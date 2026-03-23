@@ -59,7 +59,7 @@ common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - c
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
 local padIconCache                 = {}
-local hintFtFont                   = nil
+local hintFtFontCache              = {}
 local padIconNames                 = {
   up = "up",
   down = "down",
@@ -98,8 +98,11 @@ function common.getPadIcon(name)
   return (padIconCache[file] ~= false) and padIconCache[file] or nil
 end
 
-local function getHintFtFont()
-  if hintFtFont then return hintFtFont end
+local function getHintFtFont(scaleFactor)
+  local sf = tonumber(scaleFactor) or 1
+  if sf <= 0 then sf = 1 end
+  local key = string.format("%.3f", sf)
+  if hintFtFontCache[key] then return hintFtFontCache[key] end
   if not (Font and Font.ftLoad) then return nil end
   local f = Font.ftLoad("font.ttf")
   if not (f and f >= 0) then
@@ -107,11 +110,11 @@ local function getHintFtFont()
   end
   if f and f >= 0 then
     if Font.ftSetPixelSize then
-      local px = math.max(8, math.floor(((common.FT_PIXEL_H or 18) * 0.5) + 0.5))
+      local px = math.max(8, math.floor(((common.FT_PIXEL_H or 18) * sf) + 0.5))
       pcall(Font.ftSetPixelSize, f, 0, px)
     end
-    hintFtFont = f
-    return hintFtFont
+    hintFtFontCache[key] = f
+    return hintFtFontCache[key]
   end
   return nil
 end
@@ -122,7 +125,7 @@ end
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
-    local hintScale = 0.5
+    local hintScale = 0.75
     local drawScale = (scale or 0.7) * hintScale
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * hintScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * hintScale + 0.5))
@@ -139,7 +142,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local slotW = widthEff / slotCount
     local hintFont = font
     if drawMode == "ftPrint" then
-      local f = getHintFtFont()
+      local f = getHintFtFont(hintScale)
       if f then hintFont = f end
     end
 
@@ -194,8 +197,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     local function drawRow(slots, rowIndex)
       local rTop = rowTop + rowIndex * (rowH + rowGap)
-      local textY = rTop + math.floor((rowH - textH) / 2)
-      local iconY = textY + math.floor((textH - iconH) / 2)
+      local rowCenter = rTop + rowH / 2
+      local iconY = math.floor(rowCenter - iconH / 2)
+      local textY = math.floor(rowCenter - textH / 2)
       for col = 1, slotCount do
         local item = slots[col]
         local padName = item and item.pad
