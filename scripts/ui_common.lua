@@ -167,55 +167,33 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local topMap, bottomMap = {}, {}
     local drawUnusedButtons = common.PAD_HINT_DRAW_UNUSED_BUTTONS == true
     for i = 1, slotCount do
-      topMap[topPads[i]] = i
-      bottomMap[bottomPads[i]] = i
-      if drawUnusedButtons then
-        topSlots[i] = { pad = topPads[i], label = "", used = false }
-        bottomSlots[i] = { pad = bottomPads[i], label = "", used = false }
-      end
+      topMap[topPads[i]] = true
+      bottomMap[bottomPads[i]] = true
     end
 
-    local overflow = {}
-    local activePadSet = {}
-    local seenPadSet = {}
+    local activeByPad = {}
     for i = 1, #hintItems do
       local item = hintItems[i]
-      local padName = tostring((item and item.pad) or "")
-      local key = padName:lower()
-      if key ~= "" then
-        if seenPadSet[key] then
-          goto continue
-        end
-        seenPadSet[key] = true
-        local topIdx = topMap[key]
-        local bottomIdx = bottomMap[key]
-        if topIdx and (drawUnusedButtons or not topSlots[topIdx]) then
-          topSlots[topIdx] = { pad = key, label = tostring(item.label or ""), used = true }
-          activePadSet[key] = true
-        elseif bottomIdx and (drawUnusedButtons or not bottomSlots[bottomIdx]) then
-          bottomSlots[bottomIdx] = { pad = key, label = tostring(item.label or ""), used = true }
-          activePadSet[key] = true
-        else
-          overflow[#overflow + 1] = item
-        end
+      local rawPad = tostring((item and item.pad) or "")
+      local key = rawPad:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+      if key ~= "" and not activeByPad[key] and (topMap[key] or bottomMap[key]) then
+        activeByPad[key] = { label = tostring(item.label or "") }
       end
-      ::continue::
     end
 
-    local function placeOverflow(slots)
-      for i = 1, slotCount do
-        if (not slots[i] or not slots[i].used) and #overflow > 0 then
-          local item = table.remove(overflow, 1)
-          local key = tostring(item.pad or ""):lower()
-          if key ~= "" and not activePadSet[key] then
-            slots[i] = { pad = key, label = tostring(item.label or ""), used = true }
-            activePadSet[key] = true
-          end
-        end
+    for i = 1, slotCount do
+      local topKey = topPads[i]
+      local topActive = activeByPad[topKey]
+      if drawUnusedButtons or topActive then
+        topSlots[i] = { pad = topKey, label = topActive and topActive.label or "", used = not not topActive }
+      end
+
+      local bottomKey = bottomPads[i]
+      local bottomActive = activeByPad[bottomKey]
+      if drawUnusedButtons or bottomActive then
+        bottomSlots[i] = { pad = bottomKey, label = bottomActive and bottomActive.label or "", used = not not bottomActive }
       end
     end
-    placeOverflow(bottomSlots)
-    placeOverflow(topSlots)
 
     local totalRowH = rowH * 2 + rowGap
     local rowTop = math.floor(y) - totalRowH
@@ -232,10 +210,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local padName = item and item.pad
         local label = (item and item.label) or ""
         local isUsed = item and item.used
-        local key = tostring(padName or ""):lower()
-        if (not isUsed) and key ~= "" and activePadSet[key] then
-          isUsed = nil
-          padName = nil
+        local active = (padName and activeByPad[padName]) or nil
+        if active then
+          isUsed = true
+          if label == "" then
+            label = active.label or ""
+          end
         end
         if padName and padName ~= "" then
           local icon = common.getPadIcon(padName)
