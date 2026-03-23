@@ -58,11 +58,10 @@ common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
-common.PAD_HINT_DRAW_UNUSED_BUTTONS = false
+common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 38 -- 15% opaque = 85% transparent
-common.PAD_HINT_ACTIVE_ALPHA       = 220
 common.PAD_HINT_GRID_EXTRA_W       = 30
-common.PAD_HINT_GRID_X_SHIFT       = -35
+common.PAD_HINT_GRID_X_SHIFT       = -25
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
@@ -226,7 +225,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
-      local activeIconColor = Color.new(255, 255, 255, common.PAD_HINT_ACTIVE_ALPHA or 255)
+      local activeIconColor = Color.new(255, 255, 255, 255)
       local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
       for col = 1, slotCount do
         local item = slots[col]
