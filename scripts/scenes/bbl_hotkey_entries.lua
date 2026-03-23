@@ -1,4 +1,4 @@
---[[ Per-hotkey slots (E1..E10): name, path slots, reorder, enable/disable, remove. ]]
+--[[ Per-hotkey slots (E1..E10): name, path slots, enable/disable, remove. ]]
 
 local function findFirstFreeSlot(_, ctx, keyId, maxEntries)
   for i = 1, maxEntries do
@@ -10,7 +10,6 @@ end
 
 local function buildRows(_, ctx, keyId, maxEntries, includeNameRow)
   local rows = {}
-  local usedCount = 0
   if includeNameRow then
     local nameVal = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
     rows[#rows + 1] = { kind = "name", nameVal = nameVal }
@@ -19,11 +18,7 @@ local function buildRows(_, ctx, keyId, maxEntries, includeNameRow)
     local slot = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
     if slot.used then
       rows[#rows + 1] = { kind = "entry", slot = i, data = slot }
-      usedCount = usedCount + 1
     end
-  end
-  if usedCount < maxEntries then
-    rows[#rows + 1] = { kind = "add" }
   end
   return rows
 end
@@ -82,9 +77,9 @@ local function run(ctx)
       ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   local includeNameRow = not isFmcb
   local rows = buildRows(_, ctx, keyId, maxEntries, includeNameRow)
+  local freeSlot = findFirstFreeSlot(_, ctx, keyId, maxEntries)
   if #rows == 0 then
-    ctx.state = "bbl_hotkeys"
-    return
+    rows[#rows + 1] = { kind = "empty" }
   end
 
   if ctx.bblEntryFocusSlot then
@@ -151,6 +146,8 @@ local function run(ctx)
       if slot.disabled then
         col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
+    elseif row.kind == "empty" then
+      text = _.common_str.none or _.common_str.empty
     else
       text = (_.menu_str.add_entry_label or "Add") .. " path"
     end
@@ -164,8 +161,11 @@ local function run(ctx)
   end
 
   local sel = rows[ctx.bblEntrySel]
-  local hint = _.menu_str.cross_select_circle_back_items or
-      { { pad = "cross", label = "Enter" }, { pad = "circle", label = "Back" } }
+  local hint = {
+    { pad = "cross", label = "Enter", row = 1 },
+    { pad = (freeSlot and "select" or ""), label = (freeSlot and "Insert" or ""), row = 1 },
+    { pad = "circle", label = "Back", row = 1 },
+  }
   if sel and sel.kind == "entry" then
     local enableHint = _.menu_str.paths_hint_items_with_enable or _.menu_str.paths_hint_items
     local disableHint = _.menu_str.paths_hint_items_with_disable or _.menu_str.paths_hint_items
@@ -180,7 +180,7 @@ local function run(ctx)
       { pad = "", label = "", row = 2 },
       { pad = "cross", label = findHintLabel(baseHint, "cross", "Enter"), row = 1 },
       { pad = "triangle", label = findHintLabel(baseHint, "triangle", sel.data.disabled and "Enable" or "Disable"), layoutLabel = toggleLayoutLabel, row = 1 },
-      { pad = "", label = "", row = 1 },
+      { pad = (freeSlot and "select" or ""), label = (freeSlot and "Insert" or ""), row = 1 },
       { pad = "square", label = findHintLabel(baseHint, "square", "Delete"), row = 1 },
       { pad = "circle", label = findHintLabel(baseHint, "circle", "Back"), row = 1 },
     }
@@ -218,15 +218,14 @@ local function run(ctx)
       ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
       ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
       ctx.state = "bbl_hotkey_entry"
-    elseif sel.kind == "add" then
-      local freeSlot = findFirstFreeSlot(_, ctx, keyId, maxEntries)
-      if freeSlot then
-        ctx.bblEntrySlot = freeSlot
-        ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-        ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
-        ctx.state = "bbl_hotkey_entry"
-      end
     end
+  end
+
+  if (_.padEffective & _.PAD_SELECT) ~= 0 and freeSlot then
+    ctx.bblEntrySlot = freeSlot
+    ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+    ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
+    ctx.state = "bbl_hotkey_entry"
   end
 
   local function toggleSelectedEntryDisabled()
@@ -256,7 +255,6 @@ local function run(ctx)
       ctx.bblEntryFocusSlot = sel.slot + 1
     end
   end
-
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.state = "bbl_hotkeys"
     ctx.bblEntryDetailReturnState = nil
