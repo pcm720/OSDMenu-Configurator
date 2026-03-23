@@ -458,8 +458,17 @@ local function runMain(s, pad)
     local msg = main_str.main_exit_prompt or main_str.main_exit
     local tw = common.calcTextWidth(s.font, msg, 1.1)
     local w = s.w or 640
-    local cx = math.floor((w - tw) / 2)
-    local cy = math.floor((MY + H) / 2) - math.floor((s.LINE_H or common.LINE_H) / 2)
+    local h = s.h or 448
+    local lineH = s.LINE_H or common.LINE_H
+    local boxW = tw + 48
+    local boxH = lineH + 24
+    local boxX = math.floor((w - boxW) / 2)
+    local boxY = math.floor((h - boxH) / 2)
+    if Graphics and Graphics.drawRect then
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 110))
+    end
+    local cx = common.centerX and common.centerX(s, tw) or math.floor((w - tw) / 2)
+    local cy = boxY + math.floor((boxH - lineH) / 2)
     dt(s.font, s.drawMode, math.max(M, cx), cy, 1.1, msg, common.WHITE)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.main_exit_hint_items or main_str.circle_back_items, nil,
       common.DIM)

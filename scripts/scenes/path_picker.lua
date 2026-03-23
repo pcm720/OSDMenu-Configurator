@@ -268,7 +268,6 @@ local function ensureBblCommandRows(ctx)
       { name = "$OSDSYS", desc = p.bbl_cmd_osdsys or "$OSDSYS", special = "bbl_cmd" },
       { name = "$CREDITS", desc = p.bbl_cmd_credits or "$CREDITS", special = "bbl_cmd" },
       { name = "$HDDCHECKER", desc = p.bbl_cmd_hddchecker or "$HDDCHECKER (HDD build)", special = "bbl_cmd" },
-      { name = "$RUNKELF:", desc = p.bbl_cmd_runkelf or "$RUNKELF:<path>", special = "bbl_cmd", bblTokenPrompt = true },
     }
   end
   for i = 1, #cmdRows do
@@ -673,26 +672,6 @@ local function run(ctx)
               -- exclusive and other paths exist; ignore
             elseif e.special then
               local pathVal = e.name or ""
-              if e.bblTokenPrompt then
-                ctx.textInputTitleIdMode = nil
-                ctx.textInputPrompt = _.path_str.bbl_cmd_runkelf_prompt or "Enter KELF path"
-                ctx.textInputValue = ""
-                ctx.textInputMaxLen = 79
-                ctx.textInputCallback = function(val)
-                  local v = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
-                  if v == "" then
-                    ctx.state = "path_picker"
-                    return
-                  end
-                  applyManualPath(ctx, "$RUNKELF:" .. v)
-                end
-                ctx.textInputReturnState = "path_picker"
-                ctx.textInputGridSel = 1
-                ctx.textInputCursor = 1
-                ctx.textInputScroll = 1
-                ctx.state = "text_input"
-                return
-              end
 	              if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
 	              if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
 	              ctx.pathList = nil

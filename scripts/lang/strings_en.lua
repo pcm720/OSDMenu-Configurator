@@ -128,8 +128,6 @@ strings.path_picker = {
   fmcb_cmd_osdsys = "OSDSYS (Launch browser)",
   bbl_cmd_credits = "$CREDITS",
   bbl_cmd_hddchecker = "$HDDCHECKER (HDD build)",
-  bbl_cmd_runkelf = "$RUNKELF:<path>",
-  bbl_cmd_runkelf_prompt = "Enter KELF path for $RUNKELF:",
   enter_path_prompt = "Enter path",
   cross_select_circle_back_items = { { pad = "cross", label = "Enter" }, { pad = "circle", label = "Back" } },
   select_hdd_partition = "Select HDD partition",
