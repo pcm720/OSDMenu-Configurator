@@ -125,15 +125,16 @@ end
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
-    local hintScale = 0.75
-    local drawScale = (scale or 0.7) * hintScale
-    local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * hintScale + 0.5))
-    local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * hintScale + 0.5))
-    local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * hintScale + 0.5))
-    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * hintScale + 0.5))
-    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * hintScale + 0.5))
+    local iconScale = 0.6
+    local textScale = 0.75
+    local drawScale = (scale or 0.7) * textScale
+    local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
+    local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
+    local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
+    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
+    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * textScale + 0.5))
     local approxCharW = math.floor(8 * drawScale)
-    local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * hintScale + 0.5))
+    local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * textScale + 0.5))
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin
@@ -142,7 +143,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local slotW = widthEff / slotCount
     local hintFont = font
     if drawMode == "ftPrint" then
-      local f = getHintFtFont(hintScale)
+      local f = getHintFtFont(textScale)
       if f then hintFont = f end
     end
 
