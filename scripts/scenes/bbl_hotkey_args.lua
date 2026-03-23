@@ -95,7 +95,8 @@ local function run(ctx)
 
   local args = getArgs()
   local total = #args
-  local entryPath = _.config_parse.getBblHotkeyPath(ctx.lines, keyId, slot)
+  local slotData = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot) or nil
+  local entryPath = (slotData and slotData.path) or ""
   local hasCdrom = arg_presets.hasCdromPath(entryPath)
   local isNhddlElfPath = arg_presets.isNhddlElfPath(entryPath)
   local usedKnown, usedModes = arg_presets.collectUsedArgs(args)
@@ -341,7 +342,7 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and total < maxArgs then
+  if (_.padEffective & _.PAD_SELECT) ~= 0 and ((not hasArgCap) or total < maxArgs) then
     ctx.bblArgAddMenu = true
     ctx.bblArgAddSel = ctx.bblArgAddSel or 1
     ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
