@@ -116,9 +116,21 @@ local function getLanguageDisplayName(idx)
   return defaultLanguageDisplayName(code)
 end
 
+local function withoutUpDownHints(items)
+  local out = {}
+  for i = 1, #(items or {}) do
+    local it = items[i]
+    local pad = tostring((it and it.pad) or ""):lower()
+    if pad ~= "up" and pad ~= "down" then
+      out[#out + 1] = it
+    end
+  end
+  return out
+end
+
 local function buildMainLangHintItems(s, main_str)
   if C.langCycleDisabled or not C.langFiles or #C.langFiles <= 1 then
-    return main_str.main_hint_items or {}
+    return withoutUpDownHints(main_str.main_hint_items or {})
   end
 
   local idx = C.langIndex or 1
@@ -128,23 +140,21 @@ local function buildMainLangHintItems(s, main_str)
   if nextIdx > #C.langFiles then nextIdx = 1 end
 
   local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
-  local upLabel = findHintLabel(baseHint, "up", "Up")
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
-  local downLabel = findHintLabel(baseHint, "down", "Down")
   local saveLabel = findHintLabel(baseHint, "start", "Save")
   local prevLabel = getLanguageDisplayName(prevIdx)
   local nextLabel = getLanguageDisplayName(nextIdx)
+  local l1Label = findHintLabel(baseHint, "L1", prevLabel)
+  local r1Label = findHintLabel(baseHint, "R1", nextLabel)
 
-  local leftLayout = widerLabel(s.font, 0.7, upLabel, prevLabel)
+  local leftLayout = widerLabel(s.font, 0.7, l1Label, prevLabel)
   local centerLayout = widerLabel(s.font, 0.7, enterLabel, saveLabel)
-  local rightLayout = widerLabel(s.font, 0.7, downLabel, nextLabel)
+  local rightLayout = widerLabel(s.font, 0.7, r1Label, nextLabel)
 
   return {
-    { pad = "up", label = upLabel, layoutLabel = leftLayout, row = 1 },
     { pad = "cross", label = enterLabel, layoutLabel = centerLayout, row = 1 },
-    { pad = "down", label = downLabel, layoutLabel = rightLayout, row = 1 },
+    { pad = "start", label = saveLabel, layoutLabel = centerLayout, row = 1 },
     { pad = "L1", label = prevLabel, layoutLabel = leftLayout, row = 2 },
-    { pad = "start", label = saveLabel, layoutLabel = centerLayout, row = 2 },
     { pad = "R1", label = nextLabel, layoutLabel = rightLayout, row = 2 },
   }
 end
@@ -439,7 +449,7 @@ local function runMain(s, pad)
   dt(s.font, s.drawMode, w - M - vw, MY, 0.75, versionStr, common.DIM)
   dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
   local hintItems = (not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 and buildMainLangHintItems(s, main_str)) or
-      main_str.main_hint_items
+      withoutUpDownHints(main_str.main_hint_items)
   common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
   for i, label in ipairs(s.main) do
     local y = MY + sc(50) + (i - 1) * L

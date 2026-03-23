@@ -50,8 +50,8 @@ end
 -- Ordered to match PS2BBL source search order (first -> last), ignoring unsupported XFROM.
 local function buildPs2BblIniLocations()
   local out = {}
-  appendUnique(out, "mmce1:/PS2BBL/PS2BBL.INI")
-  appendUnique(out, "mmce0:/PS2BBL/PS2BBL.INI")
+  appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
@@ -65,8 +65,8 @@ local function buildPsxBblIniLocations()
   local out = {}
   appendUnique(out, "mc1:/SYS-CONF/PSXBBL.INI")
   appendUnique(out, "mc0:/SYS-CONF/PSXBBL.INI")
-  appendUnique(out, "mmce1:/PS2BBL/PS2BBL.INI")
-  appendUnique(out, "mmce0:/PS2BBL/PS2BBL.INI")
+  appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")

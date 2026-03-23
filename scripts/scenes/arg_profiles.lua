@@ -57,9 +57,8 @@ local EGSM_ARG_KEY = {
 }
 
 local EGSM_PROFILE_SUPPORT = {
-  -- PS2BBL/PSXBBL parser support exists in source, but current distributed builds
-  -- are not compiled with working eGSM runtime support.
-  ps2bbl = false,
+  -- PS2BBL/PSXBBL Extended now support -gsm args.
+  ps2bbl = true,
   osdmenu = true,
   hosdmenu = true,
   osdmbr = true,
@@ -68,7 +67,7 @@ local EGSM_PROFILE_SUPPORT = {
 local function egsmRowLabel(argKey)
   local key = trimText(argKey)
   if key == "" then key = "-gsm" end
-  return key .. "=<mode[:compat]>"
+  return key .. "=<v:[c]>"
 end
 
 local function buildEgsmRows(argKey)
