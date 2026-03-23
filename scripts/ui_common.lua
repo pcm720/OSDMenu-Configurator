@@ -59,6 +59,7 @@ common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - c
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
 local padIconCache                 = {}
+local hintFtFont                   = nil
 local padIconNames                 = {
   up = "up",
   down = "down",
@@ -97,6 +98,24 @@ function common.getPadIcon(name)
   return (padIconCache[file] ~= false) and padIconCache[file] or nil
 end
 
+local function getHintFtFont()
+  if hintFtFont then return hintFtFont end
+  if not (Font and Font.ftLoad) then return nil end
+  local f = Font.ftLoad("font.ttf")
+  if not (f and f >= 0) then
+    f = Font.ftLoad("scripts/font/font.ttf")
+  end
+  if f and f >= 0 then
+    if Font.ftSetPixelSize then
+      local px = math.max(8, math.floor(((common.FT_PIXEL_H or 18) * 0.5) + 0.5))
+      pcall(Font.ftSetPixelSize, f, 0, px)
+    end
+    hintFtFont = f
+    return hintFtFont
+  end
+  return nil
+end
+
 -- Draw a hint line: list of { pad = "cross", label = "Select" [, row = 1|2 ] }. Uses pad textures when available; else falls back to text.
 -- row: 1 = bottom row, 2 = top row. If any item has row=2, rows are from lang; else first PAD_HINT_MAX_PER_ROW on bottom, rest on top.
 -- totalWidth: optional. y = bottom of hint area. Full width (minus side margin) divided into equal slots. Odd: icon+label centered in slot. Even: left half left-aligned, right half right-aligned. Uses Font.ftCalcDimensions when available for accurate text width.
@@ -118,17 +137,16 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local widthEff = width - 2 * sideMargin
     local slotCount = 6
     local slotW = widthEff / slotCount
-    local usingFtScaledHints = false
-    if drawMode == "ftPrint" and font and Font and Font.ftSetPixelSize then
-      local hintPixelH = math.max(8, math.floor((common.FT_PIXEL_H or 18) * hintScale + 0.5))
-      pcall(Font.ftSetPixelSize, font, 0, hintPixelH)
-      usingFtScaledHints = true
+    local hintFont = font
+    if drawMode == "ftPrint" then
+      local f = getHintFtFont()
+      if f then hintFont = f end
     end
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
-      if drawMode == "ftPrint" and font and Font and Font.ftCalcDimensions then
-        local w = Font.ftCalcDimensions(font, label)
+      if drawMode == "ftPrint" and hintFont and Font and Font.ftCalcDimensions then
+        local w = Font.ftCalcDimensions(hintFont, label)
         return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #label)
       end
       return math.floor(approxCharW * #label)
@@ -202,7 +220,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             else
               textX = math.floor(slotCenter - textW / 2)
             end
-            common.drawText(font, drawMode, textX, textY, drawScale, label, color, textH)
+            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, color, textH)
           end
         end
       end
@@ -210,9 +228,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     drawRow(topSlots, 0)
     drawRow(bottomSlots, 1)
-    if usingFtScaledHints and font and Font and Font.ftSetPixelSize then
-      pcall(Font.ftSetPixelSize, font, 0, common.FT_PIXEL_H or 18)
-    end
     return
   end
   if textFallback and textFallback ~= "" then
