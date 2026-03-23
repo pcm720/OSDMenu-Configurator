@@ -60,8 +60,8 @@ common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 38 -- 15% opaque = 85% transparent
-common.PAD_HINT_GRID_EXTRA_W       = 20
-common.PAD_HINT_GRID_X_SHIFT       = -20
+common.PAD_HINT_GRID_EXTRA_W       = 30
+common.PAD_HINT_GRID_X_SHIFT       = -25
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
@@ -243,11 +243,18 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
           local slotCenter = slotLeft + slotW / 2
           local px = math.floor(slotCenter - iconW / 2)
           if icon then
-            local iconColor = isUsed and activeIconColor or inactiveIconColor
-            if Graphics.drawScaleImage then
-              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+            if isUsed then
+              if Graphics.drawScaleImage then
+                Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, activeIconColor)
+              else
+                Graphics.drawImage(icon, px, iconY)
+              end
             else
-              Graphics.drawImage(icon, px, iconY, iconColor)
+              if Graphics.drawScaleImage then
+                Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, inactiveIconColor)
+              else
+                Graphics.drawImage(icon, px, iconY, inactiveIconColor)
+              end
             end
           end
           if isUsed and label ~= "" then
