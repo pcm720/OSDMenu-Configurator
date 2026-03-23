@@ -103,18 +103,21 @@ end
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
-    local iconW, gap = common.PAD_ICON_W, common.PAD_HINT_GAP
-    local rowH = common.PAD_HINT_ROW_H
-    local approxCharW = math.floor(8 * (scale or 0.7))
-    -- Use font pixel height for vertical alignment with icons (same as FT_PIXEL_H)
-    local textH = common.FT_PIXEL_H or 18
-    local n = #hintItems
+    local drawScale = (scale or 0.7) * 0.75
+    local iconW = math.max(12, math.floor((common.PAD_ICON_W or 26) * 0.75 + 0.5))
+    local iconH = math.max(12, math.floor((common.PAD_ICON_H or 26) * 0.75 + 0.5))
+    local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * 0.75 + 0.5))
+    local rowH = math.max(18, math.floor((common.PAD_HINT_ROW_H or 28) * 0.75 + 0.5))
+    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * 0.75 + 0.5))
+    local approxCharW = math.floor(8 * drawScale)
+    local textH = math.max(12, math.floor((common.FT_PIXEL_H or 18) * 0.75 + 0.5))
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
-    local maxPerRow = common.PAD_HINT_MAX_PER_ROW or 4
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin
     local widthEff = width - 2 * sideMargin
-    local centerX = xEff + widthEff / 2
+    local slotCount = 6
+    local slotW = widthEff / slotCount
+
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
       if drawMode == "ftPrint" and font and Font and Font.ftCalcDimensions then
@@ -123,79 +126,79 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
       return math.floor(approxCharW * #label)
     end
-    local groupWidths = {}
-    for i = 1, n do
-      local item = hintItems[i]
-      local label = (item and (item.layoutLabel or item.label)) or ""
-      groupWidths[i] = iconW + gap + getTextWidth(label)
+
+    local topPads = { "left", "l1", "l2", "r2", "r1", "right" }
+    local bottomPads = { "cross", "square", "select", "start", "triangle", "circle" }
+    local topSlots, bottomSlots = {}, {}
+    local topMap, bottomMap = {}, {}
+    for i = 1, slotCount do
+      topMap[topPads[i]] = i
+      bottomMap[bottomPads[i]] = i
     end
-    local bottomIndices, topIndices = {}, {}
-    local hasExplicitRow = false
-    for i = 1, n do
-      if hintItems[i] and hintItems[i].row == 2 then
-        hasExplicitRow = true; topIndices[#topIndices + 1] = i
-      else
-        bottomIndices[#bottomIndices + 1] = i
+
+    local overflow = {}
+    for i = 1, #hintItems do
+      local item = hintItems[i]
+      local padName = tostring((item and item.pad) or "")
+      local key = padName:lower()
+      if key ~= "" then
+        local topIdx = topMap[key]
+        local bottomIdx = bottomMap[key]
+        if topIdx and not topSlots[topIdx] then
+          topSlots[topIdx] = item
+        elseif bottomIdx and not bottomSlots[bottomIdx] then
+          bottomSlots[bottomIdx] = item
+        else
+          overflow[#overflow + 1] = item
+        end
       end
     end
-    if not hasExplicitRow then
-      bottomIndices = {}
-      topIndices = {}
-      local bottomCount = (n <= maxPerRow) and n or maxPerRow
-      for i = 1, bottomCount do bottomIndices[i] = i end
-      for i = bottomCount + 1, n do topIndices[#topIndices + 1] = i end
+
+    local function placeOverflow(slots)
+      for i = 1, slotCount do
+        if not slots[i] and #overflow > 0 then
+          slots[i] = table.remove(overflow, 1)
+        end
+      end
     end
-    local rowCount = (#topIndices > 0 and #bottomIndices > 0) and 2 or 1
-    local rowGap = (rowCount > 1) and (common.PAD_HINT_ROW_GAP or 0) or 0
-    local totalRowH = rowH * rowCount + rowGap * (rowCount - 1)
+    placeOverflow(bottomSlots)
+    placeOverflow(topSlots)
+
+    local totalRowH = rowH * 2 + rowGap
     local rowTop = math.floor(y) - totalRowH
-    local function drawRow(indices, rowIndex)
-      if not indices or #indices == 0 then return end
-      local numInRow = #indices
-      local slotW = widthEff / numInRow
-      local rowLeft = (numInRow % 2 == 1) and (centerX - (numInRow * slotW) / 2) or xEff
+
+    local function drawRow(slots, rowIndex)
       local rTop = rowTop + rowIndex * (rowH + rowGap)
       local textY = rTop + math.floor((rowH - textH) / 2)
-      -- Align icon vertical center with text vertical center
-      local iconY = textY + math.floor((textH - common.PAD_ICON_H) / 2)
-      local leftCount = math.floor(numInRow / 2)
-      for idx = 1, numInRow do
-        local j = indices[idx]
-        local item = hintItems[j]
+      local iconY = textY + math.floor((textH - iconH) / 2)
+      for col = 1, slotCount do
+        local item = slots[col]
         local padName = item and item.pad
         local label = (item and item.label) or ""
         if padName and padName ~= "" then
           local icon = common.getPadIcon(padName)
-          local groupW = groupWidths[j]
-          local slotLeft = rowLeft + (idx - 1) * slotW
-          local px
-          if numInRow % 2 == 1 then
-            px = math.floor(slotLeft + (slotW - groupW) / 2)
-          elseif idx <= leftCount then
-            px = math.floor(slotLeft)
-          else
-            px = math.floor(slotLeft + slotW - groupW)
-          end
+          local textW = getTextWidth(label)
+          local hasIcon = not not icon
+          local groupW = (hasIcon and iconW or 0) + ((hasIcon and label ~= "") and gap or 0) + textW
+          local slotLeft = xEff + (col - 1) * slotW
+          local px = math.floor(slotLeft + (slotW - groupW) / 2)
           if icon then
             if Graphics.drawScaleImage then
-              Graphics.drawScaleImage(icon, px, iconY, iconW, common.PAD_ICON_H)
+              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, common.WHITE)
             else
               Graphics.drawImage(icon, px, iconY)
             end
-            common.drawText(font, drawMode, px + iconW + gap, textY, scale, label, color)
-          else
-            common.drawText(font, drawMode, px, textY, scale, (padName or "") .. (label ~= "" and "=" .. label or ""),
-              color, textH)
+          end
+          if label ~= "" then
+            local textX = px + (hasIcon and (iconW + gap) or 0)
+            common.drawText(font, drawMode, textX, textY, drawScale, label, color, textH)
           end
         end
       end
     end
-    if rowCount == 2 then
-      drawRow(topIndices, 0)
-      drawRow(bottomIndices, 1)
-    else
-      drawRow(#bottomIndices > 0 and bottomIndices or topIndices, 0)
-    end
+
+    drawRow(topSlots, 0)
+    drawRow(bottomSlots, 1)
     return
   end
   if textFallback and textFallback ~= "" then

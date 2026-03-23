@@ -449,7 +449,11 @@ local function runMain(s, pad)
     s.mainSel = s.mainSel + 1
   end
   s.mainOverlayLogoKey = getMainOverlayLogoKey(s.mainSel)
-  if (pad & PAD_CIRCLE) ~= 0 and not s.mainExitPrompt then s.mainExitPrompt = true end
+  local openedExitPrompt = false
+  if (pad & PAD_CIRCLE) ~= 0 and not s.mainExitPrompt then
+    s.mainExitPrompt = true
+    openedExitPrompt = true
+  end
   if s.mainExitPrompt then
     local msg = main_str.main_exit_prompt or main_str.main_exit
     local tw = common.calcTextWidth(s.font, msg, 1.1)
@@ -460,7 +464,7 @@ local function runMain(s, pad)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.main_exit_hint_items or main_str.circle_back_items, nil,
       common.DIM)
     if (pad & PAD_CROSS) ~= 0 then System.exitToBrowser() end
-    if (pad & PAD_CIRCLE) ~= 0 then s.mainExitPrompt = nil end
+    if (pad & PAD_CIRCLE) ~= 0 and not openedExitPrompt then s.mainExitPrompt = nil end
     return
   end
   dt(s.font, s.drawMode, M, MY, 1.1, main_str.main_title or "", common.WHITE)
