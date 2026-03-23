@@ -62,13 +62,14 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local returnState = ctx.bblEntryListReturnState or "bbl_hotkeys"
   if not ctx.lines then
     ctx.state = "editor"
     return
   end
   local keyId = ctx.bblHotkeyKey
   if not keyId or keyId == "" then
-    ctx.state = "bbl_hotkeys"
+    ctx.state = returnState
     return
   end
 
@@ -270,7 +271,8 @@ local function run(ctx)
     end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
-    ctx.state = "bbl_hotkeys"
+    ctx.state = returnState
+    ctx.bblEntryListReturnState = nil
     ctx.bblEntryDetailReturnState = nil
   end
 end

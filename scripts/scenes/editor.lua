@@ -570,10 +570,18 @@ local function run(ctx)
         ctx.state = "bbl_hotkeys"
       elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
-        ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
-        ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-        ctx.bblEntryDetailReturnState = "editor"
-        ctx.state = "bbl_hotkey_entry"
+        if ctx.bblHotkeyKey == "AUTO" then
+          ctx.bblEntryFocusSlot = tonumber(o.bblEntrySlot)
+          ctx.bblEntrySel = ctx.bblEntrySel or 1
+          ctx.bblEntryScroll = ctx.bblEntryScroll or 0
+          ctx.bblEntryListReturnState = "editor"
+          ctx.state = "bbl_hotkey_entries"
+        else
+          ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
+          ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+          ctx.bblEntryDetailReturnState = "editor"
+          ctx.state = "bbl_hotkey_entry"
+        end
       elseif o.optType == "boot_paths" then
         ctx.bootKey = o.key
         ctx.entryIdx = nil

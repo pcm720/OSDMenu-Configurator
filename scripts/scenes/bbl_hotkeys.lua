@@ -90,6 +90,7 @@ local function run(ctx)
     ctx.bblEntrySel = ctx.bblEntrySel or 1
     ctx.bblEntryScroll = ctx.bblEntryScroll or 0
     ctx.bblEntryFocusSlot = nil
+    ctx.bblEntryListReturnState = "bbl_hotkeys"
     ctx.state = "bbl_hotkey_entries"
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then

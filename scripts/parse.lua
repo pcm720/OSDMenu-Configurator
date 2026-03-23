@@ -1385,15 +1385,23 @@ local function appendFreemcbootLaunchKeys(out, lines, maxEntries)
     keys[#keys + 1] = k
   end
   for _, keyId in ipairs(keys) do
+    local keyDisabled = config_parse.isBblHotkeyDisabled(lines, keyId)
     local added = false
     for slot = 1, maxEntries do
       local path, disabled = config_parse.getBblHotkeyPath(lines, keyId, slot)
       if path ~= nil then
         local saveKeyId = toFreemcbootKeyId(keyId)
+        local comment = nil
+        if keyDisabled then
+          -- Keep whole-key disabled state (#) and preserve per-slot disable markers (##).
+          comment = disabled and 2 or true
+        else
+          comment = disabled and true or nil
+        end
         out[#out + 1] = {
           key = "LK_" .. tostring(saveKeyId) .. "_E" .. tostring(slot),
           value = path or "",
-          comment = disabled and true or nil
+          comment = comment
         }
         added = true
       end
