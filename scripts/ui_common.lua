@@ -58,6 +58,8 @@ common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
+common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
+common.PAD_HINT_UNUSED_ALPHA       = 38 -- 15% opaque = 85% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
@@ -160,9 +162,14 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local bottomPads = { "cross", "square", "select", "start", "triangle", "circle" }
     local topSlots, bottomSlots = {}, {}
     local topMap, bottomMap = {}, {}
+    local drawUnusedButtons = common.PAD_HINT_DRAW_UNUSED_BUTTONS == true
     for i = 1, slotCount do
       topMap[topPads[i]] = i
       bottomMap[bottomPads[i]] = i
+      if drawUnusedButtons then
+        topSlots[i] = { pad = topPads[i], label = "", used = false }
+        bottomSlots[i] = { pad = bottomPads[i], label = "", used = false }
+      end
     end
 
     local overflow = {}
@@ -173,10 +180,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       if key ~= "" then
         local topIdx = topMap[key]
         local bottomIdx = bottomMap[key]
-        if topIdx and not topSlots[topIdx] then
-          topSlots[topIdx] = item
-        elseif bottomIdx and not bottomSlots[bottomIdx] then
-          bottomSlots[bottomIdx] = item
+        if topIdx and (drawUnusedButtons or not topSlots[topIdx]) then
+          topSlots[topIdx] = { pad = key, label = tostring(item.label or ""), used = true }
+        elseif bottomIdx and (drawUnusedButtons or not bottomSlots[bottomIdx]) then
+          bottomSlots[bottomIdx] = { pad = key, label = tostring(item.label or ""), used = true }
         else
           overflow[#overflow + 1] = item
         end
@@ -185,8 +192,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     local function placeOverflow(slots)
       for i = 1, slotCount do
-        if not slots[i] and #overflow > 0 then
-          slots[i] = table.remove(overflow, 1)
+        if (not slots[i] or not slots[i].used) and #overflow > 0 then
+          local item = table.remove(overflow, 1)
+          slots[i] = { pad = tostring(item.pad or ""), label = tostring(item.label or ""), used = true }
         end
       end
     end
@@ -201,23 +209,27 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
+      local activeIconColor = Color.new(255, 255, 255, 255)
+      local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
       for col = 1, slotCount do
         local item = slots[col]
         local padName = item and item.pad
         local label = (item and item.label) or ""
+        local isUsed = item and item.used
         if padName and padName ~= "" then
           local icon = common.getPadIcon(padName)
           local slotLeft = xEff + (col - 1) * slotW
           local slotCenter = slotLeft + slotW / 2
           local px = math.floor(slotCenter - iconW / 2)
           if icon then
+            local iconColor = isUsed and activeIconColor or inactiveIconColor
             if Graphics.drawScaleImage then
-              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH)
+              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
             else
-              Graphics.drawImage(icon, px, iconY)
+              Graphics.drawImage(icon, px, iconY, iconColor)
             end
           end
-          if label ~= "" then
+          if isUsed and label ~= "" then
             local textW = getTextWidth(label)
             local textX
             if icon then
