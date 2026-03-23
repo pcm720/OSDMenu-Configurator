@@ -173,9 +173,9 @@ local function buildMainLangHintItems(s, main_str)
 
   return {
     { pad = "L1", label = prevLabel, layoutLabel = leftLayout, row = 2 },
-    { pad = "cross", label = enterLabel, layoutLabel = centerLayout, row = 2 },
+    { pad = "", label = "", layoutLabel = centerLayout, row = 2 },
     { pad = "R1", label = nextLabel, layoutLabel = rightLayout, row = 2 },
-    { pad = "", label = "", row = 1 },
+    { pad = "cross", label = enterLabel, layoutLabel = leftLayout, row = 1 },
     { pad = "", label = "", row = 1 },
     { pad = "circle", label = exitLabel, layoutLabel = rightLayout, row = 1 },
   }

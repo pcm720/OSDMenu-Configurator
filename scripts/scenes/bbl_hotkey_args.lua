@@ -5,6 +5,32 @@ local arg_profiles = dofile("scripts/scenes/arg_profiles.lua")
 local arg_gsm_picker = dofile("scripts/scenes/arg_gsm_picker.lua")
 local arg_add_menu = dofile("scripts/scenes/arg_add_menu.lua")
 
+local function drawPadTitle(_, keyId, suffix)
+  local tail = tostring(suffix or "")
+  if keyId == "AUTO" then
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, "AUTOBOOT" .. tail, _.WHITE)
+    return
+  end
+
+  local icon = _.common.getPadIcon and _.common.getPadIcon(keyId) or nil
+  local baseIconW = _.common.PAD_ICON_W or 26
+  local baseIconH = _.common.PAD_ICON_H or 26
+  local textH = (_.common and _.common.FT_PIXEL_H) or 18
+  local iconH = math.min(baseIconH, textH)
+  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
+  local iconGap = 8
+  local iconY = _.MARGIN_Y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
+
+  if icon then
+    if _.Graphics.drawScaleImage then
+      _.Graphics.drawScaleImage(icon, _.MARGIN_X, iconY, iconW, iconH)
+    else
+      _.Graphics.drawImage(icon, _.MARGIN_X, iconY)
+    end
+  end
+  _.drawText(_.font, _.drawMode, _.MARGIN_X + iconW + iconGap, _.MARGIN_Y, 1, tail, _.WHITE)
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -221,9 +247,8 @@ local function run(ctx)
   ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgSel or 1, total)
   ctx.bblArgScroll = _.common.centeredListScroll(ctx.bblArgSel, total, _.MAX_VISIBLE_LIST)
 
-  local displayKey = (keyId == "AUTO") and "AUTOBOOT" or keyId
-  local title = displayKey .. " - E" .. tostring(slot) .. " args (" .. tostring(total) .. "/" .. tostring(maxArgs) .. ")"
-  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, title, _.WHITE)
+  local titleSuffix = " - E" .. tostring(slot) .. " args (" .. tostring(total) .. "/" .. tostring(maxArgs) .. ")"
+  drawPadTitle(_, keyId, titleSuffix)
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   if total == 0 then
