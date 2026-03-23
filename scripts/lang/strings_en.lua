@@ -128,8 +128,6 @@ strings.path_picker = {
   fmcb_cmd_osdsys = "OSDSYS (Launch browser)",
   bbl_cmd_credits = "$CREDITS",
   bbl_cmd_hddchecker = "$HDDCHECKER (HDD build)",
-  bbl_cmd_runkelf = "$RUNKELF:<path>",
-  bbl_cmd_runkelf_prompt = "Enter KELF path for $RUNKELF:",
   enter_path_prompt = "Enter path",
   cross_select_circle_back_items = { { pad = "cross", label = "Enter" }, { pad = "circle", label = "Back" } },
   select_hdd_partition = "Select HDD partition",
@@ -234,7 +232,7 @@ strings.options_osdmenu = {
   ps1drv_use_ps1vn = { label = "Use PS1VN", desc = "Use PS1 Video Mode Negator" },
   app_gameid = { label = "Application Game ID", desc = "Enable visual game ID for ELF files" },
   path_DKWDRV_ELF = { label = "DKWDRV path", desc = "Custom path to DKWDRV.ELF" },
-  pad_delay = { label = "Pad delay", desc = "Delay before AUTOBOOT launch key selection" },
+  pad_delay = { label = "Timer", desc = "Delay before AUTOBOOT launch key selection" },
   FastBoot = { label = "Fast boot", desc = "Enable fast disc boot handling" },
   ESR_Path_E1 = { label = "ESR path E1", desc = "Primary ESR path" },
   ESR_Path_E2 = { label = "ESR path E2", desc = "Secondary ESR path" },
@@ -264,6 +262,10 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   _bbl_irx_entries = { label = "Edit IRX entries", desc = "Edit LOAD_IRX_E# module paths" },
+  APP_GAMEID = { label = "APP_GAMEID", desc = "Game ID for RetroGem" },
+  CDROM_DISABLE_GAMEID = { label = "CDROM_DISABLE_GAMEID", desc = "Disable RetroGem Game ID for DISCS" },
+  app_gameid = { label = "Application Game ID", desc = "Game ID for RetroGem" },
+  cdrom_disable_gameid = { label = "Disable visual game ID", desc = "Disable RetroGem Game ID for DISCS" },
 }
 
 -- eGSM editor (single screen: default + title overrides)

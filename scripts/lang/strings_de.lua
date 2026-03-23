@@ -128,8 +128,6 @@ strings.path_picker = {
   fmcb_cmd_osdsys = "OSDSYS (Browser starten)",
   bbl_cmd_credits = "$CREDITS",
   bbl_cmd_hddchecker = "$HDDCHECKER (HDD-Build)",
-  bbl_cmd_runkelf = "$RUNKELF:<pfad>",
-  bbl_cmd_runkelf_prompt = "KELF-Pfad fuer $RUNKELF eingeben:",
   enter_path_prompt = "Pfad eingeben",
   cross_select_circle_back_items = { { pad = "cross", label = "Oeffnen" }, { pad = "circle", label = "Zurueck" } },
   select_hdd_partition = "HDD-Partition waehlen",
@@ -234,7 +232,7 @@ strings.options_osdmenu = {
   ps1drv_use_ps1vn = { label = "PS1VN verwenden", desc = "PS1 Video Mode Negator verwenden" },
   app_gameid = { label = "Anwendungs-Spiel-ID", desc = "Visuelle Spiel-ID fuer ELF-Dateien aktivieren" },
   path_DKWDRV_ELF = { label = "DKWDRV-Pfad", desc = "Benutzerdefinierter Pfad zu DKWDRV.ELF" },
-  pad_delay = { label = "Pad-Verzoegerung", desc = "Verzoegerung vor der Auswahl der AUTOBOOT-Starttaste" },
+  pad_delay = { label = "Timer", desc = "Verzoegerung vor der Auswahl der AUTOBOOT-Starttaste" },
   FastBoot = { label = "Schnellstart", desc = "Schnelle Disc-Startbehandlung aktivieren" },
   ESR_Path_E1 = { label = "ESR-Pfad E1", desc = "Primaerer ESR-Pfad" },
   ESR_Path_E2 = { label = "ESR-Pfad E2", desc = "Sekundaerer ESR-Pfad" },
@@ -264,6 +262,10 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   _bbl_irx_entries = { label = "IRX-Eintraege bearbeiten", desc = "LOAD_IRX_E#-Modulpfade bearbeiten" },
+  APP_GAMEID = { label = "APP_GAMEID", desc = "Game ID for RetroGem" },
+  CDROM_DISABLE_GAMEID = { label = "CDROM_DISABLE_GAMEID", desc = "Disable RetroGem Game ID for DISCS" },
+  app_gameid = { label = "Anwendungs-Spiel-ID", desc = "Game ID for RetroGem" },
+  cdrom_disable_gameid = { label = "Visuelle Spiel-ID deaktivieren", desc = "Disable RetroGem Game ID for DISCS" },
 }
 
 -- eGSM-Editor

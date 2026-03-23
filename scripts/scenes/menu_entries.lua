@@ -69,7 +69,7 @@ local function run(ctx)
     ctx.entryEditSub = ctx.entryEditSub or 1
     ctx.state = "menu_entry_edit"
   end
-  if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT | _.PAD_TRIANGLE)) ~= 0 then
+  if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     toggleSelectedDisabled()
   end
   if (_.padEffective & _.PAD_L1) ~= 0 then
@@ -116,6 +116,13 @@ local function run(ctx)
     hints = ctx.entryList[ctx.entrySel].disabled and (_.menu_str.hint_items_with_enable or hints)
         or (_.menu_str.hint_items_with_disable or hints)
   end
+  local hintsNoLeftRight = {}
+  for _, item in ipairs(hints or {}) do
+    if item.pad ~= "left" and item.pad ~= "right" then
+      hintsNoLeftRight[#hintsNoLeftRight + 1] = item
+    end
+  end
+  hints = hintsNoLeftRight
   if not canAddEntry then
     local filtered = {}
     for _, item in ipairs(hints or {}) do

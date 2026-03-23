@@ -5,6 +5,32 @@ local arg_profiles = dofile("scripts/scenes/arg_profiles.lua")
 local arg_gsm_picker = dofile("scripts/scenes/arg_gsm_picker.lua")
 local arg_add_menu = dofile("scripts/scenes/arg_add_menu.lua")
 
+local function drawPadTitle(_, keyId, suffix)
+  local tail = tostring(suffix or "")
+  if keyId == "AUTO" then
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, "AUTOBOOT" .. tail, _.WHITE)
+    return
+  end
+
+  local icon = _.common.getPadIcon and _.common.getPadIcon(keyId) or nil
+  local baseIconW = _.common.PAD_ICON_W or 26
+  local baseIconH = _.common.PAD_ICON_H or 26
+  local textH = (_.common and _.common.FT_PIXEL_H) or 18
+  local iconH = math.min(baseIconH, textH)
+  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
+  local iconGap = 8
+  local iconY = _.MARGIN_Y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
+
+  if icon then
+    if _.Graphics.drawScaleImage then
+      _.Graphics.drawScaleImage(icon, _.MARGIN_X, iconY, iconW, iconH)
+    else
+      _.Graphics.drawImage(icon, _.MARGIN_X, iconY)
+    end
+  end
+  _.drawText(_.font, _.drawMode, _.MARGIN_X + iconW + iconGap, _.MARGIN_Y, 1, tail, _.WHITE)
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -17,8 +43,13 @@ local function run(ctx)
     ctx.state = "bbl_hotkey_entry"
     return
   end
+  if ctx.fileType == "freemcboot_cnf" or ctx.context == "freehddboot" then
+    ctx.state = "bbl_hotkey_entry"
+    return
+  end
 
-  local maxArgs = (_.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry()) or 8
+  local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
+  local hasArgCap = (type(maxArgs) == "number" and maxArgs > 0)
 
   local function getArgs()
     return _.config_parse.getBblHotkeyArgs(ctx.lines, keyId, slot) or {}
@@ -33,7 +64,7 @@ local function run(ctx)
     local value = tostring(v or "")
     if value == "" then return end
     local args2 = getArgs()
-    if #args2 >= maxArgs then return end
+    if hasArgCap and #args2 >= maxArgs then return end
     table.insert(args2, { value = value, disabled = false })
     setArgs(args2)
     ctx.bblArgSel = #args2
@@ -64,7 +95,8 @@ local function run(ctx)
 
   local args = getArgs()
   local total = #args
-  local entryPath = _.config_parse.getBblHotkeyPath(ctx.lines, keyId, slot)
+  local slotData = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot) or nil
+  local entryPath = (slotData and slotData.path) or ""
   local hasCdrom = arg_presets.hasCdromPath(entryPath)
   local isNhddlElfPath = arg_presets.isNhddlElfPath(entryPath)
   local usedKnown, usedModes = arg_presets.collectUsedArgs(args)
@@ -110,7 +142,7 @@ local function run(ctx)
   end
 
   local function reopenAddMenu()
-    if total >= maxArgs then return end
+    if hasArgCap and total >= maxArgs then return end
     ctx.bblArgAddMenu = true
     ctx.bblArgAddSel = ctx.bblArgAddSel or 1
     ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
@@ -120,7 +152,7 @@ local function run(ctx)
     arg_gsm_picker.open(ctx, gsmKeys, (row and row.egsmArgKey) or "-gsm")
   end
 
-  if ctx.bblArgAddMenu and total >= maxArgs then
+  if ctx.bblArgAddMenu and hasArgCap and total >= maxArgs then
     ctx.bblArgAddMenu = nil
     ctx.bblArgAddSel = nil
     ctx.bblArgAddScroll = nil
@@ -179,8 +211,9 @@ local function run(ctx)
         ctx.state = "bbl_hotkey_args"
       end)
     end
-    local titleAdd = "Add argument (" .. tostring(total) .. "/" .. tostring(maxArgs) .. ") [" ..
-        arg_profiles.getMenuTag(profileState) .. "]"
+    local titleAdd = hasArgCap
+      and ("Add argument (" .. tostring(total) .. "/" .. tostring(maxArgs) .. ") [" .. arg_profiles.getMenuTag(profileState) .. "]")
+      or ("Add argument (" .. tostring(total) .. ") [" .. arg_profiles.getMenuTag(profileState) .. "]")
     if arg_add_menu.run(ctx, {
           menuOpenKey = "bblArgAddMenu",
           selKey = "bblArgAddSel",
@@ -221,9 +254,10 @@ local function run(ctx)
   ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgSel or 1, total)
   ctx.bblArgScroll = _.common.centeredListScroll(ctx.bblArgSel, total, _.MAX_VISIBLE_LIST)
 
-  local displayKey = (keyId == "AUTO") and "AUTOBOOT" or keyId
-  local title = displayKey .. " - E" .. tostring(slot) .. " args (" .. tostring(total) .. "/" .. tostring(maxArgs) .. ")"
-  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, title, _.WHITE)
+  local titleSuffix = hasArgCap
+      and (" - E" .. tostring(slot) .. " args (" .. tostring(total) .. "/" .. tostring(maxArgs) .. ")")
+      or (" - E" .. tostring(slot) .. " args (" .. tostring(total) .. ")")
+  drawPadTitle(_, keyId, titleSuffix)
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   if total == 0 then
@@ -253,7 +287,7 @@ local function run(ctx)
   if total > 0 and args[ctx.bblArgSel] then
     hint = args[ctx.bblArgSel].disabled and (_.menu_str.args_hint_items_with_enable or _.menu_str.args_hint_items) or
         (_.menu_str.args_hint_items_with_disable or _.menu_str.args_hint_items)
-    if total >= maxArgs then
+    if hasArgCap and total >= maxArgs then
       local filtered = {}
       for _, item in ipairs(hint or {}) do
         if item.pad ~= "select" then
@@ -308,7 +342,7 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and total < maxArgs then
+  if (_.padEffective & _.PAD_SELECT) ~= 0 and ((not hasArgCap) or total < maxArgs) then
     ctx.bblArgAddMenu = true
     ctx.bblArgAddSel = ctx.bblArgAddSel or 1
     ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0

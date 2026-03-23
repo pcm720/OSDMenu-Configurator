@@ -116,9 +116,41 @@ local function getLanguageDisplayName(idx)
   return defaultLanguageDisplayName(code)
 end
 
+local function withoutUpDownHints(items)
+  local out = {}
+  for i = 1, #(items or {}) do
+    local it = items[i]
+    local pad = tostring((it and it.pad) or ""):lower()
+    if pad ~= "up" and pad ~= "down" then
+      out[#out + 1] = it
+    end
+  end
+  return out
+end
+
+local function buildMainBaseHintItems(main_str)
+  local base = withoutUpDownHints(main_str.main_hint_items or {})
+  local out = {}
+  for i = 1, #base do
+    local item = base[i]
+    local rawPad = tostring((item and item.pad) or "")
+    local padLower = rawPad:lower()
+    local isExit = (padLower == "start" or padLower == "circle")
+    local pad = isExit and "circle" or rawPad
+    local row = isExit and 1 or 2
+    out[#out + 1] = {
+      pad = pad,
+      label = (item and item.label) or "",
+      layoutLabel = item and item.layoutLabel,
+      row = row,
+    }
+  end
+  return out
+end
+
 local function buildMainLangHintItems(s, main_str)
   if C.langCycleDisabled or not C.langFiles or #C.langFiles <= 1 then
-    return main_str.main_hint_items or {}
+    return buildMainBaseHintItems(main_str)
   end
 
   local idx = C.langIndex or 1
@@ -128,24 +160,24 @@ local function buildMainLangHintItems(s, main_str)
   if nextIdx > #C.langFiles then nextIdx = 1 end
 
   local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
-  local upLabel = findHintLabel(baseHint, "up", "Up")
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
-  local downLabel = findHintLabel(baseHint, "down", "Down")
-  local saveLabel = findHintLabel(baseHint, "start", "Save")
+  local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
   local prevLabel = getLanguageDisplayName(prevIdx)
   local nextLabel = getLanguageDisplayName(nextIdx)
+  local l1Label = findHintLabel(baseHint, "L1", prevLabel)
+  local r1Label = findHintLabel(baseHint, "R1", nextLabel)
 
-  local leftLayout = widerLabel(s.font, 0.7, upLabel, prevLabel)
-  local centerLayout = widerLabel(s.font, 0.7, enterLabel, saveLabel)
-  local rightLayout = widerLabel(s.font, 0.7, downLabel, nextLabel)
+  local leftLayout = widerLabel(s.font, 0.7, l1Label, prevLabel)
+  local centerLayout = widerLabel(s.font, 0.7, enterLabel, exitLabel)
+  local rightLayout = widerLabel(s.font, 0.7, r1Label, nextLabel)
 
   return {
-    { pad = "up", label = upLabel, layoutLabel = leftLayout, row = 1 },
-    { pad = "cross", label = enterLabel, layoutLabel = centerLayout, row = 1 },
-    { pad = "down", label = downLabel, layoutLabel = rightLayout, row = 1 },
     { pad = "L1", label = prevLabel, layoutLabel = leftLayout, row = 2 },
-    { pad = "start", label = saveLabel, layoutLabel = centerLayout, row = 2 },
+    { pad = "", label = "", layoutLabel = centerLayout, row = 2 },
     { pad = "R1", label = nextLabel, layoutLabel = rightLayout, row = 2 },
+    { pad = "cross", label = enterLabel, layoutLabel = leftLayout, row = 1 },
+    { pad = "", label = "", row = 1 },
+    { pad = "circle", label = exitLabel, layoutLabel = rightLayout, row = 1 },
   }
 end
 
@@ -417,18 +449,31 @@ local function runMain(s, pad)
     s.mainSel = s.mainSel + 1
   end
   s.mainOverlayLogoKey = getMainOverlayLogoKey(s.mainSel)
-  if (pad & PAD_START) ~= 0 and not s.mainExitPrompt then s.mainExitPrompt = true end
+  local openedExitPrompt = false
+  if (pad & PAD_CIRCLE) ~= 0 and not s.mainExitPrompt then
+    s.mainExitPrompt = true
+    openedExitPrompt = true
+  end
   if s.mainExitPrompt then
     local msg = main_str.main_exit_prompt or main_str.main_exit
     local tw = common.calcTextWidth(s.font, msg, 1.1)
     local w = s.w or 640
-    local cx = math.floor((w - tw) / 2)
-    local cy = math.floor((MY + H) / 2) - math.floor((s.LINE_H or common.LINE_H) / 2)
+    local h = s.h or 448
+    local lineH = s.LINE_H or common.LINE_H
+    local boxW = tw + 48
+    local boxH = lineH + 24
+    local boxX = math.floor((w - boxW) / 2)
+    local boxY = math.floor((h - boxH) / 2)
+    if Graphics and Graphics.drawRect then
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 110))
+    end
+    local cx = common.centerX and common.centerX(s, tw) or math.floor((w - tw) / 2)
+    local cy = boxY + math.floor((boxH - lineH) / 2)
     dt(s.font, s.drawMode, math.max(M, cx), cy, 1.1, msg, common.WHITE)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.main_exit_hint_items or main_str.circle_back_items, nil,
       common.DIM)
     if (pad & PAD_CROSS) ~= 0 then System.exitToBrowser() end
-    if (pad & PAD_CIRCLE) ~= 0 then s.mainExitPrompt = nil end
+    if (pad & PAD_CIRCLE) ~= 0 and not openedExitPrompt then s.mainExitPrompt = nil end
     return
   end
   dt(s.font, s.drawMode, M, MY, 1.1, main_str.main_title or "", common.WHITE)
@@ -439,7 +484,7 @@ local function runMain(s, pad)
   dt(s.font, s.drawMode, w - M - vw, MY, 0.75, versionStr, common.DIM)
   dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
   local hintItems = (not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 and buildMainLangHintItems(s, main_str)) or
-      main_str.main_hint_items
+      buildMainBaseHintItems(main_str)
   common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
   for i, label in ipairs(s.main) do
     local y = MY + sc(50) + (i - 1) * L

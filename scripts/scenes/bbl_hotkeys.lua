@@ -41,6 +41,7 @@ local function run(ctx)
   for i = ctx.bblHotkeyScroll + 1, math.min(ctx.bblHotkeyScroll + _.MAX_VISIBLE_LIST, #hotkeys) do
     local keyId = hotkeys[i]
     local keyIcon = _.common.getPadIcon(keyId)
+    local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
     local nameVal = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
     local disp = isFmcb and tostring(keyId or "") or ((nameVal ~= "" and nameVal) or _.common_str.empty)
     local line = disp
@@ -53,6 +54,9 @@ local function run(ctx)
     end
     local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.bblHotkeyScroll - 1) * _.LINE_H
     local col = (i == ctx.bblHotkeySel) and _.SELECTED_ENTRY or _.WHITE
+    if keyDisabled then
+      col = (i == ctx.bblHotkeySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+    end
     if keyIcon then
       local iconY = y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
       if _.Graphics.drawScaleImage then
@@ -64,9 +68,14 @@ local function run(ctx)
     _.drawText(_.font, _.drawMode, rowX + iconW + iconGap, y, _.FONT_SCALE, line, col)
   end
 
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7,
-    _.menu_str.cross_select_circle_back_items or { { pad = "cross", label = "Enter" }, { pad = "circle", label = "Back" } },
-    nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  local selKey = hotkeys[ctx.bblHotkeySel]
+  local selDisabled = selKey and _.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, selKey)
+  local hint = {
+    { pad = "cross", label = "Enter", row = 1 },
+    { pad = "triangle", label = selDisabled and "Enable" or "Disable", layoutLabel = "Disable", row = 1 },
+    { pad = "circle", label = "Back", row = 1 },
+  }
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.bblHotkeySel = ctx.bblHotkeySel - 1
@@ -81,7 +90,16 @@ local function run(ctx)
     ctx.bblEntrySel = ctx.bblEntrySel or 1
     ctx.bblEntryScroll = ctx.bblEntryScroll or 0
     ctx.bblEntryFocusSlot = nil
+    ctx.bblEntryListReturnState = "bbl_hotkeys"
     ctx.state = "bbl_hotkey_entries"
+  end
+  if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
+    local keyId = hotkeys[ctx.bblHotkeySel]
+    if keyId and _.config_parse.setBblHotkeyDisabled then
+      local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
+      _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
+      ctx.configModified = true
+    end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.state = "editor"

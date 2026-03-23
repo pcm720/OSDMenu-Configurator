@@ -240,6 +240,7 @@ local function run(ctx)
       local o = ctx.optList[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
       local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.WHITE
+      local bootKeyDisabled = false
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       local valDisplay
       if o.optType == "header" or o.optType == "action" then
@@ -250,6 +251,7 @@ local function run(ctx)
         local v = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         valDisplay = (v == "1") and _.common_str.on or _.common_str.off
       elseif o.optType == "boot_paths" then
+        bootKeyDisabled = (_.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)) and true or false
         local paths = _.config_parse.getBootPaths(ctx.lines, o.key)
         if not paths or #paths == 0 then
           valDisplay = ""
@@ -334,7 +336,13 @@ local function run(ctx)
           local argCount = (slot and slot.argCount) or 0
           lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp .. " " .. formatArgCount(argCount)
         end
+        if slot and slot.used and slot.disabled then
+          col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        end
         valDisplay = ""
+      end
+      if o.optType == "boot_paths" and bootKeyDisabled then
+        col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
       if inlineAutoRow then
         local maxInlineW = (_.w or 640) - (_.MARGIN_X + 16) - (_.MARGIN_X + 8)
@@ -417,6 +425,19 @@ local function run(ctx)
         descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
       end
       if descStr ~= "" then
+        local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+        if _.common.fitListRowText then
+          descStr = _.common.fitListRowText(ctx,
+            "editor_desc_" .. tostring(selOpt.key or ""),
+            _.font,
+            descStr,
+            descMaxW,
+            0.72,
+            true,
+            { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+        elseif _.common.truncateTextToWidth then
+          descStr = _.common.truncateTextToWidth(_.font, descStr, descMaxW, 0.72)
+        end
         local tw = _.common.calcTextWidth(_.font, descStr, 0.72)
         local x = _.common.centerX(_, tw)
         _.drawText(_.font, _.drawMode, x, _.DESC_Y_BOTTOM, 0.72, descStr, _.DIM)
@@ -428,6 +449,24 @@ local function run(ctx)
     local hintItems = _.common.buildEditorHintItems(selOpt, _.editor_str.hint_edit_items,
       _.config_options.getOsdmenuDefault,
       { left = _.common_str.hint_prev, right = _.common_str.hint_next })
+    local isAutoSlotRow = selOpt and selOpt.optType == "bbl_slot" and selOpt.bblKeyId == "AUTO" and selOpt.bblEntrySlot
+    if isAutoSlotRow then
+      hintItems = {
+        { pad = "cross", label = "Edit", row = 1 },
+        { pad = "triangle", label = "Disable", row = 1 },
+        { pad = "select", label = "Insert", row = 1 },
+        { pad = "square", label = "Remove", row = 1 },
+        { pad = "circle", label = "Back", row = 1 },
+        { pad = "L1", label = "Up", row = 2 },
+        { pad = "start", label = "Save", row = 2 },
+        { pad = "R1", label = "Down", row = 2 },
+      }
+      local slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO",
+        tonumber(selOpt.bblEntrySlot)) or nil
+      if slot and slot.used and slot.disabled then
+        hintItems[2].label = "Enable"
+      end
+    end
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_UP) ~= 0 then
       ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
@@ -510,6 +549,50 @@ local function run(ctx)
         end
       end
     end
+    if isAutoSlotRow then
+      local slotNum = tonumber(selOpt.bblEntrySlot)
+      local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+      local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
+          ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
+      local slotData = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum) or
+          nil
+
+      if (_.padEffective & _.PAD_SELECT) ~= 0 then
+        local usedCount = 0
+        for i = 1, maxAutoSlots do
+          local s = _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", i)
+          if s and s.used then usedCount = usedCount + 1 end
+        end
+        if usedCount < maxAutoSlots then
+          local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, "AUTO", slotNum, maxAutoSlots)
+          if newSlot then
+            ctx.configModified = true
+            if newSlot < slotNum and ctx.optSel > 1 then
+              ctx.optSel = ctx.optSel + (newSlot - slotNum)
+            elseif newSlot > slotNum and ctx.optSel < #ctx.optList then
+              ctx.optSel = ctx.optSel + 1
+            end
+          end
+        end
+      end
+
+      if (_.padEffective & _.PAD_SQUARE) ~= 0 and slotData and slotData.used then
+        _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", slotNum)
+        ctx.configModified = true
+      end
+
+      if (_.padEffective & _.PAD_L1) ~= 0 and slotNum > 1 then
+        _.config_parse.swapBblHotkeySlots(ctx.lines, "AUTO", slotNum, slotNum - 1)
+        ctx.configModified = true
+        if ctx.optSel > 1 then ctx.optSel = ctx.optSel - 1 end
+      end
+
+      if (_.padEffective & _.PAD_R1) ~= 0 and slotNum < maxAutoSlots then
+        _.config_parse.swapBblHotkeySlots(ctx.lines, "AUTO", slotNum, slotNum + 1)
+        ctx.configModified = true
+        if ctx.optSel < #ctx.optList then ctx.optSel = ctx.optSel + 1 end
+      end
+    end
     if (_.padEffective & _.PAD_CROSS) ~= 0 then
       local o = ctx.optList[ctx.optSel]
       if o.optType == "bool" then
@@ -552,10 +635,17 @@ local function run(ctx)
         ctx.state = "bbl_hotkeys"
       elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
-        ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
-        ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-        ctx.bblEntryDetailReturnState = "editor"
-        ctx.state = "bbl_hotkey_entry"
+        if ctx.bblHotkeyKey == "AUTO" then
+          ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
+          ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+          ctx.bblEntryDetailReturnState = "editor"
+          ctx.state = "bbl_hotkey_entry"
+        else
+          ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
+          ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+          ctx.bblEntryDetailReturnState = "editor"
+          ctx.state = "bbl_hotkey_entry"
+        end
       elseif o.optType == "boot_paths" then
         ctx.bootKey = o.key
         ctx.entryIdx = nil
@@ -590,7 +680,17 @@ local function run(ctx)
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
       local o = ctx.optList[ctx.optSel]
-      if o and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
+      if o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then
+        local slotNum = tonumber(o.bblEntrySlot)
+        local slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum) or nil
+        if slot and slot.used then
+          local changed = _.config_parse.setBblHotkeySlotDisabled and
+              _.config_parse.setBblHotkeySlotDisabled(ctx.lines, "AUTO", slotNum, not slot.disabled)
+          if changed then
+            ctx.configModified = true
+          end
+        end
+      elseif o and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
         local def = nil
         if ctx.fileType == "freemcboot_cnf" then
           def = _.config_options.getFreemcbootDefault and _.config_options.getFreemcbootDefault(o.key)
@@ -600,6 +700,14 @@ local function run(ctx)
         if def ~= nil then
           _.config_parse.set(ctx.lines, o.key, def); ctx.configModified = true
         end
+      end
+    end
+    if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and ctx.fileType == "osdmbr_cnf" then
+      local o = ctx.optList[ctx.optSel]
+      if o and o.optType == "boot_paths" and o.key then
+        local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
+        _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
+        ctx.configModified = true
       end
     end
   else

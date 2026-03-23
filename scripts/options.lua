@@ -50,8 +50,8 @@ end
 -- Ordered to match PS2BBL source search order (first -> last), ignoring unsupported XFROM.
 local function buildPs2BblIniLocations()
   local out = {}
-  appendUnique(out, "mmce1:/PS2BBL/PS2BBL.INI")
-  appendUnique(out, "mmce0:/PS2BBL/PS2BBL.INI")
+  appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
@@ -65,8 +65,8 @@ local function buildPsxBblIniLocations()
   local out = {}
   appendUnique(out, "mc1:/SYS-CONF/PSXBBL.INI")
   appendUnique(out, "mc0:/SYS-CONF/PSXBBL.INI")
-  appendUnique(out, "mmce1:/PS2BBL/PS2BBL.INI")
-  appendUnique(out, "mmce0:/PS2BBL/PS2BBL.INI")
+  appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
@@ -195,7 +195,7 @@ config_options.BBL_HOTKEYS = {
   "L1", "L2", "L3", "R1", "R2", "R3", "SELECT", "START"
 }
 config_options.BBL_MAX_ENTRIES = 10
-config_options.BBL_MAX_ARGS_PER_ENTRY = 8
+config_options.BBL_MAX_ARGS_PER_ENTRY = nil -- uncapped
 config_options.BBL_MAX_IRX_ENTRIES = 10
 config_options.FMCB_MAX_ENTRIES = 99
 config_options.FMCB_MAX_PATHS_PER_ENTRY = 3
@@ -266,6 +266,20 @@ local function buildBblIniGlobalOptions()
       default = "0",
       label = "PS1DRV_USE_PS1VN",
       desc = "Enable PS1 video negator.",
+    },
+    {
+      key = "APP_GAMEID",
+      optType = "bool",
+      default = "1",
+      label = "APP_GAMEID",
+      desc = "Game ID for RetroGem",
+    },
+    {
+      key = "CDROM_DISABLE_GAMEID",
+      optType = "bool",
+      default = "0",
+      label = "CDROM_DISABLE_GAMEID",
+      desc = "Disable RetroGem Game ID for DISCS",
     },
   }
 

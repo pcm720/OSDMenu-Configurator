@@ -1,5 +1,35 @@
 --[[ Paths list for a menu entry or MBR boot key (when ctx.bootKey is set and we're in MBR). ]]
 
+local function getBootPadName(key)
+  if key == "boot_start" then return "start" end
+  if key == "boot_triangle" then return "triangle" end
+  if key == "boot_circle" then return "circle" end
+  if key == "boot_cross" then return "cross" end
+  if key == "boot_square" then return "square" end
+  return nil
+end
+
+local function drawBootTitle(_, bootKey, titleLabel)
+  local padName = getBootPadName(bootKey)
+  local icon = padName and _.common.getPadIcon and _.common.getPadIcon(padName) or nil
+  local baseIconW = _.common.PAD_ICON_W or 26
+  local baseIconH = _.common.PAD_ICON_H or 26
+  local textH = (_.common and _.common.FT_PIXEL_H) or 18
+  local iconH = math.min(baseIconH, textH)
+  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
+  local iconGap = 8
+  local iconY = _.MARGIN_Y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
+
+  if icon then
+    if _.Graphics.drawScaleImage then
+      _.Graphics.drawScaleImage(icon, _.MARGIN_X, iconY, iconW, iconH)
+    else
+      _.Graphics.drawImage(icon, _.MARGIN_X, iconY)
+    end
+  end
+  _.drawText(_.font, _.drawMode, _.MARGIN_X + iconW + iconGap, _.MARGIN_Y, 1, "- " .. titleLabel, _.WHITE)
+end
+
 local function run(ctx)
   local _ = ctx._
   local isBoot = not not (ctx.bootKey and (ctx.context == "mbr" or ctx.fileType == "osdmbr_cnf"))
@@ -12,7 +42,7 @@ local function run(ctx)
   if isBoot and not ctx.bootKey then
     ctx.state = "editor"; return
   end
-  local paths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
+  local paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
       _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
   local hasExclusivePath = false
   local hasArgsPaths = false
@@ -55,7 +85,11 @@ local function run(ctx)
     end
     titleStr = string.format(_.menu_str.paths_for_entry_title, name, ctx.entryIdx)
   end
-  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, titleStr, _.WHITE)
+  if isBoot then
+    drawBootTitle(_, ctx.bootKey, titleStr)
+  else
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, titleStr, _.WHITE)
+  end
   local argsRow = pathRows + 1
   local argsRowIsSpecial = hasSpecialArgsPath and (not hasArgsPaths or #paths == 1)
   local function pathLabel(p)
@@ -91,13 +125,13 @@ local function run(ctx)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local col = (i == ctx.entryPathSel) and _.SELECTED_ENTRY or _.WHITE
-    if not isBoot and i <= pathRows and type(paths[i]) == "table" and paths[i].disabled then
+    if i <= pathRows and type(paths[i]) == "table" and paths[i].disabled then
       col = (i == ctx.entryPathSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryPathSel, label, col)
   end
   local pathHints = _.menu_str.paths_hint_items
-  if not isBoot and ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
+  if ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
     pathHints = paths[ctx.entryPathSel].disabled and (_.menu_str.paths_hint_items_with_enable or pathHints)
         or (_.menu_str.paths_hint_items_with_disable or pathHints)
   end
@@ -132,6 +166,7 @@ local function run(ctx)
     ctx.pathPickerTarget = nil
     ctx.pathPickerFileExts = nil
     ctx.pathPickerEditIdx = editIdx
+    ctx.pathPickerInsertBelow = nil
     ctx.pathPickerSub = "device"
     ctx.pathList = _.file_selector.getDevices(isBoot and "mbr" or "osdmenu") or {}
     ctx.pathPickerSel = ctx.pathPickerSel or 1
@@ -141,8 +176,12 @@ local function run(ctx)
     ctx.state = "path_picker"
   end
   local function toggleSelectedPathDisabled()
-    if not isBoot and ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
-      _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
+    if ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
+      if isBoot then
+        _.config_parse.setBootPathDisabled(ctx.lines, ctx.bootKey, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
+      else
+        _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
+      end
       ctx.configModified = true
     end
   end
@@ -163,14 +202,21 @@ local function run(ctx)
       openPathPicker(ctx.entryPathSel)
     end
   end
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and canAddPath then openPathPicker(nil) end
+  if (_.padEffective & _.PAD_SELECT) ~= 0 and canAddPath then
+    if isBoot and ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows then
+      ctx.pathPickerInsertBelow = ctx.entryPathSel
+    else
+      ctx.pathPickerInsertBelow = nil
+    end
+    openPathPicker(nil)
+  end
   if (_.padEffective & _.PAD_L1) ~= 0 then
     if ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths and ctx.entryPathSel > 1 then
-      paths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
+      paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
           _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
       paths[ctx.entryPathSel], paths[ctx.entryPathSel - 1] = paths[ctx.entryPathSel - 1], paths[ctx.entryPathSel]
       if isBoot then
-        _.config_parse.setBootPaths(ctx.lines, ctx.bootKey, paths)
+        _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
       else
         _.config_parse.setMenuEntryPaths(
           ctx.lines, ctx.entryIdx, paths)
@@ -181,11 +227,11 @@ local function run(ctx)
   end
   if (_.padEffective & _.PAD_R1) ~= 0 then
     if ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths and ctx.entryPathSel < #paths then
-      paths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
+      paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
           _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
       paths[ctx.entryPathSel], paths[ctx.entryPathSel + 1] = paths[ctx.entryPathSel + 1], paths[ctx.entryPathSel]
       if isBoot then
-        _.config_parse.setBootPaths(ctx.lines, ctx.bootKey, paths)
+        _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
       else
         _.config_parse.setMenuEntryPaths(
           ctx.lines, ctx.entryIdx, paths)
@@ -196,11 +242,11 @@ local function run(ctx)
   end
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
     if ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths then
-      paths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
+      paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
           _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
       table.remove(paths, ctx.entryPathSel)
       if isBoot then
-        _.config_parse.setBootPaths(ctx.lines, ctx.bootKey, paths)
+        _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
       else
         _.config_parse.setMenuEntryPaths(
           ctx.lines, ctx.entryIdx, paths)
