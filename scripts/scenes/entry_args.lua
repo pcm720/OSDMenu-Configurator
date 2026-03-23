@@ -66,19 +66,14 @@ local function run(ctx)
 
   local function getArgs()
     if isBoot then
-      local a = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey) or {}
-      local t = {}
-      for _, v in ipairs(a) do table.insert(t, { value = v, disabled = false }) end
-      return t
+      return _.config_parse.getBootArgEntries(ctx.lines, ctx.bootKey) or {}
     end
     return _.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {}
   end
 
   local function setArgs(a)
     if isBoot then
-      local v = {}
-      for _, item in ipairs(a or {}) do table.insert(v, type(item) == "table" and item.value or item) end
-      _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v)
+      _.config_parse.setBootArgEntries(ctx.lines, ctx.bootKey, a or {})
       ctx.configModified = true
     else
       _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, a)
@@ -89,10 +84,17 @@ local function run(ctx)
   local function addArgValue(v)
     local value = tostring(v or "")
     if value == "" then return end
-    local args2 = getArgs()
-    table.insert(args2, { value = value, disabled = false })
-    setArgs(args2)
-    ctx.entryArgSel = #args2
+    if isBoot and ctx.entryArgInsertBelow and ctx.entryArgInsertBelow >= 0 then
+      local insertAt = _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value)
+      ctx.configModified = true
+      ctx.entryArgSel = insertAt or (ctx.entryArgInsertBelow + 1)
+    else
+      local args2 = getArgs()
+      table.insert(args2, { value = value, disabled = false })
+      setArgs(args2)
+      ctx.entryArgSel = #args2
+    end
+    ctx.entryArgInsertBelow = nil
   end
 
   local function openNewArgumentInput(prompt, maxLen, callback)
@@ -323,7 +325,7 @@ local function run(ctx)
   end
 
   local argHints = _.menu_str.args_hint_items
-  if not isBoot and ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
+  if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
     argHints = args[ctx.entryArgSel].disabled and (_.menu_str.args_hint_items_with_enable or argHints)
         or (_.menu_str.args_hint_items_with_disable or argHints)
   end
@@ -348,8 +350,12 @@ local function run(ctx)
   end
 
   local function toggleSelectedArgDisabled()
-    if not isBoot and ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
-      _.config_parse.setArgDisabled(ctx.lines, ctx.entryIdx, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
+    if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
+      if isBoot then
+        _.config_parse.setBootArgDisabled(ctx.lines, ctx.bootKey, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
+      else
+        _.config_parse.setArgDisabled(ctx.lines, ctx.entryIdx, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
+      end
       ctx.configModified = true
     end
   end
@@ -393,6 +399,11 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_SELECT) ~= 0 and (isBoot or not hasCdrom) then
+    if isBoot and total > 0 and ctx.entryArgSel >= 1 and ctx.entryArgSel <= total then
+      ctx.entryArgInsertBelow = ctx.entryArgSel
+    else
+      ctx.entryArgInsertBelow = nil
+    end
     ctx.entryArgAddMenu = true
     ctx.entryArgAddSel = ctx.entryArgAddSel or 1
     ctx.entryArgAddScroll = ctx.entryArgAddScroll or 0

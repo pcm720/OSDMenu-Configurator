@@ -240,6 +240,7 @@ local function run(ctx)
       local o = ctx.optList[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
       local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.WHITE
+      local bootKeyDisabled = false
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       local valDisplay
       if o.optType == "header" or o.optType == "action" then
@@ -250,6 +251,7 @@ local function run(ctx)
         local v = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         valDisplay = (v == "1") and _.common_str.on or _.common_str.off
       elseif o.optType == "boot_paths" then
+        bootKeyDisabled = (_.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)) and true or false
         local paths = _.config_parse.getBootPaths(ctx.lines, o.key)
         if not paths or #paths == 0 then
           valDisplay = ""
@@ -335,6 +337,9 @@ local function run(ctx)
           lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp .. " " .. formatArgCount(argCount)
         end
         valDisplay = ""
+      end
+      if o.optType == "boot_paths" and bootKeyDisabled then
+        col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
       if inlineAutoRow then
         local maxInlineW = (_.w or 640) - (_.MARGIN_X + 16) - (_.MARGIN_X + 8)
@@ -613,6 +618,14 @@ local function run(ctx)
         if def ~= nil then
           _.config_parse.set(ctx.lines, o.key, def); ctx.configModified = true
         end
+      end
+    end
+    if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and ctx.fileType == "osdmbr_cnf" then
+      local o = ctx.optList[ctx.optSel]
+      if o and o.optType == "boot_paths" and o.key then
+        local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
+        _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
+        ctx.configModified = true
       end
     end
   else

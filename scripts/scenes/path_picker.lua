@@ -5,17 +5,25 @@ local function applyBootPathAndReturn(ctx, val)
   if not ctx.pathPickerBootKey or not ctx.lines then return nil end
   local _ = ctx._
   if ctx.pathPickerEditIdx then
-    local paths = _.config_parse.getBootPaths(ctx.lines, ctx.pathPickerBootKey) or {}
-    paths[ctx.pathPickerEditIdx] = val
-    _.config_parse.setBootPaths(ctx.lines, ctx.pathPickerBootKey, paths)
+    local paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+    local item = paths[ctx.pathPickerEditIdx]
+    if type(item) == "table" then
+      item.value = val
+    else
+      paths[ctx.pathPickerEditIdx] = { value = val, disabled = false }
+    end
+    _.config_parse.setBootPathEntries(ctx.lines, ctx.pathPickerBootKey, paths)
+  elseif ctx.pathPickerInsertBelow then
+    _.config_parse.insertBootPathBelow(ctx.lines, ctx.pathPickerBootKey, ctx.pathPickerInsertBelow, val)
   else
-    _.config_parse.append(ctx.lines, ctx.pathPickerBootKey, val)
+    _.config_parse.insertBootPathBelow(ctx.lines, ctx.pathPickerBootKey, 0x7fffffff, val)
   end
   ctx.state = ctx.pathPickerReturnState or "editor"
   ctx.pathPickerBootKey = nil
   ctx.pathPickerReturnState = nil
   ctx.pathPickerForEntryIdx = nil
   ctx.pathPickerEditIdx = nil
+  ctx.pathPickerInsertBelow = nil
   return true
 end
 
@@ -171,6 +179,7 @@ local function applyManualPath(ctx, val)
       ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
       ctx.pathPickerForEntryIdx = nil
       ctx.pathPickerEditIdx = nil
+      ctx.pathPickerInsertBelow = nil
     elseif ctx.pathPickerBblHotkeyKey then
       ctx.state = ctx.pathPickerReturnState or "bbl_hotkey_entry"
       ctx.pathPickerBblHotkeyKey = nil
@@ -241,6 +250,7 @@ local function applyManualPath(ctx, val)
   end
   ctx.pathPickerBootKey = nil
   ctx.pathPickerReturnState = nil
+  ctx.pathPickerInsertBelow = nil
   ctx.pathPickerBdmPrefix = nil
   ctx.pathPickerBdmMountpoint = nil
   clearConfigOpenPickerState(ctx)
@@ -413,17 +423,7 @@ local function run(ctx)
         _.config_parse.append(ctx.lines, key, chosenVal)
         ctx.state = "editor"
       elseif mode == "boot" then
-        if ctx.pathPickerEditIdx then
-          local paths = _.config_parse.getBootPaths(ctx.lines, ctx.pathPickerBootKey) or {}
-          paths[ctx.pathPickerEditIdx] = chosenVal
-          _.config_parse.setBootPaths(ctx.lines, ctx.pathPickerBootKey, paths)
-        else
-          _.config_parse.append(ctx.lines, ctx.pathPickerBootKey, chosenVal)
-        end
-        ctx.state = ctx.pathPickerReturnState or "editor"
-        ctx.pathPickerBootKey = nil
-        ctx.pathPickerReturnState = nil
-        ctx.pathPickerEditIdx = nil
+        applyBootPathAndReturn(ctx, chosenVal)
       end
       ctx.pathPickerWildcardConfirm = nil
       ctx.pathPickerPendingPath = nil
@@ -677,20 +677,10 @@ local function run(ctx)
 	              ctx.pathList = nil
 	              ctx.pfs0Mounted = nil
 	              ctx.pfs1Mounted = nil
-	              if ctx.pathPickerBootKey and ctx.lines then
-	                if ctx.pathPickerEditIdx then
-	                  local paths = _.config_parse.getBootPaths(ctx.lines, ctx.pathPickerBootKey) or {}
-	                  paths[ctx.pathPickerEditIdx] = pathVal
-	                  _.config_parse.setBootPaths(ctx.lines, ctx.pathPickerBootKey, paths)
-	                else
-	                  _.config_parse.append(ctx.lines, ctx.pathPickerBootKey, pathVal)
-	                end
-	                if e.noargs then _.config_parse.setBootArgs(ctx.lines, ctx.pathPickerBootKey, {}) end
-	                ctx.state = ctx.pathPickerReturnState or "editor"
-	                ctx.pathPickerBootKey = nil
-	                ctx.pathPickerReturnState = nil
-	                ctx.pathPickerForEntryIdx = nil
-	                ctx.pathPickerEditIdx = nil
+                if ctx.pathPickerBootKey and ctx.lines then
+                  local bootKey = ctx.pathPickerBootKey
+                  applyBootPathAndReturn(ctx, pathVal)
+                  if e.noargs then _.config_parse.setBootArgs(ctx.lines, bootKey, {}) end
 	              elseif applyBblHotkeyPathAndReturn(ctx, pathVal) then
 	              elseif applyBblIrxPathAndReturn(ctx, pathVal) then
 	              elseif ctx.pathPickerForEntryIdx then
