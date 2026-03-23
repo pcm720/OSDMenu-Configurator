@@ -200,7 +200,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rTop = rowTop + rowIndex * (rowH + rowGap)
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
-      local textY = math.floor(rowCenter - textH / 2) - 10
+      local textY = math.floor(rowCenter - textH / 2) - 3
       for col = 1, slotCount do
         local item = slots[col]
         local padName = item and item.pad
