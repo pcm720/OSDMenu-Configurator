@@ -205,6 +205,17 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local textY = math.floor(rowCenter - textH / 2) - 4
       local activeIconColor = Color.new(255, 255, 255, 255)
       local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
+      local function drawActiveIcon(icon, px)
+        if Graphics.drawScaleImage then
+          local drawScaled = Graphics.drawScaleImage
+          local ok = pcall(drawScaled, icon, px, iconY, iconW, iconH)
+          if not ok then
+            drawScaled(icon, px, iconY, iconW, iconH, activeIconColor)
+          end
+        else
+          Graphics.drawImage(icon, px, iconY)
+        end
+      end
       for col = 1, slotCount do
         local item = slots[col]
         local padName = item and item.pad
@@ -224,11 +235,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
           local px = math.floor(slotCenter - iconW / 2)
           if icon then
             if isUsed then
-              if Graphics.drawScaleImage then
-                Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, activeIconColor)
-              else
-                Graphics.drawImage(icon, px, iconY)
-              end
+              drawActiveIcon(icon, px)
             else
               if Graphics.drawScaleImage then
                 Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, inactiveIconColor)
