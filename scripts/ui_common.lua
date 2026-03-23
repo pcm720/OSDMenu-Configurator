@@ -44,7 +44,8 @@ common.VALUE_MAX_LEN               = 38
 common.VALUE_MAX_LEN_LONG          = 22
 common.HINT_Y                      = 424
 
--- Pad button hint icons (System/textures/*.png). Layout for icon+label.
+-- Pad button hint icons (System/textures/*.png).
+-- Layout metrics.
 common.PAD_ICON_W                  = 26
 common.PAD_ICON_H                  = 26
 common.PAD_HINT_GAP                = 5
@@ -56,12 +57,16 @@ common.PAD_HINT_ITEM_GAP           = 20
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H * 2 + common.PAD_HINT_ROW_GAP -- height when 2 rows
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
+
+-- 6x2 grid geometry tuning (code-only).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
-common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
-common.PAD_HINT_UNUSED_ALPHA       = 38 -- 15% opaque = 85% transparent
 common.PAD_HINT_GRID_EXTRA_W       = 30
 common.PAD_HINT_GRID_X_SHIFT       = -25
+
+-- Unused placeholder behavior (code-only).
+common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
+common.PAD_HINT_UNUSED_ALPHA       = 20 -- ~8% opaque = ~92% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
