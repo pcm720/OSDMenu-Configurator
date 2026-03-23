@@ -61,8 +61,8 @@ common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - c
 -- 6x2 grid geometry tuning (code-only).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
-common.PAD_HINT_GRID_EXTRA_W       = 30
-common.PAD_HINT_GRID_X_SHIFT       = -25
+common.PAD_HINT_GRID_EXTRA_W       = 40
+common.PAD_HINT_GRID_X_SHIFT       = -35
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
