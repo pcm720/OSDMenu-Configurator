@@ -195,7 +195,7 @@ config_options.BBL_HOTKEYS = {
   "L1", "L2", "L3", "R1", "R2", "R3", "SELECT", "START"
 }
 config_options.BBL_MAX_ENTRIES = 10
-config_options.BBL_MAX_ARGS_PER_ENTRY = 8
+config_options.BBL_MAX_ARGS_PER_ENTRY = nil -- uncapped
 config_options.BBL_MAX_IRX_ENTRIES = 10
 config_options.FMCB_MAX_ENTRIES = 99
 config_options.FMCB_MAX_PATHS_PER_ENTRY = 3

@@ -211,7 +211,7 @@ local BBL_HOTKEYS = {
   "L1", "L2", "L3", "R1", "R2", "R3", "SELECT", "START"
 }
 local BBL_MAX_ENTRIES = 10
-local BBL_MAX_ARGS_PER_ENTRY = 8
+local BBL_MAX_ARGS_PER_ENTRY = nil -- uncapped
 local BBL_MAX_IRX_ENTRIES = 10
 
 function config_parse.getBblHotkeys()
@@ -523,10 +523,7 @@ function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
   for i = 1, #ids do keys[#keys + 1] = bblArgKey(ids[i], entryIdx) end
   removeAllKeys(lines, keys)
   local key = bblArgKey(canonical, entryIdx)
-  local maxArgs = BBL_MAX_ARGS_PER_ENTRY
-  local count = 0
   for _, item in ipairs(args or {}) do
-    if count >= maxArgs then break end
     local value = type(item) == "table" and item.value or item
     local disabled = false
     if type(item) == "table" then
@@ -538,7 +535,6 @@ function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
       end
     end
     table.insert(lines, { key = key, value = value or "", comment = disabled and true or nil })
-    count = count + 1
   end
   return true
 end

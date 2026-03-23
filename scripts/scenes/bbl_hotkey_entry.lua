@@ -70,7 +70,7 @@ local function run(ctx)
     return
   end
 
-  local maxArgs = (_.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry()) or 8
+  local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
   local data = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot)
   local allowArgs = (ctx.fileType ~= "freemcboot_cnf")
   local rows = allowArgs and { "path", "args" } or { "path" }
@@ -82,7 +82,9 @@ local function run(ctx)
 
   local pathDisp = (data.path ~= "" and data.path) or _.common_str.not_set
   local pathLine = "Path: " .. pathDisp
-  local argsLine = "Arguments: " .. tostring(data.argCount) .. "/" .. tostring(maxArgs)
+  local argsLine = (type(maxArgs) == "number" and maxArgs > 0)
+      and ("Arguments: " .. tostring(data.argCount) .. "/" .. tostring(maxArgs))
+      or ("Arguments: " .. tostring(data.argCount))
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
 
   for i = 1, #rows do
