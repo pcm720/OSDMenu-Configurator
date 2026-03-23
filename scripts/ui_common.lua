@@ -173,28 +173,41 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     local overflow = {}
+    local activePadSet = {}
+    local seenPadSet = {}
     for i = 1, #hintItems do
       local item = hintItems[i]
       local padName = tostring((item and item.pad) or "")
       local key = padName:lower()
       if key ~= "" then
+        if seenPadSet[key] then
+          goto continue
+        end
+        seenPadSet[key] = true
         local topIdx = topMap[key]
         local bottomIdx = bottomMap[key]
         if topIdx and (drawUnusedButtons or not topSlots[topIdx]) then
           topSlots[topIdx] = { pad = key, label = tostring(item.label or ""), used = true }
+          activePadSet[key] = true
         elseif bottomIdx and (drawUnusedButtons or not bottomSlots[bottomIdx]) then
           bottomSlots[bottomIdx] = { pad = key, label = tostring(item.label or ""), used = true }
+          activePadSet[key] = true
         else
           overflow[#overflow + 1] = item
         end
       end
+      ::continue::
     end
 
     local function placeOverflow(slots)
       for i = 1, slotCount do
         if (not slots[i] or not slots[i].used) and #overflow > 0 then
           local item = table.remove(overflow, 1)
-          slots[i] = { pad = tostring(item.pad or ""), label = tostring(item.label or ""), used = true }
+          local key = tostring(item.pad or ""):lower()
+          if key ~= "" and not activePadSet[key] then
+            slots[i] = { pad = key, label = tostring(item.label or ""), used = true }
+            activePadSet[key] = true
+          end
         end
       end
     end
@@ -216,6 +229,11 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local padName = item and item.pad
         local label = (item and item.label) or ""
         local isUsed = item and item.used
+        local key = tostring(padName or ""):lower()
+        if (not isUsed) and key ~= "" and activePadSet[key] then
+          isUsed = nil
+          padName = nil
+        end
         if padName and padName ~= "" then
           local icon = common.getPadIcon(padName)
           local slotLeft = xEff + (col - 1) * slotW
