@@ -232,7 +232,7 @@ strings.options_osdmenu = {
   ps1drv_use_ps1vn = { label = "Utiliser PS1VN", desc = "Utiliser le neutraliseur de mode video PS1" },
   app_gameid = { label = "ID jeu application", desc = "Activer l'ID visuel du jeu pour les fichiers ELF" },
   path_DKWDRV_ELF = { label = "Chemin DKWDRV", desc = "Chemin personnalise vers DKWDRV.ELF" },
-  pad_delay = { label = "Delai manette", desc = "Delai avant la selection de la touche de lancement AUTOBOOT" },
+  pad_delay = { label = "Minuteur", desc = "Delai avant la selection de la touche de lancement AUTOBOOT" },
   FastBoot = { label = "Demarrage rapide", desc = "Activer la gestion rapide du demarrage du disque" },
   ESR_Path_E1 = { label = "Chemin ESR E1", desc = "Chemin ESR principal" },
   ESR_Path_E2 = { label = "Chemin ESR E2", desc = "Chemin ESR secondaire" },

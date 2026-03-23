@@ -232,7 +232,7 @@ strings.options_osdmenu = {
   ps1drv_use_ps1vn = { label = "Usar PS1VN", desc = "Usar Negador de Modo de Video de PS1" },
   app_gameid = { label = "ID de juego de aplicación", desc = "Habilitar ID de juego visual para archivos ELF" },
   path_DKWDRV_ELF = { label = "Ruta DKWDRV", desc = "Ruta personalizada a DKWDRV.ELF" },
-  pad_delay = { label = "Retardo de pad", desc = "Retardo antes de procesar la selección de tecla de AUTOBOOT" },
+  pad_delay = { label = "Temporizador", desc = "Retardo antes de procesar la selección de tecla de AUTOBOOT" },
   FastBoot = { label = "Inicio rápido", desc = "Habilitar manejo de inicio rápido de disco" },
   ESR_Path_E1 = { label = "Ruta ESR E1", desc = "Ruta ESR primaria" },
   ESR_Path_E2 = { label = "Ruta ESR E2", desc = "Ruta ESR secundaria" },
