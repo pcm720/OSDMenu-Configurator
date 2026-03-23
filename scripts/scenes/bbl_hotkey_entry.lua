@@ -72,7 +72,7 @@ local function run(ctx)
 
   local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
   local data = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot)
-  local allowArgs = (ctx.fileType ~= "freemcboot_cnf")
+  local allowArgs = (ctx.fileType ~= "freemcboot_cnf") and (ctx.context ~= "freehddboot")
   local rows = allowArgs and { "path", "args" } or { "path" }
   ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
   if ctx.bblEntryDetailSel < 1 then ctx.bblEntryDetailSel = 1 end

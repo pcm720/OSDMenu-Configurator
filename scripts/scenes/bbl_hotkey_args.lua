@@ -43,6 +43,10 @@ local function run(ctx)
     ctx.state = "bbl_hotkey_entry"
     return
   end
+  if ctx.fileType == "freemcboot_cnf" or ctx.context == "freehddboot" then
+    ctx.state = "bbl_hotkey_entry"
+    return
+  end
 
   local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
   local hasArgCap = (type(maxArgs) == "number" and maxArgs > 0)

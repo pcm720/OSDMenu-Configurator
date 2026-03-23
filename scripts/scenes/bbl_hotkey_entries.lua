@@ -72,12 +72,18 @@ local function run(ctx)
     return
   end
 
-  local isFmcb = (ctx.fileType == "freemcboot_cnf")
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
   local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
       ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   local includeNameRow = not isFmcb
   local rows = buildRows(_, ctx, keyId, maxEntries, includeNameRow)
-  local freeSlot = findFirstFreeSlot(_, ctx, keyId, maxEntries)
+  local usedCount = 0
+  for i = 1, #rows do
+    if rows[i].kind == "entry" then
+      usedCount = usedCount + 1
+    end
+  end
+  local canInsert = usedCount < maxEntries
   if #rows == 0 then
     rows[#rows + 1] = { kind = "empty" }
   end
@@ -163,7 +169,7 @@ local function run(ctx)
   local sel = rows[ctx.bblEntrySel]
   local hint = {
     { pad = "cross", label = "Enter", row = 1 },
-    { pad = (freeSlot and "select" or ""), label = (freeSlot and "Insert" or ""), row = 1 },
+    { pad = (canInsert and "select" or ""), label = (canInsert and "Insert" or ""), row = 1 },
     { pad = "circle", label = "Back", row = 1 },
   }
   if sel and sel.kind == "entry" then
@@ -180,7 +186,7 @@ local function run(ctx)
       { pad = "", label = "", row = 2 },
       { pad = "cross", label = findHintLabel(baseHint, "cross", "Enter"), row = 1 },
       { pad = "triangle", label = findHintLabel(baseHint, "triangle", sel.data.disabled and "Enable" or "Disable"), layoutLabel = toggleLayoutLabel, row = 1 },
-      { pad = (freeSlot and "select" or ""), label = (freeSlot and "Insert" or ""), row = 1 },
+      { pad = (canInsert and "select" or ""), label = (canInsert and "Insert" or ""), row = 1 },
       { pad = "square", label = findHintLabel(baseHint, "square", "Delete"), row = 1 },
       { pad = "circle", label = findHintLabel(baseHint, "circle", "Back"), row = 1 },
     }
@@ -221,11 +227,19 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and freeSlot then
-    ctx.bblEntrySlot = freeSlot
-    ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-    ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
-    ctx.state = "bbl_hotkey_entry"
+  if (_.padEffective & _.PAD_SELECT) ~= 0 and canInsert then
+    local belowSlot = 0
+    if sel and sel.kind == "entry" then
+      belowSlot = sel.slot
+    end
+    local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, belowSlot, maxEntries)
+    if newSlot then
+      ctx.configModified = true
+      ctx.bblEntrySlot = newSlot
+      ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+      ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
+      ctx.state = "bbl_hotkey_entry"
+    end
   end
 
   local function toggleSelectedEntryDisabled()

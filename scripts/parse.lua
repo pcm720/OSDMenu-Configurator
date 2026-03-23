@@ -603,6 +603,88 @@ function config_parse.swapBblHotkeySlots(lines, keyId, slotA, slotB)
   return true
 end
 
+function config_parse.changeBblHotkeySlotIndex(lines, keyId, oldIdx, newIdx)
+  if not isBblHotkeyId(keyId) then return false end
+  if not isValidBblEntryIdx(oldIdx) or not isValidBblEntryIdx(newIdx) then return false end
+  if oldIdx == newIdx then return true end
+
+  local oldData = config_parse.getBblHotkeySlot(lines, keyId, oldIdx)
+  if not oldData.used then return false end
+
+  local newData = config_parse.getBblHotkeySlot(lines, keyId, newIdx)
+  if newData.used then return false end
+
+  config_parse.setBblHotkeyPath(lines, keyId, newIdx, oldData.pathExists and oldData.path or nil, oldData.disabled)
+  config_parse.setBblHotkeyArgs(lines, keyId, newIdx, oldData.args)
+  config_parse.removeBblHotkeySlot(lines, keyId, oldIdx)
+  return true
+end
+
+function config_parse.insertBblHotkeySlotBelow(lines, keyId, belowIdx, maxEntries)
+  if not isBblHotkeyId(keyId) then return nil end
+
+  local cap = tonumber(maxEntries) or BBL_MAX_ENTRIES
+  if cap < 1 then return nil end
+  if cap > BBL_MAX_ENTRIES then cap = BBL_MAX_ENTRIES end
+
+  local ordered = {}
+  for i = 1, cap do
+    local slot = config_parse.getBblHotkeySlot(lines, keyId, i)
+    if slot.used then
+      ordered[#ordered + 1] = {
+        pathExists = slot.pathExists,
+        path = slot.path,
+        disabled = slot.disabled,
+        args = slot.args,
+        slot = i,
+      }
+    end
+  end
+
+  if #ordered >= cap then
+    return nil
+  end
+
+  local insertPos = 1
+  local below = tonumber(belowIdx) or 0
+  if below > 0 then
+    insertPos = #ordered + 1
+    for i = 1, #ordered do
+      if ordered[i].slot == below then
+        insertPos = i + 1
+        break
+      end
+    end
+  end
+  if insertPos < 1 then insertPos = 1 end
+  if insertPos > (#ordered + 1) then insertPos = #ordered + 1 end
+
+  local rewritten = {}
+  local srcPos = 1
+  for i = 1, #ordered + 1 do
+    if i == insertPos then
+      rewritten[i] = false
+    else
+      rewritten[i] = ordered[srcPos]
+      srcPos = srcPos + 1
+    end
+  end
+
+  for i = 1, cap do
+    config_parse.removeBblHotkeySlot(lines, keyId, i)
+  end
+
+  for i = 1, #rewritten do
+    local item = rewritten[i]
+    if item then
+      config_parse.setBblHotkeyPath(lines, keyId, i, item.pathExists and item.path or nil, item.disabled)
+      config_parse.setBblHotkeyArgs(lines, keyId, i, item.args)
+    end
+  end
+
+  return insertPos
+end
+
 -- OSDGSM: validate title ID format AAAA_000.00 (4 uppercase letters, _, 3 digits, ., 2 digits; 11 chars).
 function config_parse.isValidTitleId(s)
   if type(s) ~= "string" or #s ~= 11 then return false end
