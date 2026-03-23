@@ -118,6 +118,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local widthEff = width - 2 * sideMargin
     local slotCount = 6
     local slotW = widthEff / slotCount
+    local usingFtScaledHints = false
+    if drawMode == "ftPrint" and font and Font and Font.ftSetPixelSize then
+      local hintPixelH = math.max(8, math.floor((common.FT_PIXEL_H or 18) * hintScale + 0.5))
+      pcall(Font.ftSetPixelSize, font, 0, hintPixelH)
+      usingFtScaledHints = true
+    end
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
@@ -204,6 +210,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     drawRow(topSlots, 0)
     drawRow(bottomSlots, 1)
+    if usingFtScaledHints and font and Font and Font.ftSetPixelSize then
+      pcall(Font.ftSetPixelSize, font, 0, common.FT_PIXEL_H or 18)
+    end
     return
   end
   if textFallback and textFallback ~= "" then
