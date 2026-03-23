@@ -184,7 +184,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
           local px = math.floor(slotLeft + (slotW - groupW) / 2)
           if icon then
             if Graphics.drawScaleImage then
-              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, common.WHITE)
+              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH)
             else
               Graphics.drawImage(icon, px, iconY)
             end
