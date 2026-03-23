@@ -264,6 +264,8 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   _bbl_irx_entries = { label = "IRX-Eintraege bearbeiten", desc = "LOAD_IRX_E#-Modulpfade bearbeiten" },
+  app_gameid = { label = "Anwendungs-Spiel-ID", desc = "Game ID for RetroGem" },
+  cdrom_disable_gameid = { label = "Visuelle Spiel-ID deaktivieren", desc = "Disable RetroGem Game ID for DISCS" },
 }
 
 -- eGSM-Editor

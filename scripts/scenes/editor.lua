@@ -417,6 +417,19 @@ local function run(ctx)
         descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
       end
       if descStr ~= "" then
+        local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+        if _.common.fitListRowText then
+          descStr = _.common.fitListRowText(ctx,
+            "editor_desc_" .. tostring(selOpt.key or ""),
+            _.font,
+            descStr,
+            descMaxW,
+            0.72,
+            true,
+            { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+        elseif _.common.truncateTextToWidth then
+          descStr = _.common.truncateTextToWidth(_.font, descStr, descMaxW, 0.72)
+        end
         local tw = _.common.calcTextWidth(_.font, descStr, 0.72)
         local x = _.common.centerX(_, tw)
         _.drawText(_.font, _.drawMode, x, _.DESC_Y_BOTTOM, 0.72, descStr, _.DIM)

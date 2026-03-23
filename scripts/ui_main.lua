@@ -128,9 +128,29 @@ local function withoutUpDownHints(items)
   return out
 end
 
+local function buildMainBaseHintItems(main_str)
+  local base = withoutUpDownHints(main_str.main_hint_items or {})
+  local out = {}
+  for i = 1, #base do
+    local item = base[i]
+    local rawPad = tostring((item and item.pad) or "")
+    local padLower = rawPad:lower()
+    local isExit = (padLower == "start" or padLower == "circle")
+    local pad = isExit and "circle" or rawPad
+    local row = isExit and 1 or 2
+    out[#out + 1] = {
+      pad = pad,
+      label = (item and item.label) or "",
+      layoutLabel = item and item.layoutLabel,
+      row = row,
+    }
+  end
+  return out
+end
+
 local function buildMainLangHintItems(s, main_str)
   if C.langCycleDisabled or not C.langFiles or #C.langFiles <= 1 then
-    return withoutUpDownHints(main_str.main_hint_items or {})
+    return buildMainBaseHintItems(main_str)
   end
 
   local idx = C.langIndex or 1
@@ -141,21 +161,23 @@ local function buildMainLangHintItems(s, main_str)
 
   local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
-  local saveLabel = findHintLabel(baseHint, "start", "Save")
+  local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
   local prevLabel = getLanguageDisplayName(prevIdx)
   local nextLabel = getLanguageDisplayName(nextIdx)
   local l1Label = findHintLabel(baseHint, "L1", prevLabel)
   local r1Label = findHintLabel(baseHint, "R1", nextLabel)
 
   local leftLayout = widerLabel(s.font, 0.7, l1Label, prevLabel)
-  local centerLayout = widerLabel(s.font, 0.7, enterLabel, saveLabel)
+  local centerLayout = widerLabel(s.font, 0.7, enterLabel, exitLabel)
   local rightLayout = widerLabel(s.font, 0.7, r1Label, nextLabel)
 
   return {
-    { pad = "cross", label = enterLabel, layoutLabel = centerLayout, row = 1 },
-    { pad = "start", label = saveLabel, layoutLabel = centerLayout, row = 1 },
     { pad = "L1", label = prevLabel, layoutLabel = leftLayout, row = 2 },
+    { pad = "cross", label = enterLabel, layoutLabel = centerLayout, row = 2 },
     { pad = "R1", label = nextLabel, layoutLabel = rightLayout, row = 2 },
+    { pad = "", label = "", row = 1 },
+    { pad = "", label = "", row = 1 },
+    { pad = "circle", label = exitLabel, layoutLabel = rightLayout, row = 1 },
   }
 end
 
@@ -427,7 +449,7 @@ local function runMain(s, pad)
     s.mainSel = s.mainSel + 1
   end
   s.mainOverlayLogoKey = getMainOverlayLogoKey(s.mainSel)
-  if (pad & PAD_START) ~= 0 and not s.mainExitPrompt then s.mainExitPrompt = true end
+  if (pad & PAD_CIRCLE) ~= 0 and not s.mainExitPrompt then s.mainExitPrompt = true end
   if s.mainExitPrompt then
     local msg = main_str.main_exit_prompt or main_str.main_exit
     local tw = common.calcTextWidth(s.font, msg, 1.1)
@@ -449,7 +471,7 @@ local function runMain(s, pad)
   dt(s.font, s.drawMode, w - M - vw, MY, 0.75, versionStr, common.DIM)
   dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
   local hintItems = (not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 and buildMainLangHintItems(s, main_str)) or
-      withoutUpDownHints(main_str.main_hint_items)
+      buildMainBaseHintItems(main_str)
   common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
   for i, label in ipairs(s.main) do
     local y = MY + sc(50) + (i - 1) * L
