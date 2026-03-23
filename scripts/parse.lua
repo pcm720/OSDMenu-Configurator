@@ -802,6 +802,29 @@ function config_parse.setBblHotkeyArgDisabled(lines, keyId, entryIdx, argIdx, di
   return config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
 end
 
+function config_parse.setBblHotkeySlotDisabled(lines, keyId, entryIdx, disabled)
+  if not isValidBblEntryIdx(entryIdx) then return false end
+  local changed = false
+
+  local pathVal = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
+  if pathVal ~= nil then
+    config_parse.setBblHotkeyPath(lines, keyId, entryIdx, pathVal, disabled and true or false)
+    changed = true
+  end
+
+  local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
+  if #args > 0 then
+    for i = 1, #args do
+      args[i].disabled = disabled and true or false
+      args[i].comment = args[i].disabled and true or nil
+    end
+    config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
+    changed = true
+  end
+
+  return changed
+end
+
 function config_parse.removeBblHotkeySlot(lines, keyId, entryIdx)
   local canonical = canonicalBblHotkeyId(keyId)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end

@@ -244,9 +244,12 @@ local function run(ctx)
   end
 
   local function toggleSelectedEntryDisabled()
-    if sel and sel.kind == "entry" and sel.data.pathExists then
-      _.config_parse.setBblHotkeyPathDisabled(ctx.lines, keyId, sel.slot, not sel.data.disabled)
-      ctx.configModified = true
+    if sel and sel.kind == "entry" then
+      local changed = _.config_parse.setBblHotkeySlotDisabled and
+          _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, sel.slot, not sel.data.disabled)
+      if changed then
+        ctx.configModified = true
+      end
     end
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then

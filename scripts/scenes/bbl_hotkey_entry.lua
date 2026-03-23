@@ -165,9 +165,12 @@ local function run(ctx)
   end
 
   local function toggleSelectedPathDisabled()
-    if rows[ctx.bblEntryDetailSel] == "path" and data.pathExists then
-      _.config_parse.setBblHotkeyPathDisabled(ctx.lines, keyId, slot, not data.disabled)
-      ctx.configModified = true
+    if rows[ctx.bblEntryDetailSel] == "path" then
+      local changed = _.config_parse.setBblHotkeySlotDisabled and
+          _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, slot, not data.disabled)
+      if changed then
+        ctx.configModified = true
+      end
     end
   end
 
