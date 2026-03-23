@@ -267,6 +267,20 @@ local function buildBblIniGlobalOptions()
       label = "PS1DRV_USE_PS1VN",
       desc = "Enable PS1 video negator.",
     },
+    {
+      key = "APP_GAMEID",
+      optType = "bool",
+      default = "1",
+      label = "APP_GAMEID",
+      desc = "Game ID for RetroGem",
+    },
+    {
+      key = "CDROM_DISABLE_GAMEID",
+      optType = "bool",
+      default = "0",
+      label = "CDROM_DISABLE_GAMEID",
+      desc = "Disable RetroGem Game ID for DISCS",
+    },
   }
 
   table.insert(out, {

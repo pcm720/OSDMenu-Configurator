@@ -103,14 +103,15 @@ end
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
-    local drawScale = (scale or 0.7) * 0.75
-    local iconW = math.max(12, math.floor((common.PAD_ICON_W or 26) * 0.75 + 0.5))
-    local iconH = math.max(12, math.floor((common.PAD_ICON_H or 26) * 0.75 + 0.5))
-    local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * 0.75 + 0.5))
-    local rowH = math.max(18, math.floor((common.PAD_HINT_ROW_H or 28) * 0.75 + 0.5))
-    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * 0.75 + 0.5))
+    local hintScale = 0.5
+    local drawScale = (scale or 0.7) * hintScale
+    local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * hintScale + 0.5))
+    local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * hintScale + 0.5))
+    local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * hintScale + 0.5))
+    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * hintScale + 0.5))
+    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * hintScale + 0.5))
     local approxCharW = math.floor(8 * drawScale)
-    local textH = math.max(12, math.floor((common.FT_PIXEL_H or 18) * 0.75 + 0.5))
+    local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * hintScale + 0.5))
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin
@@ -177,11 +178,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local label = (item and item.label) or ""
         if padName and padName ~= "" then
           local icon = common.getPadIcon(padName)
-          local textW = getTextWidth(label)
-          local hasIcon = not not icon
-          local groupW = (hasIcon and iconW or 0) + ((hasIcon and label ~= "") and gap or 0) + textW
           local slotLeft = xEff + (col - 1) * slotW
-          local px = math.floor(slotLeft + (slotW - groupW) / 2)
+          local slotCenter = slotLeft + slotW / 2
+          local px = math.floor(slotCenter - iconW / 2)
           if icon then
             if Graphics.drawScaleImage then
               Graphics.drawScaleImage(icon, px, iconY, iconW, iconH)
@@ -190,7 +189,13 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             end
           end
           if label ~= "" then
-            local textX = px + (hasIcon and (iconW + gap) or 0)
+            local textW = getTextWidth(label)
+            local textX
+            if icon then
+              textX = px + iconW + gap
+            else
+              textX = math.floor(slotCenter - textW / 2)
+            end
             common.drawText(font, drawMode, textX, textY, drawScale, label, color, textH)
           end
         end

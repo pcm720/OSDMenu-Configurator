@@ -264,6 +264,8 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   _bbl_irx_entries = { label = "Modifier les entrees IRX", desc = "Modifier les chemins des modules LOAD_IRX_E#" },
+  APP_GAMEID = { label = "APP_GAMEID", desc = "Game ID for RetroGem" },
+  CDROM_DISABLE_GAMEID = { label = "CDROM_DISABLE_GAMEID", desc = "Disable RetroGem Game ID for DISCS" },
   app_gameid = { label = "ID jeu application", desc = "Game ID for RetroGem" },
   cdrom_disable_gameid = { label = "Desactiver l'ID visuel du jeu", desc = "Disable RetroGem Game ID for DISCS" },
 }
