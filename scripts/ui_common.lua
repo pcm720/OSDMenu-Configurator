@@ -60,6 +60,8 @@ common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_MAX_PER_ROW        = 4
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 38 -- 15% opaque = 85% transparent
+common.PAD_HINT_GRID_EXTRA_W       = 20
+common.PAD_HINT_GRID_X_SHIFT       = -20
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
@@ -138,8 +140,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local approxCharW = math.floor(8 * drawScale)
     local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * textScale + 0.5))
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
+    width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
-    local xEff = x + sideMargin
+    local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
     local widthEff = width - 2 * sideMargin
     local slotCount = 6
     local slotW = widthEff / slotCount
