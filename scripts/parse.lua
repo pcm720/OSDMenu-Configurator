@@ -46,6 +46,8 @@ function config_parse.regenerateLinesBbl(lines, options)
   end
   return out
 end
+
+local config_parse = {}
 --[[
   CNF parse/serialize for OSDMENU.CNF, OSDMBR.CNF, OSDGSM.CNF.
   Line-based key = value; # comments; empty lines allowed.
