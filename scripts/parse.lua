@@ -148,7 +148,10 @@ local function semanticSignaturesEqual(a, b)
   return true
 end
 
-local function readFileRaw(path)
+local function readFileRaw(path, opts)
+  opts = opts or {}
+  local requireCloseOk = opts.requireCloseOk == true
+  local requireFullRead = opts.requireFullRead == true
   local h = System.openFile(path, MODE_READ)
   if not h or h < 0 then return nil, "cannot open " .. tostring(path), nil end
   local size = System.sizeFile(h)
@@ -158,11 +161,14 @@ local function readFileRaw(path)
   end
   local content, readLen = System.readFile(h, size)
   local closeRes = System.closeFile(h)
-  if closeRes ~= 0 then
+  if requireCloseOk and closeRes ~= 0 then
     return nil, "read close failed", size
   end
   if not content then return nil, "read failed", size end
-  if type(readLen) == "number" and readLen ~= size then
+  if type(readLen) == "number" and readLen < 0 then
+    return nil, "read failed", size
+  end
+  if requireFullRead and type(readLen) == "number" and readLen ~= size then
     return nil, "read failed", size
   end
   return content, nil, size
@@ -179,7 +185,9 @@ end
 
 -- Read file at path and parse. Returns lines or nil, err.
 function config_parse.load(path)
-  local content, err = readFileRaw(path)
+  -- Be tolerant on load: some devices/filesystems may return non-zero close or
+  -- short-read metadata even when text content is readable.
+  local content, err = readFileRaw(path, { requireCloseOk = false, requireFullRead = false })
   if not content then return nil, err end
   return config_parse.parse(content)
 end
@@ -201,7 +209,7 @@ function config_parse.save(path, lines, createDir)
   if written ~= #expected then return nil, "write failed" end
   if closeRes ~= 0 then return nil, "write close failed" end
 
-  local actual, readErr, actualSize = readFileRaw(path)
+  local actual, readErr, actualSize = readFileRaw(path, { requireCloseOk = true, requireFullRead = true })
   if not actual then
     return nil, "verify failed (" .. tostring(readErr) .. ")"
   end
