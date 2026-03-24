@@ -506,6 +506,7 @@ local function mainLoop()
       syncFromS(c)
     end
 
+    common.refreshConfigModified(c)
     common.drawSaveSplash(c)
     syncFromS(c)
 

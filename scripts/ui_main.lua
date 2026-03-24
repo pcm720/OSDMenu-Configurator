@@ -394,7 +394,12 @@ local function loadLinesWithDeviceAccess(path)
 end
 
 local function setStateAfterLoad(s)
-  s.configModified = false
+  if common.setCleanConfigSnapshot then
+    common.setCleanConfigSnapshot(s, { needsInitialSave = false })
+  else
+    s.configModified = false
+    s.configNeedsInitialSave = false
+  end
   local isCategorized = (s.fileType == "osdmenu_cnf" or s.fileType == "freemcboot_cnf" or s.fileType == "ps2bbl_ini" or
       s.fileType == "psxbbl_ini")
   if s.fileType == "osdgsm_cnf" then
@@ -1033,7 +1038,7 @@ local function runOpen(s, pad)
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
       setStateAfterLoad(s)
-      s.configModified = true
+      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
       openDbg("mark modified", "reason=new file in memory (explicit path missing)")
       return
     end
@@ -1107,7 +1112,7 @@ local function runOpen(s, pad)
       openDbg("no existing file; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "no existing path")
       setStateAfterLoad(s)
-      s.configModified = true
+      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
       openDbg("mark modified", "reason=new file in memory (no existing path)")
     end
   elseif #existing == 1 then
@@ -1263,7 +1268,7 @@ local function runChooseLoad(s, pad)
       openDbg("selected missing path; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "choose_load create missing")
       setStateAfterLoad(s)
-      s.configModified = true
+      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
       openDbg("mark modified", "reason=new file in memory (choose_load missing path)")
       clearLoadChoiceState(s)
     else

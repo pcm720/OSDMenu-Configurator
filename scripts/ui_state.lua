@@ -85,6 +85,8 @@ local function initContext()
     textInputScroll = 1,
     holdFrameCount = 0,
     configModified = false,
+    configCleanSemanticDigest = nil,
+    configNeedsInitialSave = false,
     editorLeavePrompt = nil,
     returnToSelectConfigAfterSave = nil,
     returnToSelectConfigAfterSaveFlash = nil,

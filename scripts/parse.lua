@@ -136,6 +136,26 @@ local function buildSemanticSignature(lines)
   return out
 end
 
+function config_parse.semanticSignature(lines)
+  return buildSemanticSignature(lines)
+end
+
+-- Stable digest used by UI dirty tracking. Includes key order, values, and
+-- comment state for key lines; ignores non-key comments.
+function config_parse.semanticDigest(lines)
+  local signature = buildSemanticSignature(lines)
+  local out = {}
+  for i = 1, #signature do
+    local item = signature[i]
+    local key = item.key or ""
+    local value = item.value or ""
+    local commentState = tostring(item.commentState or 0)
+    out[#out + 1] =
+        tostring(#key) .. ":" .. key .. "|" .. tostring(#value) .. ":" .. value .. "|" .. commentState
+  end
+  return table.concat(out, "\n")
+end
+
 local function semanticSignaturesEqual(a, b)
   if #a ~= #b then return false end
   for i = 1, #a do

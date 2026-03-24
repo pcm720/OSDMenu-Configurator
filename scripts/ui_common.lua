@@ -355,6 +355,81 @@ function common.findExistingPaths(locations)
   return out
 end
 
+local function getConfigParser(ctx)
+  if ctx and ctx._ and ctx._.config_parse then
+    return ctx._.config_parse
+  end
+  if _G and _G.CONFIG_UI and _G.CONFIG_UI.config_parse then
+    return _G.CONFIG_UI.config_parse
+  end
+  return nil
+end
+
+local function fallbackSemanticDigest(lines)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    if entry and entry.key then
+      local key = tostring(entry.key)
+      local value = tostring(entry.value or "")
+      local commentState = 0
+      if entry.comment == 2 then
+        commentState = 2
+      elseif entry.comment then
+        commentState = 1
+      end
+      out[#out + 1] =
+          tostring(#key) .. ":" .. key .. "|" .. tostring(#value) .. ":" .. value .. "|" .. tostring(commentState)
+    end
+  end
+  return table.concat(out, "\n")
+end
+
+local function computeSemanticDigest(ctx, lines)
+  local parser = getConfigParser(ctx)
+  if parser and parser.semanticDigest then
+    return parser.semanticDigest(lines or {})
+  end
+  return fallbackSemanticDigest(lines)
+end
+
+function common.refreshConfigModified(ctx)
+  if not ctx then return false end
+  if not ctx.lines then
+    ctx.configModified = false
+    return false
+  end
+
+  if ctx.configCleanSemanticDigest == nil then
+    ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, ctx.lines)
+  end
+
+  local currentDigest = computeSemanticDigest(ctx, ctx.lines)
+  local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
+  local needsInitialSave = (ctx.configNeedsInitialSave == true)
+  ctx.configModified = semanticChanged or needsInitialSave
+  return ctx.configModified
+end
+
+function common.setCleanConfigSnapshot(ctx, opts)
+  if not ctx then return false end
+  opts = opts or {}
+  local snapshotLines = (opts.lines ~= nil) and opts.lines or ctx.lines or {}
+  ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, snapshotLines)
+  ctx.configNeedsInitialSave = opts.needsInitialSave == true
+  return common.refreshConfigModified(ctx)
+end
+
+function common.markNewUnsavedConfig(ctx, opts)
+  opts = opts or {}
+  opts.needsInitialSave = true
+  return common.setCleanConfigSnapshot(ctx, opts)
+end
+
+function common.markConfigSaved(ctx, lines)
+  return common.setCleanConfigSnapshot(ctx, { lines = lines, needsInitialSave = false })
+end
+
 -- Save config; for pfs0 (__sysconf) paths we mount, save, then unmount so ELF browsing does not break saving.
 function common.saveConfig(ctx, path, lines, createDir)
   local function saveDbg(...)
@@ -409,6 +484,9 @@ function common.saveConfig(ctx, path, lines, createDir)
   end
   saveDbg("dispatch", "savePath=" .. tostring(savePath), "saveDir=" .. tostring(saveDir))
   local ok, err = ctx._.config_parse.save(savePath, lines, saveDir)
+  if ok then
+    common.markConfigSaved(ctx, lines)
+  end
   saveDbg("dispatch result", "ok=" .. tostring(ok), "err=" .. tostring(err))
   if mounted and System and System.fileXioUmount then
     saveDbg("umount", tostring(mounted))
@@ -485,6 +563,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     end
     local padEffective = common.getPadEffective(ctx)
     runHandler(ctx, padEffective)
+    common.refreshConfigModified(ctx)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end
