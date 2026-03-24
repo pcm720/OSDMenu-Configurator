@@ -1,5 +1,18 @@
 --[[ PS2BBL/PSXBBL LOAD_IRX_E# editor. ]]
 
+local function withStartHintVisibility(items, showStart)
+  if showStart then return items end
+  local out = {}
+  for _, item in ipairs(items or {}) do
+    if item.pad ~= "start" then
+      out[#out + 1] = item
+    else
+      out[#out + 1] = { pad = "", label = "", row = item.row }
+    end
+  end
+  return out
+end
+
 local function beginIrxPathEdit(_, ctx, entryIdx, disabled)
   ctx.editKey = nil
   ctx.isAddPath = false
@@ -172,9 +185,10 @@ local function run(ctx)
       hints = _.menu_str.irx_hint_items_with_enable or hints
     end
   end
+  hints = withStartHintVisibility(hints, ctx.configModified == true)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-  if (_.padEffective & _.PAD_START) ~= 0 then
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
     saveAndStay(ctx, _)
   end
 

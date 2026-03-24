@@ -1033,6 +1033,8 @@ local function runOpen(s, pad)
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
       setStateAfterLoad(s)
+      s.configModified = true
+      openDbg("mark modified", "reason=new file in memory (explicit path missing)")
       return
     end
     local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)
@@ -1105,6 +1107,8 @@ local function runOpen(s, pad)
       openDbg("no existing file; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "no existing path")
       setStateAfterLoad(s)
+      s.configModified = true
+      openDbg("mark modified", "reason=new file in memory (no existing path)")
     end
   elseif #existing == 1 then
     s.currentPath = existing[1]
@@ -1259,6 +1263,8 @@ local function runChooseLoad(s, pad)
       openDbg("selected missing path; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "choose_load create missing")
       setStateAfterLoad(s)
+      s.configModified = true
+      openDbg("mark modified", "reason=new file in memory (choose_load missing path)")
       clearLoadChoiceState(s)
     else
       local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)

@@ -1,5 +1,18 @@
 --[[ Menu entries list (OSDMENU). ]]
 
+local function withStartHintVisibility(items, showStart)
+  if showStart then return items end
+  local out = {}
+  for _, item in ipairs(items or {}) do
+    if item.pad ~= "start" then
+      out[#out + 1] = item
+    else
+      out[#out + 1] = { pad = "", label = "", row = item.row }
+    end
+  end
+  return out
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -134,9 +147,10 @@ local function run(ctx)
     end
     hints = filtered
   end
+  hints = withStartHintVisibility(hints, ctx.configModified == true)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
-  if (_.padEffective & _.PAD_START) ~= 0 then
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
     ctx.saveSplash = nil
     local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
     if ctx.fileType == "osdmenu_cnf" and #locations >= 2 then
