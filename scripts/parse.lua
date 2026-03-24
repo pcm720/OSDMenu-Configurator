@@ -1,3 +1,51 @@
+-- Regenerate PS2BBL/PSXBBL config lines: global settings, autoboot, then hotkeys, grouping LK/ARG as in UI
+function config_parse.regenerateLinesBbl(lines, options)
+  local out = {}
+  local SEPARATOR = options and options.separator or '# --------------------------------'
+  local hotkeyOrder = options and options.bbl_hotkey_order or {
+    "AUTO", "START", "SELECT", "TRIANGLE", "CIRCLE", "CROSS", "SQUARE", "R1", "R2", "R3", "L1", "L2", "L3", "UP", "RIGHT", "DOWN", "LEFT"
+  }
+  local maxEntries = (options and options.BBL_MAX_ENTRIES) or 9
+  -- 1. Global settings (all keys not NAME_*/LK_*/ARG_*)
+  local addedGlobals = false
+  for _, entry in ipairs(lines) do
+    if entry.key and not entry.key:match("^NAME_") and not entry.key:match("^LK_") and not entry.key:match("^ARG_") then
+      table.insert(out, { key = entry.key, value = entry.value, comment = entry.comment })
+      addedGlobals = true
+    end
+  end
+  if addedGlobals then table.insert(out, { comment = SEPARATOR }) end
+  -- 2. Autoboot section (NAME_AUTO, LK_AUTO_E#, ARG_AUTO_E#)
+  local function writeHotkeySection(keyId)
+    local sectionStart = #out
+    local name = config_parse.getBblHotkeyName(lines, keyId)
+    local wrote = false
+    if name ~= nil then
+      table.insert(out, { key = "NAME_" .. keyId, value = name })
+      wrote = true
+    end
+    for entryIdx = 1, maxEntries do
+      local path, pathDisabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
+      if path ~= nil then
+        table.insert(out, { key = "LK_" .. keyId .. "_E" .. entryIdx, value = path, comment = pathDisabled and true or nil })
+        local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
+        for _, arg in ipairs(args) do
+          table.insert(out, { key = "ARG_" .. keyId .. "_E" .. entryIdx, value = arg.value, comment = arg.disabled and true or nil })
+        end
+        wrote = true
+      end
+    end
+    if wrote then table.insert(out, { comment = SEPARATOR }) end
+  end
+  writeHotkeySection("AUTO")
+  -- 3. Other hotkeys in order (excluding AUTO)
+  for _, keyId in ipairs(hotkeyOrder) do
+    if keyId ~= "AUTO" then
+      writeHotkeySection(keyId)
+    end
+  end
+  return out
+end
 --[[
   CNF parse/serialize for OSDMENU.CNF, OSDMBR.CNF, OSDGSM.CNF.
   Line-based key = value; # comments; empty lines allowed.
@@ -1571,9 +1619,27 @@ function config_parse.regenerateForSave(lines, fileType, options)
     local out = config_parse.regenerateLines(lines, cats, false, maxEntries, maxPathsPerEntry)
     local cnfVersion = config_parse.get(lines, "CNF_version") or "1"
     table.insert(out, 1, { key = "CNF_version", value = cnfVersion })
-    table.insert(out, 2, { comment = SEPARATOR })
+    table.insert(out, 2, { comment = '# --------------------------------' })
     local maxLaunchKeyEntries = (type(opt.FMCB_BBL_MAX_ENTRIES) == "number" and opt.FMCB_BBL_MAX_ENTRIES) or 3
+    -- Insert separator between each launch key section for visual clarity
+    local launchKeyStart = #out + 1
     appendFreemcbootLaunchKeys(out, lines, maxLaunchKeyEntries)
+    -- Add separator after each launch key section (if any were added)
+    if #out > launchKeyStart then
+      for i = launchKeyStart, #out do
+        if out[i] and out[i].key and out[i].key:match("^LK_") then
+          table.insert(out, i + 1, { comment = '# --------------------------------' })
+        end
+      end
+    end
+    return out
+  end
+  if fileType == "bbl" or fileType == "freemcboot_cnf" or fileType == "freehdboot_cnf" then
+    -- Use OSDMenu-style regenerateLines for all BBL and FreeMCBoot/FreeHDDBoot configs
+    local cats = opt.osdmenu_cnf_categories or {}
+    local maxEntries = (type(opt.BBL_MAX_ENTRIES) == "number" and opt.BBL_MAX_ENTRIES) or 9
+    local maxPathsPerEntry = (type(opt.BBL_MAX_PATHS_PER_ENTRY) == "number" and opt.BBL_MAX_PATHS_PER_ENTRY) or 9
+    local out = config_parse.regenerateLines(lines, cats, true, maxEntries, maxPathsPerEntry)
     return out
   end
   if fileType == "osdmbr_cnf" then
