@@ -75,6 +75,19 @@ local function getEditorBackState(ctx)
   return "main"
 end
 
+local function withStartHintVisibility(items, showStart)
+  if showStart then return items end
+  local out = {}
+  for _, item in ipairs(items or {}) do
+    if item.pad ~= "start" then
+      out[#out + 1] = item
+    else
+      out[#out + 1] = { pad = "", label = "", row = item.row }
+    end
+  end
+  return out
+end
+
 local function run(ctx)
   local _ = ctx._
   -- Leave-save prompt when going back to file select with unsaved changes
@@ -108,11 +121,11 @@ local function run(ctx)
               kind = "failed",
               detail = _.common.localizeParseError(err, _.editor_str) or
                   _.editor_str.save_failed,
-              framesLeft = 60
+              framesLeft = 120
             }
           end
         else
-          ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 60 }
+          ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
         end
       end
     elseif (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
@@ -179,7 +192,8 @@ local function run(ctx)
       _.drawListRow(_.MARGIN_X + 16, y, i == ctx.optSel,
         catLabel, col)
     end
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.cross_open_circle_back_items, nil,
+    local categoryHints = withStartHintVisibility(_.editor_str.cross_open_circle_back_items, ctx.configModified == true)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, categoryHints, nil,
       _.DIM, _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_UP) ~= 0 then
       ctx.optSel = _.common.wrapListSelection(ctx.optSel, #cats, -1)
@@ -467,6 +481,7 @@ local function run(ctx)
         hintItems[2].label = "Enable"
       end
     end
+    hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_UP) ~= 0 then
       ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
@@ -713,11 +728,12 @@ local function run(ctx)
   else
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.editor_str.no_option_list,
       _.GRAY)
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.start_save_circle_back_items, nil,
+    local emptyHints = withStartHintVisibility(_.editor_str.start_save_circle_back_items, ctx.configModified == true)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, emptyHints, nil,
       _.DIM, _.w - 2 * _.MARGIN_X)
   end
 
-  if (_.padEffective & _.PAD_START) ~= 0 then
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
     ctx.saveSplash = nil
     local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
     if ctx.fileType == "osdmenu_cnf" and #locations >= 2 then
@@ -739,11 +755,11 @@ local function run(ctx)
             kind = "failed",
             detail = _.common.localizeParseError(err, _.editor_str) or
                 _.editor_str.save_failed,
-            framesLeft = 60
+            framesLeft = 120
           }
         end
       else
-        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 60 }
+        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
       end
     end
   end

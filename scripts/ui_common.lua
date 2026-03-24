@@ -23,6 +23,7 @@ common.PAD_L2, common.PAD_R2       = 0x0100, 0x0200
 common.WHITE                       = Color.new(255, 255, 255)
 common.GRAY                        = Color.new(160, 160, 160)
 common.DIM                         = Color.new(96, 96, 96)
+common.ERROR                       = Color.new(255, 64, 64)
 common.BGCOLOR                     = Color.new(20, 20, 20)
 common.HIGHLIGHT                   = Color.new(255, 220, 100)
 common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0)
@@ -354,8 +355,94 @@ function common.findExistingPaths(locations)
   return out
 end
 
+local function getConfigParser(ctx)
+  if ctx and ctx._ and ctx._.config_parse then
+    return ctx._.config_parse
+  end
+  if _G and _G.CONFIG_UI and _G.CONFIG_UI.config_parse then
+    return _G.CONFIG_UI.config_parse
+  end
+  return nil
+end
+
+local function fallbackSemanticDigest(lines)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    if entry and entry.key then
+      local key = tostring(entry.key)
+      local value = tostring(entry.value or "")
+      local commentState = 0
+      if entry.comment == 2 then
+        commentState = 2
+      elseif entry.comment then
+        commentState = 1
+      end
+      out[#out + 1] =
+          tostring(#key) .. ":" .. key .. "|" .. tostring(#value) .. ":" .. value .. "|" .. tostring(commentState)
+    end
+  end
+  return table.concat(out, "\n")
+end
+
+local function computeSemanticDigest(ctx, lines)
+  local parser = getConfigParser(ctx)
+  if parser and parser.semanticDigest then
+    return parser.semanticDigest(lines or {})
+  end
+  return fallbackSemanticDigest(lines)
+end
+
+function common.refreshConfigModified(ctx)
+  if not ctx then return false end
+  if not ctx.lines then
+    ctx.configModified = false
+    return false
+  end
+
+  if ctx.configCleanSemanticDigest == nil then
+    ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, ctx.lines)
+  end
+
+  local currentDigest = computeSemanticDigest(ctx, ctx.lines)
+  local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
+  local needsInitialSave = (ctx.configNeedsInitialSave == true)
+  ctx.configModified = semanticChanged or needsInitialSave
+  return ctx.configModified
+end
+
+function common.setCleanConfigSnapshot(ctx, opts)
+  if not ctx then return false end
+  opts = opts or {}
+  local snapshotLines = (opts.lines ~= nil) and opts.lines or ctx.lines or {}
+  ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, snapshotLines)
+  ctx.configNeedsInitialSave = opts.needsInitialSave == true
+  return common.refreshConfigModified(ctx)
+end
+
+function common.markNewUnsavedConfig(ctx, opts)
+  opts = opts or {}
+  opts.needsInitialSave = true
+  return common.setCleanConfigSnapshot(ctx, opts)
+end
+
+function common.markConfigSaved(ctx, lines)
+  return common.setCleanConfigSnapshot(ctx, { lines = lines, needsInitialSave = false })
+end
+
 -- Save config; for pfs0 (__sysconf) paths we mount, save, then unmount so ELF browsing does not break saving.
 function common.saveConfig(ctx, path, lines, createDir)
+  local function saveDbg(...)
+    if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[#parts + 1] = tostring(select(i, ...))
+    end
+    print("[save] " .. table.concat(parts, " "))
+  end
+
+  saveDbg("route begin", "context=" .. tostring(ctx and ctx.context), "fileType=" .. tostring(ctx and ctx.fileType),
+    "path=" .. tostring(path), "createDir=" .. tostring(createDir))
   local savePath = path
   local saveDir = createDir
   local mounted = nil
@@ -376,6 +463,7 @@ function common.saveConfig(ctx, path, lines, createDir)
   local part, rest = splitHddPartitionPath(path)
   if part and rest then
     savePath = "pfs0:" .. rest
+    saveDbg("route partition", "part=" .. tostring(part), "savePath=" .. tostring(savePath))
     if saveDir and saveDir ~= "" then
       local dPart, dRest = splitHddPartitionPath(saveDir)
       if dPart and dPart == part and dRest then
@@ -383,17 +471,25 @@ function common.saveConfig(ctx, path, lines, createDir)
       end
     end
     if System and System.fileXioMount then
+      saveDbg("mount", "pfs0:", "<-", tostring(part))
       System.fileXioMount("pfs0:", part)
       mounted = "pfs0:"
     end
   elseif savePath and savePath:match("^pfs0:/") then
     if System and System.fileXioMount then
+      saveDbg("mount", "pfs0:", "<-", "hdd0:__sysconf")
       System.fileXioMount("pfs0:", "hdd0:__sysconf")
       mounted = "pfs0:"
     end
   end
+  saveDbg("dispatch", "savePath=" .. tostring(savePath), "saveDir=" .. tostring(saveDir))
   local ok, err = ctx._.config_parse.save(savePath, lines, saveDir)
+  if ok then
+    common.markConfigSaved(ctx, lines)
+  end
+  saveDbg("dispatch result", "ok=" .. tostring(ok), "err=" .. tostring(err))
   if mounted and System and System.fileXioUmount then
+    saveDbg("umount", tostring(mounted))
     System.fileXioUmount(mounted)
   end
   return ok, err
@@ -467,6 +563,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     end
     local padEffective = common.getPadEffective(ctx)
     runHandler(ctx, padEffective)
+    common.refreshConfigModified(ctx)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end
@@ -747,14 +844,16 @@ function common.centerX(c, textWidth)
   return math.max(mx, math.floor((w - textWidth) / 2))
 end
 
--- Unified save splash: "Saved" or "Save failed", drawn on top. ctx.saveSplash = { kind = "saved"|"failed", detail = string, framesLeft = N }.
+-- Unified save splash: "Saved" or "Save Failed!", drawn on top. ctx.saveSplash = { kind = "saved"|"failed", detail = string, framesLeft = N }.
 -- Decrements framesLeft; when 0, clears saveSplash and (if kind=="saved" and returnToSelectConfigAfterSaveFlash) performs transition.
 function common.drawSaveSplash(ctx)
   local sp = ctx.saveSplash
   if not sp or not sp.framesLeft or sp.framesLeft <= 0 then return end
   local _ = ctx._
   local lineH = _.LINE_H or common.LINE_H
-  local title = (sp.kind == "failed") and (_.editor_str.save_failed or "Save failed") or (_.editor_str.saved or "Saved")
+  local isFailed = (sp.kind == "failed")
+  local title = sp.title or (isFailed and "Save Failed!" or (_.editor_str.saved or "Saved"))
+  local textColor = sp.textColor or (isFailed and common.ERROR or _.HIGHLIGHT)
   local tw = common.calcTextWidth(_.font, title, 1) or (#title * 14)
   local detailStr = (sp.detail and sp.detail ~= "") and tostring(sp.detail) or ""
   if #detailStr > 52 then detailStr = detailStr:sub(1, 49) .. "..." end
@@ -768,9 +867,9 @@ function common.drawSaveSplash(ctx)
     _.Graphics.drawRect(boxX, boxY, boxW, boxH, splashBg)
   end
   local centerY = boxY + math.floor((boxH - (detailStr ~= "" and lineH * 2 or lineH)) / 2)
-  common.drawText(_.font, _.drawMode, common.centerX(_, tw), centerY, 1, title, _.HIGHLIGHT)
+  common.drawText(_.font, _.drawMode, common.centerX(_, tw), centerY, 1, title, textColor)
   if detailStr ~= "" then
-    common.drawText(_.font, _.drawMode, common.centerX(_, detailW), centerY + lineH, 1, detailStr, _.HIGHLIGHT)
+    common.drawText(_.font, _.drawMode, common.centerX(_, detailW), centerY + lineH, 1, detailStr, textColor)
   end
   sp.framesLeft = sp.framesLeft - 1
   if sp.framesLeft <= 0 then

@@ -1,3 +1,53 @@
+local config_parse = {}
+
+-- Regenerate PS2BBL/PSXBBL config lines: global settings, autoboot, then hotkeys, grouping LK/ARG as in UI
+function config_parse.regenerateLinesBbl(lines, options)
+  local out = {}
+  local SEPARATOR = options and options.separator or '# --------------------------------'
+  local hotkeyOrder = options and options.bbl_hotkey_order or {
+    "AUTO", "START", "SELECT", "TRIANGLE", "CIRCLE", "CROSS", "SQUARE", "R1", "R2", "R3", "L1", "L2", "L3", "UP", "RIGHT", "DOWN", "LEFT"
+  }
+  local maxEntries = (options and options.BBL_MAX_ENTRIES) or 9
+  -- 1. Global settings (all keys not NAME_*/LK_*/ARG_*)
+  local addedGlobals = false
+  for _, entry in ipairs(lines) do
+    if entry.key and not entry.key:match("^NAME_") and not entry.key:match("^LK_") and not entry.key:match("^ARG_") then
+      table.insert(out, { key = entry.key, value = entry.value, comment = entry.comment })
+      addedGlobals = true
+    end
+  end
+  if addedGlobals then table.insert(out, { comment = SEPARATOR }) end
+  -- 2. Autoboot section (NAME_AUTO, LK_AUTO_E#, ARG_AUTO_E#)
+  local function writeHotkeySection(keyId)
+    local sectionStart = #out
+    local name = config_parse.getBblHotkeyName(lines, keyId)
+    local wrote = false
+    if name ~= nil then
+      table.insert(out, { key = "NAME_" .. keyId, value = name })
+      wrote = true
+    end
+    for entryIdx = 1, maxEntries do
+      local path, pathDisabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
+      if path ~= nil then
+        table.insert(out, { key = "LK_" .. keyId .. "_E" .. entryIdx, value = path, comment = pathDisabled and true or nil })
+        local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
+        for _, arg in ipairs(args) do
+          table.insert(out, { key = "ARG_" .. keyId .. "_E" .. entryIdx, value = arg.value, comment = arg.disabled and true or nil })
+        end
+        wrote = true
+      end
+    end
+    if wrote then table.insert(out, { comment = SEPARATOR }) end
+  end
+  writeHotkeySection("AUTO")
+  -- 3. Other hotkeys in order (excluding AUTO)
+  for _, keyId in ipairs(hotkeyOrder) do
+    if keyId ~= "AUTO" then
+      writeHotkeySection(keyId)
+    end
+  end
+  return out
+end
 --[[
   CNF parse/serialize for OSDMENU.CNF, OSDMBR.CNF, OSDGSM.CNF.
   Line-based key = value; # comments; empty lines allowed.
@@ -6,7 +56,6 @@
   Nil checks: use ~= nil when the value can be "" or false (e.g. config get); use truthiness for match results.
 ]]
 
-local config_parse = {}
 local System = System
 
 -- Open modes. Write uses O_TRUNC so the file is recreated (truncated), not appended.
@@ -66,32 +115,221 @@ function config_parse.serialize(lines)
   return table.concat(t, "\n")
 end
 
--- Read file at path and parse. Returns lines or nil, err.
-function config_parse.load(path)
+local function buildSemanticSignature(lines)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    if entry and entry.key then
+      local commentState = 0
+      if entry.comment == 2 then
+        commentState = 2
+      elseif entry.comment then
+        commentState = 1
+      end
+      out[#out + 1] = {
+        key = tostring(entry.key),
+        value = tostring(entry.value or ""),
+        commentState = commentState,
+      }
+    end
+  end
+  return out
+end
+
+function config_parse.semanticSignature(lines)
+  return buildSemanticSignature(lines)
+end
+
+-- Stable digest used by UI dirty tracking. Includes key order, values, and
+-- comment state for key lines; ignores non-key comments.
+function config_parse.semanticDigest(lines)
+  local signature = buildSemanticSignature(lines)
+  local out = {}
+  for i = 1, #signature do
+    local item = signature[i]
+    local key = item.key or ""
+    local value = item.value or ""
+    local commentState = tostring(item.commentState or 0)
+    out[#out + 1] =
+        tostring(#key) .. ":" .. key .. "|" .. tostring(#value) .. ":" .. value .. "|" .. commentState
+  end
+  return table.concat(out, "\n")
+end
+
+local function semanticSignaturesEqual(a, b)
+  if #a ~= #b then return false end
+  for i = 1, #a do
+    local x, y = a[i], b[i]
+    if not x or not y then return false end
+    if x.key ~= y.key or x.value ~= y.value or x.commentState ~= y.commentState then
+      return false
+    end
+  end
+  return true
+end
+
+local function closeFailed(closeRes)
+  -- Some filesystem backends can return non-standard success values from close().
+  -- Treat only explicit negative return values as failure.
+  if type(closeRes) ~= "number" then return false end
+  return closeRes < 0
+end
+
+local function saveDbg(...)
+  if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[#parts + 1] = tostring(select(i, ...))
+  end
+  print("[save] " .. table.concat(parts, " "))
+end
+
+local function firstSemanticMismatch(a, b)
+  local maxLen = math.max(#a, #b)
+  for i = 1, maxLen do
+    local x, y = a[i], b[i]
+    if not x or not y then
+      return i, "length", x and "present" or "missing", y and "present" or "missing"
+    end
+    if x.key ~= y.key then
+      return i, "key", x.key, y.key
+    end
+    if x.value ~= y.value then
+      return i, "value", x.value, y.value
+    end
+    if x.commentState ~= y.commentState then
+      return i, "commentState", x.commentState, y.commentState
+    end
+  end
+  return nil, nil, nil, nil
+end
+
+local function readFileRaw(path, opts)
+  opts = opts or {}
+  local requireCloseOk = opts.requireCloseOk == true
+  local requireFullRead = opts.requireFullRead == true
   local h = System.openFile(path, MODE_READ)
-  if not h or h < 0 then return nil, "cannot open " .. tostring(path) end
+  if not h or h < 0 then return nil, "cannot open " .. tostring(path), nil end
   local size = System.sizeFile(h)
   if not size or size < 0 then
     System.closeFile(h)
-    return nil, "cannot get size"
+    return nil, "cannot get size", nil
   end
-  local content = System.readFile(h, size)
+  local content, readLen = System.readFile(h, size)
+  local closeRes = System.closeFile(h)
+  if requireCloseOk and closeFailed(closeRes) then
+    return nil, "read close failed", size
+  end
+  if not content then return nil, "read failed", size end
+  if type(readLen) == "number" and readLen < 0 then
+    return nil, "read failed", size
+  end
+  if requireFullRead and type(readLen) == "number" and readLen ~= size then
+    return nil, "read failed", size
+  end
+  return content, nil, size
+end
+
+local function getFileSizeIfExists(path)
+  local h = System.openFile(path, MODE_READ)
+  if not h or h < 0 then return nil end
+  local size = System.sizeFile(h)
   System.closeFile(h)
-  if not content then return nil, "read failed" end
+  if not size or size < 0 then return nil end
+  return size
+end
+
+local function directoryExists(path)
+  if not path or path == "" then return true end
+  if not System or not System.listDirectory then return nil end
+  local ok, list = pcall(System.listDirectory, path)
+  if not ok then return nil end
+  if type(list) == "table" then return true end
+  if list == nil then return false end
+  return nil
+end
+
+-- Read file at path and parse. Returns lines or nil, err.
+function config_parse.load(path)
+  -- Be tolerant on load: some devices/filesystems may return non-zero close or
+  -- short-read metadata even when text content is readable.
+  local content, err = readFileRaw(path, { requireCloseOk = false, requireFullRead = false })
+  if not content then return nil, err end
   return config_parse.parse(content)
 end
 
 -- Serialize lines and write to path. Ensures parent dir exists if createDir is provided.
+-- Success requires write size match, close success, and read-back semantic match
+-- (key/value + comment state for key lines; non-key comments are ignored).
 function config_parse.save(path, lines, createDir)
-  local s = config_parse.serialize(lines)
+  saveDbg("begin", "path=" .. tostring(path), "createDir=" .. tostring(createDir), "lines=" .. tostring(#(lines or {})))
+  local expected = config_parse.serialize(lines)
+  local expectedSemantic = buildSemanticSignature(config_parse.parse(expected))
+  local previousSize = getFileSizeIfExists(path)
+  local targetExists = (type(previousSize) == "number")
+  local dirState = directoryExists(createDir)
+  saveDbg("prepared", "expectedBytes=" .. tostring(#expected), "semanticEntries=" .. tostring(#expectedSemantic),
+    "previousSize=" .. tostring(previousSize), "dirExists=" .. tostring(dirState))
+  if targetExists then
+    saveDbg("target file", "exists", "size=" .. tostring(previousSize))
+  else
+    saveDbg("target file", "missing", "willCreateOnOpen=true")
+  end
+  -- Create parent only if missing; if unknown, only attempt when target file does not exist.
+  local shouldCreateDir = false
   if createDir and createDir ~= "" then
-    System.createDirectory(createDir)
+    if dirState == false then
+      shouldCreateDir = true
+    elseif dirState == nil and previousSize == nil then
+      shouldCreateDir = true
+    end
+  end
+  if shouldCreateDir then
+    local mkRes = System.createDirectory(createDir)
+    saveDbg("mkdir", tostring(createDir), "result=" .. tostring(mkRes), "dirExistsBefore=" .. tostring(dirState))
+  elseif createDir and createDir ~= "" then
+    local reason = (dirState == true and "directory already exists") or
+        (dirState == nil and previousSize ~= nil and "directory state unknown; target file exists") or
+        (dirState == nil and "directory state unknown") or
+        "not needed"
+    saveDbg("mkdir skipped", tostring(createDir), "reason=" .. tostring(reason))
   end
   local h = System.openFile(path, MODE_WRITE)
-  if not h or h < 0 then return nil, "cannot open for write " .. tostring(path) end
-  local written = System.writeFile(h, s, #s)
-  System.closeFile(h)
-  if written ~= #s then return nil, "write failed" end
+  if not h or h < 0 then
+    saveDbg("openForWrite failed", "path=" .. tostring(path), "handle=" .. tostring(h))
+    return nil, "cannot open for write " .. tostring(path)
+  end
+  local written = System.writeFile(h, expected, #expected)
+  local closeRes = System.closeFile(h)
+  saveDbg("write", "written=" .. tostring(written), "expected=" .. tostring(#expected), "closeRes=" .. tostring(closeRes))
+  if written ~= #expected then
+    saveDbg("write failed", "writtenMismatch")
+    return nil, "write failed"
+  end
+  if closeFailed(closeRes) then
+    saveDbg("write close failed", "closeRes=" .. tostring(closeRes))
+    return nil, "write close failed"
+  end
+
+  local actual, readErr, actualSize = readFileRaw(path, { requireCloseOk = true, requireFullRead = true })
+  if not actual then
+    saveDbg("verify readback failed", "error=" .. tostring(readErr), "actualSize=" .. tostring(actualSize))
+    return nil, "verify failed (" .. tostring(readErr) .. ")"
+  end
+
+  local actualSemantic = buildSemanticSignature(config_parse.parse(actual))
+  if not semanticSignaturesEqual(expectedSemantic, actualSemantic) then
+    local idx, why, ev, av = firstSemanticMismatch(expectedSemantic, actualSemantic)
+    saveDbg("verify mismatch", "idx=" .. tostring(idx), "field=" .. tostring(why), "expected=" .. tostring(ev),
+      "actual=" .. tostring(av), "expectedEntries=" .. tostring(#expectedSemantic),
+      "actualEntries=" .. tostring(#actualSemantic), "actualSize=" .. tostring(actualSize))
+    if (type(previousSize) == "number" and previousSize > 0) and (type(actualSize) == "number" and actualSize == 0) then
+      return nil, "verify failed (file became empty after save)"
+    end
+    return nil, "verify failed (content mismatch)"
+  end
+  saveDbg("success", "path=" .. tostring(path), "actualSize=" .. tostring(actualSize),
+    "semanticEntries=" .. tostring(#actualSemantic))
   return true
 end
 
@@ -1571,10 +1809,23 @@ function config_parse.regenerateForSave(lines, fileType, options)
     local out = config_parse.regenerateLines(lines, cats, false, maxEntries, maxPathsPerEntry)
     local cnfVersion = config_parse.get(lines, "CNF_version") or "1"
     table.insert(out, 1, { key = "CNF_version", value = cnfVersion })
-    table.insert(out, 2, { comment = SEPARATOR })
+    table.insert(out, 2, { comment = '# --------------------------------' })
     local maxLaunchKeyEntries = (type(opt.FMCB_BBL_MAX_ENTRIES) == "number" and opt.FMCB_BBL_MAX_ENTRIES) or 3
+    -- Insert separator between each launch key section for visual clarity
+    local launchKeyStart = #out + 1
     appendFreemcbootLaunchKeys(out, lines, maxLaunchKeyEntries)
+    -- Add separator after each launch key section (if any were added)
+    if #out > launchKeyStart then
+      for i = #out, launchKeyStart, -1 do
+        if out[i] and out[i].key and out[i].key:match("^LK_") then
+          table.insert(out, i + 1, { comment = '# --------------------------------' })
+        end
+      end
+    end
     return out
+  end
+  if fileType == "ps2bbl_ini" or fileType == "psxbbl_ini" then
+    return config_parse.regenerateLinesBbl(lines, opt)
   end
   if fileType == "osdmbr_cnf" then
     return config_parse.regenerateLinesMBR(lines, opt.osdmbr_cnf or {})

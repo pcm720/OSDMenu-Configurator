@@ -89,6 +89,23 @@ local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START = common.PAD_UP, common
     common.PAD_CIRCLE, common.PAD_START
 local PAD_L1, PAD_R1 = common.PAD_L1, common.PAD_R1
 
+local function openDbg(...)
+  if _G and _G.CONFIG_UI_OPEN_DEBUG == false then return end
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[#parts + 1] = tostring(select(i, ...))
+  end
+  print("[open] " .. table.concat(parts, " "))
+end
+
+local function countTrue(list)
+  local n = 0
+  for i = 1, #(list or {}) do
+    if list[i] then n = n + 1 end
+  end
+  return n
+end
+
 local function findHintLabel(items, pad, fallback)
   for _, item in ipairs(items or {}) do
     if item.pad == pad and item.label and item.label ~= "" then
@@ -277,13 +294,15 @@ local function resolveIniFileType(s)
   return nil
 end
 
-local function initEmptyLinesForFileType(s)
+local function initEmptyLinesForFileType(s, reason)
   s.lines = config_parse.parse("")
   if s.fileType == "freemcboot_cnf" and C.config_options.getFreemcbootDefaults then
     for k, v in pairs(C.config_options.getFreemcbootDefaults()) do config_parse.set(s.lines, k, v) end
   elseif s.fileType == "osdmenu_cnf" and C.config_options.getOsdmenuDefaults then
     for k, v in pairs(C.config_options.getOsdmenuDefaults()) do config_parse.set(s.lines, k, v) end
   end
+  openDbg("init empty lines", "fileType=" .. tostring(s.fileType), "reason=" .. tostring(reason),
+    "lineCount=" .. tostring(#(s.lines or {})))
 end
 
 local function getPathModuleType(path)
@@ -342,6 +361,7 @@ local function pathExists(path)
   local mounted, accessPath = beginPathAccess(path)
   local ok = common.tryOpen(accessPath or path)
   endPathAccess(mounted)
+  openDbg("exists", "path=" .. tostring(path), "accessPath=" .. tostring(accessPath or path), "result=" .. tostring(ok))
   return ok
 end
 
@@ -357,19 +377,29 @@ end
 
 local function loadLinesWithDeviceAccess(path)
   local mounted, accessPath = beginPathAccess(path)
+  openDbg("load begin", "path=" .. tostring(path), "accessPath=" .. tostring(accessPath or path),
+    "mounted=" .. tostring(mounted))
   local ok, lines, err = pcall(config_parse.load, accessPath or path)
   endPathAccess(mounted)
   if ok and lines then
+    openDbg("load success", "path=" .. tostring(path), "entries=" .. tostring(#(lines or {})))
     return lines
   end
   if ok then
+    openDbg("load failed", "path=" .. tostring(path), "error=" .. tostring(err))
     return nil, err
   end
+  openDbg("load exception", "path=" .. tostring(path), "error=" .. tostring(lines))
   return nil, lines
 end
 
 local function setStateAfterLoad(s)
-  s.configModified = false
+  if common.setCleanConfigSnapshot then
+    common.setCleanConfigSnapshot(s, { needsInitialSave = false })
+  else
+    s.configModified = false
+    s.configNeedsInitialSave = false
+  end
   local isCategorized = (s.fileType == "osdmenu_cnf" or s.fileType == "freemcboot_cnf" or s.fileType == "ps2bbl_ini" or
       s.fileType == "psxbbl_ini")
   if s.fileType == "osdgsm_cnf" then
@@ -1003,13 +1033,16 @@ local function runOpen(s, pad)
   local sc = s.scaleY or function(y) return y end
   if s.openExplicitPath and s.currentPath and s.currentPath ~= "" then
     if not pathExists(s.currentPath) then
-      initEmptyLinesForFileType(s)
+      openDbg("explicit path missing; creating new in memory", "path=" .. tostring(s.currentPath))
+      initEmptyLinesForFileType(s, "explicit path missing")
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
       setStateAfterLoad(s)
+      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      openDbg("mark modified", "reason=new file in memory (explicit path missing)")
       return
     end
-    local loaded = loadLinesWithDeviceAccess(s.currentPath)
+    local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)
     if loaded then
       s.lines = loaded
       s.openExplicitPath = nil
@@ -1017,6 +1050,7 @@ local function runOpen(s, pad)
       setStateAfterLoad(s)
       return
     end
+    openDbg("explicit path load failed", "path=" .. tostring(s.currentPath), "error=" .. tostring(loadErr))
     dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.failed_to_load .. tostring(s.currentPath),
       common.GRAY)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM)
@@ -1028,6 +1062,8 @@ local function runOpen(s, pad)
     return
   end
   local locations = C.config_options.getLocations(s.context, s.fileType, s.chosenMcSlot)
+  openDbg("resolve locations", "context=" .. tostring(s.context), "fileType=" .. tostring(s.fileType),
+    "count=" .. tostring(#(locations or {})))
   if s.fileType == "freemcboot_cnf" and (s.context == "freemcboot" or s.context == "freehddboot") and
       type(locations) == "table" and #locations > 0 then
     local prevPath = nil
@@ -1055,6 +1091,8 @@ local function runOpen(s, pad)
     end
     s.loadAllowCreate = true
     s.loadReturnState = getOpenParentState(s)
+    openDbg("choose load", "mode=allow_create", "choices=" .. tostring(#s.loadChoices),
+      "existingChoices=" .. tostring(countTrue(s.loadPathExists)))
     s.state = "choose_load"
     return
   end
@@ -1066,17 +1104,23 @@ local function runOpen(s, pad)
       s.currentPath = locations[1]
     end
     if not s.currentPath then
+      openDbg("open failed", "reason=no location found")
       dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.no_location, common.GRAY)
       common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM)
       if (pad & PAD_CROSS) ~= 0 then s.state = getOpenParentState(s) end
     else
-      initEmptyLinesForFileType(s)
+      openDbg("no existing file; creating new in memory", "path=" .. tostring(s.currentPath))
+      initEmptyLinesForFileType(s, "no existing path")
       setStateAfterLoad(s)
+      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      openDbg("mark modified", "reason=new file in memory (no existing path)")
     end
   elseif #existing == 1 then
     s.currentPath = existing[1]
-    local loaded = loadLinesWithDeviceAccess(s.currentPath)
+    openDbg("single existing path", "path=" .. tostring(s.currentPath))
+    local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)
     if not loaded then
+      openDbg("single path load failed", "path=" .. tostring(s.currentPath), "error=" .. tostring(loadErr))
       dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.failed_to_load .. tostring(s.currentPath),
         common.GRAY)
       common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM)
@@ -1106,6 +1150,7 @@ local function runOpen(s, pad)
     s.loadAllowCreate = nil
     s.loadPathExists = nil
     s.loadReturnState = getOpenParentState(s)
+    openDbg("choose load", "mode=existing_only", "choices=" .. tostring(#existing))
     s.state = "choose_load"
   end
 end
@@ -1174,6 +1219,8 @@ local function runChooseLoad(s, pad)
   if (pad & PAD_CROSS) ~= 0 and #choices > 0 then
     local chosen = choices[s.loadSel]
     if type(chosen) == "table" and chosen.kind == "browse_ini" then
+      openDbg("choose load selection", "kind=browse_ini", "deviceId=" .. tostring(chosen.browseDeviceId),
+        "deviceType=" .. tostring(chosen.browseDeviceType))
       local allDevices = (C.file_selector and C.file_selector.getDevices and C.file_selector.getDevices("config_ini")) or {}
       local targetDevice = nil
       for i = 1, #allDevices do
@@ -1215,16 +1262,23 @@ local function runChooseLoad(s, pad)
 
     s.currentPath = chosen
     local exists = allowCreate and ((type(s.loadPathExists) == "table" and s.loadPathExists[s.loadSel]) or pathExists(s.currentPath))
+    openDbg("choose load selection", "path=" .. tostring(s.currentPath), "allowCreate=" .. tostring(allowCreate),
+      "exists=" .. tostring(exists))
     if allowCreate and not exists then
-      initEmptyLinesForFileType(s)
+      openDbg("selected missing path; creating new in memory", "path=" .. tostring(s.currentPath))
+      initEmptyLinesForFileType(s, "choose_load create missing")
       setStateAfterLoad(s)
+      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      openDbg("mark modified", "reason=new file in memory (choose_load missing path)")
       clearLoadChoiceState(s)
     else
-      local loaded = loadLinesWithDeviceAccess(s.currentPath)
+      local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)
       if loaded then
         s.lines = loaded
         setStateAfterLoad(s)
         clearLoadChoiceState(s)
+      else
+        openDbg("choose load failed", "path=" .. tostring(s.currentPath), "error=" .. tostring(loadErr))
       end
     end
   end
