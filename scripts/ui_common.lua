@@ -357,6 +357,17 @@ end
 
 -- Save config; for pfs0 (__sysconf) paths we mount, save, then unmount so ELF browsing does not break saving.
 function common.saveConfig(ctx, path, lines, createDir)
+  local function saveDbg(...)
+    if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[#parts + 1] = tostring(select(i, ...))
+    end
+    print("[save] " .. table.concat(parts, " "))
+  end
+
+  saveDbg("route begin", "context=" .. tostring(ctx and ctx.context), "fileType=" .. tostring(ctx and ctx.fileType),
+    "path=" .. tostring(path), "createDir=" .. tostring(createDir))
   local savePath = path
   local saveDir = createDir
   local mounted = nil
@@ -377,6 +388,7 @@ function common.saveConfig(ctx, path, lines, createDir)
   local part, rest = splitHddPartitionPath(path)
   if part and rest then
     savePath = "pfs0:" .. rest
+    saveDbg("route partition", "part=" .. tostring(part), "savePath=" .. tostring(savePath))
     if saveDir and saveDir ~= "" then
       local dPart, dRest = splitHddPartitionPath(saveDir)
       if dPart and dPart == part and dRest then
@@ -384,17 +396,22 @@ function common.saveConfig(ctx, path, lines, createDir)
       end
     end
     if System and System.fileXioMount then
+      saveDbg("mount", "pfs0:", "<-", tostring(part))
       System.fileXioMount("pfs0:", part)
       mounted = "pfs0:"
     end
   elseif savePath and savePath:match("^pfs0:/") then
     if System and System.fileXioMount then
+      saveDbg("mount", "pfs0:", "<-", "hdd0:__sysconf")
       System.fileXioMount("pfs0:", "hdd0:__sysconf")
       mounted = "pfs0:"
     end
   end
+  saveDbg("dispatch", "savePath=" .. tostring(savePath), "saveDir=" .. tostring(saveDir))
   local ok, err = ctx._.config_parse.save(savePath, lines, saveDir)
+  saveDbg("dispatch result", "ok=" .. tostring(ok), "err=" .. tostring(err))
   if mounted and System and System.fileXioUmount then
+    saveDbg("umount", tostring(mounted))
     System.fileXioUmount(mounted)
   end
   return ok, err

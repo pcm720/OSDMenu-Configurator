@@ -155,6 +155,35 @@ local function closeFailed(closeRes)
   return closeRes < 0
 end
 
+local function saveDbg(...)
+  if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[#parts + 1] = tostring(select(i, ...))
+  end
+  print("[save] " .. table.concat(parts, " "))
+end
+
+local function firstSemanticMismatch(a, b)
+  local maxLen = math.max(#a, #b)
+  for i = 1, maxLen do
+    local x, y = a[i], b[i]
+    if not x or not y then
+      return i, "length", x and "present" or "missing", y and "present" or "missing"
+    end
+    if x.key ~= y.key then
+      return i, "key", x.key, y.key
+    end
+    if x.value ~= y.value then
+      return i, "value", x.value, y.value
+    end
+    if x.commentState ~= y.commentState then
+      return i, "commentState", x.commentState, y.commentState
+    end
+  end
+  return nil, nil, nil, nil
+end
+
 local function readFileRaw(path, opts)
   opts = opts or {}
   local requireCloseOk = opts.requireCloseOk == true
@@ -203,31 +232,52 @@ end
 -- Success requires write size match, close success, and read-back semantic match
 -- (key/value + comment state for key lines; non-key comments are ignored).
 function config_parse.save(path, lines, createDir)
+  saveDbg("begin", "path=" .. tostring(path), "createDir=" .. tostring(createDir), "lines=" .. tostring(#(lines or {})))
   local expected = config_parse.serialize(lines)
   local expectedSemantic = buildSemanticSignature(config_parse.parse(expected))
   local previousSize = getFileSizeIfExists(path)
+  saveDbg("prepared", "expectedBytes=" .. tostring(#expected), "semanticEntries=" .. tostring(#expectedSemantic),
+    "previousSize=" .. tostring(previousSize))
   if createDir and createDir ~= "" then
+    saveDbg("mkdir", tostring(createDir))
     System.createDirectory(createDir)
   end
   local h = System.openFile(path, MODE_WRITE)
-  if not h or h < 0 then return nil, "cannot open for write " .. tostring(path) end
+  if not h or h < 0 then
+    saveDbg("openForWrite failed", "path=" .. tostring(path), "handle=" .. tostring(h))
+    return nil, "cannot open for write " .. tostring(path)
+  end
   local written = System.writeFile(h, expected, #expected)
   local closeRes = System.closeFile(h)
-  if written ~= #expected then return nil, "write failed" end
-  if closeFailed(closeRes) then return nil, "write close failed" end
+  saveDbg("write", "written=" .. tostring(written), "expected=" .. tostring(#expected), "closeRes=" .. tostring(closeRes))
+  if written ~= #expected then
+    saveDbg("write failed", "writtenMismatch")
+    return nil, "write failed"
+  end
+  if closeFailed(closeRes) then
+    saveDbg("write close failed", "closeRes=" .. tostring(closeRes))
+    return nil, "write close failed"
+  end
 
   local actual, readErr, actualSize = readFileRaw(path, { requireCloseOk = true, requireFullRead = true })
   if not actual then
+    saveDbg("verify readback failed", "error=" .. tostring(readErr), "actualSize=" .. tostring(actualSize))
     return nil, "verify failed (" .. tostring(readErr) .. ")"
   end
 
   local actualSemantic = buildSemanticSignature(config_parse.parse(actual))
   if not semanticSignaturesEqual(expectedSemantic, actualSemantic) then
+    local idx, why, ev, av = firstSemanticMismatch(expectedSemantic, actualSemantic)
+    saveDbg("verify mismatch", "idx=" .. tostring(idx), "field=" .. tostring(why), "expected=" .. tostring(ev),
+      "actual=" .. tostring(av), "expectedEntries=" .. tostring(#expectedSemantic),
+      "actualEntries=" .. tostring(#actualSemantic), "actualSize=" .. tostring(actualSize))
     if (type(previousSize) == "number" and previousSize > 0) and (type(actualSize) == "number" and actualSize == 0) then
       return nil, "verify failed (file became empty after save)"
     end
     return nil, "verify failed (content mismatch)"
   end
+  saveDbg("success", "path=" .. tostring(path), "actualSize=" .. tostring(actualSize),
+    "semanticEntries=" .. tostring(#actualSemantic))
   return true
 end
 
