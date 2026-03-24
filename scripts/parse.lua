@@ -219,6 +219,16 @@ local function getFileSizeIfExists(path)
   return size
 end
 
+local function directoryExists(path)
+  if not path or path == "" then return true end
+  if not System or not System.listDirectory then return nil end
+  local ok, list = pcall(System.listDirectory, path)
+  if not ok then return nil end
+  if type(list) == "table" then return true end
+  if list == nil then return false end
+  return nil
+end
+
 -- Read file at path and parse. Returns lines or nil, err.
 function config_parse.load(path)
   -- Be tolerant on load: some devices/filesystems may return non-zero close or
@@ -236,11 +246,33 @@ function config_parse.save(path, lines, createDir)
   local expected = config_parse.serialize(lines)
   local expectedSemantic = buildSemanticSignature(config_parse.parse(expected))
   local previousSize = getFileSizeIfExists(path)
+  local targetExists = (type(previousSize) == "number")
+  local dirState = directoryExists(createDir)
   saveDbg("prepared", "expectedBytes=" .. tostring(#expected), "semanticEntries=" .. tostring(#expectedSemantic),
-    "previousSize=" .. tostring(previousSize))
+    "previousSize=" .. tostring(previousSize), "dirExists=" .. tostring(dirState))
+  if targetExists then
+    saveDbg("target file", "exists", "size=" .. tostring(previousSize))
+  else
+    saveDbg("target file", "missing", "willCreateOnOpen=true")
+  end
+  -- Create parent only if missing; if unknown, only attempt when target file does not exist.
+  local shouldCreateDir = false
   if createDir and createDir ~= "" then
-    saveDbg("mkdir", tostring(createDir))
-    System.createDirectory(createDir)
+    if dirState == false then
+      shouldCreateDir = true
+    elseif dirState == nil and previousSize == nil then
+      shouldCreateDir = true
+    end
+  end
+  if shouldCreateDir then
+    local mkRes = System.createDirectory(createDir)
+    saveDbg("mkdir", tostring(createDir), "result=" .. tostring(mkRes), "dirExistsBefore=" .. tostring(dirState))
+  elseif createDir and createDir ~= "" then
+    local reason = (dirState == true and "directory already exists") or
+        (dirState == nil and previousSize ~= nil and "directory state unknown; target file exists") or
+        (dirState == nil and "directory state unknown") or
+        "not needed"
+    saveDbg("mkdir skipped", tostring(createDir), "reason=" .. tostring(reason))
   end
   local h = System.openFile(path, MODE_WRITE)
   if not h or h < 0 then
