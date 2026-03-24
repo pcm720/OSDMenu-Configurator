@@ -1,3 +1,5 @@
+local config_parse = {}
+
 -- Regenerate PS2BBL/PSXBBL config lines: global settings, autoboot, then hotkeys, grouping LK/ARG as in UI
 function config_parse.regenerateLinesBbl(lines, options)
   local out = {}
@@ -46,8 +48,6 @@ function config_parse.regenerateLinesBbl(lines, options)
   end
   return out
 end
-
-local config_parse = {}
 --[[
   CNF parse/serialize for OSDMENU.CNF, OSDMBR.CNF, OSDGSM.CNF.
   Line-based key = value; # comments; empty lines allowed.
@@ -56,7 +56,6 @@ local config_parse = {}
   Nil checks: use ~= nil when the value can be "" or false (e.g. config get); use truthiness for match results.
 ]]
 
-local config_parse = {}
 local System = System
 
 -- Open modes. Write uses O_TRUNC so the file is recreated (truncated), not appended.
@@ -1636,13 +1635,8 @@ function config_parse.regenerateForSave(lines, fileType, options)
     end
     return out
   end
-  if fileType == "bbl" or fileType == "freemcboot_cnf" or fileType == "freehdboot_cnf" then
-    -- Use OSDMenu-style regenerateLines for all BBL and FreeMCBoot/FreeHDDBoot configs
-    local cats = opt.osdmenu_cnf_categories or {}
-    local maxEntries = (type(opt.BBL_MAX_ENTRIES) == "number" and opt.BBL_MAX_ENTRIES) or 9
-    local maxPathsPerEntry = (type(opt.BBL_MAX_PATHS_PER_ENTRY) == "number" and opt.BBL_MAX_PATHS_PER_ENTRY) or 9
-    local out = config_parse.regenerateLines(lines, cats, true, maxEntries, maxPathsPerEntry)
-    return out
+  if fileType == "ps2bbl_ini" or fileType == "psxbbl_ini" then
+    return config_parse.regenerateLinesBbl(lines, opt)
   end
   if fileType == "osdmbr_cnf" then
     return config_parse.regenerateLinesMBR(lines, opt.osdmbr_cnf or {})
