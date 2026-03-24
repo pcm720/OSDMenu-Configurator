@@ -148,6 +148,13 @@ local function semanticSignaturesEqual(a, b)
   return true
 end
 
+local function closeFailed(closeRes)
+  -- Some filesystem backends can return non-standard success values from close().
+  -- Treat only explicit negative return values as failure.
+  if type(closeRes) ~= "number" then return false end
+  return closeRes < 0
+end
+
 local function readFileRaw(path, opts)
   opts = opts or {}
   local requireCloseOk = opts.requireCloseOk == true
@@ -161,7 +168,7 @@ local function readFileRaw(path, opts)
   end
   local content, readLen = System.readFile(h, size)
   local closeRes = System.closeFile(h)
-  if requireCloseOk and closeRes ~= 0 then
+  if requireCloseOk and closeFailed(closeRes) then
     return nil, "read close failed", size
   end
   if not content then return nil, "read failed", size end
@@ -207,7 +214,7 @@ function config_parse.save(path, lines, createDir)
   local written = System.writeFile(h, expected, #expected)
   local closeRes = System.closeFile(h)
   if written ~= #expected then return nil, "write failed" end
-  if closeRes ~= 0 then return nil, "write close failed" end
+  if closeFailed(closeRes) then return nil, "write close failed" end
 
   local actual, readErr, actualSize = readFileRaw(path, { requireCloseOk = true, requireFullRead = true })
   if not actual then
