@@ -65,7 +65,7 @@ local function run(ctx)
         kind = "failed",
         detail = _.common.localizeParseError(err, _.editor_str) or
             _.editor_str.save_failed,
-        framesLeft = 60
+        framesLeft = 120
       }
       if ctx.returnToMenuEntriesAfterSave then
         ctx.returnToMenuEntriesAfterSave = nil

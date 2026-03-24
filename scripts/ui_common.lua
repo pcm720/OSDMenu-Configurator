@@ -23,6 +23,7 @@ common.PAD_L2, common.PAD_R2       = 0x0100, 0x0200
 common.WHITE                       = Color.new(255, 255, 255)
 common.GRAY                        = Color.new(160, 160, 160)
 common.DIM                         = Color.new(96, 96, 96)
+common.ERROR                       = Color.new(255, 64, 64)
 common.BGCOLOR                     = Color.new(20, 20, 20)
 common.HIGHLIGHT                   = Color.new(255, 220, 100)
 common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0)
@@ -747,14 +748,16 @@ function common.centerX(c, textWidth)
   return math.max(mx, math.floor((w - textWidth) / 2))
 end
 
--- Unified save splash: "Saved" or "Save failed", drawn on top. ctx.saveSplash = { kind = "saved"|"failed", detail = string, framesLeft = N }.
+-- Unified save splash: "Saved" or "Save Failed!", drawn on top. ctx.saveSplash = { kind = "saved"|"failed", detail = string, framesLeft = N }.
 -- Decrements framesLeft; when 0, clears saveSplash and (if kind=="saved" and returnToSelectConfigAfterSaveFlash) performs transition.
 function common.drawSaveSplash(ctx)
   local sp = ctx.saveSplash
   if not sp or not sp.framesLeft or sp.framesLeft <= 0 then return end
   local _ = ctx._
   local lineH = _.LINE_H or common.LINE_H
-  local title = (sp.kind == "failed") and (_.editor_str.save_failed or "Save failed") or (_.editor_str.saved or "Saved")
+  local isFailed = (sp.kind == "failed")
+  local title = sp.title or (isFailed and "Save Failed!" or (_.editor_str.saved or "Saved"))
+  local textColor = sp.textColor or (isFailed and common.ERROR or _.HIGHLIGHT)
   local tw = common.calcTextWidth(_.font, title, 1) or (#title * 14)
   local detailStr = (sp.detail and sp.detail ~= "") and tostring(sp.detail) or ""
   if #detailStr > 52 then detailStr = detailStr:sub(1, 49) .. "..." end
@@ -768,9 +771,9 @@ function common.drawSaveSplash(ctx)
     _.Graphics.drawRect(boxX, boxY, boxW, boxH, splashBg)
   end
   local centerY = boxY + math.floor((boxH - (detailStr ~= "" and lineH * 2 or lineH)) / 2)
-  common.drawText(_.font, _.drawMode, common.centerX(_, tw), centerY, 1, title, _.HIGHLIGHT)
+  common.drawText(_.font, _.drawMode, common.centerX(_, tw), centerY, 1, title, textColor)
   if detailStr ~= "" then
-    common.drawText(_.font, _.drawMode, common.centerX(_, detailW), centerY + lineH, 1, detailStr, _.HIGHLIGHT)
+    common.drawText(_.font, _.drawMode, common.centerX(_, detailW), centerY + lineH, 1, detailStr, textColor)
   end
   sp.framesLeft = sp.framesLeft - 1
   if sp.framesLeft <= 0 then

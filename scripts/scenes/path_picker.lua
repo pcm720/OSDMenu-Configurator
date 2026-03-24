@@ -203,6 +203,8 @@ local function applyManualPath(ctx, val)
     if not okIrx then
       ctx.saveSplash = {
         kind = "failed",
+        title = (_.editor_str and _.editor_str.save_failed) or "Save failed",
+        textColor = _.HIGHLIGHT,
         detail = (_.path_str and _.path_str.irx_extension_required) or "Path must end in .irx",
         framesLeft = 60
       }

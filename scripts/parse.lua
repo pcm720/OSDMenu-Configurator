@@ -115,32 +115,104 @@ function config_parse.serialize(lines)
   return table.concat(t, "\n")
 end
 
--- Read file at path and parse. Returns lines or nil, err.
-function config_parse.load(path)
+local function buildSemanticSignature(lines)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    if entry and entry.key then
+      local commentState = 0
+      if entry.comment == 2 then
+        commentState = 2
+      elseif entry.comment then
+        commentState = 1
+      end
+      out[#out + 1] = {
+        key = tostring(entry.key),
+        value = tostring(entry.value or ""),
+        commentState = commentState,
+      }
+    end
+  end
+  return out
+end
+
+local function semanticSignaturesEqual(a, b)
+  if #a ~= #b then return false end
+  for i = 1, #a do
+    local x, y = a[i], b[i]
+    if not x or not y then return false end
+    if x.key ~= y.key or x.value ~= y.value or x.commentState ~= y.commentState then
+      return false
+    end
+  end
+  return true
+end
+
+local function readFileRaw(path)
   local h = System.openFile(path, MODE_READ)
-  if not h or h < 0 then return nil, "cannot open " .. tostring(path) end
+  if not h or h < 0 then return nil, "cannot open " .. tostring(path), nil end
   local size = System.sizeFile(h)
   if not size or size < 0 then
     System.closeFile(h)
-    return nil, "cannot get size"
+    return nil, "cannot get size", nil
   end
-  local content = System.readFile(h, size)
+  local content, readLen = System.readFile(h, size)
+  local closeRes = System.closeFile(h)
+  if closeRes ~= 0 then
+    return nil, "read close failed", size
+  end
+  if not content then return nil, "read failed", size end
+  if type(readLen) == "number" and readLen ~= size then
+    return nil, "read failed", size
+  end
+  return content, nil, size
+end
+
+local function getFileSizeIfExists(path)
+  local h = System.openFile(path, MODE_READ)
+  if not h or h < 0 then return nil end
+  local size = System.sizeFile(h)
   System.closeFile(h)
-  if not content then return nil, "read failed" end
+  if not size or size < 0 then return nil end
+  return size
+end
+
+-- Read file at path and parse. Returns lines or nil, err.
+function config_parse.load(path)
+  local content, err = readFileRaw(path)
+  if not content then return nil, err end
   return config_parse.parse(content)
 end
 
 -- Serialize lines and write to path. Ensures parent dir exists if createDir is provided.
+-- Success requires write size match, close success, and read-back semantic match
+-- (key/value + comment state for key lines; non-key comments are ignored).
 function config_parse.save(path, lines, createDir)
-  local s = config_parse.serialize(lines)
+  local expected = config_parse.serialize(lines)
+  local expectedSemantic = buildSemanticSignature(config_parse.parse(expected))
+  local previousSize = getFileSizeIfExists(path)
   if createDir and createDir ~= "" then
     System.createDirectory(createDir)
   end
   local h = System.openFile(path, MODE_WRITE)
   if not h or h < 0 then return nil, "cannot open for write " .. tostring(path) end
-  local written = System.writeFile(h, s, #s)
-  System.closeFile(h)
-  if written ~= #s then return nil, "write failed" end
+  local written = System.writeFile(h, expected, #expected)
+  local closeRes = System.closeFile(h)
+  if written ~= #expected then return nil, "write failed" end
+  if closeRes ~= 0 then return nil, "write close failed" end
+
+  local actual, readErr, actualSize = readFileRaw(path)
+  if not actual then
+    return nil, "verify failed (" .. tostring(readErr) .. ")"
+  end
+
+  local actualSemantic = buildSemanticSignature(config_parse.parse(actual))
+  if not semanticSignaturesEqual(expectedSemantic, actualSemantic) then
+    if (type(previousSize) == "number" and previousSize > 0) and (type(actualSize) == "number" and actualSize == 0) then
+      return nil, "verify failed (file became empty after save)"
+    end
+    return nil, "verify failed (content mismatch)"
+  end
   return true
 end
 
@@ -1627,7 +1699,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
     appendFreemcbootLaunchKeys(out, lines, maxLaunchKeyEntries)
     -- Add separator after each launch key section (if any were added)
     if #out > launchKeyStart then
-      for i = launchKeyStart, #out do
+      for i = #out, launchKeyStart, -1 do
         if out[i] and out[i].key and out[i].key:match("^LK_") then
           table.insert(out, i + 1, { comment = '# --------------------------------' })
         end

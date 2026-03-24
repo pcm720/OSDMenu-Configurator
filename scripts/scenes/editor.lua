@@ -108,11 +108,11 @@ local function run(ctx)
               kind = "failed",
               detail = _.common.localizeParseError(err, _.editor_str) or
                   _.editor_str.save_failed,
-              framesLeft = 60
+              framesLeft = 120
             }
           end
         else
-          ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 60 }
+          ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
         end
       end
     elseif (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
@@ -739,11 +739,11 @@ local function run(ctx)
             kind = "failed",
             detail = _.common.localizeParseError(err, _.editor_str) or
                 _.editor_str.save_failed,
-            framesLeft = 60
+            framesLeft = 120
           }
         end
       else
-        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 60 }
+        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
       end
     end
   end
