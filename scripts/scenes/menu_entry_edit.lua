@@ -9,7 +9,7 @@ local function run(ctx)
   local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
   local args = _.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx)
   local hasOsdOrShutdown = false
-  local allowArgs = (ctx.fileType ~= "freemcboot_cnf")
+  local allowArgs = (ctx.fileType ~= "freemcboot_cnf") and (ctx.context ~= "freehddboot")
   for _, p in ipairs(paths) do
     local pv = type(p) == "table" and p.value or p
     if (pv or ""):upper() == "OSDSYS" or (pv or ""):upper() == "POWEROFF" then
@@ -30,10 +30,14 @@ local function run(ctx)
   local argsStr = _.menu_str.args ..
       ((not allowArgs or hasOsdOrShutdown or hasCdrom) and _.menu_str.none or
       (#args == 0 and _.menu_str.none or #args .. _.menu_str.arg_s))
+  local summaryStr = pathsStr
+  if allowArgs then
+    summaryStr = pathsStr .. ", " .. argsStr
+  end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
     _.menu_str.name .. (name == "" and _.common_str.empty or name:sub(1, 40)), _.DIM)
-  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, pathsStr .. ", " .. argsStr, _.DIM)
+  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
   if ctx.entryEditSub < 1 then ctx.entryEditSub = 1 end
   if ctx.entryEditSub > #subOpts then ctx.entryEditSub = #subOpts end
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X

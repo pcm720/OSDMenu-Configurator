@@ -9,7 +9,8 @@ local function formatTimerSeconds(msText, unitSingular, unitPlural)
   local plural = unitPlural or "seconds"
   local sec = math.max(0, math.floor((ms + 500) / 1000))
   local unit = (sec == 1) and singular or plural
-  return tostring(sec) .. " " .. unit
+  local secText = string.format("%3d", sec)
+  return secText .. " " .. unit
 end
 
 local function formatArgCount(n)
@@ -655,9 +656,21 @@ local function run(ctx)
       elseif ctx.fileType == "freemcboot_cnf" and o.key and o.key:match("^ESR_Path_E%d+$") then
         inlineAutoRow = true
         local slotIdx = o.key:match("^ESR_Path_E(%d+)$") or "?"
-        local pathVal = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+        local pathVal, pathCommented = nil, nil
+        if _.config_parse.getWithComment then
+          pathVal, pathCommented = _.config_parse.getWithComment(ctx.lines, o.key)
+        end
+        if pathVal == nil then
+          pathVal = ""
+        end
         local pathDisp = (pathVal ~= "" and pathVal) or _.common_str.not_set
         lab = "ESR path E" .. tostring(slotIdx) .. ": " .. pathDisp
+        if ctx.editorEsrPathGrab and i == ctx.optSel then
+          lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
+        end
+        if pathCommented then
+          col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        end
         valDisplay = ""
       elseif o.optType == "bbl_slot" and (o.bblKeyId == "AUTO" or (o.key and o.key:match("^_auto_e%d+$"))) then
         inlineAutoRow = true
@@ -804,11 +817,76 @@ local function run(ctx)
       { left = _.common_str.hint_prev, right = _.common_str.hint_next })
     local isAutoSlotRow = selOpt and selOpt.optType == "bbl_slot" and selOpt.bblKeyId == "AUTO" and selOpt.bblEntrySlot
     local autoSlotNum = isAutoSlotRow and tonumber(selOpt.bblEntrySlot) or nil
+    local isEsrPathRow = selOpt and ctx.fileType == "freemcboot_cnf" and selOpt.key and selOpt.key:match("^ESR_Path_E%d+$")
+    local esrSlotNum = isEsrPathRow and tonumber(selOpt.key:match("^ESR_Path_E(%d+)$")) or nil
     local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
         ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
     local autoSlotData = (isAutoSlotRow and autoSlotNum and _.config_parse.getBblHotkeySlot) and
         _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum) or nil
+
+    local function esrKey(slot)
+      return "ESR_Path_E" .. tostring(slot or "")
+    end
+
+    local function getEsrSlot(slot)
+      local key = esrKey(slot)
+      local value, commented = nil, nil
+      if _.config_parse.getWithComment then
+        value, commented = _.config_parse.getWithComment(ctx.lines, key)
+      end
+      return {
+        key = key,
+        value = value or "",
+        present = (value ~= nil),
+        disabled = commented and true or false
+      }
+    end
+
+    local function setEsrSlot(slot, value, disabled)
+      local key = esrKey(slot)
+      _.config_parse.set(ctx.lines, key, value or "")
+      for _, entry in ipairs(ctx.lines or {}) do
+        if entry.key and entry.key == key then
+          entry.comment = disabled and true or nil
+          break
+        end
+      end
+    end
+
+    local function getEsrSlots()
+      local out = {}
+      for s = 1, 3 do
+        out[s] = getEsrSlot(s)
+      end
+      return out
+    end
+
+    local function applyEsrSlots(slots)
+      for s = 1, 3 do
+        local row = slots[s] or {}
+        setEsrSlot(s, row.value or "", row.disabled and true or false)
+      end
+    end
+
+    local function countFilledEsrSlots()
+      local count = 0
+      for s = 1, 3 do
+        local slot = getEsrSlot(s)
+        if slot.value ~= "" then count = count + 1 end
+      end
+      return count
+    end
+
+    local function focusEsrSlot(slot)
+      local key = esrKey(slot)
+      for idx, opt in ipairs(ctx.optList or {}) do
+        if opt and opt.key == key then
+          ctx.optSel = idx
+          return
+        end
+      end
+    end
     local function clearAutoMoveState()
       ctx.editorAutoSlotGrab = nil
       ctx.editorAutoSlotMoveSnapshot = nil
@@ -888,6 +966,97 @@ local function run(ctx)
       confirmAutoMoveState()
     end
 
+    local function clearEsrMoveState()
+      ctx.editorEsrPathGrab = nil
+      ctx.editorEsrPathMoveSnapshot = nil
+      ctx.editorEsrPathMoveSel = nil
+    end
+
+    local function beginEsrMoveState()
+      if ctx.editorEsrPathGrab then return end
+      if _.common and _.common.cloneConfigLines then
+        ctx.editorEsrPathMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+      else
+        ctx.editorEsrPathMoveSnapshot = nil
+      end
+      ctx.editorEsrPathMoveSel = ctx.optSel
+      ctx.editorEsrPathGrab = true
+    end
+
+    local function confirmEsrMoveState()
+      clearEsrMoveState()
+    end
+
+    local function cancelEsrMoveState()
+      if ctx.editorEsrPathMoveSnapshot then
+        if _.common and _.common.cloneConfigLines then
+          ctx.lines = _.common.cloneConfigLines(ctx.editorEsrPathMoveSnapshot)
+        else
+          ctx.lines = ctx.editorEsrPathMoveSnapshot
+        end
+        ctx.optSel = _.common.clampListSelection(ctx.editorEsrPathMoveSel or ctx.optSel, #ctx.optList)
+        _.common.refreshConfigModified(ctx)
+      end
+      clearEsrMoveState()
+    end
+
+    if not isEsrPathRow then
+      confirmEsrMoveState()
+      ctx.editorEsrPathActionsOpen = nil
+    end
+
+    local function moveEsrSlot(step)
+      if not (isEsrPathRow and esrSlotNum) then return end
+      local dst = esrSlotNum + step
+      if dst < 1 or dst > 3 then return end
+      local slots = getEsrSlots()
+      slots[esrSlotNum], slots[dst] = slots[dst], slots[esrSlotNum]
+      applyEsrSlots(slots)
+      ctx.configModified = true
+      focusEsrSlot(dst)
+    end
+
+    local function insertEsrSlotBelow()
+      if not (isEsrPathRow and esrSlotNum and esrSlotNum < 3) then return end
+      if countFilledEsrSlots() >= 3 then return end
+      local slots = getEsrSlots()
+      for s = 3, esrSlotNum + 2, -1 do
+        slots[s] = {
+          value = slots[s - 1].value or "",
+          disabled = slots[s - 1].disabled and true or false
+        }
+      end
+      slots[esrSlotNum + 1] = { value = "", disabled = false }
+      applyEsrSlots(slots)
+      ctx.configModified = true
+      confirmEsrMoveState()
+      focusEsrSlot(esrSlotNum + 1)
+    end
+
+    local function removeEsrSlot()
+      if not (isEsrPathRow and esrSlotNum) then return end
+      if countFilledEsrSlots() <= 0 then return end
+      local slots = getEsrSlots()
+      for s = esrSlotNum, 2 do
+        slots[s] = {
+          value = slots[s + 1].value or "",
+          disabled = slots[s + 1].disabled and true or false
+        }
+      end
+      slots[3] = { value = "", disabled = false }
+      applyEsrSlots(slots)
+      ctx.configModified = true
+      confirmEsrMoveState()
+      focusEsrSlot(math.min(esrSlotNum, 3))
+    end
+
+    local function toggleEsrSlotDisabled()
+      if not (isEsrPathRow and esrSlotNum) then return end
+      local slot = getEsrSlot(esrSlotNum)
+      setEsrSlot(esrSlotNum, slot.value or "", not slot.disabled)
+      ctx.configModified = true
+    end
+
     if isAutoSlotRow then
       hintItems = {
         {
@@ -909,6 +1078,33 @@ local function run(ctx)
         {
           pad = "circle",
           label = ctx.editorAutoSlotGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+          row = 1
+        },
+      }
+    end
+
+    if isEsrPathRow then
+      local esrSel = getEsrSlot(esrSlotNum or 1)
+      hintItems = {
+        {
+          pad = "cross",
+          label = ctx.editorEsrPathGrab and (_.menu_str.confirm_label or "Confirm") or "Edit",
+          row = 1
+        },
+        { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+        {
+          pad = ctx.configModified and "start" or "",
+          label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+          row = 1
+        },
+        {
+          pad = "triangle",
+          label = esrSel.disabled and "Enable" or "Disable",
+          row = 1
+        },
+        {
+          pad = "circle",
+          label = ctx.editorEsrPathGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
           row = 1
         },
       }
@@ -990,9 +1186,58 @@ local function run(ctx)
       end
     end
 
+    if ctx.editorEsrPathActionsOpen and isEsrPathRow then
+      local actionRows = {}
+      local filledEsrSlots = countFilledEsrSlots()
+      local canMoveEsrSlots = filledEsrSlots > 1
+      local canInsertEsrSlot = (esrSlotNum or 0) < 3 and filledEsrSlots < 3
+      local canRemoveEsrSlot = filledEsrSlots > 0
+      if not canMoveEsrSlots then
+        confirmEsrMoveState()
+      end
+      if canMoveEsrSlots then
+        actionRows[#actionRows + 1] = {
+          id = "grab",
+          label = ctx.editorEsrPathGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+              (_.menu_str.grab_label or "Move")
+        }
+      end
+      if canInsertEsrSlot then
+        actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+      end
+      if canRemoveEsrSlot then
+        actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+      end
+      if actions_menu.run(ctx, {
+            openKey = "editorEsrPathActionsOpen",
+            selKey = "editorEsrPathActionsSel",
+            scrollKey = "editorEsrPathActionsScroll",
+            title = (_.menu_str.actions_title or "Actions"),
+            rows = actionRows,
+            rowStateKeyPrefix = "editor_esr_path_actions_row_",
+            onSelect = function(row)
+              if row.id == "grab" then
+                if ctx.editorEsrPathGrab then
+                  cancelEsrMoveState()
+                else
+                  beginEsrMoveState()
+                end
+              elseif row.id == "insert" then
+                insertEsrSlotBelow()
+              elseif row.id == "remove" then
+                removeEsrSlot()
+              end
+            end,
+          }) then
+        return
+      end
+    end
+
     if (_.padEffective & _.PAD_UP) ~= 0 then
       if isAutoSlotRow and ctx.editorAutoSlotGrab then
         moveAutoSlot(-1)
+      elseif isEsrPathRow and ctx.editorEsrPathGrab then
+        moveEsrSlot(-1)
       else
         ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
       end
@@ -1000,6 +1245,8 @@ local function run(ctx)
     if (_.padEffective & _.PAD_DOWN) ~= 0 then
       if isAutoSlotRow and ctx.editorAutoSlotGrab then
         moveAutoSlot(1)
+      elseif isEsrPathRow and ctx.editorEsrPathGrab then
+        moveEsrSlot(1)
       else
         ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, 1)
       end
@@ -1074,6 +1321,10 @@ local function run(ctx)
     if (_.padEffective & _.PAD_CROSS) ~= 0 then
       if isAutoSlotRow and ctx.editorAutoSlotGrab then
         confirmAutoMoveState()
+        return
+      end
+      if isEsrPathRow and ctx.editorEsrPathGrab then
+        confirmEsrMoveState()
         return
       end
       local o = ctx.optList[ctx.optSel]
@@ -1178,15 +1429,23 @@ local function run(ctx)
         ctx.state = "path_picker"
       end
     end
-    if (_.padEffective & _.PAD_SQUARE) ~= 0 and isAutoSlotRow then
-      ctx.editorAutoSlotActionsOpen = true
-      ctx.editorAutoSlotActionsSel = ctx.editorAutoSlotActionsSel or 1
-      ctx.editorAutoSlotActionsScroll = ctx.editorAutoSlotActionsScroll or 0
+    if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+      if isAutoSlotRow then
+        ctx.editorAutoSlotActionsOpen = true
+        ctx.editorAutoSlotActionsSel = ctx.editorAutoSlotActionsSel or 1
+        ctx.editorAutoSlotActionsScroll = ctx.editorAutoSlotActionsScroll or 0
+      elseif isEsrPathRow then
+        ctx.editorEsrPathActionsOpen = true
+        ctx.editorEsrPathActionsSel = ctx.editorEsrPathActionsSel or 1
+        ctx.editorEsrPathActionsScroll = ctx.editorEsrPathActionsScroll or 0
+      end
     end
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
       local o = ctx.optList[ctx.optSel]
-      if o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then
+      if o and o.key and o.key:match("^ESR_Path_E%d+$") and ctx.fileType == "freemcboot_cnf" then
+        toggleEsrSlotDisabled()
+      elseif o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then
         local slotNum = tonumber(o.bblEntrySlot)
         local slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum) or nil
         if slot and slot.used then
@@ -1272,6 +1531,23 @@ local function run(ctx)
       ctx.editorAutoSlotGrab = nil
       ctx.editorAutoSlotMoveSnapshot = nil
       ctx.editorAutoSlotMoveSel = nil
+      return
+    end
+    if ctx.editorEsrPathGrab then
+      if _.common and _.common.cloneConfigLines then
+        if ctx.editorEsrPathMoveSnapshot then
+          ctx.lines = _.common.cloneConfigLines(ctx.editorEsrPathMoveSnapshot)
+          ctx.optSel = _.common.clampListSelection(ctx.editorEsrPathMoveSel or ctx.optSel, #(ctx.optList or {}))
+          _.common.refreshConfigModified(ctx)
+        end
+      elseif ctx.editorEsrPathMoveSnapshot then
+        ctx.lines = ctx.editorEsrPathMoveSnapshot
+        ctx.optSel = _.common.clampListSelection(ctx.editorEsrPathMoveSel or ctx.optSel, #(ctx.optList or {}))
+        _.common.refreshConfigModified(ctx)
+      end
+      ctx.editorEsrPathGrab = nil
+      ctx.editorEsrPathMoveSnapshot = nil
+      ctx.editorEsrPathMoveSel = nil
       return
     end
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
