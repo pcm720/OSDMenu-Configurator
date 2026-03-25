@@ -85,9 +85,8 @@ local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
 
-local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START = common.PAD_UP, common.PAD_DOWN, common.PAD_CROSS,
-    common.PAD_CIRCLE, common.PAD_START
-local PAD_L1, PAD_R1 = common.PAD_L1, common.PAD_R1
+local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE = common.PAD_UP, common.PAD_DOWN,
+    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE
 
 local function openDbg(...)
   if _G and _G.CONFIG_UI_OPEN_DEBUG == false then return end
@@ -115,15 +114,6 @@ local function findHintLabel(items, pad, fallback)
   return fallback
 end
 
-local function widerLabel(font, scale, a, b)
-  local wa = common.calcTextWidth and common.calcTextWidth(font, a or "", scale) or #(a or "")
-  local wb = common.calcTextWidth and common.calcTextWidth(font, b or "", scale) or #(b or "")
-  if wa >= wb then
-    return a or ""
-  end
-  return b or ""
-end
-
 local function getLanguageDisplayName(idx)
   local names = C.langDisplayNames
   if names and names[idx] and names[idx] ~= "" then
@@ -133,69 +123,27 @@ local function getLanguageDisplayName(idx)
   return defaultLanguageDisplayName(code)
 end
 
-local function withoutUpDownHints(items)
-  local out = {}
-  for i = 1, #(items or {}) do
-    local it = items[i]
-    local pad = tostring((it and it.pad) or ""):lower()
-    if pad ~= "up" and pad ~= "down" then
-      out[#out + 1] = it
-    end
-  end
-  return out
+local function hasLanguageChoices()
+  return not C.langCycleDisabled and C.langFiles and #C.langFiles > 1
+end
+
+local function getLanguageHintLabel(main_str)
+  local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
+  return findHintLabel(baseHint, "L1", findHintLabel(baseHint, "R1", "Language"))
 end
 
 local function buildMainBaseHintItems(main_str)
-  local base = withoutUpDownHints(main_str.main_hint_items or {})
-  local out = {}
-  for i = 1, #base do
-    local item = base[i]
-    local rawPad = tostring((item and item.pad) or "")
-    local padLower = rawPad:lower()
-    local isExit = (padLower == "start" or padLower == "circle")
-    local pad = isExit and "circle" or rawPad
-    local row = isExit and 1 or 2
-    out[#out + 1] = {
-      pad = pad,
-      label = (item and item.label) or "",
-      layoutLabel = item and item.layoutLabel,
-      row = row,
-    }
-  end
-  return out
-end
-
-local function buildMainLangHintItems(s, main_str)
-  if C.langCycleDisabled or not C.langFiles or #C.langFiles <= 1 then
-    return buildMainBaseHintItems(main_str)
-  end
-
-  local idx = C.langIndex or 1
-  local prevIdx = idx - 1
-  local nextIdx = idx + 1
-  if prevIdx < 1 then prevIdx = #C.langFiles end
-  if nextIdx > #C.langFiles then nextIdx = 1 end
-
-  local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
+  local baseHint = main_str.main_hint_items or {}
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
   local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
-  local prevLabel = getLanguageDisplayName(prevIdx)
-  local nextLabel = getLanguageDisplayName(nextIdx)
-  local l1Label = findHintLabel(baseHint, "L1", prevLabel)
-  local r1Label = findHintLabel(baseHint, "R1", nextLabel)
-
-  local leftLayout = widerLabel(s.font, 0.7, l1Label, prevLabel)
-  local centerLayout = widerLabel(s.font, 0.7, enterLabel, exitLabel)
-  local rightLayout = widerLabel(s.font, 0.7, r1Label, nextLabel)
-
-  return {
-    { pad = "L1", label = prevLabel, layoutLabel = leftLayout, row = 2 },
-    { pad = "", label = "", layoutLabel = centerLayout, row = 2 },
-    { pad = "R1", label = nextLabel, layoutLabel = rightLayout, row = 2 },
-    { pad = "cross", label = enterLabel, layoutLabel = leftLayout, row = 1 },
-    { pad = "", label = "", row = 1 },
-    { pad = "circle", label = exitLabel, layoutLabel = rightLayout, row = 1 },
+  local out = {
+    { pad = "cross", label = enterLabel, row = 1 },
+    { pad = "circle", label = exitLabel, row = 1 },
   }
+  if hasLanguageChoices() then
+    table.insert(out, 2, { pad = "square", label = getLanguageHintLabel(main_str), row = 1 })
+  end
+  return out
 end
 
 local function clearPathPickerState(s)
@@ -229,6 +177,20 @@ local function buildMainChoices(main_str)
     table.insert(out, 6, main_str.main_egsm or "eGSM")
   end
   return out
+end
+
+local function applyLanguageIndex(s, idx)
+  if not hasLanguageChoices() then return false end
+  local total = #C.langFiles
+  local target = common.clampListSelection(idx or (C.langIndex or 1), total)
+  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[target])
+  if okLoad and newStrings and type(newStrings) == "table" then
+    C.strings = newStrings
+    C.langIndex = target
+    s.main = buildMainChoices(newStrings.main or {})
+    return true
+  end
+  return false
 end
 
 local function isBblContext(context)
@@ -449,27 +411,56 @@ local function runMain(s, pad)
   if s.mainSel < 1 then s.mainSel = 1 end
   if s.mainSel > #s.main then s.mainSel = #s.main end
 
-  -- L1/R1: cycle language (only when not using CWD strings.lua override and more than one lang file)
-  if not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 then
-    local idx = C.langIndex or 1
-    if (pad & PAD_L1) ~= 0 then
-      idx = idx - 1
-      if idx < 1 then idx = #C.langFiles end
-      local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[idx])
-      if okLoad and newStrings and type(newStrings) == "table" then
-        C.strings = newStrings
-        C.langIndex = idx
-        s.main = buildMainChoices(newStrings.main or {})
-      end
-    elseif (pad & PAD_R1) ~= 0 then
-      idx = idx % #C.langFiles + 1
-      local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[idx])
-      if okLoad and newStrings and type(newStrings) == "table" then
-        C.strings = newStrings
-        C.langIndex = idx
-        s.main = buildMainChoices(newStrings.main or {})
-      end
+  if s.mainLangPrompt and not hasLanguageChoices() then
+    s.mainLangPrompt = nil
+    s.mainLangSel = nil
+  end
+  if s.mainLangPrompt then
+    local total = #C.langFiles
+    s.mainLangSel = common.clampListSelection(s.mainLangSel or (C.langIndex or 1), total)
+    local maxVis = math.max(1, math.min(8, total))
+    local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
+    local boxW = math.min(480, (s.w or 640) - (M * 2))
+    local boxH = math.floor(sc(72)) + maxVis * L
+    local boxX = math.floor(((s.w or 640) - boxW) / 2)
+    local boxY = math.floor(((s.h or 448) - boxH) / 2)
+    local title = main_str.main_select_language or "Select language"
+    if Graphics and Graphics.drawRect then
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 110))
     end
+    dt(s.font, s.drawMode, boxX + 18, boxY + 14, 0.95, title, common.WHITE)
+    for i = scroll + 1, math.min(scroll + maxVis, total) do
+      local y = boxY + math.floor(sc(40)) + (i - scroll - 1) * L
+      local label = getLanguageDisplayName(i)
+      local col = (i == s.mainLangSel) and SE or common.GRAY
+      dlr(boxX + 24, y, i == s.mainLangSel, label, col)
+    end
+    local hintItems = main_str.cross_select_circle_back_items or {
+      { pad = "cross", label = "Enter" },
+      { pad = "circle", label = "Back" },
+    }
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
+    if (pad & PAD_UP) ~= 0 then
+      s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, -1)
+    end
+    if (pad & PAD_DOWN) ~= 0 then
+      s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, 1)
+    end
+    if (pad & PAD_CROSS) ~= 0 then
+      applyLanguageIndex(s, s.mainLangSel)
+      s.mainLangPrompt = nil
+      s.mainLangSel = nil
+    elseif (pad & PAD_CIRCLE) ~= 0 then
+      s.mainLangPrompt = nil
+      s.mainLangSel = nil
+    end
+    return
+  end
+
+  if hasLanguageChoices() and (pad & PAD_SQUARE) ~= 0 then
+    s.mainLangPrompt = true
+    s.mainLangSel = C.langIndex or 1
+    return
   end
 
   if (pad & PAD_UP) ~= 0 and s.mainSel > 1 then
@@ -513,8 +504,7 @@ local function runMain(s, pad)
   local w = s.w or 640
   dt(s.font, s.drawMode, w - M - vw, MY, 0.75, versionStr, common.DIM)
   dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
-  local hintItems = (not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 and buildMainLangHintItems(s, main_str)) or
-      buildMainBaseHintItems(main_str)
+  local hintItems = buildMainBaseHintItems(main_str)
   common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
   for i, label in ipairs(s.main) do
     local y = MY + sc(50) + (i - 1) * L

@@ -55,7 +55,7 @@ common.PAD_HINT_ROW_H              = 28
 common.PAD_HINT_ROW_GAP            = 6
 common.PAD_HINT_SIDE_MARGIN        = 16
 common.PAD_HINT_ITEM_GAP           = 20
-common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H * 2 + common.PAD_HINT_ROW_GAP -- height when 2 rows
+common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
 
@@ -129,9 +129,9 @@ local function getHintFtFont(scaleFactor)
   return nil
 end
 
--- Draw a hint line: list of { pad = "cross", label = "Select" [, row = 1|2 ] }. Uses pad textures when available; else falls back to text.
--- row: 1 = bottom row, 2 = top row. If any item has row=2, rows are from lang; else first PAD_HINT_MAX_PER_ROW on bottom, rest on top.
--- totalWidth: optional. y = bottom of hint area. Full width (minus side margin) divided into equal slots. Odd: icon+label centered in slot. Even: left half left-aligned, right half right-aligned. Uses Font.ftCalcDimensions when available for accurate text width.
+-- Draw a hint line: list of { pad = "cross", label = "Select" }.
+-- Single-row 5-slot layout (top row removed in new UX).
+-- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
@@ -142,7 +142,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * textScale + 0.5))
     local approxCharW = math.floor(8 * drawScale)
     local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * textScale + 0.5))
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
@@ -150,7 +149,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
     local widthEff = width - 2 * sideMargin
-    local slotCount = 6
+    local rowPads = { "cross", "square", "start", "triangle", "circle" }
+    local slotCount = #rowPads
     local slotW = widthEff / slotCount
     local hintFont = font
     if drawMode == "ftPrint" then
@@ -167,14 +167,11 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return math.floor(approxCharW * #label)
     end
 
-    local topPads = { "left", "l1", "l2", "r2", "r1", "right" }
-    local bottomPads = { "cross", "square", "select", "start", "triangle", "circle" }
-    local topSlots, bottomSlots = {}, {}
-    local topMap, bottomMap = {}, {}
+    local rowSlots = {}
+    local rowMap = {}
     local drawUnusedButtons = common.PAD_HINT_DRAW_UNUSED_BUTTONS == true
     for i = 1, slotCount do
-      topMap[topPads[i]] = true
-      bottomMap[bottomPads[i]] = true
+      rowMap[rowPads[i]] = true
     end
 
     local activeByPad = {}
@@ -182,30 +179,24 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local item = hintItems[i]
       local rawPad = tostring((item and item.pad) or "")
       local key = rawPad:gsub("^%s+", ""):gsub("%s+$", ""):lower()
-      if key ~= "" and not activeByPad[key] and (topMap[key] or bottomMap[key]) then
+      if key ~= "" and not activeByPad[key] and rowMap[key] then
         activeByPad[key] = { label = tostring(item.label or "") }
       end
     end
 
     for i = 1, slotCount do
-      local topKey = topPads[i]
-      local topActive = activeByPad[topKey]
-      if drawUnusedButtons or topActive then
-        topSlots[i] = { pad = topKey, label = topActive and topActive.label or "", used = not not topActive }
-      end
-
-      local bottomKey = bottomPads[i]
-      local bottomActive = activeByPad[bottomKey]
-      if drawUnusedButtons or bottomActive then
-        bottomSlots[i] = { pad = bottomKey, label = bottomActive and bottomActive.label or "", used = not not bottomActive }
+      local key = rowPads[i]
+      local active = activeByPad[key]
+      if drawUnusedButtons or active then
+        rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
       end
     end
 
-    local totalRowH = rowH * 2 + rowGap
+    local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH
 
     local function drawRow(slots, rowIndex)
-      local rTop = rowTop + rowIndex * (rowH + rowGap)
+      local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
@@ -264,8 +255,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
     end
 
-    drawRow(topSlots, 0)
-    drawRow(bottomSlots, 1)
+    drawRow(rowSlots, 0)
     return
   end
   if textFallback and textFallback ~= "" then

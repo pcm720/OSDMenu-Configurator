@@ -1,5 +1,7 @@
 --[[ Per-hotkey slots (E1..E10): name, path slots, enable/disable, remove. ]]
 
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
+
 local function findFirstFreeSlot(_, ctx, keyId, maxEntries)
   for i = 1, maxEntries do
     local slot = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
@@ -29,35 +31,6 @@ local function formatArgCount(n)
     return "(1 arg)"
   end
   return "(" .. tostring(count) .. " args)"
-end
-
-local function findHintLabel(items, pad, fallback)
-  for _, item in ipairs(items or {}) do
-    if item.pad == pad and item.label and item.label ~= "" then
-      return item.label
-    end
-  end
-  return fallback
-end
-
-local function getTextWidth(font, label)
-  if not label or label == "" then return 0 end
-  if font and Font and Font.ftCalcDimensions then
-    local w = Font.ftCalcDimensions(font, label)
-    if type(w) == "number" and w > 0 then
-      return w
-    end
-  end
-  return #label
-end
-
-local function findWidestHintLabel(_, itemsA, itemsB, pad, fallback)
-  local labelA = findHintLabel(itemsA, pad, fallback)
-  local labelB = findHintLabel(itemsB, pad, fallback)
-  if getTextWidth(_.font, labelA) >= getTextWidth(_.font, labelB) then
-    return labelA
-  end
-  return labelB
 end
 
 local function run(ctx)
@@ -164,43 +137,135 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       text = _.common.truncateTextToWidth(_.font, text, maxLabelW, _.FONT_SCALE)
     end
+    if row.kind == "entry" and ctx.bblEntryGrab and i == ctx.bblEntrySel then
+      text = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. text
+    end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblEntrySel, text, col)
   end
 
   local sel = rows[ctx.bblEntrySel]
+  local isEntrySel = sel and sel.kind == "entry"
   local hint = {
-    { pad = "cross", label = "Enter", row = 1 },
-    { pad = (canInsert and "select" or ""), label = (canInsert and "Insert" or ""), row = 1 },
+    { pad = (sel and sel.kind ~= "empty") and "cross" or "", label = (sel and sel.kind ~= "empty") and "Enter" or "", row = 1 },
+    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+      row = 1
+    },
+    {
+      pad = isEntrySel and "triangle" or "",
+      label = isEntrySel and (sel.data.disabled and "Enable" or "Disable") or "",
+      row = 1
+    },
     { pad = "circle", label = "Back", row = 1 },
   }
-  if sel and sel.kind == "entry" then
-    local enableHint = _.menu_str.paths_hint_items_with_enable or _.menu_str.paths_hint_items
-    local disableHint = _.menu_str.paths_hint_items_with_disable or _.menu_str.paths_hint_items
-    local baseHint = sel.data.disabled and enableHint or disableHint
-    local toggleLayoutLabel = findWidestHintLabel(_, enableHint, disableHint, "triangle",
-      sel.data.disabled and "Enable" or "Disable")
-    hint = {
-      { pad = "", label = "", row = 2 },
-      { pad = "L1", label = findHintLabel(baseHint, "L1", "Up"), row = 2 },
-      { pad = "", label = "", row = 2 },
-      { pad = "R1", label = findHintLabel(baseHint, "R1", "Down"), row = 2 },
-      { pad = "", label = "", row = 2 },
-      { pad = "cross", label = findHintLabel(baseHint, "cross", "Enter"), row = 1 },
-      { pad = "triangle", label = findHintLabel(baseHint, "triangle", sel.data.disabled and "Enable" or "Disable"), layoutLabel = toggleLayoutLabel, row = 1 },
-      { pad = (canInsert and "select" or ""), label = (canInsert and "Insert" or ""), row = 1 },
-      { pad = "square", label = findHintLabel(baseHint, "square", "Delete"), row = 1 },
-      { pad = "circle", label = findHintLabel(baseHint, "circle", "Back"), row = 1 },
-    }
-  end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
+  local function insertEntryBelowSelected()
+    if not canInsert then return end
+    local belowSlot = 0
+    if sel and sel.kind == "entry" then
+      belowSlot = sel.slot
+    end
+    local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, belowSlot, maxEntries)
+    if newSlot then
+      ctx.configModified = true
+      ctx.bblEntryGrab = nil
+      ctx.bblEntrySlot = newSlot
+      ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+      ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
+      ctx.state = "bbl_hotkey_entry"
+    end
+  end
+
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
+
+  local function removeSelectedEntry()
+    if not (sel and sel.kind == "entry") then return end
+    _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
+    ctx.configModified = true
+    ctx.bblEntryGrab = nil
+  end
+
+  local function moveSelectedEntry(step)
+    if not (sel and sel.kind == "entry") then return end
+    local dst = sel.slot + step
+    if dst < 1 or dst > maxEntries then return end
+    _.config_parse.swapBblHotkeySlots(ctx.lines, keyId, sel.slot, dst)
+    ctx.configModified = true
+    ctx.bblEntryFocusSlot = dst
+  end
+
+  if ctx.bblEntryActionsOpen then
+    local actionRows = {}
+    if isEntrySel then
+      actionRows[#actionRows + 1] = {
+        id = "grab",
+        label = ctx.bblEntryGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Grab"),
+      }
+      actionRows[#actionRows + 1] = { id = "delete", label = (_.menu_str.delete_label or "Delete") }
+    end
+    if canInsert then
+      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "bblEntryActionsOpen",
+          selKey = "bblEntryActionsSel",
+          scrollKey = "bblEntryActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "bbl_hotkey_entries_actions_row_",
+          onSelect = function(row)
+            if row.id == "grab" then
+              ctx.bblEntryGrab = not ctx.bblEntryGrab
+            elseif row.id == "insert" then
+              insertEntryBelowSelected()
+            elseif row.id == "delete" then
+              removeSelectedEntry()
+            end
+          end,
+        }) then
+      return
+    end
+  end
+
   if (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.bblEntrySel = ctx.bblEntrySel - 1
-    if ctx.bblEntrySel < 1 then ctx.bblEntrySel = #rows end
+    if ctx.bblEntryGrab and isEntrySel then
+      moveSelectedEntry(-1)
+    else
+      ctx.bblEntrySel = ctx.bblEntrySel - 1
+      if ctx.bblEntrySel < 1 then ctx.bblEntrySel = #rows end
+    end
   end
   if (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.bblEntrySel = ctx.bblEntrySel + 1
-    if ctx.bblEntrySel > #rows then ctx.bblEntrySel = 1 end
+    if ctx.bblEntryGrab and isEntrySel then
+      moveSelectedEntry(1)
+    else
+      ctx.bblEntrySel = ctx.bblEntrySel + 1
+      if ctx.bblEntrySel > #rows then ctx.bblEntrySel = 1 end
+    end
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
@@ -228,21 +293,6 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and canInsert then
-    local belowSlot = 0
-    if sel and sel.kind == "entry" then
-      belowSlot = sel.slot
-    end
-    local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, belowSlot, maxEntries)
-    if newSlot then
-      ctx.configModified = true
-      ctx.bblEntrySlot = newSlot
-      ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-      ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
-      ctx.state = "bbl_hotkey_entry"
-    end
-  end
-
   local function toggleSelectedEntryDisabled()
     if sel and sel.kind == "entry" then
       local changed = _.config_parse.setBblHotkeySlotDisabled and
@@ -255,25 +305,16 @@ local function run(ctx)
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     toggleSelectedEntryDisabled()
   end
-  if sel and sel.kind == "entry" and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
-    ctx.configModified = true
+  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    ctx.bblEntryActionsOpen = true
+    ctx.bblEntryActionsSel = ctx.bblEntryActionsSel or 1
+    ctx.bblEntryActionsScroll = ctx.bblEntryActionsScroll or 0
   end
-  if sel and sel.kind == "entry" and (_.padEffective & _.PAD_L1) ~= 0 then
-    if sel.slot > 1 then
-      _.config_parse.swapBblHotkeySlots(ctx.lines, keyId, sel.slot, sel.slot - 1)
-      ctx.configModified = true
-      ctx.bblEntryFocusSlot = sel.slot - 1
-    end
-  end
-  if sel and sel.kind == "entry" and (_.padEffective & _.PAD_R1) ~= 0 then
-    if sel.slot < maxEntries then
-      _.config_parse.swapBblHotkeySlots(ctx.lines, keyId, sel.slot, sel.slot + 1)
-      ctx.configModified = true
-      ctx.bblEntryFocusSlot = sel.slot + 1
-    end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.bblEntryGrab = nil
     ctx.state = returnState
     ctx.bblEntryListReturnState = nil
     ctx.bblEntryDetailReturnState = nil

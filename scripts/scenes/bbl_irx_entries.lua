@@ -1,17 +1,6 @@
 --[[ PS2BBL/PSXBBL LOAD_IRX_E# editor. ]]
 
-local function withStartHintVisibility(items, showStart)
-  if showStart then return items end
-  local out = {}
-  for _, item in ipairs(items or {}) do
-    if item.pad ~= "start" then
-      out[#out + 1] = item
-    else
-      out[#out + 1] = { pad = "", label = "", row = item.row }
-    end
-  end
-  return out
-end
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function beginIrxPathEdit(_, ctx, entryIdx, disabled)
   ctx.editKey = nil
@@ -112,26 +101,116 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
+    if ctx.bblIrxGrab and i == ctx.bblIrxSel then
+      label = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. label
+    end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblIrxSel, label, col)
   end
 
-  if (_.padEffective & _.PAD_UP) ~= 0 and total > 0 then
-    ctx.bblIrxSel = ctx.bblIrxSel - 1
-    if ctx.bblIrxSel < 1 then ctx.bblIrxSel = total end
-  end
-  if (_.padEffective & _.PAD_DOWN) ~= 0 and total > 0 then
-    ctx.bblIrxSel = ctx.bblIrxSel + 1
-    if ctx.bblIrxSel > total then ctx.bblIrxSel = 1 end
-  end
+  local hasSelection = (total > 0 and ctx.bblIrxSel >= 1 and ctx.bblIrxSel <= total)
+  local selectedDisabled = hasSelection and entries[ctx.bblIrxSel].disabled
+  local hints = {
+    { pad = hasSelection and "cross" or "", label = hasSelection and (_.menu_str.enter_label or "Enter") or "", row = 1 },
+    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+      row = 1
+    },
+    {
+      pad = hasSelection and "triangle" or "",
+      label = hasSelection and
+          (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      row = 1
+    },
+    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+  }
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and canAddEntry then
+  local function addIrxEntry()
+    if not canAddEntry then return end
     local belowIdx = (total == 0) and 0 or entries[ctx.bblIrxSel].idx
     local newIdx = _.config_parse.insertBblIrxEntryBelow(ctx.lines, belowIdx, "")
     if newIdx then
       ctx.configModified = true
       ctx.bblIrxSel = (total == 0) and 1 or (ctx.bblIrxSel + 1)
+      ctx.bblIrxGrab = nil
       beginIrxPathEdit(_, ctx, newIdx, false)
+    end
+  end
+
+  local function removeSelectedIrx()
+    if not hasSelection then return end
+    local idx = entries[ctx.bblIrxSel].idx
+    _.config_parse.removeBblIrxEntry(ctx.lines, idx)
+    ctx.configModified = true
+    if ctx.bblIrxSel > total - 1 then ctx.bblIrxSel = math.max(1, total - 1) end
+    if total - 1 <= 0 then
+      ctx.bblIrxGrab = nil
+    end
+  end
+
+  local function moveSelectedIrx(step)
+    if not hasSelection then return end
+    local dst = ctx.bblIrxSel + step
+    if dst < 1 or dst > total then return end
+    local curIdx = entries[ctx.bblIrxSel].idx
+    local dstIdx = entries[dst].idx
+    if _.config_parse.swapBblIrxEntryContent(ctx.lines, curIdx, dstIdx) then
+      ctx.configModified = true
+      ctx.bblIrxSel = dst
+    end
+  end
+
+  if ctx.bblIrxActionsOpen then
+    local actionRows = {}
+    if hasSelection then
+      actionRows[#actionRows + 1] = {
+        id = "grab",
+        label = ctx.bblIrxGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Grab"),
+      }
+    end
+    if canAddEntry then
+      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+    end
+    if hasSelection then
+      actionRows[#actionRows + 1] = { id = "delete", label = (_.menu_str.delete_label or "Delete") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "bblIrxActionsOpen",
+          selKey = "bblIrxActionsSel",
+          scrollKey = "bblIrxActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "bbl_irx_actions_row_",
+          onSelect = function(row)
+            if row.id == "grab" then
+              ctx.bblIrxGrab = not ctx.bblIrxGrab
+            elseif row.id == "insert" then
+              addIrxEntry()
+            elseif row.id == "delete" then
+              removeSelectedIrx()
+            end
+          end,
+        }) then
       return
+    end
+  end
+
+  if (_.padEffective & _.PAD_UP) ~= 0 and total > 0 then
+    if ctx.bblIrxGrab then
+      moveSelectedIrx(-1)
+    else
+      ctx.bblIrxSel = ctx.bblIrxSel - 1
+      if ctx.bblIrxSel < 1 then ctx.bblIrxSel = total end
+    end
+  end
+  if (_.padEffective & _.PAD_DOWN) ~= 0 and total > 0 then
+    if ctx.bblIrxGrab then
+      moveSelectedIrx(1)
+    else
+      ctx.bblIrxSel = ctx.bblIrxSel + 1
+      if ctx.bblIrxSel > total then ctx.bblIrxSel = 1 end
     end
   end
 
@@ -147,52 +226,24 @@ local function run(ctx)
     toggleSelectedIrxDisabled()
   end
 
-  if total > 0 and (_.padEffective & _.PAD_L1) ~= 0 and ctx.bblIrxSel >= 2 then
-    local curIdx = entries[ctx.bblIrxSel].idx
-    local prevIdx = entries[ctx.bblIrxSel - 1].idx
-    if _.config_parse.swapBblIrxEntryContent(ctx.lines, curIdx, prevIdx) then
-      ctx.configModified = true
-      ctx.bblIrxSel = ctx.bblIrxSel - 1
-    end
-  end
-
-  if total > 0 and (_.padEffective & _.PAD_R1) ~= 0 and ctx.bblIrxSel <= total - 1 then
-    local curIdx = entries[ctx.bblIrxSel].idx
-    local nextIdx = entries[ctx.bblIrxSel + 1].idx
-    if _.config_parse.swapBblIrxEntryContent(ctx.lines, curIdx, nextIdx) then
-      ctx.configModified = true
-      ctx.bblIrxSel = ctx.bblIrxSel + 1
-    end
-  end
-
   if (_.padEffective & _.PAD_CROSS) ~= 0 and total > 0 then
     local ent = entries[ctx.bblIrxSel]
     beginIrxPathEdit(_, ctx, ent.idx, ent.disabled)
     return
   end
 
-  if (_.padEffective & _.PAD_SQUARE) ~= 0 and total > 0 then
-    local idx = entries[ctx.bblIrxSel].idx
-    _.config_parse.removeBblIrxEntry(ctx.lines, idx)
-    ctx.configModified = true
-    if ctx.bblIrxSel > total - 1 then ctx.bblIrxSel = math.max(1, total - 1) end
+  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    ctx.bblIrxActionsOpen = true
+    ctx.bblIrxActionsSel = ctx.bblIrxActionsSel or 1
+    ctx.bblIrxActionsScroll = ctx.bblIrxActionsScroll or 0
   end
-
-  local hints = _.menu_str.irx_hint_items_with_disable or _.menu_str.irx_hint_items or {}
-  if total > 0 then
-    local selected = entries[ctx.bblIrxSel]
-    if selected.disabled then
-      hints = _.menu_str.irx_hint_items_with_enable or hints
-    end
-  end
-  hints = withStartHintVisibility(hints, ctx.configModified == true)
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
     saveAndStay(ctx, _)
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.bblIrxGrab = nil
     ctx.state = "editor"
   end
 end

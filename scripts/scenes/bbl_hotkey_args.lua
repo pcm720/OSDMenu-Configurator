@@ -4,6 +4,7 @@ local arg_presets = dofile("scripts/scenes/arg_presets.lua")
 local arg_profiles = dofile("scripts/scenes/arg_profiles.lua")
 local arg_gsm_picker = dofile("scripts/scenes/arg_gsm_picker.lua")
 local arg_add_menu = dofile("scripts/scenes/arg_add_menu.lua")
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function drawPadTitle(_, keyId, suffix)
   local tail = tostring(suffix or "")
@@ -269,6 +270,9 @@ local function run(ctx)
       local a = args[i]
       local text = (a and a.value) or ""
       if text == "" then text = _.common_str.empty end
+      if ctx.bblArgGrab and i == ctx.bblArgSel then
+        text = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. text
+      end
       if _.common.fitListRowText then
         text = _.common.fitListRowText(ctx, "bbl_hotkey_args_row_" .. tostring(i), _.font, text, maxLabelW,
           _.FONT_SCALE, i == ctx.bblArgSel)
@@ -283,34 +287,124 @@ local function run(ctx)
     end
   end
 
-  local hint
-  if total > 0 and args[ctx.bblArgSel] then
-    hint = args[ctx.bblArgSel].disabled and (_.menu_str.args_hint_items_with_enable or _.menu_str.args_hint_items) or
-        (_.menu_str.args_hint_items_with_disable or _.menu_str.args_hint_items)
-    if hasArgCap and total >= maxArgs then
-      local filtered = {}
-      for _, item in ipairs(hint or {}) do
-        if item.pad ~= "select" then
-          filtered[#filtered + 1] = item
-        else
-          filtered[#filtered + 1] = { pad = "", label = "", row = item.row }
-        end
-      end
-      hint = filtered
-    end
-  else
-    hint = {
-      { pad = "select", label = "Add", row = 1 },
-      { pad = "circle", label = "Back", row = 1 },
-    }
-  end
+  local hasSelection = (total > 0 and ctx.bblArgSel >= 1 and ctx.bblArgSel <= total and args[ctx.bblArgSel])
+  local canAddArg = ((not hasArgCap) or total < maxArgs)
+  local selectedDisabled = hasSelection and args[ctx.bblArgSel].disabled
+  local hint = {
+    { pad = hasSelection and "cross" or "", label = hasSelection and (_.menu_str.edit_label or "Edit") or "", row = 1 },
+    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+      row = 1
+    },
+    {
+      pad = hasSelection and "triangle" or "",
+      label = hasSelection and
+          (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      row = 1
+    },
+    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+  }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
+  local function moveSelectedArg(step)
+    if not hasSelection or total <= 1 then return end
+    local dst = ctx.bblArgSel + step
+    if dst < 1 or dst > total then return end
+    local args2 = getArgs()
+    args2[ctx.bblArgSel], args2[dst] = args2[dst], args2[ctx.bblArgSel]
+    setArgs(args2)
+    ctx.bblArgSel = dst
+  end
+
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
+
+  local function removeSelectedArg()
+    if not hasSelection then return end
+    local args2 = arg_presets.removeArgAndPairedUdpbd(getArgs(), ctx.bblArgSel, removeNhddlPair)
+    setArgs(args2)
+    ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgSel, #args2)
+    if #args2 == 0 then
+      ctx.bblArgGrab = nil
+    end
+  end
+
+  local function beginAddArg()
+    if not canAddArg then return end
+    ctx.bblArgGrab = nil
+    ctx.bblArgAddMenu = true
+    ctx.bblArgAddSel = ctx.bblArgAddSel or 1
+    ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
+  end
+
+  if ctx.bblArgActionsOpen then
+    local actionRows = {}
+    if hasSelection then
+      actionRows[#actionRows + 1] = {
+        id = "grab",
+        label = ctx.bblArgGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Grab"),
+      }
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+    end
+    if canAddArg then
+      actionRows[#actionRows + 1] = { id = "add", label = (_.menu_str.add_label or "Add") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "bblArgActionsOpen",
+          selKey = "bblArgActionsSel",
+          scrollKey = "bblArgActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "bbl_hotkey_args_actions_row_",
+          onSelect = function(row)
+            if row.id == "grab" then
+              ctx.bblArgGrab = not ctx.bblArgGrab
+            elseif row.id == "remove" then
+              removeSelectedArg()
+            elseif row.id == "add" then
+              beginAddArg()
+            end
+          end,
+        }) then
+      return
+    end
+  end
+
   if total > 0 and (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, -1)
+    if ctx.bblArgGrab then
+      moveSelectedArg(-1)
+    else
+      ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, -1)
+    end
   end
   if total > 0 and (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, 1)
+    if ctx.bblArgGrab then
+      moveSelectedArg(1)
+    else
+      ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, 1)
+    end
   end
 
   if total > 0 and (_.padEffective & _.PAD_CROSS) ~= 0 then
@@ -342,12 +436,6 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and ((not hasArgCap) or total < maxArgs) then
-    ctx.bblArgAddMenu = true
-    ctx.bblArgAddSel = ctx.bblArgAddSel or 1
-    ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
-  end
-
   local function toggleSelectedArgDisabled()
     if total > 0 then
       _.config_parse.setBblHotkeyArgDisabled(ctx.lines, keyId, slot, ctx.bblArgSel, not args[ctx.bblArgSel].disabled)
@@ -359,30 +447,17 @@ local function run(ctx)
     toggleSelectedArgDisabled()
   end
 
-  if total > 0 and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    local args2 = arg_presets.removeArgAndPairedUdpbd(getArgs(), ctx.bblArgSel, removeNhddlPair)
-    setArgs(args2)
-    ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgSel, #args2)
+  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    ctx.bblArgActionsOpen = true
+    ctx.bblArgActionsSel = ctx.bblArgActionsSel or 1
+    ctx.bblArgActionsScroll = ctx.bblArgActionsScroll or 0
   end
-
-  if total > 1 and (_.padEffective & _.PAD_L1) ~= 0 then
-    if ctx.bblArgSel > 1 then
-      local args2 = getArgs()
-      args2[ctx.bblArgSel], args2[ctx.bblArgSel - 1] = args2[ctx.bblArgSel - 1], args2[ctx.bblArgSel]
-      setArgs(args2)
-      ctx.bblArgSel = ctx.bblArgSel - 1
-    end
-  end
-  if total > 1 and (_.padEffective & _.PAD_R1) ~= 0 then
-    if ctx.bblArgSel < total then
-      local args2 = getArgs()
-      args2[ctx.bblArgSel], args2[ctx.bblArgSel + 1] = args2[ctx.bblArgSel + 1], args2[ctx.bblArgSel]
-      setArgs(args2)
-      ctx.bblArgSel = ctx.bblArgSel + 1
-    end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.bblArgGrab = nil
     ctx.state = "bbl_hotkey_entry"
   end
 end

@@ -1,5 +1,7 @@
 --[[ Editor state: config option list and category list (OSDMENU). ]]
 
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
+
 local function formatTimerSeconds(msText, unitSingular, unitPlural)
   local ms = tonumber(msText or "")
   if not ms then return msText end
@@ -86,6 +88,106 @@ local function withStartHintVisibility(items, showStart)
     end
   end
   return out
+end
+
+local function isTimerDigitEditKey(key)
+  return key == "KEY_READ_WAIT_TIME" or key == "pad_delay"
+end
+
+local function clampNumber(n, minV, maxV)
+  if n < minV then return minV end
+  if n > maxV then return maxV end
+  return n
+end
+
+local function formatTimerDigitValue(ms)
+  local rounded = math.max(0, math.floor(((tonumber(ms) or 0) + 50) / 100))
+  local seconds = math.floor(rounded / 10)
+  local tenths = rounded % 10
+  return string.format("%03d.%d", seconds, tenths)
+end
+
+local function startTimerDigitEdit(ctx, _, opt)
+  if not (ctx and _ and opt and opt.key) then return end
+  local raw = _.config_parse.get(ctx.lines, opt.key) or opt.default or "0"
+  local num = tonumber(raw)
+  if not num then return end
+  local minV = tonumber(opt.min) or 0
+  local maxV = tonumber(opt.max) or 999900
+  num = clampNumber(math.floor((num + 50) / 100) * 100, minV, maxV)
+  local label = (_.strings.options and _.strings.options[opt.key] and _.strings.options[opt.key].label) or opt.label or opt.key
+  ctx.timerDigitEdit = {
+    key = opt.key,
+    label = label,
+    value = num,
+    min = minV,
+    max = maxV,
+    digit = 1, -- 1=hundreds sec, 2=tens, 3=ones, 4=tenths
+  }
+end
+
+local function runTimerDigitOverlay(ctx, _)
+  local edit = ctx.timerDigitEdit
+  if not edit then return false end
+
+  local boxW = math.min(460, (_.w or 640) - (_.MARGIN_X * 2))
+  local boxH = math.floor(_.scaleY(112))
+  local boxX = math.floor(((_.w or 640) - boxW) / 2)
+  local boxY = math.floor(((_.h or 448) - boxH) / 2)
+  if _.Graphics and _.Graphics.drawRect then
+    _.Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 120))
+  end
+
+  _.drawText(_.font, _.drawMode, boxX + 18, boxY + 14, 0.9, edit.label, _.WHITE)
+  _.drawText(_.font, _.drawMode, boxX + 18, boxY + 36, 0.62, "D-pad: Left/Right digit, Up/Down change", _.DIM)
+
+  local valueText = formatTimerDigitValue(edit.value)
+  local valueScale = 1.15
+  local valueW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, valueText, valueScale)) or (#valueText * 16)
+  local valueX = boxX + math.floor((boxW - valueW) / 2)
+  local valueY = boxY + math.floor(_.scaleY(62))
+  local selectedCharIndex = ({ 1, 2, 3, 5 })[edit.digit] or 1
+  local cursorX = valueX
+  for i = 1, #valueText do
+    local ch = valueText:sub(i, i)
+    local col = (i == selectedCharIndex) and (_.SELECTED_ENTRY or _.WHITE) or _.WHITE
+    _.drawText(_.font, _.drawMode, cursorX, valueY, valueScale, ch, col)
+    local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, valueScale)) or 10
+    cursorX = cursorX + cw
+  end
+
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, {
+    { pad = "cross", label = "Confirm", row = 1 },
+    { pad = "circle", label = "Cancel", row = 1 },
+  }, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+
+  if (_.padEffective & _.PAD_LEFT) ~= 0 then
+    edit.digit = edit.digit - 1
+    if edit.digit < 1 then edit.digit = 4 end
+  end
+  if (_.padEffective & _.PAD_RIGHT) ~= 0 then
+    edit.digit = edit.digit + 1
+    if edit.digit > 4 then edit.digit = 1 end
+  end
+
+  local weightByDigit = { 100000, 10000, 1000, 100 }
+  local weight = weightByDigit[edit.digit] or 100
+  if (_.padEffective & _.PAD_UP) ~= 0 then
+    edit.value = clampNumber(edit.value + weight, edit.min, edit.max)
+  end
+  if (_.padEffective & _.PAD_DOWN) ~= 0 then
+    edit.value = clampNumber(edit.value - weight, edit.min, edit.max)
+  end
+
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    _.config_parse.set(ctx.lines, edit.key, tostring(edit.value))
+    ctx.configModified = true
+    ctx.timerDigitEdit = nil
+  elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.timerDigitEdit = nil
+  end
+
+  return true
 end
 
 local function run(ctx)
@@ -302,7 +404,7 @@ local function run(ctx)
           valDisplay = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         end
       end
-      if o.key == "KEY_READ_WAIT_TIME" and valDisplay and valDisplay ~= "" then
+      if (o.key == "KEY_READ_WAIT_TIME" or o.key == "pad_delay") and valDisplay and valDisplay ~= "" then
         local commonStrings = _.common_str or {}
         local unitSingular = commonStrings.second or "second"
         local unitPlural = commonStrings.seconds or "seconds"
@@ -349,6 +451,9 @@ local function run(ctx)
         else
           local argCount = (slot and slot.argCount) or 0
           lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp .. " " .. formatArgCount(argCount)
+        end
+        if ctx.editorAutoSlotGrab and i == ctx.optSel then
+          lab = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. lab
         end
         if slot and slot.used and slot.disabled then
           col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
@@ -464,32 +569,134 @@ local function run(ctx)
       _.config_options.getOsdmenuDefault,
       { left = _.common_str.hint_prev, right = _.common_str.hint_next })
     local isAutoSlotRow = selOpt and selOpt.optType == "bbl_slot" and selOpt.bblKeyId == "AUTO" and selOpt.bblEntrySlot
+    local autoSlotNum = isAutoSlotRow and tonumber(selOpt.bblEntrySlot) or nil
+    local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+    local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
+        ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
+    local autoSlotData = (isAutoSlotRow and autoSlotNum and _.config_parse.getBblHotkeySlot) and
+        _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum) or nil
+    if not isAutoSlotRow then
+      ctx.editorAutoSlotGrab = nil
+      ctx.editorAutoSlotActionsOpen = nil
+    end
+
+    local function countUsedAutoSlots()
+      local usedCount = 0
+      for i = 1, maxAutoSlots do
+        local s = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", i) or nil
+        if s and s.used then usedCount = usedCount + 1 end
+      end
+      return usedCount
+    end
+
+    local function moveAutoSlot(step)
+      if not (isAutoSlotRow and autoSlotNum) then return end
+      local dst = autoSlotNum + step
+      if dst < 1 or dst > maxAutoSlots then return end
+      _.config_parse.swapBblHotkeySlots(ctx.lines, "AUTO", autoSlotNum, dst)
+      ctx.configModified = true
+      if ctx.optSel > 1 then
+        ctx.optSel = _.common.clampListSelection(ctx.optSel + step, #ctx.optList)
+      end
+    end
+
+    local function insertAutoSlotBelow()
+      if not (isAutoSlotRow and autoSlotNum) then return end
+      local usedCount = countUsedAutoSlots()
+      if usedCount >= maxAutoSlots then return end
+      local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, "AUTO", autoSlotNum, maxAutoSlots)
+      if newSlot then
+        ctx.configModified = true
+        ctx.editorAutoSlotGrab = nil
+        if newSlot < autoSlotNum and ctx.optSel > 1 then
+          ctx.optSel = ctx.optSel + (newSlot - autoSlotNum)
+        elseif newSlot > autoSlotNum and ctx.optSel < #ctx.optList then
+          ctx.optSel = ctx.optSel + 1
+        end
+      end
+    end
+
+    local function removeAutoSlot()
+      if not (isAutoSlotRow and autoSlotNum and autoSlotData and autoSlotData.used) then return end
+      _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum)
+      ctx.configModified = true
+      ctx.editorAutoSlotGrab = nil
+    end
+
     if isAutoSlotRow then
       hintItems = {
         { pad = "cross", label = "Edit", row = 1 },
-        { pad = "triangle", label = "Disable", row = 1 },
-        { pad = "select", label = "Insert", row = 1 },
-        { pad = "square", label = "Remove", row = 1 },
+        { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+        {
+          pad = ctx.configModified and "start" or "",
+          label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+          row = 1
+        },
+        {
+          pad = (autoSlotData and autoSlotData.used) and "triangle" or "",
+          label = (autoSlotData and autoSlotData.used) and ((autoSlotData.disabled and "Enable") or "Disable") or "",
+          row = 1
+        },
         { pad = "circle", label = "Back", row = 1 },
-        { pad = "L1", label = "Up", row = 2 },
-        { pad = "start", label = "Save", row = 2 },
-        { pad = "R1", label = "Down", row = 2 },
       }
-      local slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO",
-        tonumber(selOpt.bblEntrySlot)) or nil
-      if slot and slot.used and slot.disabled then
-        hintItems[2].label = "Enable"
-      end
     end
+
     hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+
+    if runTimerDigitOverlay(ctx, _) then
+      return
+    end
+
+    if ctx.editorAutoSlotActionsOpen and isAutoSlotRow then
+      local actionRows = {}
+      if autoSlotData and autoSlotData.used then
+        actionRows[#actionRows + 1] = {
+          id = "grab",
+          label = ctx.editorAutoSlotGrab and (_.menu_str.release_grab_label or "Release") or
+              (_.menu_str.grab_label or "Grab")
+        }
+        actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+      end
+      if countUsedAutoSlots() < maxAutoSlots then
+        actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+      end
+      if actions_menu.run(ctx, {
+            openKey = "editorAutoSlotActionsOpen",
+            selKey = "editorAutoSlotActionsSel",
+            scrollKey = "editorAutoSlotActionsScroll",
+            title = (_.menu_str.actions_title or "Actions"),
+            rows = actionRows,
+            rowStateKeyPrefix = "editor_auto_slot_actions_row_",
+            onSelect = function(row)
+              if row.id == "grab" then
+                ctx.editorAutoSlotGrab = not ctx.editorAutoSlotGrab
+              elseif row.id == "insert" then
+                insertAutoSlotBelow()
+              elseif row.id == "remove" then
+                removeAutoSlot()
+              end
+            end,
+          }) then
+        return
+      end
+    end
+
     if (_.padEffective & _.PAD_UP) ~= 0 then
-      ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
+      if isAutoSlotRow and ctx.editorAutoSlotGrab then
+        moveAutoSlot(-1)
+      else
+        ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
+      end
     end
     if (_.padEffective & _.PAD_DOWN) ~= 0 then
-      ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, 1)
+      if isAutoSlotRow and ctx.editorAutoSlotGrab then
+        moveAutoSlot(1)
+      else
+        ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, 1)
+      end
     end
-    if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT | _.PAD_L1 | _.PAD_R1 | _.PAD_L2 | _.PAD_R2)) ~= 0 then
+    if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT)) ~= 0 then
       local o = ctx.optList[ctx.optSel]
       if o.optType == "enum" and o.enumVals and #o.enumVals > 0 then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
@@ -521,6 +728,9 @@ local function run(ctx)
         _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
       elseif (o.optType == "int" or o.optType == "string") then
+        if isTimerDigitEditKey(o.key) then
+          -- Timer-style integer options are edited via digit editor on Cross.
+        else
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
         if num then
@@ -542,17 +752,9 @@ local function run(ctx)
             local d = o.intPadDeltas
             if (_.padEffective & _.PAD_RIGHT) ~= 0 then delta = tonumber(d.right) or delta end
             if (_.padEffective & _.PAD_LEFT) ~= 0 then delta = tonumber(d.left) or delta end
-            if (_.padEffective & _.PAD_R1) ~= 0 then delta = tonumber(d.R1) or delta end
-            if (_.padEffective & _.PAD_L1) ~= 0 then delta = tonumber(d.L1) or delta end
-            if (_.padEffective & _.PAD_R2) ~= 0 then delta = tonumber(d.R2) or delta end
-            if (_.padEffective & _.PAD_L2) ~= 0 then delta = tonumber(d.L2) or delta end
           else
             if (_.padEffective & _.PAD_RIGHT) ~= 0 then delta = 1 end
             if (_.padEffective & _.PAD_LEFT) ~= 0 then delta = -1 end
-            if (_.padEffective & _.PAD_R1) ~= 0 then delta = 10 end
-            if (_.padEffective & _.PAD_L1) ~= 0 then delta = -10 end
-            if (_.padEffective & _.PAD_R2) ~= 0 then delta = 50 end
-            if (_.padEffective & _.PAD_L2) ~= 0 then delta = -50 end
           end
           if delta ~= 0 then
             num = num + delta
@@ -562,50 +764,7 @@ local function run(ctx)
             ctx.configModified = true
           end
         end
-      end
-    end
-    if isAutoSlotRow then
-      local slotNum = tonumber(selOpt.bblEntrySlot)
-      local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
-      local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
-          ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
-      local slotData = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum) or
-          nil
-
-      if (_.padEffective & _.PAD_SELECT) ~= 0 then
-        local usedCount = 0
-        for i = 1, maxAutoSlots do
-          local s = _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", i)
-          if s and s.used then usedCount = usedCount + 1 end
         end
-        if usedCount < maxAutoSlots then
-          local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, "AUTO", slotNum, maxAutoSlots)
-          if newSlot then
-            ctx.configModified = true
-            if newSlot < slotNum and ctx.optSel > 1 then
-              ctx.optSel = ctx.optSel + (newSlot - slotNum)
-            elseif newSlot > slotNum and ctx.optSel < #ctx.optList then
-              ctx.optSel = ctx.optSel + 1
-            end
-          end
-        end
-      end
-
-      if (_.padEffective & _.PAD_SQUARE) ~= 0 and slotData and slotData.used then
-        _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", slotNum)
-        ctx.configModified = true
-      end
-
-      if (_.padEffective & _.PAD_L1) ~= 0 and slotNum > 1 then
-        _.config_parse.swapBblHotkeySlots(ctx.lines, "AUTO", slotNum, slotNum - 1)
-        ctx.configModified = true
-        if ctx.optSel > 1 then ctx.optSel = ctx.optSel - 1 end
-      end
-
-      if (_.padEffective & _.PAD_R1) ~= 0 and slotNum < maxAutoSlots then
-        _.config_parse.swapBblHotkeySlots(ctx.lines, "AUTO", slotNum, slotNum + 1)
-        ctx.configModified = true
-        if ctx.optSel < #ctx.optList then ctx.optSel = ctx.optSel + 1 end
       end
     end
     if (_.padEffective & _.PAD_CROSS) ~= 0 then
@@ -614,11 +773,16 @@ local function run(ctx)
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
+      elseif (o.optType == "int" or o.optType == "string") and isTimerDigitEditKey(o.key) then
+        startTimerDigitEdit(ctx, _, o)
       elseif o.optType == "color" then
         ctx.colorOpt = o
         local r, g, b, a = _.parseColor(_.config_parse.get(ctx.lines, o.key) or o.default)
         ctx.colorVals = { r, g, b, a }
+        ctx.colorOrigVals = { r, g, b, a }
         ctx.colorCh = 1
+        ctx.colorDigitEdit = nil
+        ctx.colorChannelOrig = nil
         ctx.state = "color_edit"
       elseif o.optType == "text" or o.optType == "string" then
         ctx.textInputTitleIdMode = nil
@@ -692,6 +856,11 @@ local function run(ctx)
         ctx.state = "path_picker"
       end
     end
+    if (_.padEffective & _.PAD_SQUARE) ~= 0 and isAutoSlotRow then
+      ctx.editorAutoSlotActionsOpen = true
+      ctx.editorAutoSlotActionsSel = ctx.editorAutoSlotActionsSel or 1
+      ctx.editorAutoSlotActionsScroll = ctx.editorAutoSlotActionsScroll or 0
+    end
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
       local o = ctx.optList[ctx.optSel]
@@ -733,7 +902,7 @@ local function run(ctx)
       _.DIM, _.w - 2 * _.MARGIN_X)
   end
 
-  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+  if ctx.configModified and ((_.padEffective & _.PAD_START) ~= 0) then
     ctx.saveSplash = nil
     local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
     if ctx.fileType == "osdmenu_cnf" and #locations >= 2 then
@@ -753,8 +922,7 @@ local function run(ctx)
         else
           ctx.saveSplash = {
             kind = "failed",
-            detail = _.common.localizeParseError(err, _.editor_str) or
-                _.editor_str.save_failed,
+            detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
             framesLeft = 120
           }
         end
@@ -764,6 +932,7 @@ local function run(ctx)
     end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.editorAutoSlotGrab = nil
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
       setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx

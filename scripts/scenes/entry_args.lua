@@ -4,6 +4,7 @@ local arg_presets = dofile("scripts/scenes/arg_presets.lua")
 local arg_profiles = dofile("scripts/scenes/arg_profiles.lua")
 local arg_gsm_picker = dofile("scripts/scenes/arg_gsm_picker.lua")
 local arg_add_menu = dofile("scripts/scenes/arg_add_menu.lua")
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function getBootPadName(key)
   if key == "boot_start" then return "start" end
@@ -311,6 +312,9 @@ local function run(ctx)
     local a = args[i]
     local av = type(a) == "table" and a.value or a
     local label = (av and av ~= "" and av) or _.common_str.empty
+    if ctx.entryArgGrab and i == ctx.entryArgSel then
+      label = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. label
+    end
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "entry_args_row_" .. tostring(i), _.font, label, maxLabelW, _.FONT_SCALE,
         i == ctx.entryArgSel)
@@ -324,30 +328,26 @@ local function run(ctx)
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryArgSel, label, col)
   end
 
-  local argHints = _.menu_str.args_hint_items
-  if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
-    argHints = args[ctx.entryArgSel].disabled and (_.menu_str.args_hint_items_with_enable or argHints)
-        or (_.menu_str.args_hint_items_with_disable or argHints)
-  end
-  if not (isBoot or not hasCdrom) then
-    local filtered = {}
-    for _, item in ipairs(argHints or {}) do
-      if item.pad ~= "select" then
-        filtered[#filtered + 1] = item
-      else
-        filtered[#filtered + 1] = { pad = "", label = "", row = item.row }
-      end
-    end
-    argHints = filtered
-  end
+  local hasSelection = (ctx.entryArgSel >= 1 and ctx.entryArgSel <= total)
+  local canAddArg = (isBoot or not hasCdrom)
+  local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and args[ctx.entryArgSel].disabled
+  local argHints = {
+    { pad = hasSelection and "cross" or "", label = hasSelection and (_.menu_str.edit_label or "Edit") or "", row = 1 },
+    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+      row = 1
+    },
+    {
+      pad = hasSelection and "triangle" or "",
+      label = hasSelection and
+          (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      row = 1
+    },
+    { pad = "circle", label = _.menu_str.back_label or "Back", row = 1 },
+  }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, argHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
-
-  if (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.entryArgSel = _.common.wrapListSelection(ctx.entryArgSel, total, -1)
-  end
-  if (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.entryArgSel = _.common.wrapListSelection(ctx.entryArgSel, total, 1)
-  end
 
   local function toggleSelectedArgDisabled()
     if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
@@ -357,6 +357,110 @@ local function run(ctx)
         _.config_parse.setArgDisabled(ctx.lines, ctx.entryIdx, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
       end
       ctx.configModified = true
+    end
+  end
+
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
+
+  local function moveSelectedArg(step)
+    if not hasSelection or total <= 1 then return end
+    local dst = ctx.entryArgSel + step
+    if dst < 1 or dst > total then return end
+    local args2 = getArgs()
+    args2[ctx.entryArgSel], args2[dst] = args2[dst], args2[ctx.entryArgSel]
+    setArgs(args2)
+    ctx.entryArgSel = dst
+  end
+
+  local function removeSelectedArg()
+    if not hasSelection then return end
+    local args2 = arg_presets.removeArgAndPairedUdpbd(getArgs(), ctx.entryArgSel, removeNhddlPair)
+    setArgs(args2)
+    ctx.entryArgSel = _.common.clampListSelection(ctx.entryArgSel, #args2)
+    if #args2 == 0 then
+      ctx.entryArgGrab = nil
+    end
+  end
+
+  local function beginAddArg()
+    if not canAddArg then return end
+    if isBoot and total > 0 and hasSelection then
+      ctx.entryArgInsertBelow = ctx.entryArgSel
+    else
+      ctx.entryArgInsertBelow = nil
+    end
+    ctx.entryArgGrab = nil
+    ctx.entryArgAddMenu = true
+    ctx.entryArgAddSel = ctx.entryArgAddSel or 1
+    ctx.entryArgAddScroll = ctx.entryArgAddScroll or 0
+  end
+
+  if ctx.entryArgsActionsOpen then
+    local actionRows = {}
+    if hasSelection then
+      actionRows[#actionRows + 1] = {
+        id = "grab",
+        label = ctx.entryArgGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Grab"),
+      }
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+    end
+    if canAddArg then
+      actionRows[#actionRows + 1] = { id = "add", label = (_.menu_str.add_label or "Add") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "entryArgsActionsOpen",
+          selKey = "entryArgsActionsSel",
+          scrollKey = "entryArgsActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "entry_args_actions_row_",
+          onSelect = function(row)
+            if row.id == "grab" then
+              ctx.entryArgGrab = not ctx.entryArgGrab
+            elseif row.id == "add" then
+              beginAddArg()
+            elseif row.id == "remove" then
+              removeSelectedArg()
+            end
+          end,
+        }) then
+      return
+    end
+  end
+
+  if (_.padEffective & _.PAD_UP) ~= 0 then
+    if ctx.entryArgGrab then
+      moveSelectedArg(-1)
+    else
+      ctx.entryArgSel = _.common.wrapListSelection(ctx.entryArgSel, total, -1)
+    end
+  end
+  if (_.padEffective & _.PAD_DOWN) ~= 0 then
+    if ctx.entryArgGrab then
+      moveSelectedArg(1)
+    else
+      ctx.entryArgSel = _.common.wrapListSelection(ctx.entryArgSel, total, 1)
     end
   end
 
@@ -398,41 +502,19 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and (isBoot or not hasCdrom) then
-    if isBoot and total > 0 and ctx.entryArgSel >= 1 and ctx.entryArgSel <= total then
-      ctx.entryArgInsertBelow = ctx.entryArgSel
-    else
-      ctx.entryArgInsertBelow = nil
-    end
-    ctx.entryArgAddMenu = true
-    ctx.entryArgAddSel = ctx.entryArgAddSel or 1
-    ctx.entryArgAddScroll = ctx.entryArgAddScroll or 0
-  end
-
-  if (_.padEffective & _.PAD_L1) ~= 0 then
-    if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and ctx.entryArgSel > 1 then
-      local args2 = getArgs(); args2[ctx.entryArgSel], args2[ctx.entryArgSel - 1] = args2[ctx.entryArgSel - 1],
-          args2[ctx.entryArgSel]; setArgs(args2)
-      ctx.entryArgSel = ctx.entryArgSel - 1
-    end
-  end
-  if (_.padEffective & _.PAD_R1) ~= 0 then
-    if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and ctx.entryArgSel < total then
-      local args2 = getArgs(); args2[ctx.entryArgSel], args2[ctx.entryArgSel + 1] = args2[ctx.entryArgSel + 1],
-          args2[ctx.entryArgSel]; setArgs(args2)
-      ctx.entryArgSel = ctx.entryArgSel + 1
-    end
-  end
-
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total then
-      local args2 = arg_presets.removeArgAndPairedUdpbd(getArgs(), ctx.entryArgSel, removeNhddlPair)
-      setArgs(args2)
-      ctx.entryArgSel = _.common.clampListSelection(ctx.entryArgSel, #args2)
-    end
+    ctx.entryArgsActionsOpen = true
+    ctx.entryArgsActionsSel = ctx.entryArgsActionsSel or 1
+    ctx.entryArgsActionsScroll = ctx.entryArgsActionsScroll or 0
+  end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
 
-  if (_.padEffective & _.PAD_CIRCLE) ~= 0 then ctx.state = isBoot and "entry_paths" or "menu_entry_edit" end
+  if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.entryArgGrab = nil
+    ctx.state = isBoot and "entry_paths" or "menu_entry_edit"
+  end
 end
 
 return { run = run }

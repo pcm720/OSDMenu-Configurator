@@ -12,6 +12,8 @@ local function initContext()
     chosenMcSlot = nil,
     state = "main",
     mainOverlayLogoKey = nil,
+    mainLangPrompt = nil,
+    mainLangSel = 1,
     mcSel = 1,
     hddReady = false,
     prevPad = 0,

@@ -24,6 +24,7 @@ strings.main = {
   main_freehddboot = "FreeHDBoot",
   main_exit = "Salir al navegador",
   main_exit_prompt = "¿Salir al navegador?",
+  main_select_language = "Seleccionar idioma",
   main_exit_hint_items = { { pad = "cross", label = "Sí" }, { pad = "circle", label = "No" } },
   no_memory_card = "No se encontró tarjeta de memoria",
   insert_mc = "Inserta una tarjeta de memoria e inténtalo de nuevo",
