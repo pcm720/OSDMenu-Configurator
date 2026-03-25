@@ -140,6 +140,10 @@ local function drawTimerDigitInlineValue(_, edit, x, y, scale)
     local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, scale)) or 10
     cursorX = cursorX + cw
   end
+  local secondsLabel = (_.common_str and _.common_str.seconds) or "seconds"
+  if secondsLabel ~= "" then
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, " " .. tostring(secondsLabel), _.WHITE)
+  end
 end
 
 local function runTimerDigitInlineInput(ctx, _)
@@ -308,24 +312,57 @@ end
 local function drawInlineColorEditValue(_, edit, x, y, scale)
   if not edit then return end
   local labels = { "R", "G", "B", "A" }
-  local cursorX = x
-  for ch = 1, 4 do
-    local prefix = labels[ch]
-    local prefixCol = (ch == edit.channel) and (_.SELECTED_ENTRY or _.WHITE) or _.GRAY
-    _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
-    cursorX = cursorX + ((_.common.calcTextWidth and _.common.calcTextWidth(_.font, prefix, scale)) or 8)
+  local calcTextWidth = _.common and _.common.calcTextWidth
+  local function textWidth(s)
+    if calcTextWidth then
+      return calcTextWidth(_.font, s, scale)
+    end
+    return #tostring(s or "") * 8
+  end
 
+  local blockGap = textWidth(" ")
+  local channelBlocks = {}
+  local cursorX = x
+
+  for ch = 1, 4 do
     local val = clampNumber(tonumber(edit.values[ch]) or 0, 0, 255)
     local valStr = string.format("%03d", val)
+    local blockText = labels[ch] .. valStr
+    local blockW = textWidth(blockText)
+    channelBlocks[ch] = { x = cursorX, w = blockW, valStr = valStr }
+    cursorX = cursorX + blockW
+    if ch < 4 then
+      cursorX = cursorX + blockGap
+    end
+  end
+
+  local activeBlock = channelBlocks[edit.channel]
+  if activeBlock then
+    local padX = math.max(1, math.floor((_.scaleX and _.scaleX(2)) or 2))
+    local padY = math.max(1, math.floor((_.scaleY and _.scaleY(2)) or 2))
+    local fontPixelH = (_.common and _.common.FT_PIXEL_H) or 18
+    local blockH = math.max(8, math.floor(fontPixelH * (scale or 1) + 0.5))
+    local underlay = _.Color.new(96, 96, 96, 110)
+    _.Graphics.drawRect(activeBlock.x - padX, y - padY, activeBlock.w + padX * 2, blockH + padY * 2, underlay)
+  end
+
+  cursorX = x
+  for ch = 1, 4 do
+    local prefix = labels[ch]
+    local prefixCol = _.WHITE
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
+    cursorX = cursorX + textWidth(prefix)
+
+    local valStr = channelBlocks[ch] and channelBlocks[ch].valStr or "000"
     for i = 1, #valStr do
       local digit = valStr:sub(i, i)
       local col = (ch == edit.channel and i == edit.digit) and (_.SELECTED_ENTRY or _.WHITE) or _.WHITE
       _.drawText(_.font, _.drawMode, cursorX, y, scale, digit, col)
-      cursorX = cursorX + ((_.common.calcTextWidth and _.common.calcTextWidth(_.font, digit, scale)) or 8)
+      cursorX = cursorX + textWidth(digit)
     end
     if ch < 4 then
       _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.WHITE)
-      cursorX = cursorX + ((_.common.calcTextWidth and _.common.calcTextWidth(_.font, " ", scale)) or 6)
+      cursorX = cursorX + blockGap
     end
   end
 end
