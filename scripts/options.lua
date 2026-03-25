@@ -343,13 +343,13 @@ local function buildFreemcbootAutoOptions()
   }
   local maxSlots = (type(config_options.FMCB_BBL_MAX_ENTRIES) == "number" and config_options.FMCB_BBL_MAX_ENTRIES) or 3
   for i = 1, maxSlots do
-    table.insert(out, {
+      table.insert(out, {
       key = "_auto_e" .. tostring(i),
       optType = "bbl_slot",
       bblKeyId = "AUTO",
       bblEntrySlot = i,
       label = "E" .. tostring(i),
-      desc = "Edit LK_Auto_E" .. tostring(i) .. " (no arguments).",
+      desc = "Edit LK_Auto_E" .. tostring(i) .. ".",
     })
   end
   return out

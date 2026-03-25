@@ -71,6 +71,52 @@ local function getEditorBackState(ctx)
   return "main"
 end
 
+local OSD_VISUAL_COORD_KEYS = {
+  OSDSYS_menu_x = true,
+  OSDSYS_menu_y = true,
+  OSDSYS_enter_x = true,
+  OSDSYS_enter_y = true,
+  OSDSYS_version_x = true,
+  OSDSYS_version_y = true,
+}
+
+-- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig).
+local OSD_VISUAL_PATCHED_DEFAULTS = {
+  OSDSYS_menu_x = "320",
+  OSDSYS_menu_y = "110",
+  OSDSYS_enter_x = "30",
+  OSDSYS_enter_y = "-1",
+  OSDSYS_version_x = "-1",
+  OSDSYS_version_y = "-1",
+}
+
+-- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments.
+local OSD_VISUAL_PS2_DEFAULTS = {
+  OSDSYS_menu_x = "430",
+  OSDSYS_menu_y = "110",
+  OSDSYS_enter_x = "-1",
+  OSDSYS_enter_y = "-1",
+  OSDSYS_version_x = "-1",
+  OSDSYS_version_y = "-1",
+}
+
+local function isOsdVisualCoordKey(key)
+  local k = tostring(key or "")
+  return OSD_VISUAL_COORD_KEYS[k] == true
+end
+
+local function applyOsdVisualPreset(ctx, _, preset)
+  if not (ctx and _ and ctx.lines and preset) then return end
+  for key, value in pairs(preset) do
+    _.config_parse.set(ctx.lines, key, tostring(value or ""))
+  end
+  if _.common and _.common.refreshConfigModified then
+    _.common.refreshConfigModified(ctx)
+  else
+    ctx.configModified = true
+  end
+end
+
 local function prettifyBblGlobalLabel(ctx, o, label)
   if not (ctx and o and label) then return label end
   if (ctx.fileType ~= "ps2bbl_ini" and ctx.fileType ~= "psxbbl_ini") then
@@ -188,7 +234,9 @@ local function resolveIntBounds(opt, currentNum)
 
   if opt and opt.min == nil and opt.max == nil then
     local key = tostring(opt.key or "")
-    if key:match("^OSDSYS_.*_x$") then
+    if key == "OSDSYS_enter_x" or key == "OSDSYS_enter_y" or key == "OSDSYS_version_x" or key == "OSDSYS_version_y" then
+      minV, maxV = -999, 999
+    elseif key:match("^OSDSYS_.*_x$") then
       maxV = 639
     elseif key:match("^OSDSYS_.*_y$") then
       maxV = 447
@@ -351,6 +399,13 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
   for ch = 1, 4 do
     local prefix = labels[ch]
     local prefixCol = _.WHITE
+    if ch == 1 then
+      prefixCol = _.Color.new(230, 70, 70, 128)
+    elseif ch == 2 then
+      prefixCol = _.Color.new(80, 200, 80, 128)
+    elseif ch == 3 then
+      prefixCol = _.Color.new(60, 80, 170, 128)
+    end
     _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
     cursorX = cursorX + textWidth(prefix)
 
@@ -372,13 +427,28 @@ local function runInlineColorEditInput(ctx, _)
   local edit = ctx.colorInlineEdit
   if not edit then return false end
 
+  local function toLinear(ch, digit)
+    return ((ch - 1) * 3) + digit
+  end
+
+  local function fromLinear(idx)
+    local safe = idx
+    if safe < 1 then safe = 1 end
+    if safe > 12 then safe = 12 end
+    local ch = math.floor((safe - 1) / 3) + 1
+    local digit = ((safe - 1) % 3) + 1
+    return ch, digit
+  end
+
   if (_.padEffective & _.PAD_LEFT) ~= 0 then
-    edit.digit = edit.digit - 1
-    if edit.digit < 1 then edit.digit = 3 end
+    local idx = toLinear(edit.channel, edit.digit) - 1
+    if idx < 1 then idx = 12 end
+    edit.channel, edit.digit = fromLinear(idx)
   end
   if (_.padEffective & _.PAD_RIGHT) ~= 0 then
-    edit.digit = edit.digit + 1
-    if edit.digit > 3 then edit.digit = 1 end
+    local idx = toLinear(edit.channel, edit.digit) + 1
+    if idx > 12 then idx = 1 end
+    edit.channel, edit.digit = fromLinear(idx)
   end
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
     edit.channel = edit.channel + 1
@@ -783,7 +853,7 @@ local function run(ctx)
       local descStr = (_.strings.options and _.strings.options[selOpt.key] and _.strings.options[selOpt.key].desc) or
           selOpt.desc or ""
       if ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
-        descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit, Up/Down change, Square channel")
+        descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit or channel, Up/Down change, Square channel")
       end
       if selOpt.key == "LOGO_DISPLAY" then
         local cur = _.config_parse.get(ctx.lines, selOpt.key) or selOpt.default or ""
@@ -819,6 +889,9 @@ local function run(ctx)
     local autoSlotNum = isAutoSlotRow and tonumber(selOpt.bblEntrySlot) or nil
     local isEsrPathRow = selOpt and ctx.fileType == "freemcboot_cnf" and selOpt.key and selOpt.key:match("^ESR_Path_E%d+$")
     local esrSlotNum = isEsrPathRow and tonumber(selOpt.key:match("^ESR_Path_E(%d+)$")) or nil
+    local isOsdVisualCoordRow = selOpt and
+        (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") and
+        selOpt.optType == "int" and isOsdVisualCoordKey(selOpt.key)
     local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
         ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
@@ -1141,6 +1214,29 @@ local function run(ctx)
       return
     end
 
+    if ctx.editorOsdVisualRestoreOpen then
+      if actions_menu.run(ctx, {
+            openKey = "editorOsdVisualRestoreOpen",
+            selKey = "editorOsdVisualRestoreSel",
+            scrollKey = "editorOsdVisualRestoreScroll",
+            titleOverride = "Restore OSDSYS visuals:",
+            rows = {
+              { id = "patched", label = "Patched Defaults" },
+              { id = "ps2", label = "PS2 Defaults" },
+            },
+            rowStateKeyPrefix = "editor_osd_visual_restore_row_",
+            onSelect = function(row)
+              if row.id == "patched" then
+                applyOsdVisualPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS)
+              elseif row.id == "ps2" then
+                applyOsdVisualPreset(ctx, _, OSD_VISUAL_PS2_DEFAULTS)
+              end
+            end,
+          }) then
+        return
+      end
+    end
+
     if ctx.editorAutoSlotActionsOpen and isAutoSlotRow then
       local actionRows = {}
       local usedAutoSlots = countUsedAutoSlots()
@@ -1282,6 +1378,35 @@ local function run(ctx)
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
+      elseif o.optType == "int" then
+        local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
+        local num = tonumber(cur)
+        if not num then num = tonumber(o.default or "0") end
+        if not num then num = 0 end
+        if num >= 0 then
+          num = math.floor(num + 0.5)
+        else
+          num = math.ceil(num - 0.5)
+        end
+        local minV, maxV = resolveIntBounds(o, num)
+        num = clampNumber(num, minV, maxV)
+        local delta = 0
+        if isTimerDigitEditKey(o.key) then
+          if (_.padEffective & _.PAD_RIGHT) ~= 0 then delta = 1000 end
+          if (_.padEffective & _.PAD_LEFT) ~= 0 then delta = -1000 end
+        elseif o.intPadDeltas then
+          local d = o.intPadDeltas
+          if (_.padEffective & _.PAD_RIGHT) ~= 0 then delta = tonumber(d.right) or delta end
+          if (_.padEffective & _.PAD_LEFT) ~= 0 then delta = tonumber(d.left) or delta end
+        else
+          if (_.padEffective & _.PAD_RIGHT) ~= 0 then delta = 1 end
+          if (_.padEffective & _.PAD_LEFT) ~= 0 then delta = -1 end
+        end
+        if delta ~= 0 then
+          num = clampNumber(num + delta, minV, maxV)
+          _.config_parse.set(ctx.lines, o.key, tostring(math.floor(num)))
+          ctx.configModified = true
+        end
       elseif o.optType == "string" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
@@ -1443,7 +1568,11 @@ local function run(ctx)
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
       local o = ctx.optList[ctx.optSel]
-      if o and o.key and o.key:match("^ESR_Path_E%d+$") and ctx.fileType == "freemcboot_cnf" then
+      if isOsdVisualCoordRow then
+        ctx.editorOsdVisualRestoreOpen = true
+        ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
+        ctx.editorOsdVisualRestoreScroll = ctx.editorOsdVisualRestoreScroll or 0
+      elseif o and o.key and o.key:match("^ESR_Path_E%d+$") and ctx.fileType == "freemcboot_cnf" then
         toggleEsrSlotDisabled()
       elseif o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then
         local slotNum = tonumber(o.bblEntrySlot)

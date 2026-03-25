@@ -76,6 +76,9 @@ function actions_menu.run(ctx, opts)
   ctx[scrollKey] = _.common.centeredListScroll(ctx[selKey], #rows, maxVisible)
 
   local title = "Select Action:"
+  if opts.titleOverride ~= nil and tostring(opts.titleOverride) ~= "" then
+    title = tostring(opts.titleOverride)
+  end
   local titleScale = 0.95
   local rowScale = _.FONT_SCALE
   local rowStateKeyPrefix = opts.rowStateKeyPrefix or "actions_menu_row_"
