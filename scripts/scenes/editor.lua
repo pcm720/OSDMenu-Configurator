@@ -1745,8 +1745,8 @@ local function run(ctx)
         ctx.state = "bbl_hotkeys"
       elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
-        if ctx.bblHotkeyKey == "AUTO" and
-            ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) then
+        local isAutoKey = tostring(ctx.bblHotkeyKey or ""):upper() == "AUTO"
+        if isAutoKey and ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) then
           local slotNum = tonumber(o.bblEntrySlot)
           if slotNum then
             local slotData = (_.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum)) or

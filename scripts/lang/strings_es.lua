@@ -319,8 +319,8 @@ strings.cdrom_options = {
 
 -- Sugerencia de entrada de texto (teclado). hint_items_title_id = igual pero sin mayúsculas (usado para ID de título GSM).
 strings.text_input = {
-  hint_items = { { pad = "cross", label = "Entrar", row = 1 }, { pad = "triangle", label = "Mayúsculas", row = 1 }, { pad = "square", label = "Retroceso", row = 1 }, { pad = "circle", label = "Cancelar", row = 1 }, { pad = "L1", label = "Izquierda", row = 2 }, { pad = "start", label = "Hecho", row = 2 }, { pad = "R1", label = "Derecha", row = 2 } },
-  hint_items_title_id = { { pad = "cross", label = "Entrar", row = 1 }, { pad = "square", label = "Retroceso", row = 1 }, { pad = "circle", label = "Cancelar", row = 1 }, { pad = "L1", label = "Izquierda", row = 2 }, { pad = "start", label = "Hecho", row = 2 }, { pad = "R1", label = "Derecha", row = 2 } },
+  hint_items = { { pad = "cross", label = "Entrar", row = 1 }, { pad = "square", label = "Retroceso", row = 1 }, { pad = "start", label = "Hecho", row = 1 }, { pad = "triangle", label = "Mayúsculas", row = 1 }, { pad = "circle", label = "Cancelar", row = 1 }, { pad = "L1", label = "Izquierda", row = 2 }, { pad = "R1", label = "Derecha", row = 2 } },
+  hint_items_title_id = { { pad = "cross", label = "Entrar", row = 1 }, { pad = "square", label = "Retroceso", row = 1 }, { pad = "start", label = "Hecho", row = 1 }, { pad = "circle", label = "Cancelar", row = 1 }, { pad = "L1", label = "Izquierda", row = 2 }, { pad = "R1", label = "Derecha", row = 2 } },
 }
 
 return strings

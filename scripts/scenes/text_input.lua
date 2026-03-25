@@ -1,5 +1,71 @@
 --[[ On-screen keyboard text input. ]]
 
+local function buildKeyboardShoulderHints(hintItems)
+  local out = {}
+  for i = 1, #(hintItems or {}) do
+    local item = hintItems[i]
+    local pad = tostring(item and item.pad or ""):lower()
+    if pad == "l1" or pad == "r1" or pad == "l2" or pad == "r2" then
+      out[pad] = tostring(item and item.label or "")
+    end
+  end
+  return out
+end
+
+local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, color)
+  local labels = buildKeyboardShoulderHints(hintItems)
+  if not (labels.l1 or labels.r1) then
+    return
+  end
+  local drawColor = color or _.DIM
+  local iconScale = 0.6
+  local textScale = 0.75
+  local drawScale = (scale or 0.7) * textScale
+  local iconW = math.max(10, math.floor((_.common.PAD_ICON_W or 26) * iconScale + 0.5))
+  local iconH = math.max(10, math.floor((_.common.PAD_ICON_H or 26) * iconScale + 0.5))
+  local gap = math.max(2, math.floor((_.common.PAD_HINT_GAP or 5) * textScale + 0.5))
+  local rowH = math.max(14, math.floor((_.common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
+  local textH = math.max(10, math.floor((_.common.FT_PIXEL_H or 18) * textScale + 0.5))
+  local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
+  width = width + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
+  local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
+  local xEff = (_.MARGIN_X or 0) + sideMargin + (tonumber(_.common.PAD_HINT_GRID_X_SHIFT) or 0)
+  local widthEff = width - 2 * sideMargin
+  local slotW = widthEff / 5
+  local bottomRowTop = math.floor(_.HINT_Y) - rowH
+  local topRowTop = bottomRowTop - rowH
+
+  local columns = {
+    { pad = "l1", col = 2 },
+    { pad = "r1", col = 4 },
+  }
+
+  for i = 1, #columns do
+    local c = columns[i]
+    local label = labels[c.pad]
+    if label and label ~= "" then
+      local icon = _.common.getPadIcon(c.pad)
+      local slotCenter = xEff + (c.col - 1) * slotW + (slotW / 2)
+      local iconY = math.floor(topRowTop + (rowH - iconH) / 2)
+      local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
+      if icon then
+        local px = math.floor(slotCenter - iconW / 2)
+        if _.Graphics.drawScaleImage then
+          _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH)
+        else
+          _.Graphics.drawImage(icon, px, iconY)
+        end
+        _.common.drawText(_.font, _.drawMode, px + iconW + gap, textY, drawScale, label, drawColor, textH)
+      else
+        local textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawScale)) or
+            math.floor(8 * drawScale * #label)
+        local textX = math.floor(slotCenter - (textW / 2))
+        _.common.drawText(_.font, _.drawMode, textX, textY, drawScale, label, drawColor, textH)
+      end
+    end
+  end
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.textInputCallback then
@@ -163,6 +229,7 @@ local function run(ctx)
   local hints = (ctx.textInputTitleIdMode and _.text_str.hint_items_title_id) or _.text_str.hint_items
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
+  drawKeyboardShoulderHints(ctx, _, hints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM)
 end
 
 return { run = run }

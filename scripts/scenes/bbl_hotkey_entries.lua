@@ -354,10 +354,36 @@ local function run(ctx)
       ctx.textInputScroll = 1
       ctx.state = "text_input"
     elseif sel.kind == "entry" then
-      ctx.bblEntrySlot = sel.slot
-      ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-      ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
-      ctx.state = "bbl_hotkey_entry"
+      if isFmcb and tostring(keyId or ""):upper() == "AUTO" then
+        -- FreeMCBoot/FreeHDBoot AUTO entries are path-only, so go straight to device select.
+        ctx.editKey = nil
+        ctx.isAddPath = false
+        ctx.addPathKey = nil
+        ctx.pathPickerTarget = nil
+        ctx.pathPickerFileExts = nil
+        ctx.pathPickerBootKey = nil
+        ctx.pathPickerForEntryIdx = nil
+        ctx.pathPickerEditIdx = nil
+        ctx.pathPickerInsertBelow = nil
+        ctx.pathPickerBblIrxIdx = nil
+        ctx.pathPickerBblIrxDisabled = nil
+        ctx.pathPickerBblHotkeyKey = "AUTO"
+        ctx.pathPickerBblHotkeySlot = sel.slot
+        ctx.pathPickerBblHotkeyDisabled = (sel.data and sel.data.disabled) and true or false
+        ctx.pathPickerReturnState = "bbl_hotkey_entries"
+        ctx.pathPickerContext = "path_only"
+        ctx.pathPickerSub = "device"
+        ctx.pathList = _.file_selector.getDevices("path_only") or {}
+        ctx.pathPickerSel = 1
+        ctx.pathPickerScroll = 0
+        ctx.pathBrowsePath = nil
+        ctx.state = "path_picker"
+      else
+        ctx.bblEntrySlot = sel.slot
+        ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+        ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
+        ctx.state = "bbl_hotkey_entry"
+      end
     end
   end
 

@@ -319,8 +319,8 @@ strings.cdrom_options = {
 
 -- Text input (keyboard) hint. hint_items_title_id = same but no Caps (used for GSM title ID).
 strings.text_input = {
-  hint_items = { { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Caps", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "circle", label = "Cancel", row = 1 }, { pad = "L1", label = "Left", row = 2 }, { pad = "start", label = "Done", row = 2 }, { pad = "R1", label = "Right", row = 2 } },
-  hint_items_title_id = { { pad = "cross", label = "Enter", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "circle", label = "Cancel", row = 1 }, { pad = "L1", label = "Left", row = 2 }, { pad = "start", label = "Done", row = 2 }, { pad = "R1", label = "Right", row = 2 } },
+  hint_items = { { pad = "cross", label = "Enter", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Done", row = 1 }, { pad = "triangle", label = "Caps", row = 1 }, { pad = "circle", label = "Cancel", row = 1 }, { pad = "L1", label = "Left", row = 2 }, { pad = "R1", label = "Right", row = 2 } },
+  hint_items_title_id = { { pad = "cross", label = "Enter", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Done", row = 1 }, { pad = "circle", label = "Cancel", row = 1 }, { pad = "L1", label = "Left", row = 2 }, { pad = "R1", label = "Right", row = 2 } },
 }
 
 return strings

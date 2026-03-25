@@ -318,8 +318,8 @@ strings.cdrom_options = {
 
 -- Texteingabe
 strings.text_input = {
-  hint_items = { { pad = "cross", label = "Bestaet.", row = 1 }, { pad = "triangle", label = "Grossschr.", row = 1 }, { pad = "square", label = "Loeschen", row = 1 }, { pad = "circle", label = "Abbrechen", row = 1 }, { pad = "L1", label = "Links", row = 2 }, { pad = "start", label = "Fertig", row = 2 }, { pad = "R1", label = "Rechts", row = 2 } },
-  hint_items_title_id = { { pad = "cross", label = "Bestaet.", row = 1 }, { pad = "square", label = "Loeschen", row = 1 }, { pad = "circle", label = "Abbrechen", row = 1 }, { pad = "L1", label = "Links", row = 2 }, { pad = "start", label = "Fertig", row = 2 }, { pad = "R1", label = "Rechts", row = 2 } },
+  hint_items = { { pad = "cross", label = "Bestaet.", row = 1 }, { pad = "square", label = "Loeschen", row = 1 }, { pad = "start", label = "Fertig", row = 1 }, { pad = "triangle", label = "Grossschr.", row = 1 }, { pad = "circle", label = "Abbrechen", row = 1 }, { pad = "L1", label = "Links", row = 2 }, { pad = "R1", label = "Rechts", row = 2 } },
+  hint_items_title_id = { { pad = "cross", label = "Bestaet.", row = 1 }, { pad = "square", label = "Loeschen", row = 1 }, { pad = "start", label = "Fertig", row = 1 }, { pad = "circle", label = "Abbrechen", row = 1 }, { pad = "L1", label = "Links", row = 2 }, { pad = "R1", label = "Rechts", row = 2 } },
 }
 
 return strings

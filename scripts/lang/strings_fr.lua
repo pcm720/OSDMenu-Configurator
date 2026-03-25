@@ -318,8 +318,8 @@ strings.cdrom_options = {
 
 -- Saisie de texte (clavier)
 strings.text_input = {
-  hint_items = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Majusc.", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "start", label = "Termine", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
-  hint_items_title_id = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "start", label = "Termine", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
+  hint_items = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "start", label = "Termine", row = 1 }, { pad = "triangle", label = "Majusc.", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
+  hint_items_title_id = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "start", label = "Termine", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
 }
 
 return strings
