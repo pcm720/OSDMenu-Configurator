@@ -45,6 +45,7 @@ local function run(ctx)
     ctx.state = returnState
     return
   end
+  local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
 
   local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
   local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
@@ -153,15 +154,23 @@ local function run(ctx)
     if row.kind == "name" then
       local disp = (row.nameVal ~= "" and row.nameVal) or _.common_str.empty
       text = (_.menu_str.name or "Name: ") .. disp
+      if keyDisabled then
+        col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      end
     elseif row.kind == "entry" then
       local slot = row.data
-      local p = (slot.path ~= "" and slot.path) or _.common_str.not_set
+      local p = _.common_str.not_set
+      if slot.path ~= "" then
+        p = slot.path
+      elseif slot.pathExists then
+        p = _.common_str.empty
+      end
       if isFmcb then
         text = "E" .. tostring(row.slot) .. ": " .. p
       else
         text = "E" .. tostring(row.slot) .. ": " .. p .. " " .. formatArgCount(slot.argCount)
       end
-      if slot.disabled then
+      if keyDisabled or slot.disabled then
         col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
     elseif row.kind == "empty" then
@@ -250,9 +259,11 @@ local function run(ctx)
 
   local function removeSelectedEntry()
     if not (sel and sel.kind == "entry") then return end
-    _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
-    ctx.configModified = true
-    confirmMoveState()
+    local removed = _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
+    if removed then
+      ctx.configModified = true
+      confirmMoveState()
+    end
   end
 
   local function moveSelectedEntry(step)

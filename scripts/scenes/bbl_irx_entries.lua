@@ -2,6 +2,24 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
+local function buildIrxEntryValueMap(lines, maxEntries)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    local key = entry and entry.key
+    if key then
+      local idx = key:match("^LOAD_IRX_E(%d+)$")
+      if idx then
+        local n = tonumber(idx)
+        if n and n >= 1 and n <= maxEntries and out[n] == nil then
+          out[n] = entry.value or ""
+        end
+      end
+    end
+  end
+  return out
+end
+
 local function beginIrxPathEdit(_, ctx, entryIdx, disabled)
   ctx.editKey = nil
   ctx.isAddPath = false
@@ -60,6 +78,21 @@ local function run(ctx)
   local maxEntries = (_.config_options and _.config_options.BBL_MAX_IRX_ENTRIES) or
       ((_.config_parse.getBblMaxIrxEntries and _.config_parse.getBblMaxIrxEntries()) or 10)
   local entries = _.config_parse.getBblIrxEntryIndices(ctx.lines)
+  local sceneEpoch = ctx._sceneEpoch or 0
+  local inputEpoch = ctx._inputEpoch or 0
+  local entryValueCache = ctx.bblIrxEntryValueCache
+  if not entryValueCache or entryValueCache.linesRef ~= ctx.lines or entryValueCache.maxEntries ~= maxEntries or
+      entryValueCache.sceneEpoch ~= sceneEpoch or entryValueCache.inputEpoch ~= inputEpoch then
+    entryValueCache = {
+      linesRef = ctx.lines,
+      maxEntries = maxEntries,
+      sceneEpoch = sceneEpoch,
+      inputEpoch = inputEpoch,
+      map = buildIrxEntryValueMap(ctx.lines, maxEntries),
+    }
+    ctx.bblIrxEntryValueCache = entryValueCache
+  end
+  local entryValueByIdx = entryValueCache.map or {}
   local total = #entries
   local canMoveEntries = total > 1
   local function clearMoveState()
@@ -120,7 +153,7 @@ local function run(ctx)
   for i = ctx.bblIrxScroll + 1, math.min(ctx.bblIrxScroll + maxVis, total) do
     local ent = entries[i]
     local idx = ent.idx
-    local value = _.config_parse.getBblIrxEntry(ctx.lines, idx) or ""
+    local value = entryValueByIdx[idx] or ""
     local label = "E" .. tostring(idx) .. ": " .. ((value ~= "" and value) or _.common_str.empty)
     local y = startY + (i - ctx.bblIrxScroll - 1) * _.LINE_H
     local col = (i == ctx.bblIrxSel) and _.SELECTED_ENTRY or _.WHITE

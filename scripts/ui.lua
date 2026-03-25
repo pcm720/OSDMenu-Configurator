@@ -331,6 +331,14 @@ local function mainLoop()
       holdFrameCount = 0
     end
     local padEffective = padJust | padRepeat
+    -- Epochs are used by scene-level caches:
+    -- scene epoch bumps on state transitions; input epoch bumps after button activity.
+    c._sceneEpoch = c._sceneEpoch or 0
+    c._inputEpoch = c._inputEpoch or 0
+    if c._lastSceneForEpoch ~= state then
+      c._sceneEpoch = c._sceneEpoch + 1
+      c._lastSceneForEpoch = state
+    end
     -- Refresh strings from CONFIG_UI so L1/R1 lang cycle in main menu takes effect in all states.
     local strings = (_G.CONFIG_UI and _G.CONFIG_UI.strings) or strings
     local editor_str = (strings and strings.editor) or editor_str
@@ -509,6 +517,9 @@ local function mainLoop()
     common.refreshConfigModified(c)
     common.drawSaveSplash(c)
     syncFromS(c)
+    if padEffective ~= 0 then
+      c._inputEpoch = (c._inputEpoch or 0) + 1
+    end
 
     prevPad = pad
     syncToS(c)

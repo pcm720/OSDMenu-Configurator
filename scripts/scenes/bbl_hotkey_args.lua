@@ -48,6 +48,7 @@ local function run(ctx)
     ctx.state = "bbl_hotkey_entry"
     return
   end
+  local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
 
   local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
   local hasArgCap = (type(maxArgs) == "number" and maxArgs > 0)
@@ -315,7 +316,7 @@ local function run(ctx)
         text = _.common.truncateTextToWidth(_.font, text, maxLabelW, _.FONT_SCALE)
       end
       local col = (i == ctx.bblArgSel) and _.SELECTED_ENTRY or _.WHITE
-      if a and a.disabled then
+      if keyDisabled or (a and a.disabled) then
         col = (i == ctx.bblArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblArgSel, text, col)

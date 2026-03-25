@@ -72,6 +72,7 @@ local function run(ctx)
 
   local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
   local data = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot)
+  local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
   local allowArgs = (ctx.fileType ~= "freemcboot_cnf") and (ctx.context ~= "freehddboot")
   local rows = allowArgs and { "path", "args" } or { "path" }
   ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
@@ -80,7 +81,12 @@ local function run(ctx)
 
   drawPadTitle(_, keyId, " - E" .. tostring(slot))
 
-  local pathDisp = (data.path ~= "" and data.path) or _.common_str.not_set
+  local pathDisp = _.common_str.not_set
+  if data.path ~= "" then
+    pathDisp = data.path
+  elseif data.pathExists then
+    pathDisp = _.common_str.empty
+  end
   local pathLine = "Path: " .. pathDisp
   local argsLine = (type(maxArgs) == "number" and maxArgs > 0)
       and ("Arguments: " .. tostring(data.argCount) .. "/" .. tostring(maxArgs))
@@ -97,7 +103,7 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       line = _.common.truncateTextToWidth(_.font, line, maxLabelW, _.FONT_SCALE)
     end
-    if rows[i] == "path" and data.disabled then
+    if rows[i] == "path" and (data.disabled or keyDisabled) then
       col = (i == ctx.bblEntryDetailSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblEntryDetailSel, line, col)
@@ -178,8 +184,10 @@ local function run(ctx)
     toggleSelectedPathDisabled()
   end
   if rows[ctx.bblEntryDetailSel] == "path" and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, slot)
-    ctx.configModified = true
+    local removed = _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, slot)
+    if removed then
+      ctx.configModified = true
+    end
     ctx.bblEntryDetailReturnState = nil
     ctx.state = returnState
   end

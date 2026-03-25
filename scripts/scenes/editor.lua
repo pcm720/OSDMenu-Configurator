@@ -129,25 +129,102 @@ local function valuesEquivalent(a, b)
   return false
 end
 
-local function optionMatchesDefault(ctx, _, key, def)
+local function optionMatchesDefault(ctx, _, key, def, getValue)
   if not (ctx and _ and key) then return false end
   if def == nil then return false end
-  local cur = _.config_parse.get(ctx.lines, key)
+  local getter = getValue or _.config_parse.get
+  local cur = getter(ctx.lines, key)
   local effective = (cur ~= nil) and cur or def
   return valuesEquivalent(effective, def)
 end
 
-local function osdVisualGroupMatchesPreset(ctx, _, preset)
+local function osdVisualGroupMatchesPreset(ctx, _, preset, getValue)
   if not (ctx and _ and preset) then return false end
+  local getter = getValue or _.config_parse.get
   for key, _present in pairs(OSD_VISUAL_COORD_KEYS) do
     local def = preset[key]
-    local cur = _.config_parse.get(ctx.lines, key)
+    local cur = getter(ctx.lines, key)
     local effective = (cur ~= nil) and cur or def
     if not valuesEquivalent(effective, def) then
       return false
     end
   end
   return true
+end
+
+local function makeFrameParseCache(_, lines)
+  local getCache = {}
+  local getWithCommentCache = {}
+  local getMultiCache = {}
+  local getBootPathsCache = {}
+  local getBblSlotCache = {}
+  local isBootKeyDisabledCache = {}
+
+  local function cacheKeyForSlot(keyId, slot)
+    return tostring(keyId or "") .. ":" .. tostring(slot or "")
+  end
+
+  return {
+    get = function(_ignored, key)
+      if key == nil then return nil end
+      if getCache[key] == nil then
+        getCache[key] = { _.config_parse.get(lines, key) }
+      end
+      return getCache[key][1]
+    end,
+    getWithComment = function(_ignored, key)
+      if key == nil then return nil, nil end
+      if getWithCommentCache[key] == nil then
+        getWithCommentCache[key] = { _.config_parse.getWithComment(lines, key) }
+      end
+      return getWithCommentCache[key][1], getWithCommentCache[key][2]
+    end,
+    getMulti = function(_ignored, key)
+      if key == nil then return {} end
+      if getMultiCache[key] == nil then
+        getMultiCache[key] = _.config_parse.getMulti(lines, key)
+      end
+      return getMultiCache[key]
+    end,
+    getBootPaths = function(_ignored, key)
+      if key == nil then return {} end
+      if getBootPathsCache[key] == nil then
+        getBootPathsCache[key] = _.config_parse.getBootPaths(lines, key)
+      end
+      return getBootPathsCache[key]
+    end,
+    getBblHotkeySlot = function(_ignored, keyId, slot)
+      if keyId == nil or slot == nil then return nil end
+      local ck = cacheKeyForSlot(keyId, slot)
+      if getBblSlotCache[ck] == nil then
+        getBblSlotCache[ck] = _.config_parse.getBblHotkeySlot(lines, keyId, slot)
+      end
+      return getBblSlotCache[ck]
+    end,
+    isBootKeyDisabled = function(_ignored, key)
+      if key == nil then return false end
+      if isBootKeyDisabledCache[key] == nil then
+        isBootKeyDisabledCache[key] = (_.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(lines, key)) and
+            true or false
+      end
+      return isBootKeyDisabledCache[key]
+    end,
+  }
+end
+
+local function getEditorParseCache(ctx, _)
+  local sceneEpoch = ctx._sceneEpoch or 0
+  local inputEpoch = ctx._inputEpoch or 0
+  local cache = ctx.editorFrameParseCache
+  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
+    return cache
+  end
+  cache = makeFrameParseCache(_, ctx.lines or {})
+  cache.linesRef = ctx.lines
+  cache.sceneEpoch = sceneEpoch
+  cache.inputEpoch = inputEpoch
+  ctx.editorFrameParseCache = cache
+  return cache
 end
 
 local function removeHintPad(items, padName)
@@ -522,6 +599,13 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local frameParse = getEditorParseCache(ctx, _)
+  local cachedGet = frameParse.get
+  local cachedGetWithComment = frameParse.getWithComment
+  local cachedGetMulti = frameParse.getMulti
+  local cachedGetBootPaths = frameParse.getBootPaths
+  local cachedGetBblHotkeySlot = frameParse.getBblHotkeySlot
+  local cachedIsBootKeyDisabled = frameParse.isBootKeyDisabled
   -- Leave-save prompt when going back to file select with unsaved changes
   if ctx.editorLeavePrompt then
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.editor_str.leave_save_prompt, _.WHITE)
@@ -695,23 +779,39 @@ local function run(ctx)
       elseif o.optType == "color" then
         valDisplay = nil
       elseif o.optType == "bool" then
-        local v = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
+        local v = cachedGet(ctx.lines, o.key) or o.default or "0"
         valDisplay = (v == "1") and _.common_str.on or _.common_str.off
       elseif o.optType == "boot_paths" then
-        bootKeyDisabled = (_.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)) and true or false
-        local paths = _.config_parse.getBootPaths(ctx.lines, o.key)
-        if not paths or #paths == 0 then
-          valDisplay = ""
+        bootKeyDisabled = cachedIsBootKeyDisabled(ctx.lines, o.key)
+        local paths = cachedGetBootPaths(ctx.lines, o.key)
+        local count = paths and #paths or 0
+        if ctx.fileType == "osdmbr_cnf" then
+          if count <= 0 then
+            valDisplay = _.common_str.not_set
+          elseif count == 1 then
+            valDisplay = "(1 path)"
+          else
+            valDisplay = "(" .. tostring(count) .. " paths)"
+          end
         else
-          valDisplay = #paths .. _.menu_str.path_s
+          if count <= 0 then
+            valDisplay = ""
+          else
+            valDisplay = count .. _.menu_str.path_s
+          end
         end
       elseif o.optType == "bbl_slot" then
         local keyId = o.bblKeyId or "AUTO"
         local slotIdx = tonumber(o.bblEntrySlot)
-        local slot = (slotIdx and _.config_parse.getBblHotkeySlot) and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slotIdx) or
+        local slot = (slotIdx and _.config_parse.getBblHotkeySlot) and cachedGetBblHotkeySlot(ctx.lines, keyId, slotIdx) or
             nil
-        if slot and slot.used then
-          local p = (slot.path ~= "" and slot.path) or _.common_str.not_set
+        if slot and (slot.used or slot.pathExists) then
+          local p = _.common_str.not_set
+          if slot.path ~= "" then
+            p = slot.path
+          elseif slot.pathExists then
+            p = _.common_str.empty
+          end
           if ctx.fileType == "freemcboot_cnf" then
             valDisplay = p
           else
@@ -721,18 +821,18 @@ local function run(ctx)
           valDisplay = _.common_str.not_set
         end
       elseif o.optType == "enum" then
-        local raw = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+        local raw = cachedGet(ctx.lines, o.key) or o.default or ""
         if raw ~= "" and o.enumDisplayMap and o.enumDisplayMap[raw] then
           valDisplay = o.enumDisplayMap[raw]
         else
           valDisplay = raw
         end
       else
-        local multi = _.config_parse.getMulti(ctx.lines, o.key)
+        local multi = cachedGetMulti(ctx.lines, o.key)
         if multi and #multi > 1 then
           valDisplay = #multi .. " paths"
         else
-          valDisplay = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+          valDisplay = cachedGet(ctx.lines, o.key) or o.default or ""
         end
       end
       if (o.key == "KEY_READ_WAIT_TIME" or o.key == "pad_delay") and valDisplay and valDisplay ~= "" then
@@ -764,7 +864,7 @@ local function run(ctx)
       end
       if o.key == "NAME_AUTO" then
         inlineAutoRow = true
-        local nameVal = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+        local nameVal = cachedGet(ctx.lines, o.key) or o.default or ""
         local nameDisp = (nameVal ~= "" and nameVal) or _.common_str.empty
         lab = (_.menu_str.name or "Name: ") .. nameDisp
         valDisplay = ""
@@ -773,7 +873,7 @@ local function run(ctx)
         local slotIdx = o.key:match("^ESR_Path_E(%d+)$") or "?"
         local pathVal, pathCommented = nil, nil
         if _.config_parse.getWithComment then
-          pathVal, pathCommented = _.config_parse.getWithComment(ctx.lines, o.key)
+          pathVal, pathCommented = cachedGetWithComment(ctx.lines, o.key)
         end
         if pathVal == nil then
           pathVal = ""
@@ -790,8 +890,13 @@ local function run(ctx)
       elseif o.optType == "bbl_slot" and (o.bblKeyId == "AUTO" or (o.key and o.key:match("^_auto_e%d+$"))) then
         inlineAutoRow = true
         local slotIdx = tonumber(o.bblEntrySlot) or 0
-        local slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotIdx) or nil
-        local pathDisp = (slot and slot.path and slot.path ~= "") and slot.path or _.common_str.not_set
+        local slot = _.config_parse.getBblHotkeySlot and cachedGetBblHotkeySlot(ctx.lines, "AUTO", slotIdx) or nil
+        local pathDisp = _.common_str.not_set
+        if slot and slot.path and slot.path ~= "" then
+          pathDisp = slot.path
+        elseif slot and slot.pathExists then
+          pathDisp = _.common_str.empty
+        end
         if ctx.fileType == "freemcboot_cnf" then
           lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp
         else
@@ -801,7 +906,7 @@ local function run(ctx)
         if ctx.editorAutoSlotGrab and i == ctx.optSel then
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
         end
-        if slot and slot.used and slot.disabled then
+        if slot and (slot.used or slot.pathExists) and slot.disabled then
           col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
         end
         valDisplay = ""
@@ -888,7 +993,7 @@ local function run(ctx)
           _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, drawVal, valCol)
         end
       elseif o.optType == "color" then
-        local r, g, b, a = _.parseColor(_.config_parse.get(ctx.lines, o.key) or o.default)
+        local r, g, b, a = _.parseColor(cachedGet(ctx.lines, o.key) or o.default)
         local swatchColor = _.Color.new(r, g, b, a)
         _.Graphics.drawRect(_.VALUE_X, y, 28, _.scaleY(18), swatchColor)
       end
@@ -901,7 +1006,7 @@ local function run(ctx)
         descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit or channel, Up/Down change, Square channel")
       end
       if selOpt.key == "LOGO_DISPLAY" then
-        local cur = _.config_parse.get(ctx.lines, selOpt.key) or selOpt.default or ""
+        local cur = cachedGet(ctx.lines, selOpt.key) or selOpt.default or ""
         local n = tonumber(cur) or 0
         descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
       end
@@ -944,11 +1049,11 @@ local function run(ctx)
     local canResetFromTriangle = false
     if selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" then
       if isOsdVisualCoordRow then
-        canResetFromTriangle = not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS)
+        canResetFromTriangle = not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet)
       else
         local def = resetDefaultFn and resetDefaultFn(selOpt.key)
         if def ~= nil then
-          canResetFromTriangle = not optionMatchesDefault(ctx, _, selOpt.key, def)
+          canResetFromTriangle = not optionMatchesDefault(ctx, _, selOpt.key, def, cachedGet)
         end
       end
     end
@@ -959,7 +1064,7 @@ local function run(ctx)
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
         ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
     local autoSlotData = (isAutoSlotRow and autoSlotNum and _.config_parse.getBblHotkeySlot) and
-        _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum) or nil
+        cachedGetBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum) or nil
 
     local function esrKey(slot)
       return "ESR_Path_E" .. tostring(slot or "")
@@ -1061,7 +1166,7 @@ local function run(ctx)
     local function countUsedAutoSlots()
       local usedCount = 0
       for i = 1, maxAutoSlots do
-        local s = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", i) or nil
+        local s = _.config_parse.getBblHotkeySlot and cachedGetBblHotkeySlot(ctx.lines, "AUTO", i) or nil
         if s and s.used then usedCount = usedCount + 1 end
       end
       return usedCount
@@ -1097,9 +1202,11 @@ local function run(ctx)
     local function removeAutoSlot()
       local hasSlotContent = autoSlotData and (autoSlotData.used or autoSlotData.pathExists)
       if not (isAutoSlotRow and autoSlotNum and hasSlotContent) then return end
-      _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum)
-      ctx.configModified = true
-      confirmAutoMoveState()
+      local removed = _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum)
+      if removed then
+        ctx.configModified = true
+        confirmAutoMoveState()
+      end
     end
 
     local function clearEsrMoveState()
@@ -1632,7 +1739,7 @@ local function run(ctx)
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
       local o = ctx.optList[ctx.optSel]
       if isOsdVisualCoordRow then
-        if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS) then
+        if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet) then
           ctx.editorOsdVisualRestoreOpen = true
           ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
           ctx.editorOsdVisualRestoreScroll = ctx.editorOsdVisualRestoreScroll or 0
@@ -1656,7 +1763,7 @@ local function run(ctx)
         else
           def = _.config_options.getOsdmenuDefault and _.config_options.getOsdmenuDefault(o.key)
         end
-        if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def) then
+        if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def, cachedGet) then
           _.config_parse.set(ctx.lines, o.key, def)
           if _.common and _.common.refreshConfigModified then
             _.common.refreshConfigModified(ctx)

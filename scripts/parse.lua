@@ -827,8 +827,10 @@ local function bblHotkeyIdVariants(keyId)
   if not canonical then return {} end
   local out = { canonical }
   if canonical:match("^[A-Z]+$") then
+    local lower = canonical:lower()
+    if lower ~= canonical then out[#out + 1] = lower end
     local title = canonical:sub(1, 1) .. canonical:sub(2):lower()
-    if title ~= canonical then out[#out + 1] = title end
+    if title ~= canonical and title ~= lower then out[#out + 1] = title end
   end
   return out
 end
@@ -837,13 +839,16 @@ local function removeAllKeys(lines, keys)
   local keep = {}
   for i = 1, #keys do keep[keys[i]] = true end
   local i = 1
+  local removed = 0
   while i <= #lines do
     if keep[lines[i].key] then
       table.remove(lines, i)
+      removed = removed + 1
     else
       i = i + 1
     end
   end
+  return removed
 end
 
 local function getWithCommentAnyKey(lines, keys)
@@ -1087,9 +1092,10 @@ function config_parse.removeBblHotkeySlot(lines, keyId, entryIdx)
     pathKeys[#pathKeys + 1] = bblPathKey(ids[i], entryIdx)
     argKeys[#argKeys + 1] = bblArgKey(ids[i], entryIdx)
   end
-  removeAllKeys(lines, pathKeys)
-  removeAllKeys(lines, argKeys)
-  return true
+  local removed = 0
+  removed = removed + removeAllKeys(lines, pathKeys)
+  removed = removed + removeAllKeys(lines, argKeys)
+  return removed > 0
 end
 
 function config_parse.getBblHotkeySlot(lines, keyId, entryIdx)

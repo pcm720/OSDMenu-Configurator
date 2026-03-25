@@ -2,6 +2,24 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
+local function buildEntryNameMap(lines)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    local key = entry and entry.key
+    if key then
+      local idx = key:match("^name_OSDSYS_ITEM_(%d+)$")
+      if idx then
+        local n = tonumber(idx)
+        if n and out[n] == nil then
+          out[n] = entry.value or ""
+        end
+      end
+    end
+  end
+  return out
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -104,6 +122,20 @@ local function run(ctx)
   end
 
   refreshEntries()
+  local sceneEpoch = ctx._sceneEpoch or 0
+  local inputEpoch = ctx._inputEpoch or 0
+  local entryNameCache = ctx.menuEntriesNameCache
+  if not entryNameCache or entryNameCache.linesRef ~= ctx.lines or entryNameCache.sceneEpoch ~= sceneEpoch or
+      entryNameCache.inputEpoch ~= inputEpoch then
+    entryNameCache = {
+      linesRef = ctx.lines,
+      sceneEpoch = sceneEpoch,
+      inputEpoch = inputEpoch,
+      map = buildEntryNameMap(ctx.lines),
+    }
+    ctx.menuEntriesNameCache = entryNameCache
+  end
+  local entryNameByIdx = entryNameCache.map or {}
   local startY = _.MARGIN_Y + _.scaleY(50)
   local total = #ctx.entryList
   local canMoveEntries = total > 1
@@ -130,7 +162,7 @@ local function run(ctx)
   for i = ctx.entryScroll + 1, math.min(ctx.entryScroll + maxVis, total) do
     local ent = ctx.entryList[i]
     local idx = ent.idx
-    local name = _.config_parse.getMenuEntryName(ctx.lines, idx)
+    local name = entryNameByIdx[idx]
     local label = (name == "" or not name) and _.common_str.empty or (name or (_.menu_str.item .. idx))
     if canMoveEntries and ctx.menuEntryGrab and i == ctx.entrySel then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
