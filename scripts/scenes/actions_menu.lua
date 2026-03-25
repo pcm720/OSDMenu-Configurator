@@ -75,7 +75,7 @@ function actions_menu.run(ctx, opts)
   local maxVisible = math.max(1, math.min(#rows, math.floor(tonumber(opts.maxVisible) or 8)))
   ctx[scrollKey] = _.common.centeredListScroll(ctx[selKey], #rows, maxVisible)
 
-  local title = opts.prompt or opts.title or "Select Action:"
+  local title = "Select Action:"
   local titleScale = 0.95
   local rowScale = _.FONT_SCALE
   local rowStateKeyPrefix = opts.rowStateKeyPrefix or "actions_menu_row_"
@@ -98,7 +98,7 @@ function actions_menu.run(ctx, opts)
   local padX = 24
   local padTop = math.floor(_.scaleY(14))
   local titleH = _.LINE_H
-  local titleGap = math.floor(_.scaleY(12))
+  local titleGap = 0
   local padBottom = math.floor(_.scaleY(14))
   local rowStep = _.LINE_H
 
@@ -119,7 +119,11 @@ function actions_menu.run(ctx, opts)
   _.drawText(_.font, _.drawMode, titleX, titleY, titleScale, title, _.WHITE)
 
   local rowStartY = titleY + titleH + titleGap
-  local maxLabelW = boxW - (padX * 2)
+  local rowIndentW = textWidth("  ", rowScale)
+  local rowX = titleX + rowIndentW
+  local rowRight = (boxX + boxW) - padX
+  local maxLabelW = rowRight - rowX
+  if maxLabelW < 1 then maxLabelW = 1 end
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
@@ -130,15 +134,13 @@ function actions_menu.run(ctx, opts)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, rowScale)
     end
-    local labelW = textWidth(label, rowScale)
-    local x = boxX + math.floor((boxW - labelW) / 2)
     local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
-    _.drawListRow(x, y, i == ctx[selKey], label, col)
+    _.drawListRow(rowX, y, i == ctx[selKey], label, col)
   end
 
   local hintItems = opts.hints or {
     { pad = "cross", label = "Select", row = 1 },
-    { pad = "circle", label = "Back", row = 1 },
+    { pad = "circle", label = "Cancel", row = 1 },
   }
   if _.Graphics and _.Graphics.drawRect then
     local hintBg = (_.common and _.common.BGCOLOR) or Color.new(20, 20, 20, 255)

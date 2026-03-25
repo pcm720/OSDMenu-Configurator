@@ -57,6 +57,44 @@ local function run(ctx)
       usedCount = usedCount + 1
     end
   end
+  local canMoveEntries = usedCount > 1
+  local function clearMoveState()
+    ctx.bblEntryGrab = nil
+    ctx.bblEntryMoveSnapshot = nil
+    ctx.bblEntryMoveSel = nil
+  end
+  local function beginMoveState()
+    if ctx.bblEntryGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.bblEntryMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.bblEntryMoveSnapshot = nil
+    end
+    ctx.bblEntryMoveSel = ctx.bblEntrySel
+    ctx.bblEntryGrab = true
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.bblEntryMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.bblEntryMoveSnapshot)
+      else
+        ctx.lines = ctx.bblEntryMoveSnapshot
+      end
+      local restoredRows = buildRows(_, ctx, keyId, maxEntries, includeNameRow)
+      if #restoredRows == 0 then
+        restoredRows[#restoredRows + 1] = { kind = "empty" }
+      end
+      ctx.bblEntrySel = _.common.clampListSelection(ctx.bblEntryMoveSel or ctx.bblEntrySel, #restoredRows)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
+  end
+  if not canMoveEntries then
+    confirmMoveState()
+  end
   local canInsert = usedCount < maxEntries
   if #rows == 0 then
     rows[#rows + 1] = { kind = "empty" }
@@ -137,8 +175,8 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       text = _.common.truncateTextToWidth(_.font, text, maxLabelW, _.FONT_SCALE)
     end
-    if row.kind == "entry" and ctx.bblEntryGrab and i == ctx.bblEntrySel then
-      text = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. text
+    if row.kind == "entry" and canMoveEntries and ctx.bblEntryGrab and i == ctx.bblEntrySel then
+      text = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. text
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblEntrySel, text, col)
   end
@@ -146,7 +184,11 @@ local function run(ctx)
   local sel = rows[ctx.bblEntrySel]
   local isEntrySel = sel and sel.kind == "entry"
   local hint = {
-    { pad = (sel and sel.kind ~= "empty") and "cross" or "", label = (sel and sel.kind ~= "empty") and "Enter" or "", row = 1 },
+    {
+      pad = (sel and sel.kind ~= "empty") and "cross" or "",
+      label = (sel and sel.kind ~= "empty") and (ctx.bblEntryGrab and (_.menu_str.confirm_label or "Confirm") or "Enter") or "",
+      row = 1
+    },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
     {
       pad = ctx.configModified and "start" or "",
@@ -158,7 +200,11 @@ local function run(ctx)
       label = isEntrySel and (sel.data.disabled and "Enable" or "Disable") or "",
       row = 1
     },
-    { pad = "circle", label = "Back", row = 1 },
+    {
+      pad = "circle",
+      label = ctx.bblEntryGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
@@ -171,7 +217,7 @@ local function run(ctx)
     local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, belowSlot, maxEntries)
     if newSlot then
       ctx.configModified = true
-      ctx.bblEntryGrab = nil
+      confirmMoveState()
       ctx.bblEntrySlot = newSlot
       ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
       ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
@@ -206,11 +252,11 @@ local function run(ctx)
     if not (sel and sel.kind == "entry") then return end
     _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
     ctx.configModified = true
-    ctx.bblEntryGrab = nil
+    confirmMoveState()
   end
 
   local function moveSelectedEntry(step)
-    if not (sel and sel.kind == "entry") then return end
+    if not (sel and sel.kind == "entry" and canMoveEntries) then return end
     local dst = sel.slot + step
     if dst < 1 or dst > maxEntries then return end
     _.config_parse.swapBblHotkeySlots(ctx.lines, keyId, sel.slot, dst)
@@ -220,11 +266,14 @@ local function run(ctx)
 
   if ctx.bblEntryActionsOpen then
     local actionRows = {}
-    if isEntrySel then
+    if isEntrySel and canMoveEntries then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.bblEntryGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
+        label = ctx.bblEntryGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+            (_.menu_str.grab_label or "Move"),
       }
+    end
+    if isEntrySel then
       actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
     end
     if canInsert then
@@ -239,7 +288,11 @@ local function run(ctx)
           rowStateKeyPrefix = "bbl_hotkey_entries_actions_row_",
           onSelect = function(row)
             if row.id == "grab" then
-              ctx.bblEntryGrab = not ctx.bblEntryGrab
+              if ctx.bblEntryGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
             elseif row.id == "insert" then
               insertEntryBelowSelected()
             elseif row.id == "remove" then
@@ -269,6 +322,10 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if ctx.bblEntryGrab then
+      confirmMoveState()
+      return
+    end
     if sel.kind == "name" then
       local currentName = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
       ctx.textInputTitleIdMode = nil
@@ -315,7 +372,7 @@ local function run(ctx)
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.bblEntryGrab then
-      ctx.bblEntryGrab = nil
+      cancelMoveState()
       return
     end
     ctx.state = returnState

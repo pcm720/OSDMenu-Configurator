@@ -424,20 +424,46 @@ local function runMain(s, pad)
     s.mainLangSel = common.clampListSelection(s.mainLangSel or (C.langIndex or 1), total)
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
+    local title = main_str.main_select_language or "Select language"
+    local titleScale = 0.95
+    local rowScale = common.FONT_SCALE or 0.9
+    local function textWidth(text, scale)
+      if common.calcTextWidth then
+        return common.calcTextWidth(s.font, tostring(text or ""), scale)
+      end
+      local str = tostring(text or "")
+      return math.floor((8 * (scale or 1)) * #str)
+    end
+    local titleW = textWidth(title, titleScale)
+    local padTop = math.floor(sc(14))
+    local titleGap = 0
+    local padBottom = math.floor(sc(14))
     local boxW = math.min(480, (s.w or 640) - (M * 2))
-    local boxH = math.floor(sc(72)) + maxVis * L
+    local boxH = padTop + L + titleGap + (maxVis * L) + padBottom
     local boxX = math.floor(((s.w or 640) - boxW) / 2)
     local boxY = math.floor(((s.h or 448) - boxH) / 2)
-    local title = main_str.main_select_language or "Select language"
     if Graphics and Graphics.drawRect then
       Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 110))
     end
-    dt(s.font, s.drawMode, boxX + 18, boxY + 14, 0.95, title, common.WHITE)
+    local titleX = boxX + math.floor((boxW - titleW) / 2)
+    local titleY = boxY + padTop
+    local rowStartY = titleY + L + titleGap
+    local rowIndentW = textWidth("  ", rowScale)
+    local rowX = titleX + rowIndentW
+    local rowRight = (boxX + boxW) - 18
+    local maxLabelW = rowRight - rowX
+    if maxLabelW < 1 then maxLabelW = 1 end
+    dt(s.font, s.drawMode, titleX, titleY, titleScale, title, common.WHITE)
     for i = scroll + 1, math.min(scroll + maxVis, total) do
-      local y = boxY + math.floor(sc(40)) + (i - scroll - 1) * L
+      local y = rowStartY + (i - scroll - 1) * L
       local label = getLanguageDisplayName(i)
+      if common.fitListRowText then
+        label = common.fitListRowText(s, "main_lang_row_" .. tostring(i), s.font, label, maxLabelW, rowScale, i == s.mainLangSel)
+      elseif common.truncateTextToWidth then
+        label = common.truncateTextToWidth(s.font, label, maxLabelW, rowScale)
+      end
       local col = (i == s.mainLangSel) and SE or common.GRAY
-      dlr(boxX + 24, y, i == s.mainLangSel, label, col)
+      dlr(rowX, y, i == s.mainLangSel, label, col)
     end
     local hintItems = main_str.cross_select_circle_back_items or {
       { pad = "cross", label = "Enter" },

@@ -765,11 +765,26 @@ function config_parse.insertBblIrxEntryBelow(lines, belowIdx, value, disabled)
   while gapIdx <= BBL_MAX_IRX_ENTRIES and occupied[gapIdx] do
     gapIdx = gapIdx + 1
   end
-  if gapIdx > BBL_MAX_IRX_ENTRIES then
+  if gapIdx <= BBL_MAX_IRX_ENTRIES then
+    for idx = gapIdx - 1, insertIdx, -1 do
+      config_parse.changeBblIrxEntryIndex(lines, idx, idx + 1)
+    end
+    config_parse.setBblIrxEntry(lines, insertIdx, value == nil and "" or value, disabled)
+    return insertIdx
+  end
+
+  -- No free slot exists at/after insertIdx (e.g. selecting E10 with only lower gaps free).
+  -- Shift the contiguous block below insertIdx down by one to make room at insertIdx.
+  local lowerGap = insertIdx - 1
+  while lowerGap >= 1 and occupied[lowerGap] do
+    lowerGap = lowerGap - 1
+  end
+  if lowerGap < 1 then
     return nil
   end
-  for idx = gapIdx - 1, insertIdx, -1 do
-    config_parse.changeBblIrxEntryIndex(lines, idx, idx + 1)
+
+  for idx = lowerGap + 1, insertIdx do
+    config_parse.changeBblIrxEntryIndex(lines, idx, idx - 1)
   end
   config_parse.setBblIrxEntry(lines, insertIdx, value == nil and "" or value, disabled)
   return insertIdx

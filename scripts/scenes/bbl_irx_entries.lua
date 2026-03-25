@@ -61,6 +61,41 @@ local function run(ctx)
       ((_.config_parse.getBblMaxIrxEntries and _.config_parse.getBblMaxIrxEntries()) or 10)
   local entries = _.config_parse.getBblIrxEntryIndices(ctx.lines)
   local total = #entries
+  local canMoveEntries = total > 1
+  local function clearMoveState()
+    ctx.bblIrxGrab = nil
+    ctx.bblIrxMoveSnapshot = nil
+    ctx.bblIrxMoveSel = nil
+  end
+  local function beginMoveState()
+    if ctx.bblIrxGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.bblIrxMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.bblIrxMoveSnapshot = nil
+    end
+    ctx.bblIrxMoveSel = ctx.bblIrxSel
+    ctx.bblIrxGrab = true
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.bblIrxMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.bblIrxMoveSnapshot)
+      else
+        ctx.lines = ctx.bblIrxMoveSnapshot
+      end
+      local restored = _.config_parse.getBblIrxEntryIndices(ctx.lines)
+      ctx.bblIrxSel = _.common.clampListSelection(ctx.bblIrxMoveSel or ctx.bblIrxSel, #restored)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
+  end
+  if not canMoveEntries then
+    confirmMoveState()
+  end
   local canAddEntry = total < maxEntries
 
   ctx.bblIrxSel = ctx.bblIrxSel or 1
@@ -101,8 +136,8 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
-    if ctx.bblIrxGrab and i == ctx.bblIrxSel then
-      label = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. label
+    if canMoveEntries and ctx.bblIrxGrab and i == ctx.bblIrxSel then
+      label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblIrxSel, label, col)
   end
@@ -110,7 +145,11 @@ local function run(ctx)
   local hasSelection = (total > 0 and ctx.bblIrxSel >= 1 and ctx.bblIrxSel <= total)
   local selectedDisabled = hasSelection and entries[ctx.bblIrxSel].disabled
   local hints = {
-    { pad = hasSelection and "cross" or "", label = hasSelection and (_.menu_str.enter_label or "Enter") or "", row = 1 },
+    {
+      pad = hasSelection and "cross" or "",
+      label = hasSelection and (ctx.bblIrxGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or "",
+      row = 1
+    },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
     {
       pad = ctx.configModified and "start" or "",
@@ -123,7 +162,11 @@ local function run(ctx)
           (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
-    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+    {
+      pad = "circle",
+      label = ctx.bblIrxGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
@@ -134,7 +177,7 @@ local function run(ctx)
     if newIdx then
       ctx.configModified = true
       ctx.bblIrxSel = (total == 0) and 1 or (ctx.bblIrxSel + 1)
-      ctx.bblIrxGrab = nil
+      confirmMoveState()
       beginIrxPathEdit(_, ctx, newIdx, false)
     end
   end
@@ -145,8 +188,8 @@ local function run(ctx)
     _.config_parse.removeBblIrxEntry(ctx.lines, idx)
     ctx.configModified = true
     if ctx.bblIrxSel > total - 1 then ctx.bblIrxSel = math.max(1, total - 1) end
-    if total - 1 <= 0 then
-      ctx.bblIrxGrab = nil
+    if total - 1 <= 1 then
+      confirmMoveState()
     end
   end
 
@@ -164,10 +207,11 @@ local function run(ctx)
 
   if ctx.bblIrxActionsOpen then
     local actionRows = {}
-    if hasSelection then
+    if hasSelection and canMoveEntries then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.bblIrxGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
+        label = ctx.bblIrxGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+            (_.menu_str.grab_label or "Move"),
       }
     end
     if canAddEntry then
@@ -185,7 +229,11 @@ local function run(ctx)
           rowStateKeyPrefix = "bbl_irx_actions_row_",
           onSelect = function(row)
             if row.id == "grab" then
-              ctx.bblIrxGrab = not ctx.bblIrxGrab
+              if ctx.bblIrxGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
             elseif row.id == "insert" then
               addIrxEntry()
             elseif row.id == "remove" then
@@ -227,6 +275,10 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 and total > 0 then
+    if ctx.bblIrxGrab then
+      confirmMoveState()
+      return
+    end
     local ent = entries[ctx.bblIrxSel]
     beginIrxPathEdit(_, ctx, ent.idx, ent.disabled)
     return
@@ -244,7 +296,7 @@ local function run(ctx)
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.bblIrxGrab then
-      ctx.bblIrxGrab = nil
+      cancelMoveState()
       return
     end
     ctx.state = "editor"

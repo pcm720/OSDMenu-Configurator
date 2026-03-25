@@ -49,9 +49,40 @@ local function run(ctx)
   local function refreshPaths()
     paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-    if #paths == 0 then
+    if #paths <= 1 then
       ctx.entryPathGrab = nil
     end
+  end
+  local function clearMoveState()
+    ctx.entryPathGrab = nil
+    ctx.entryPathMoveSnapshot = nil
+    ctx.entryPathMoveSel = nil
+  end
+  local function beginMoveState()
+    if ctx.entryPathGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.entryPathMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.entryPathMoveSnapshot = nil
+    end
+    ctx.entryPathMoveSel = ctx.entryPathSel
+    ctx.entryPathGrab = true
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.entryPathMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.entryPathMoveSnapshot)
+      else
+        ctx.lines = ctx.entryPathMoveSnapshot
+      end
+      refreshPaths()
+      ctx.entryPathSel = _.common.clampListSelection(ctx.entryPathMoveSel or ctx.entryPathSel, #paths)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
   end
   local hasExclusivePath = false
   local hasArgsPaths = false
@@ -64,6 +95,10 @@ local function run(ctx)
     if flags.specialargs then hasSpecialArgsPath = true end
   end
   local pathRows = #paths
+  local canMovePaths = pathRows > 1
+  if not canMovePaths then
+    confirmMoveState()
+  end
   local isFmcbEntry = (not isBoot) and (ctx.fileType == "freemcboot_cnf")
   local maxPathsPerEntry = (isFmcbEntry and ((_.config_options and _.config_options.FMCB_MAX_PATHS_PER_ENTRY) or 3)) or nil
   local canAddPath = (not isFmcbEntry) or (pathRows < maxPathsPerEntry)
@@ -137,15 +172,19 @@ local function run(ctx)
     if i <= pathRows and type(paths[i]) == "table" and paths[i].disabled then
       col = (i == ctx.entryPathSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
-    if ctx.entryPathGrab and i == ctx.entryPathSel and i <= pathRows then
-      label = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. label
+    if canMovePaths and ctx.entryPathGrab and i == ctx.entryPathSel and i <= pathRows then
+      label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryPathSel, label, col)
   end
   local hasPathSelection = (ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows)
   local selectedPathDisabled = hasPathSelection and type(paths[ctx.entryPathSel]) == "table" and paths[ctx.entryPathSel].disabled
   local pathHints = {
-    { pad = "cross", label = _.menu_str.edit_label or "Edit", row = 1 },
+    {
+      pad = "cross",
+      label = ctx.entryPathGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit"),
+      row = 1
+    },
     { pad = "square", label = _.menu_str.actions_label or "Actions", row = 1 },
     {
       pad = ctx.configModified and "start" or "",
@@ -158,7 +197,11 @@ local function run(ctx)
           (selectedPathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
-    { pad = "circle", label = _.menu_str.back_label or "Back", row = 1 },
+    {
+      pad = "circle",
+      label = ctx.entryPathGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, pathHints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
@@ -238,7 +281,7 @@ local function run(ctx)
     else
       ctx.pathPickerInsertBelow = nil
     end
-    ctx.entryPathGrab = nil
+    confirmMoveState()
     openPathPicker(nil)
   end
   local function swapSelectedPath(step)
@@ -259,14 +302,15 @@ local function run(ctx)
 
   if ctx.entryPathsActionsOpen then
     local actionRows = {}
-    if hasPathSelection then
+    if hasPathSelection and canMovePaths then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.entryPathGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
+        label = ctx.entryPathGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+            (_.menu_str.grab_label or "Move"),
       }
     end
     if canAddPath then
-      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.add_label or "Add") }
+      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
     end
     if hasPathSelection then
       actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
@@ -280,7 +324,11 @@ local function run(ctx)
           rowStateKeyPrefix = "entry_paths_actions_row_",
           onSelect = function(row)
             if row.id == "grab" then
-              ctx.entryPathGrab = not ctx.entryPathGrab
+              if ctx.entryPathGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
             elseif row.id == "insert" then
               insertPathFromActions()
             elseif row.id == "remove" then
@@ -313,6 +361,10 @@ local function run(ctx)
     toggleSelectedPathDisabled()
   end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if ctx.entryPathGrab then
+      confirmMoveState()
+      return
+    end
     if isBoot and (hasArgsPaths or hasSpecialArgsPath) and ctx.entryPathSel == argsRow then
       if argsRowIsSpecial then
         ctx.cdromOptSel = ctx.cdromOptSel or 1
@@ -336,7 +388,7 @@ local function run(ctx)
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.entryPathGrab then
-      ctx.entryPathGrab = nil
+      cancelMoveState()
       return
     end
     ctx.state = isBoot and "editor" or "menu_entry_edit"

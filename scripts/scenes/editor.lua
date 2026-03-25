@@ -643,7 +643,7 @@ local function run(ctx)
           lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp .. " " .. formatArgCount(argCount)
         end
         if ctx.editorAutoSlotGrab and i == ctx.optSel then
-          lab = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. lab
+          lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
         end
         if slot and slot.used and slot.disabled then
           col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
@@ -781,8 +781,38 @@ local function run(ctx)
         ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
     local autoSlotData = (isAutoSlotRow and autoSlotNum and _.config_parse.getBblHotkeySlot) and
         _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum) or nil
-    if not isAutoSlotRow then
+    local function clearAutoMoveState()
       ctx.editorAutoSlotGrab = nil
+      ctx.editorAutoSlotMoveSnapshot = nil
+      ctx.editorAutoSlotMoveSel = nil
+    end
+    local function beginAutoMoveState()
+      if ctx.editorAutoSlotGrab then return end
+      if _.common and _.common.cloneConfigLines then
+        ctx.editorAutoSlotMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+      else
+        ctx.editorAutoSlotMoveSnapshot = nil
+      end
+      ctx.editorAutoSlotMoveSel = ctx.optSel
+      ctx.editorAutoSlotGrab = true
+    end
+    local function confirmAutoMoveState()
+      clearAutoMoveState()
+    end
+    local function cancelAutoMoveState()
+      if ctx.editorAutoSlotMoveSnapshot then
+        if _.common and _.common.cloneConfigLines then
+          ctx.lines = _.common.cloneConfigLines(ctx.editorAutoSlotMoveSnapshot)
+        else
+          ctx.lines = ctx.editorAutoSlotMoveSnapshot
+        end
+        ctx.optSel = _.common.clampListSelection(ctx.editorAutoSlotMoveSel or ctx.optSel, #ctx.optList)
+        _.common.refreshConfigModified(ctx)
+      end
+      clearAutoMoveState()
+    end
+    if not isAutoSlotRow then
+      confirmAutoMoveState()
       ctx.editorAutoSlotActionsOpen = nil
     end
 
@@ -813,7 +843,7 @@ local function run(ctx)
       local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, "AUTO", autoSlotNum, maxAutoSlots)
       if newSlot then
         ctx.configModified = true
-        ctx.editorAutoSlotGrab = nil
+        confirmAutoMoveState()
         if newSlot < autoSlotNum and ctx.optSel > 1 then
           ctx.optSel = ctx.optSel + (newSlot - autoSlotNum)
         elseif newSlot > autoSlotNum and ctx.optSel < #ctx.optList then
@@ -826,12 +856,16 @@ local function run(ctx)
       if not (isAutoSlotRow and autoSlotNum and autoSlotData and autoSlotData.used) then return end
       _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum)
       ctx.configModified = true
-      ctx.editorAutoSlotGrab = nil
+      confirmAutoMoveState()
     end
 
     if isAutoSlotRow then
       hintItems = {
-        { pad = "cross", label = "Edit", row = 1 },
+        {
+          pad = "cross",
+          label = ctx.editorAutoSlotGrab and (_.menu_str.confirm_label or "Confirm") or "Edit",
+          row = 1
+        },
         { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
         {
           pad = ctx.configModified and "start" or "",
@@ -843,7 +877,11 @@ local function run(ctx)
           label = (autoSlotData and autoSlotData.used) and ((autoSlotData.disabled and "Enable") or "Disable") or "",
           row = 1
         },
-        { pad = "circle", label = "Back", row = 1 },
+        {
+          pad = "circle",
+          label = ctx.editorAutoSlotGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+          row = 1
+        },
       }
     end
 
@@ -880,15 +918,22 @@ local function run(ctx)
 
     if ctx.editorAutoSlotActionsOpen and isAutoSlotRow then
       local actionRows = {}
-      if autoSlotData and autoSlotData.used then
+      local usedAutoSlots = countUsedAutoSlots()
+      local canMoveAutoSlots = usedAutoSlots > 1
+      if not canMoveAutoSlots then
+        confirmAutoMoveState()
+      end
+      if autoSlotData and autoSlotData.used and canMoveAutoSlots then
         actionRows[#actionRows + 1] = {
           id = "grab",
-          label = ctx.editorAutoSlotGrab and (_.menu_str.release_grab_label or "Release") or
+          label = ctx.editorAutoSlotGrab and (_.menu_str.cancel_move_label or "Cancel move") or
               (_.menu_str.grab_label or "Move")
         }
+      end
+      if autoSlotData and autoSlotData.used then
         actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
       end
-      if countUsedAutoSlots() < maxAutoSlots then
+      if usedAutoSlots < maxAutoSlots then
         actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
       end
       if actions_menu.run(ctx, {
@@ -900,7 +945,11 @@ local function run(ctx)
             rowStateKeyPrefix = "editor_auto_slot_actions_row_",
             onSelect = function(row)
               if row.id == "grab" then
-                ctx.editorAutoSlotGrab = not ctx.editorAutoSlotGrab
+                if ctx.editorAutoSlotGrab then
+                  cancelAutoMoveState()
+                else
+                  beginAutoMoveState()
+                end
               elseif row.id == "insert" then
                 insertAutoSlotBelow()
               elseif row.id == "remove" then
@@ -994,6 +1043,10 @@ local function run(ctx)
       end
     end
     if (_.padEffective & _.PAD_CROSS) ~= 0 then
+      if isAutoSlotRow and ctx.editorAutoSlotGrab then
+        confirmAutoMoveState()
+        return
+      end
       local o = ctx.optList[ctx.optSel]
       if o.optType == "enum" and o.enumVals and #o.enumVals > 0 and
           (((ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and
@@ -1176,7 +1229,20 @@ local function run(ctx)
     ctx.intDigitEdit = nil
     ctx.colorInlineEdit = nil
     if ctx.editorAutoSlotGrab then
+      if _.common and _.common.cloneConfigLines then
+        if ctx.editorAutoSlotMoveSnapshot then
+          ctx.lines = _.common.cloneConfigLines(ctx.editorAutoSlotMoveSnapshot)
+          ctx.optSel = _.common.clampListSelection(ctx.editorAutoSlotMoveSel or ctx.optSel, #(ctx.optList or {}))
+          _.common.refreshConfigModified(ctx)
+        end
+      elseif ctx.editorAutoSlotMoveSnapshot then
+        ctx.lines = ctx.editorAutoSlotMoveSnapshot
+        ctx.optSel = _.common.clampListSelection(ctx.editorAutoSlotMoveSel or ctx.optSel, #(ctx.optList or {}))
+        _.common.refreshConfigModified(ctx)
+      end
       ctx.editorAutoSlotGrab = nil
+      ctx.editorAutoSlotMoveSnapshot = nil
+      ctx.editorAutoSlotMoveSel = nil
       return
     end
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then

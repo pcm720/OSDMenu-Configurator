@@ -67,7 +67,7 @@ common.PAD_HINT_GRID_X_SHIFT       = -35
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
-common.PAD_HINT_UNUSED_ALPHA       = 20 -- ~8% opaque = ~92% transparent
+common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
@@ -353,6 +353,30 @@ local function getConfigParser(ctx)
     return _G.CONFIG_UI.config_parse
   end
   return nil
+end
+
+local function deepCloneValue(value, seen)
+  if type(value) ~= "table" then
+    return value
+  end
+  seen = seen or {}
+  if seen[value] then
+    return seen[value]
+  end
+  local out = {}
+  seen[value] = out
+  for k, v in pairs(value) do
+    out[deepCloneValue(k, seen)] = deepCloneValue(v, seen)
+  end
+  local mt = getmetatable(value)
+  if mt ~= nil then
+    setmetatable(out, mt)
+  end
+  return out
+end
+
+function common.cloneConfigLines(lines)
+  return deepCloneValue(lines or {})
 end
 
 local function fallbackSemanticDigest(lines)

@@ -11,7 +11,7 @@ end
 local function buildDefaultHints()
   return {
     { pad = "cross", label = "Select", row = 1 },
-    { pad = "circle", label = "Back", row = 1 },
+    { pad = "circle", label = "Cancel", row = 1 },
   }
 end
 

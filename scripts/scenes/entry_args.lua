@@ -124,6 +124,41 @@ local function run(ctx)
 
   local args = getArgs()
   local total = #args
+  local canMoveArgs = total > 1
+  local function clearMoveState()
+    ctx.entryArgGrab = nil
+    ctx.entryArgMoveSnapshot = nil
+    ctx.entryArgMoveSel = nil
+  end
+  local function beginMoveState()
+    if ctx.entryArgGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.entryArgMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.entryArgMoveSnapshot = nil
+    end
+    ctx.entryArgMoveSel = ctx.entryArgSel
+    ctx.entryArgGrab = true
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.entryArgMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.entryArgMoveSnapshot)
+      else
+        ctx.lines = ctx.entryArgMoveSnapshot
+      end
+      local restoredArgs = getArgs()
+      ctx.entryArgSel = _.common.clampListSelection(ctx.entryArgMoveSel or ctx.entryArgSel, #restoredArgs)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
+  end
+  if not canMoveArgs then
+    confirmMoveState()
+  end
   local usedKnown, usedModes = arg_presets.collectUsedArgs(args)
   local profileState = arg_profiles.resolve({
     surface = "entry_args",
@@ -312,8 +347,8 @@ local function run(ctx)
     local a = args[i]
     local av = type(a) == "table" and a.value or a
     local label = (av and av ~= "" and av) or _.common_str.empty
-    if ctx.entryArgGrab and i == ctx.entryArgSel then
-      label = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. label
+    if canMoveArgs and ctx.entryArgGrab and i == ctx.entryArgSel then
+      label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "entry_args_row_" .. tostring(i), _.font, label, maxLabelW, _.FONT_SCALE,
@@ -332,7 +367,11 @@ local function run(ctx)
   local canAddArg = (isBoot or not hasCdrom)
   local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and args[ctx.entryArgSel].disabled
   local argHints = {
-    { pad = hasSelection and "cross" or "", label = hasSelection and (_.menu_str.edit_label or "Edit") or "", row = 1 },
+    {
+      pad = hasSelection and "cross" or "",
+      label = hasSelection and (ctx.entryArgGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")) or "",
+      row = 1
+    },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
     {
       pad = ctx.configModified and "start" or "",
@@ -345,7 +384,11 @@ local function run(ctx)
           (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
-    { pad = "circle", label = _.menu_str.back_label or "Back", row = 1 },
+    {
+      pad = "circle",
+      label = ctx.entryArgGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, argHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
@@ -399,7 +442,7 @@ local function run(ctx)
     setArgs(args2)
     ctx.entryArgSel = _.common.clampListSelection(ctx.entryArgSel, #args2)
     if #args2 == 0 then
-      ctx.entryArgGrab = nil
+      confirmMoveState()
     end
   end
 
@@ -410,7 +453,7 @@ local function run(ctx)
     else
       ctx.entryArgInsertBelow = nil
     end
-    ctx.entryArgGrab = nil
+    confirmMoveState()
     ctx.entryArgAddMenu = true
     ctx.entryArgAddSel = ctx.entryArgAddSel or 1
     ctx.entryArgAddScroll = ctx.entryArgAddScroll or 0
@@ -418,15 +461,18 @@ local function run(ctx)
 
   if ctx.entryArgsActionsOpen then
     local actionRows = {}
-    if hasSelection then
+    if hasSelection and canMoveArgs then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.entryArgGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
+        label = ctx.entryArgGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+            (_.menu_str.grab_label or "Move"),
       }
+    end
+    if hasSelection then
       actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
     end
     if canAddArg then
-      actionRows[#actionRows + 1] = { id = "add", label = (_.menu_str.add_label or "Add") }
+      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
     end
     if actions_menu.run(ctx, {
           openKey = "entryArgsActionsOpen",
@@ -437,8 +483,12 @@ local function run(ctx)
           rowStateKeyPrefix = "entry_args_actions_row_",
           onSelect = function(row)
             if row.id == "grab" then
-              ctx.entryArgGrab = not ctx.entryArgGrab
-            elseif row.id == "add" then
+              if ctx.entryArgGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
+            elseif row.id == "insert" then
               beginAddArg()
             elseif row.id == "remove" then
               removeSelectedArg()
@@ -469,6 +519,10 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if ctx.entryArgGrab then
+      confirmMoveState()
+      return
+    end
     if ctx.entryArgSel >= 1 and ctx.entryArgSel <= #args then
       local editIdx = ctx.entryArgSel
       local editValue = type(args[editIdx]) == "table" and args[editIdx].value or args[editIdx]
@@ -513,7 +567,7 @@ local function run(ctx)
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.entryArgGrab then
-      ctx.entryArgGrab = nil
+      cancelMoveState()
       return
     end
     ctx.state = isBoot and "entry_paths" or "menu_entry_edit"

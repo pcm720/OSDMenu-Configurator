@@ -19,6 +19,44 @@ local function run(ctx)
     elseif ctx.entrySel > #ctx.entryList then
       ctx.entrySel = #ctx.entryList
     end
+    if #ctx.entryList <= 1 then
+      ctx.menuEntryGrab = nil
+    end
+  end
+
+  local function clearMoveState()
+    ctx.menuEntryGrab = nil
+    ctx.menuEntryMoveSnapshot = nil
+    ctx.menuEntryMoveSel = nil
+  end
+
+  local function beginMoveState()
+    if ctx.menuEntryGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.menuEntryMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.menuEntryMoveSnapshot = nil
+    end
+    ctx.menuEntryMoveSel = ctx.entrySel
+    ctx.menuEntryGrab = true
+  end
+
+  local function confirmMoveState()
+    clearMoveState()
+  end
+
+  local function cancelMoveState()
+    if ctx.menuEntryMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.menuEntryMoveSnapshot)
+      else
+        ctx.lines = ctx.menuEntryMoveSnapshot
+      end
+      refreshEntries()
+      ctx.entrySel = _.common.clampListSelection(ctx.menuEntryMoveSel or ctx.entrySel, #ctx.entryList)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
   end
 
   local function saveFromMenuEntries()
@@ -61,13 +99,17 @@ local function run(ctx)
     ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
     ctx.entryIdx = newIdx
     ctx.entryEditSub = ctx.entryEditSub or 1
-    ctx.menuEntryGrab = nil
+    confirmMoveState()
     ctx.state = "menu_entry_edit"
   end
 
   refreshEntries()
   local startY = _.MARGIN_Y + _.scaleY(50)
   local total = #ctx.entryList
+  local canMoveEntries = total > 1
+  if not canMoveEntries then
+    confirmMoveState()
+  end
   local isFmcb = (ctx.fileType == "freemcboot_cnf")
   local maxEntries = (isFmcb and ((_.config_options and _.config_options.FMCB_MAX_ENTRIES) or 99)) or nil
   local canAddEntry = (not isFmcb) or (total < maxEntries)
@@ -90,8 +132,8 @@ local function run(ctx)
     local idx = ent.idx
     local name = _.config_parse.getMenuEntryName(ctx.lines, idx)
     local label = (name == "" or not name) and _.common_str.empty or (name or (_.menu_str.item .. idx))
-    if ctx.menuEntryGrab and i == ctx.entrySel then
-      label = "[" .. (_.menu_str.grabbed_tag or "GRAB") .. "] " .. label
+    if canMoveEntries and ctx.menuEntryGrab and i == ctx.entrySel then
+      label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
     local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.WHITE
@@ -113,7 +155,11 @@ local function run(ctx)
   local hasSelection = (ctx.entrySel >= 1 and ctx.entrySel <= total)
   local selectedDisabled = hasSelection and ctx.entryList[ctx.entrySel].disabled
   local hintItems = {
-    { pad = hasSelection and "cross" or "", label = hasSelection and (_.menu_str.enter_label or "Enter") or "", row = 1 },
+    {
+      pad = hasSelection and "cross" or "",
+      label = hasSelection and (ctx.menuEntryGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or "",
+      row = 1
+    },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
     {
       pad = ctx.configModified and "start" or "",
@@ -125,16 +171,20 @@ local function run(ctx)
       label = hasSelection and (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
-    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+    {
+      pad = "circle",
+      label = ctx.menuEntryGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   if ctx.menuEntriesActionsOpen then
     local actionRows = {}
-    if hasSelection then
+    if hasSelection and canMoveEntries then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.menuEntryGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
+        label = ctx.menuEntryGrab and (_.menu_str.cancel_move_label or "Cancel move") or (_.menu_str.grab_label or "Move"),
       }
     end
     if canAddEntry then
@@ -152,7 +202,11 @@ local function run(ctx)
           rowStateKeyPrefix = "menu_entries_actions_row_",
           onSelect = function(row)
             if row.id == "grab" then
-              ctx.menuEntryGrab = not ctx.menuEntryGrab
+              if ctx.menuEntryGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
             elseif row.id == "insert" then
               insertBelowSelection(canAddEntry, total)
             elseif row.id == "remove" and hasSelection then
@@ -204,6 +258,10 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 and hasSelection then
+    if ctx.menuEntryGrab then
+      confirmMoveState()
+      return
+    end
     ctx.entryIdx = ctx.entryList[ctx.entrySel].idx
     ctx.entryEditSub = ctx.entryEditSub or 1
     ctx.state = "menu_entry_edit"
@@ -221,7 +279,7 @@ local function run(ctx)
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.menuEntryGrab then
-      ctx.menuEntryGrab = nil
+      cancelMoveState()
       return
     end
     ctx.state = "editor"
