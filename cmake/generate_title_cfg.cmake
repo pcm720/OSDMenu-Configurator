@@ -1,0 +1,44 @@
+if(NOT DEFINED INPUT OR INPUT STREQUAL "")
+    message(FATAL_ERROR "INPUT is required")
+endif()
+
+if(NOT DEFINED OUTPUT OR OUTPUT STREQUAL "")
+    message(FATAL_ERROR "OUTPUT is required")
+endif()
+
+if(NOT DEFINED TITLE_VERSION OR TITLE_VERSION STREQUAL "")
+    set(TITLE_VERSION "unknown")
+endif()
+
+if(NOT EXISTS "${INPUT}")
+    message(FATAL_ERROR "Input title.cfg does not exist: ${INPUT}")
+endif()
+
+string(TIMESTAMP BUILD_MONTH "%b")
+string(TIMESTAMP BUILD_DAY "%d")
+string(TIMESTAMP BUILD_YEAR "%Y")
+
+math(EXPR BUILD_DAY_NUM "${BUILD_DAY}")
+math(EXPR BUILD_DAY_MOD100 "${BUILD_DAY_NUM} % 100")
+set(BUILD_DAY_SUFFIX "th")
+
+if(NOT (BUILD_DAY_MOD100 EQUAL 11 OR BUILD_DAY_MOD100 EQUAL 12 OR BUILD_DAY_MOD100 EQUAL 13))
+    math(EXPR BUILD_DAY_MOD10 "${BUILD_DAY_NUM} % 10")
+    if(BUILD_DAY_MOD10 EQUAL 1)
+        set(BUILD_DAY_SUFFIX "st")
+    elseif(BUILD_DAY_MOD10 EQUAL 2)
+        set(BUILD_DAY_SUFFIX "nd")
+    elseif(BUILD_DAY_MOD10 EQUAL 3)
+        set(BUILD_DAY_SUFFIX "rd")
+    endif()
+endif()
+
+set(RELEASE_DATE "${BUILD_MONTH} ${BUILD_DAY_NUM}${BUILD_DAY_SUFFIX}, ${BUILD_YEAR}")
+
+file(READ "${INPUT}" TITLE_CFG_CONTENT)
+string(REGEX REPLACE "Version=[^\r\n]*" "Version=${TITLE_VERSION}" TITLE_CFG_CONTENT "${TITLE_CFG_CONTENT}")
+string(REGEX REPLACE "Release=[^\r\n]*" "Release=${RELEASE_DATE}" TITLE_CFG_CONTENT "${TITLE_CFG_CONTENT}")
+
+get_filename_component(OUTPUT_DIR "${OUTPUT}" DIRECTORY)
+file(MAKE_DIRECTORY "${OUTPUT_DIR}")
+file(WRITE "${OUTPUT}" "${TITLE_CFG_CONTENT}")
