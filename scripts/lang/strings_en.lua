@@ -42,11 +42,8 @@ strings.main = {
   cross_back_items = { { pad = "cross", label = "Back" } },
   failed_to_load = "Failed to load: ",
   cross_load_circle_back_items = { { pad = "cross", label = "Load" }, { pad = "circle", label = "Back" } },
-  select_config_ps2bbl_ini = "PS2BBL.INI",
-  select_config_psxbbl_ini = "PSXBBL.INI",
   select_config_browse_ini = "Browse CONFIG.INI (CWD)",
   select_config_osdmenu_cnf = "OSDMENU.CNF",
-  select_config_osdmbr_cnf = "OSDMBR.CNF",
   select_config_osdgsm_cnf = "OSDGSM.CNF",
 }
 
@@ -68,12 +65,6 @@ strings.editor = {
   cross_save_circle_cancel_items = { { pad = "cross", label = "Save" }, { pad = "circle", label = "Cancel" } },
   leave_save_prompt = "Save changes before leaving?",
   leave_save_hint_items = { { pad = "cross", label = "Save" }, { pad = "triangle", label = "Discard" }, { pad = "circle", label = "Cancel" } },
-  edit_color_suffix = " — Edit color",
-  red = "Red",
-  green = "Green",
-  blue = "Blue",
-  alpha = "Alpha",
-  color_edit_hint_items = { { pad = "cross", label = "Apply", row = 1 }, { pad = "up", label = "Up", row = 1 }, { pad = "down", label = "Down", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "-1", row = 2 }, { pad = "L1", label = "-10", row = 2 }, { pad = "L2", label = "-50", row = 2 }, { pad = "R2", label = "+50", row = 2 }, { pad = "R1", label = "+10", row = 2 }, { pad = "right", label = "+1", row = 2 } },
 }
 
 -- Menu entries
@@ -84,9 +75,6 @@ strings.menu_entries = {
   hint_items = { { pad = "cross", label = "Enter", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "right", label = "Next", row = 2 } },
   hint_items_with_enable = { { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Enable", layoutLabel = "Disable", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "right", label = "Next", row = 2 } },
   hint_items_with_disable = { { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Disable", layoutLabel = "Disable", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "right", label = "Next", row = 2 } },
-  irx_hint_items = { { pad = "", label = "", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Disable", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 } },
-  irx_hint_items_with_enable = { { pad = "", label = "", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Enable", layoutLabel = "Disable", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 } },
-  irx_hint_items_with_disable = { { pad = "", label = "", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Disable", layoutLabel = "Disable", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 } },
   entry_index = "Entry ",
   name = "Name: ",
   paths = "Paths: ",
@@ -108,9 +96,6 @@ strings.menu_entries = {
   paths_hint_items_with_enable = { { pad = "cross", label = "Edit", row = 1 }, { pad = "triangle", label = "Enable", layoutLabel = "Disable", row = 1 }, { pad = "square", label = "Remove", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "L1", label = "Up", row = 2 }, { pad = "select", label = "Add", row = 2 }, { pad = "R1", label = "Down", row = 2 } },
   paths_hint_items_with_disable = { { pad = "cross", label = "Edit", row = 1 }, { pad = "triangle", label = "Disable", layoutLabel = "Disable", row = 1 }, { pad = "square", label = "Remove", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "L1", label = "Up", row = 2 }, { pad = "select", label = "Add", row = 2 }, { pad = "R1", label = "Down", row = 2 } },
   args_for_entry_title = "Arguments for %s (entry %s)",
-  args_hint_items = { { pad = "cross", label = "Edit", row = 1 }, { pad = "square", label = "Remove", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "L1", label = "Up", row = 2 }, { pad = "select", label = "Add", row = 2 }, { pad = "R1", label = "Down", row = 2 } },
-  args_hint_items_with_enable = { { pad = "cross", label = "Edit", row = 1 }, { pad = "triangle", label = "Enable", layoutLabel = "Disable", row = 1 }, { pad = "square", label = "Remove", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "L1", label = "Up", row = 2 }, { pad = "select", label = "Add", row = 2 }, { pad = "R1", label = "Down", row = 2 } },
-  args_hint_items_with_disable = { { pad = "cross", label = "Edit", row = 1 }, { pad = "triangle", label = "Disable", layoutLabel = "Disable", row = 1 }, { pad = "square", label = "Remove", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "L1", label = "Up", row = 2 }, { pad = "select", label = "Add", row = 2 }, { pad = "R1", label = "Down", row = 2 } },
   cdrom_hint = "Launch disc entry: use Launch disc options for flags",
   cdrom_toggle_hint_items = { { pad = "cross", label = "Toggle", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "right", label = "Next", row = 2 } },
   new_argument_prompt = "New argument",
@@ -138,7 +123,7 @@ strings.path_picker = {
   no_elf_files = "No ELF files or folders",
   no_ini_files = "No INI files or folders",
   cross_select_file_items = { { pad = "cross", label = "Select" }, { pad = "circle", label = "Back" } },
-  cross_select_create_circle_back_items = { { pad = "cross", label = "Select" }, { pad = "select", label = "Create CONFIG.INI" }, { pad = "circle", label = "Back" } },
+  cross_select_create_circle_back_items = { { pad = "cross", label = "Select" }, { pad = "square", label = "Create CONFIG.INI" }, { pad = "circle", label = "Back" } },
   no_devices = "No devices",
   waiting_for_device_drivers = "Waiting for device...",
   circle_back_items = { { pad = "circle", label = "Back" } },

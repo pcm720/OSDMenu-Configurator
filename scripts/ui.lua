@@ -17,7 +17,6 @@ _G.CONFIG_UI.main = main
 -- State modules (editor, choose_save, etc.): each has .run(ctx) and reads/writes ctx.
 local scene_editor = dofile("scripts/scenes/editor.lua")
 local scene_choose_save = dofile("scripts/scenes/choose_save.lua")
-local scene_color_edit = dofile("scripts/scenes/color_edit.lua")
 local scene_menu_entries = dofile("scripts/scenes/menu_entries.lua")
 local scene_menu_entry_edit = dofile("scripts/scenes/menu_entry_edit.lua")
 local scene_entry_cdrom_options = dofile("scripts/scenes/entry_cdrom_options.lua")
@@ -45,7 +44,6 @@ local dev_str = strings.devices
 local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = common.PAD_UP, common.PAD_DOWN, common.PAD_LEFT, common.PAD_RIGHT
 local PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_TRIANGLE, PAD_SQUARE = common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START,
     common.PAD_TRIANGLE, common.PAD_SQUARE
-local PAD_SELECT = common.PAD_SELECT
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = common.PAD_L1, common.PAD_R1, common.PAD_L2, common.PAD_R2
 local WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
 local HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
@@ -66,8 +64,6 @@ local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY
 local KEY_CHAR_W, KEY_LINE_H = common.KEY_CHAR_W, common.KEY_LINE_H
 
 local function getLocations(ctx, ft, slot) return config_options.getLocations(ctx, ft, slot) end
-local function getPresentMcSlots() return common.getPresentMcSlots() end
-local function findExistingPaths(loc) return common.findExistingPaths(loc) end
 local function loadCustomFont() return common.loadCustomFont() end
 local function drawText(font, mode, x, y, scale, text, color) return common.drawText(font, mode, x, y, scale, text, color) end
 local function parseColor(v) return common.parseColor(v) end
@@ -186,7 +182,6 @@ local function mainLoop()
   local isAddPath, addPathKey = false, nil
   local pathPickerContext = "osdmenu"
   local pfs1Mounted = nil
-  local colorOpt, colorCh, colorVals = nil, 1, nil
   local entryList, entrySel, entryScroll = {}, 1, 0
   local entryIdx, entryEditSub = nil, 1
   local pathPickerForEntryIdx = nil
@@ -219,7 +214,6 @@ local function mainLoop()
         pathPickerFileExts
     c.isAddPath, c.addPathKey = isAddPath, addPathKey
     c.pathPickerContext, c.pfs1Mounted = pathPickerContext, pfs1Mounted
-    c.colorOpt, c.colorCh, c.colorVals = colorOpt, colorCh, colorVals
     c.entryList, c.entrySel, c.entryScroll = entryList, entrySel, entryScroll
     c.entryIdx, c.entryEditSub = entryIdx, entryEditSub
     c.pathPickerForEntryIdx = pathPickerForEntryIdx
@@ -253,7 +247,6 @@ local function mainLoop()
     pathPickerTarget, pathPickerFileExts = c.pathPickerTarget, c.pathPickerFileExts
     isAddPath, addPathKey = c.isAddPath, c.addPathKey
     pathPickerContext, pfs1Mounted = c.pathPickerContext, c.pfs1Mounted
-    colorOpt, colorCh, colorVals = c.colorOpt, c.colorCh, c.colorVals
     entryList, entrySel, entryScroll = c.entryList, c.entrySel, c.entryScroll
     entryIdx, entryEditSub = c.entryIdx, c.entryEditSub
     pathPickerForEntryIdx = c.pathPickerForEntryIdx
@@ -416,7 +409,6 @@ local function mainLoop()
       PAD_RIGHT = PAD_RIGHT,
       PAD_CROSS = PAD_CROSS,
       PAD_CIRCLE = PAD_CIRCLE,
-      PAD_SELECT = PAD_SELECT,
       PAD_START = PAD_START,
       PAD_TRIANGLE = PAD_TRIANGLE,
       PAD_SQUARE = PAD_SQUARE,
@@ -451,10 +443,6 @@ local function mainLoop()
     elseif state == "choose_save" then
       syncToS(c)
       scene_choose_save.run(c)
-      syncFromS(c)
-    elseif state == "color_edit" then
-      syncToS(c)
-      scene_color_edit.run(c)
       syncFromS(c)
     elseif state == "menu_entries" then
       syncToS(c)
@@ -528,7 +516,7 @@ local function mainLoop()
     return c.state, c
   end
   local sceneNames = { "main", "choose_mc", "select_config", "initHdd", "open", "choose_load", "editor", "choose_save",
-    "color_edit", "menu_entries", "menu_entry_edit", "entry_cdrom_options", "entry_paths", "entry_args", "bbl_hotkeys",
+    "menu_entries", "menu_entry_edit", "entry_cdrom_options", "entry_paths", "entry_args", "bbl_hotkeys",
     "bbl_irx_entries",
     "bbl_hotkey_entries", "bbl_hotkey_entry", "bbl_hotkey_args", "egsm_editor", "egsm_value_edit", "text_input",
     "path_picker" }

@@ -20,6 +20,13 @@ local function buildIrxEntryValueMap(lines, maxEntries)
   return out
 end
 
+local function buildIrxListCache(_, lines, maxEntries)
+  return {
+    entries = _.config_parse.getBblIrxEntryIndices(lines),
+    values = buildIrxEntryValueMap(lines, maxEntries),
+  }
+end
+
 local function beginIrxPathEdit(_, ctx, entryIdx, disabled)
   ctx.editKey = nil
   ctx.isAddPath = false
@@ -50,6 +57,7 @@ local function saveAndStay(ctx, _)
   local path = ctx.currentPath or (locations and locations[1])
   if path and path ~= "" then
     ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+    ctx.bblIrxListCache = nil
     local parentDir = path:match("^(.+)/[^/]+$")
     local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
     if ok then
@@ -77,22 +85,24 @@ local function run(ctx)
 
   local maxEntries = (_.config_options and _.config_options.BBL_MAX_IRX_ENTRIES) or
       ((_.config_parse.getBblMaxIrxEntries and _.config_parse.getBblMaxIrxEntries()) or 10)
-  local entries = _.config_parse.getBblIrxEntryIndices(ctx.lines)
   local sceneEpoch = ctx._sceneEpoch or 0
-  local inputEpoch = ctx._inputEpoch or 0
-  local entryValueCache = ctx.bblIrxEntryValueCache
-  if not entryValueCache or entryValueCache.linesRef ~= ctx.lines or entryValueCache.maxEntries ~= maxEntries or
-      entryValueCache.sceneEpoch ~= sceneEpoch or entryValueCache.inputEpoch ~= inputEpoch then
-    entryValueCache = {
-      linesRef = ctx.lines,
-      maxEntries = maxEntries,
-      sceneEpoch = sceneEpoch,
-      inputEpoch = inputEpoch,
-      map = buildIrxEntryValueMap(ctx.lines, maxEntries),
-    }
-    ctx.bblIrxEntryValueCache = entryValueCache
+  local function getIrxListCache()
+    local cache = ctx.bblIrxListCache
+    if not cache or cache.linesRef ~= ctx.lines or cache.maxEntries ~= maxEntries or cache.sceneEpoch ~= sceneEpoch then
+      cache = buildIrxListCache(_, ctx.lines, maxEntries)
+      cache.linesRef = ctx.lines
+      cache.maxEntries = maxEntries
+      cache.sceneEpoch = sceneEpoch
+      ctx.bblIrxListCache = cache
+    end
+    return cache
   end
-  local entryValueByIdx = entryValueCache.map or {}
+  local function invalidateIrxListCache()
+    ctx.bblIrxListCache = nil
+  end
+  local irxListCache = getIrxListCache()
+  local entries = irxListCache.entries or {}
+  local entryValueByIdx = irxListCache.values or {}
   local total = #entries
   local canMoveEntries = total > 1
   local function clearMoveState()
@@ -120,7 +130,8 @@ local function run(ctx)
       else
         ctx.lines = ctx.bblIrxMoveSnapshot
       end
-      local restored = _.config_parse.getBblIrxEntryIndices(ctx.lines)
+      invalidateIrxListCache()
+      local restored = (getIrxListCache().entries) or {}
       ctx.bblIrxSel = _.common.clampListSelection(ctx.bblIrxMoveSel or ctx.bblIrxSel, #restored)
       _.common.refreshConfigModified(ctx)
     end
@@ -209,6 +220,7 @@ local function run(ctx)
     local newIdx = _.config_parse.insertBblIrxEntryBelow(ctx.lines, belowIdx, "")
     if newIdx then
       ctx.configModified = true
+      invalidateIrxListCache()
       ctx.bblIrxSel = (total == 0) and 1 or (ctx.bblIrxSel + 1)
       confirmMoveState()
       beginIrxPathEdit(_, ctx, newIdx, false)
@@ -220,6 +232,7 @@ local function run(ctx)
     local idx = entries[ctx.bblIrxSel].idx
     _.config_parse.removeBblIrxEntry(ctx.lines, idx)
     ctx.configModified = true
+    invalidateIrxListCache()
     if ctx.bblIrxSel > total - 1 then ctx.bblIrxSel = math.max(1, total - 1) end
     if total - 1 <= 1 then
       confirmMoveState()
@@ -234,6 +247,7 @@ local function run(ctx)
     local dstIdx = entries[dst].idx
     if _.config_parse.swapBblIrxEntryContent(ctx.lines, curIdx, dstIdx) then
       ctx.configModified = true
+      invalidateIrxListCache()
       ctx.bblIrxSel = dst
     end
   end
@@ -300,6 +314,7 @@ local function run(ctx)
       local ent = entries[ctx.bblIrxSel]
       _.config_parse.setBblIrxEntryDisabled(ctx.lines, ent.idx, not ent.disabled)
       ctx.configModified = true
+      invalidateIrxListCache()
     end
   end
 

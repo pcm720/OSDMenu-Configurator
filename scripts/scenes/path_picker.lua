@@ -948,7 +948,8 @@ local function run(ctx)
     if canCreateConfigIni and type(_.path_str.cross_select_create_circle_back_items) == "table" then
       for i = 1, #_.path_str.cross_select_create_circle_back_items do
         local item = _.path_str.cross_select_create_circle_back_items[i]
-        if item and item.pad == "select" and item.label and item.label ~= "" then
+        local pad = tostring(item and item.pad or ""):lower()
+        if item and (pad == "square" or pad == "select") and item.label and item.label ~= "" then
           createIniLabel = tostring(item.label)
           break
         end

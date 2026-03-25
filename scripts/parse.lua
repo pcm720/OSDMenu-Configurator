@@ -19,7 +19,6 @@ function config_parse.regenerateLinesBbl(lines, options)
   if addedGlobals then table.insert(out, { comment = SEPARATOR }) end
   -- 2. Autoboot section (NAME_AUTO, LK_AUTO_E#, ARG_AUTO_E#)
   local function writeHotkeySection(keyId)
-    local sectionStart = #out
     local name = config_parse.getBblHotkeyName(lines, keyId)
     local wrote = false
     if name ~= nil then
@@ -499,18 +498,6 @@ function config_parse.getBootPaths(lines, key)
   return out
 end
 
-function config_parse.setBootPaths(lines, key, paths)
-  local normalized = {}
-  for _, p in ipairs(paths or {}) do
-    if type(p) == "table" then
-      normalized[#normalized + 1] = { value = p.value or "", disabled = p.disabled and true or false }
-    else
-      normalized[#normalized + 1] = { value = p or "", disabled = false }
-    end
-  end
-  config_parse.setBootPathEntries(lines, key, normalized)
-end
-
 -- Boot args: key_arg or key_argN (suffix ignored); fallback legacy arg_key.
 function config_parse.getBootArgEntries(lines, key)
   local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
@@ -889,17 +876,6 @@ local function bblArgKey(keyId, entryIdx)
   return "ARG_" .. tostring(keyId or "") .. "_E" .. tostring(entryIdx or "")
 end
 
-local function removeAllKey(lines, key)
-  local i = 1
-  while i <= #lines do
-    if lines[i].key == key then
-      table.remove(lines, i)
-    else
-      i = i + 1
-    end
-  end
-end
-
 local function isValidBblEntryIdx(entryIdx)
   return type(entryIdx) == "number" and entryIdx >= 1 and entryIdx <= BBL_MAX_ENTRIES
 end
@@ -999,12 +975,6 @@ function config_parse.setBblHotkeyPath(lines, keyId, entryIdx, value, disabled)
     comment = disabled and (keyDisabled and 2 or true) or nil
   })
   return true
-end
-
-function config_parse.setBblHotkeyPathDisabled(lines, keyId, entryIdx, disabled)
-  local value = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
-  if value == nil then return false end
-  return config_parse.setBblHotkeyPath(lines, keyId, entryIdx, value, disabled)
 end
 
 -- BBL args for one entry (ARG_<HOTKEY>_E#). Each item = { value, disabled }.
@@ -1113,16 +1083,6 @@ function config_parse.getBblHotkeySlot(lines, keyId, entryIdx)
   }
 end
 
-function config_parse.getBblHotkeyUsedSlots(lines, keyId)
-  local out = {}
-  if not isBblHotkeyId(keyId) then return out end
-  for i = 1, BBL_MAX_ENTRIES do
-    local slot = config_parse.getBblHotkeySlot(lines, keyId, i)
-    if slot.used then table.insert(out, slot) end
-  end
-  return out
-end
-
 function config_parse.swapBblHotkeySlots(lines, keyId, slotA, slotB)
   if not isBblHotkeyId(keyId) then return false end
   if not isValidBblEntryIdx(slotA) or not isValidBblEntryIdx(slotB) then return false end
@@ -1136,23 +1096,6 @@ function config_parse.swapBblHotkeySlots(lines, keyId, slotA, slotB)
 
   config_parse.setBblHotkeyPath(lines, keyId, slotB, slotAData.pathExists and slotAData.path or nil, slotAData.disabled)
   config_parse.setBblHotkeyArgs(lines, keyId, slotB, slotAData.args)
-  return true
-end
-
-function config_parse.changeBblHotkeySlotIndex(lines, keyId, oldIdx, newIdx)
-  if not isBblHotkeyId(keyId) then return false end
-  if not isValidBblEntryIdx(oldIdx) or not isValidBblEntryIdx(newIdx) then return false end
-  if oldIdx == newIdx then return true end
-
-  local oldData = config_parse.getBblHotkeySlot(lines, keyId, oldIdx)
-  if not oldData.used then return false end
-
-  local newData = config_parse.getBblHotkeySlot(lines, keyId, newIdx)
-  if newData.used then return false end
-
-  config_parse.setBblHotkeyPath(lines, keyId, newIdx, oldData.pathExists and oldData.path or nil, oldData.disabled)
-  config_parse.setBblHotkeyArgs(lines, keyId, newIdx, oldData.args)
-  config_parse.removeBblHotkeySlot(lines, keyId, oldIdx)
   return true
 end
 
@@ -1283,24 +1226,6 @@ function config_parse.buildEgsmValue(videoIdx, compatIdx)
   return v .. (c ~= "" and (":" .. c) or "")
 end
 
-function config_parse.isValidEgsmOption(s)
-  if type(s) ~= "string" then return false end
-  if s == "" or s == "disabled" then return true end
-  local v, c = s:match("^([^:]*):?(.*)$")
-  if not v then return false end
-  local EGSM_VIDEO, EGSM_COMPAT = getEgsmVideoOpts(), getEgsmCompatOpts()
-  for _, opt in ipairs(EGSM_VIDEO) do
-    if v == opt then
-      if c == "" then return true end
-      for _, co in ipairs(EGSM_COMPAT) do
-        if co ~= "" and c == co then return true end
-      end
-      return false
-    end
-  end
-  return false
-end
-
 -- OSDGSM.CNF: default and per-title entries (title ID = AAAA_000.00). Commented = disabled; value is always stored (even when commented).
 function config_parse.getEgsmDefault(lines)
   for _, e in ipairs(lines) do
@@ -1374,12 +1299,6 @@ config_parse.LIMIT_NAME = 79
 config_parse.LIMIT_CURSOR = 19
 config_parse.LIMIT_DELIMITER = 79
 config_parse.LIMIT_DKWDRV = 49
-
-function config_parse.clampLength(s, limit)
-  if type(s) ~= "string" or type(limit) ~= "number" then return s end
-  if #s <= limit then return s end
-  return s:sub(1, limit)
-end
 
 -- OSDMENU.CNF menu entries: name_OSDSYS_ITEM_<N>, path1_OSDSYS_ITEM_<N>, path2_..., arg_OSDSYS_ITEM_<N> (multi).
 -- Commented-out name_/path_/arg_ lines form a "disabled" entry; show in list and allow enabling (triangle).

@@ -103,15 +103,13 @@ local function run(ctx)
   local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
       ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   local sceneEpoch = ctx._sceneEpoch or 0
-  local inputEpoch = ctx._inputEpoch or 0
   local hotkeySummaryCache = ctx.bblHotkeySummaryCache
   if not hotkeySummaryCache or hotkeySummaryCache.linesRef ~= ctx.lines or hotkeySummaryCache.maxEntries ~= maxEntries or
-      hotkeySummaryCache.sceneEpoch ~= sceneEpoch or hotkeySummaryCache.inputEpoch ~= inputEpoch then
+      hotkeySummaryCache.sceneEpoch ~= sceneEpoch then
     hotkeySummaryCache = {
       linesRef = ctx.lines,
       maxEntries = maxEntries,
       sceneEpoch = sceneEpoch,
-      inputEpoch = inputEpoch,
       summary = buildHotkeySummary(ctx.lines, hotkeys, maxEntries),
     }
     ctx.bblHotkeySummaryCache = hotkeySummaryCache
@@ -211,6 +209,7 @@ local function run(ctx)
       local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
       _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
       ctx.configModified = true
+      ctx.bblHotkeySummaryCache = nil
     end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

@@ -27,8 +27,27 @@ local function run(ctx)
     return
   end
 
+  local sceneEpoch = ctx._sceneEpoch or 0
+  local function getMenuEntriesCache()
+    local cache = ctx.menuEntriesCache
+    if not cache or cache.linesRef ~= ctx.lines or cache.sceneEpoch ~= sceneEpoch then
+      cache = {
+        linesRef = ctx.lines,
+        sceneEpoch = sceneEpoch,
+        entryList = _.config_parse.getMenuEntryIndices(ctx.lines),
+        entryNameByIdx = buildEntryNameMap(ctx.lines),
+      }
+      ctx.menuEntriesCache = cache
+    end
+    return cache
+  end
+  local function invalidateMenuEntriesCache()
+    ctx.menuEntriesCache = nil
+  end
+
   local function refreshEntries()
-    ctx.entryList = _.config_parse.getMenuEntryIndices(ctx.lines)
+    local cache = getMenuEntriesCache()
+    ctx.entryList = cache.entryList or {}
     if #ctx.entryList == 0 then
       ctx.entrySel = 1
       ctx.menuEntryGrab = nil
@@ -70,6 +89,7 @@ local function run(ctx)
       else
         ctx.lines = ctx.menuEntryMoveSnapshot
       end
+      invalidateMenuEntriesCache()
       refreshEntries()
       ctx.entrySel = _.common.clampListSelection(ctx.menuEntryMoveSel or ctx.entrySel, #ctx.entryList)
       _.common.refreshConfigModified(ctx)
@@ -90,6 +110,7 @@ local function run(ctx)
     local path = ctx.currentPath or (locations and locations[1])
     if path and path ~= "" then
       ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      invalidateMenuEntriesCache()
       local parentDir = path:match("^(.+)/[^/]+$")
       local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
       if ok then
@@ -113,6 +134,7 @@ local function run(ctx)
     local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, "")
     if not newIdx then return end
     ctx.configModified = true
+    invalidateMenuEntriesCache()
     refreshEntries()
     ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
     ctx.entryIdx = newIdx
@@ -122,20 +144,7 @@ local function run(ctx)
   end
 
   refreshEntries()
-  local sceneEpoch = ctx._sceneEpoch or 0
-  local inputEpoch = ctx._inputEpoch or 0
-  local entryNameCache = ctx.menuEntriesNameCache
-  if not entryNameCache or entryNameCache.linesRef ~= ctx.lines or entryNameCache.sceneEpoch ~= sceneEpoch or
-      entryNameCache.inputEpoch ~= inputEpoch then
-    entryNameCache = {
-      linesRef = ctx.lines,
-      sceneEpoch = sceneEpoch,
-      inputEpoch = inputEpoch,
-      map = buildEntryNameMap(ctx.lines),
-    }
-    ctx.menuEntriesNameCache = entryNameCache
-  end
-  local entryNameByIdx = entryNameCache.map or {}
+  local entryNameByIdx = (getMenuEntriesCache().entryNameByIdx) or {}
   local startY = _.MARGIN_Y + _.scaleY(50)
   local total = #ctx.entryList
   local canMoveEntries = total > 1
@@ -245,6 +254,7 @@ local function run(ctx)
               local idx = ctx.entryList[ctx.entrySel].idx
               _.config_parse.removeMenuEntry(ctx.lines, idx)
               ctx.configModified = true
+              invalidateMenuEntriesCache()
               refreshEntries()
             end
           end,
@@ -259,6 +269,7 @@ local function run(ctx)
       local prevIdx = ctx.entryList[ctx.entrySel - 1].idx
       if _.config_parse.swapMenuEntryContent(ctx.lines, curIdx, prevIdx) then
         ctx.configModified = true
+        invalidateMenuEntriesCache()
         refreshEntries()
         ctx.entrySel = ctx.entrySel - 1
       end
@@ -273,6 +284,7 @@ local function run(ctx)
       local nextIdx = ctx.entryList[ctx.entrySel + 1].idx
       if _.config_parse.swapMenuEntryContent(ctx.lines, curIdx, nextIdx) then
         ctx.configModified = true
+        invalidateMenuEntriesCache()
         refreshEntries()
         ctx.entrySel = ctx.entrySel + 1
       end
@@ -286,6 +298,7 @@ local function run(ctx)
     local ent = ctx.entryList[ctx.entrySel]
     _.config_parse.setMenuEntryDisabled(ctx.lines, ent.idx, not ent.disabled)
     ctx.configModified = true
+    invalidateMenuEntriesCache()
     refreshEntries()
   end
 

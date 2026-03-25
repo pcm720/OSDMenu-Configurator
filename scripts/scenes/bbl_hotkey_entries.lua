@@ -2,14 +2,6 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
-local function findFirstFreeSlot(_, ctx, keyId, maxEntries)
-  for i = 1, maxEntries do
-    local slot = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
-    if not slot.used then return i end
-  end
-  return nil
-end
-
 local function buildRows(_, ctx, keyId, maxEntries, includeNameRow)
   local rows = {}
   if includeNameRow then

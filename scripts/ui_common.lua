@@ -50,18 +50,14 @@ common.HINT_Y                      = 424
 common.PAD_ICON_W                  = 26
 common.PAD_ICON_H                  = 26
 common.PAD_HINT_GAP                = 5
-common.PAD_HINT_GROUP_GAP          = 20
 common.PAD_HINT_ROW_H              = 28
-common.PAD_HINT_ROW_GAP            = 6
 common.PAD_HINT_SIDE_MARGIN        = 16
-common.PAD_HINT_ITEM_GAP           = 20
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
 
--- 6x2 grid geometry tuning (code-only).
+-- Hint-row geometry tuning (single-row 5-slot layout).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
-common.PAD_HINT_MAX_PER_ROW        = 4
 common.PAD_HINT_GRID_EXTRA_W       = 60
 common.PAD_HINT_GRID_X_SHIFT       = -55
 

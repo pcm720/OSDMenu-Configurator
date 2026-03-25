@@ -174,10 +174,6 @@ local function run(ctx)
     rowStateKeyPrefix = "bbl_hotkey_args_gsm_picker_row_",
   }
 
-  local function clearGsmMenus()
-    arg_gsm_picker.clearState(ctx, gsmKeys)
-  end
-
   local function reopenAddMenu()
     if hasArgCap and total >= maxArgs then return end
     ctx.bblArgAddMenu = true
