@@ -1172,6 +1172,48 @@ local function run(ctx)
       return usedCount
     end
 
+    local function cloneBblArgs(args)
+      local out = {}
+      for i = 1, #(args or {}) do
+        local a = args[i]
+        if type(a) == "table" then
+          out[#out + 1] = {
+            value = a.value or "",
+            disabled = a.disabled and true or false
+          }
+        else
+          out[#out + 1] = {
+            value = tostring(a or ""),
+            disabled = false
+          }
+        end
+      end
+      return out
+    end
+
+    local function autoSlotHasPresence(slotData)
+      if not slotData then return false end
+      if slotData.pathExists then return true end
+      if slotData.used then return true end
+      local argCount = tonumber(slotData.argCount) or 0
+      return argCount > 0
+    end
+
+    local function canRemoveAutoSlot(slotNum)
+      if not slotNum then return false end
+      local getSlot = _.config_parse.getBblHotkeySlot
+      if not getSlot then return false end
+      local current = getSlot(ctx.lines, "AUTO", slotNum)
+      if autoSlotHasPresence(current) then return true end
+      for i = slotNum + 1, maxAutoSlots do
+        local s = getSlot(ctx.lines, "AUTO", i)
+        if autoSlotHasPresence(s) then
+          return true
+        end
+      end
+      return false
+    end
+
     local function moveAutoSlot(step)
       if not (isAutoSlotRow and autoSlotNum) then return end
       local dst = autoSlotNum + step
@@ -1200,13 +1242,34 @@ local function run(ctx)
     end
 
     local function removeAutoSlot()
-      local hasSlotContent = autoSlotData and (autoSlotData.used or autoSlotData.pathExists)
-      if not (isAutoSlotRow and autoSlotNum and hasSlotContent) then return end
-      local removed = _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum)
-      if removed then
-        ctx.configModified = true
-        confirmAutoMoveState()
+      if not (isAutoSlotRow and autoSlotNum and canRemoveAutoSlot(autoSlotNum)) then return end
+      local getSlot = _.config_parse.getBblHotkeySlot
+      local packed = {}
+      for i = 1, maxAutoSlots do
+        if i ~= autoSlotNum then
+          local s = getSlot and getSlot(ctx.lines, "AUTO", i) or nil
+          if s and s.used then
+            packed[#packed + 1] = {
+              pathExists = s.pathExists and true or false,
+              path = s.path or "",
+              disabled = s.disabled and true or false,
+              args = cloneBblArgs(s.args),
+            }
+          end
+        end
       end
+      for i = 1, maxAutoSlots do
+        local row = packed[i]
+        if row then
+          _.config_parse.setBblHotkeyPath(ctx.lines, "AUTO", i, row.pathExists and row.path or nil, row.disabled)
+          _.config_parse.setBblHotkeyArgs(ctx.lines, "AUTO", i, row.args)
+        else
+          _.config_parse.setBblHotkeyPath(ctx.lines, "AUTO", i, nil, false)
+          _.config_parse.setBblHotkeyArgs(ctx.lines, "AUTO", i, {})
+        end
+      end
+      ctx.configModified = true
+      confirmAutoMoveState()
     end
 
     local function clearEsrMoveState()
@@ -1314,8 +1377,8 @@ local function run(ctx)
           row = 1
         },
         {
-          pad = (autoSlotData and autoSlotData.used) and "triangle" or "",
-          label = (autoSlotData and autoSlotData.used) and ((autoSlotData.disabled and "Enable") or "Disable") or "",
+          pad = autoSlotHasPresence(autoSlotData) and "triangle" or "",
+          label = autoSlotHasPresence(autoSlotData) and ((autoSlotData.disabled and "Enable") or "Disable") or "",
           row = 1
         },
         {
@@ -1421,7 +1484,7 @@ local function run(ctx)
               (_.menu_str.grab_label or "Move")
         }
       end
-      if autoSlotData and (autoSlotData.used or autoSlotData.pathExists) then
+      if canRemoveAutoSlot(autoSlotNum) then
         actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
       end
       if usedAutoSlots < maxAutoSlots then
@@ -1682,11 +1745,39 @@ local function run(ctx)
         ctx.state = "bbl_hotkeys"
       elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
-        if ctx.bblHotkeyKey == "AUTO" then
-          ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
-          ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-          ctx.bblEntryDetailReturnState = "editor"
-          ctx.state = "bbl_hotkey_entry"
+        if ctx.bblHotkeyKey == "AUTO" and
+            ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) then
+          local slotNum = tonumber(o.bblEntrySlot)
+          if slotNum then
+            local slotData = (_.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum)) or
+                nil
+            ctx.editKey = nil
+            ctx.isAddPath = false
+            ctx.addPathKey = nil
+            ctx.pathPickerTarget = nil
+            ctx.pathPickerFileExts = nil
+            ctx.pathPickerBootKey = nil
+            ctx.pathPickerForEntryIdx = nil
+            ctx.pathPickerEditIdx = nil
+            ctx.pathPickerBblIrxIdx = nil
+            ctx.pathPickerBblIrxDisabled = nil
+            ctx.pathPickerBblHotkeyKey = "AUTO"
+            ctx.pathPickerBblHotkeySlot = slotNum
+            ctx.pathPickerBblHotkeyDisabled = (slotData and slotData.disabled) and true or false
+            ctx.pathPickerReturnState = "editor"
+            ctx.pathPickerContext = "path_only"
+            ctx.pathPickerSub = "device"
+            ctx.pathList = _.file_selector.getDevices("path_only") or {}
+            ctx.pathPickerSel = 1
+            ctx.pathPickerScroll = 0
+            ctx.pathBrowsePath = nil
+            ctx.state = "path_picker"
+          else
+            ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
+            ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+            ctx.bblEntryDetailReturnState = "editor"
+            ctx.state = "bbl_hotkey_entry"
+          end
         else
           ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
           ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
@@ -1749,7 +1840,7 @@ local function run(ctx)
       elseif o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then
         local slotNum = tonumber(o.bblEntrySlot)
         local slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum) or nil
-        if slot and slot.used then
+        if autoSlotHasPresence(slot) then
           local changed = _.config_parse.setBblHotkeySlotDisabled and
               _.config_parse.setBblHotkeySlotDisabled(ctx.lines, "AUTO", slotNum, not slot.disabled)
           if changed then
