@@ -129,7 +129,11 @@ end
 
 local function getLanguageHintLabel(main_str)
   local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
-  return findHintLabel(baseHint, "L1", findHintLabel(baseHint, "R1", "Language"))
+  local raw = findHintLabel(baseHint, "L1", findHintLabel(baseHint, "R1", "Language"))
+  local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  cleaned = cleaned:gsub("%s*[%+%-]$", "")
+  if cleaned == "" then cleaned = "Language" end
+  return cleaned
 end
 
 local function buildMainBaseHintItems(main_str)

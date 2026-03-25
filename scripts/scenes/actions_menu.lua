@@ -10,16 +10,26 @@ end
 
 local function normalizeRows(rows)
   local out = {}
+  local removeOut = {}
   for i = 1, #(rows or {}) do
     local row = rows[i]
     if row and row.hidden ~= true then
-      out[#out + 1] = {
-        id = row.id or tostring(i),
+      local id = tostring(row.id or tostring(i))
+      local normalized = {
+        id = id,
         label = tostring(row.label or ""),
         enabled = (row.enabled ~= false),
         raw = row,
       }
+      if id:lower() == "remove" then
+        removeOut[#removeOut + 1] = normalized
+      else
+        out[#out + 1] = normalized
+      end
     end
+  end
+  for i = 1, #removeOut do
+    out[#out + 1] = removeOut[i]
   end
   return out
 end
@@ -65,36 +75,78 @@ function actions_menu.run(ctx, opts)
   local maxVisible = math.max(1, math.min(#rows, math.floor(tonumber(opts.maxVisible) or 8)))
   ctx[scrollKey] = _.common.centeredListScroll(ctx[selKey], #rows, maxVisible)
 
-  local title = opts.title or "Actions"
-  local boxW = math.min(460, (_.w or 640) - (_.MARGIN_X * 2))
-  local boxH = math.floor(_.scaleY(64)) + maxVisible * _.LINE_H
+  local title = opts.prompt or opts.title or "Select Action:"
+  local titleScale = 0.95
+  local rowScale = _.FONT_SCALE
+  local rowStateKeyPrefix = opts.rowStateKeyPrefix or "actions_menu_row_"
+
+  local function textWidth(text, scale)
+    if _.common and _.common.calcTextWidth then
+      return _.common.calcTextWidth(_.font, tostring(text or ""), scale)
+    end
+    local s = tostring(text or "")
+    return math.floor((8 * (scale or 1)) * #s)
+  end
+
+  local titleW = textWidth(title, titleScale)
+  local maxRowW = 0
+  for i = 1, #rows do
+    local w = textWidth(rows[i].label, rowScale)
+    if w > maxRowW then maxRowW = w end
+  end
+  local contentW = math.max(titleW, maxRowW)
+  local padX = 24
+  local padTop = math.floor(_.scaleY(14))
+  local titleH = _.LINE_H
+  local titleGap = math.floor(_.scaleY(12))
+  local padBottom = math.floor(_.scaleY(14))
+  local rowStep = _.LINE_H
+
+  local maxBoxW = math.min(380, (_.w or 640) - (_.MARGIN_X * 2))
+  local minBoxW = math.min(280, maxBoxW)
+  local boxW = contentW + (padX * 2)
+  if boxW < minBoxW then boxW = minBoxW end
+  if boxW > maxBoxW then boxW = maxBoxW end
+  local boxH = padTop + titleH + titleGap + (maxVisible * rowStep) + padBottom
   local boxX = math.floor(((_.w or 640) - boxW) / 2)
   local boxY = math.floor(((_.h or 448) - boxH) / 2)
   if _.Graphics and _.Graphics.drawRect then
     _.Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 120))
   end
 
-  _.drawText(_.font, _.drawMode, boxX + 18, boxY + 14, 0.95, title, _.WHITE)
-  local maxLabelW = boxW - 36
-  local rowStateKeyPrefix = opts.rowStateKeyPrefix or "actions_menu_row_"
+  local titleX = boxX + math.floor((boxW - titleW) / 2)
+  local titleY = boxY + padTop
+  _.drawText(_.font, _.drawMode, titleX, titleY, titleScale, title, _.WHITE)
+
+  local rowStartY = titleY + titleH + titleGap
+  local maxLabelW = boxW - (padX * 2)
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
     local row = rows[i]
-    local y = boxY + math.floor(_.scaleY(42)) + (i - ctx[scrollKey] - 1) * _.LINE_H
+    local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
     local label = row.label
     if _.common.fitListRowText then
-      label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), _.font, label, maxLabelW, _.FONT_SCALE,
+      label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), _.font, label, maxLabelW, rowScale,
         i == ctx[selKey])
     elseif _.common.truncateTextToWidth then
-      label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
+      label = _.common.truncateTextToWidth(_.font, label, maxLabelW, rowScale)
     end
+    local labelW = textWidth(label, rowScale)
+    local x = boxX + math.floor((boxW - labelW) / 2)
     local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
-    _.drawListRow(boxX + 18, y, i == ctx[selKey], label, col)
+    _.drawListRow(x, y, i == ctx[selKey], label, col)
   end
 
   local hintItems = opts.hints or {
     { pad = "cross", label = "Select", row = 1 },
     { pad = "circle", label = "Back", row = 1 },
   }
+  if _.Graphics and _.Graphics.drawRect then
+    local hintBg = (_.common and _.common.BGCOLOR) or Color.new(20, 20, 20, 255)
+    local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * 0.75 + 0.5))
+    local hintRowTop = math.floor(_.HINT_Y) - hintRowH
+    local hintW = (_.w or 640) - (2 * (_.MARGIN_X or 0))
+    _.Graphics.drawRect(_.MARGIN_X or 0, hintRowTop, hintW, hintRowH, hintBg)
+  end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then

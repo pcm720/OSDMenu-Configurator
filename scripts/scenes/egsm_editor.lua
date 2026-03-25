@@ -142,7 +142,7 @@ local function run(ctx)
   local hintItems = {
     { pad = "cross", label = (_.menu_str.edit_label or "Edit"), row = 1 },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
-    { pad = ctx.configModified and "start" or "", label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "", row = 1 },
+    { pad = ctx.configModified and "start" or "", label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "", row = 1 },
     { pad = "triangle", label = selectedCommented and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"), row = 1 },
     { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
@@ -212,7 +212,7 @@ local function run(ctx)
       { id = "insert", label = (_.menu_str.insert_label or "Insert") },
     }
     if hasEntrySelection then
-      actionRows[#actionRows + 1] = { id = "delete", label = (_.menu_str.delete_label or "Delete") }
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
     end
     if actions_menu.run(ctx, {
           openKey = "egsmActionsOpen",
@@ -224,7 +224,7 @@ local function run(ctx)
           onSelect = function(row)
             if row.id == "insert" then
               beginInsertEgsmEntry()
-            elseif row.id == "delete" then
+            elseif row.id == "remove" then
               removeSelectedEgsmEntry()
             end
           end,

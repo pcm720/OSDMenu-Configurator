@@ -149,7 +149,7 @@ local function run(ctx)
     { pad = "square", label = _.menu_str.actions_label or "Actions", row = 1 },
     {
       pad = ctx.configModified and "start" or "",
-      label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
       row = 1
     },
     {
@@ -262,7 +262,7 @@ local function run(ctx)
     if hasPathSelection then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.entryPathGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Grab"),
+        label = ctx.entryPathGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
       }
     end
     if canAddPath then
@@ -335,7 +335,10 @@ local function run(ctx)
     saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
-    ctx.entryPathGrab = nil
+    if ctx.entryPathGrab then
+      ctx.entryPathGrab = nil
+      return
+    end
     ctx.state = isBoot and "editor" or "menu_entry_edit"
   end
 end

@@ -61,8 +61,17 @@ local function run(ctx)
   end
 
   if edit then
-    _.drawText(_.font, _.drawMode, _.MARGIN_X + 20, row0Y + (5 * _.LINE_H), 0.62, "D-pad: Left/Right digit, Up/Down change",
-      _.DIM)
+    local helperStr = _.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit, Up/Down change, Square channel"
+    local helperMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+    if _.common.fitListRowText then
+      helperStr = _.common.fitListRowText(ctx, "color_edit_helper", _.font, helperStr, helperMaxW, 0.62, true,
+        { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+    elseif _.common.truncateTextToWidth then
+      helperStr = _.common.truncateTextToWidth(_.font, helperStr, helperMaxW, 0.62)
+    end
+    local helperW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, helperStr, 0.62)) or (10 * #helperStr)
+    local helperX = _.common.centerX(_, helperW)
+    _.drawText(_.font, _.drawMode, helperX, _.DESC_Y_BOTTOM, 0.62, helperStr, _.DIM)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, {
       { pad = "cross", label = "Confirm", row = 1 },
       { pad = "circle", label = "Cancel", row = 1 },

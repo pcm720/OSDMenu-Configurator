@@ -264,13 +264,13 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
   end
 end
 
--- Build editor hint items: show ±1/±10/±50 only for int/string; enum/bool use left/right with enumHintLabels.
+-- Build editor hint items: show ±1/±10/±50 only for string; enum/bool use left/right with enumHintLabels.
 -- Show Reset only when option has default.
 function common.buildEditorHintItems(selOpt, hintEditItems, getDefaultFn, enumHintLabels)
   if not hintEditItems or #hintEditItems == 0 then return hintEditItems end
   local numericPads = { left = true, right = true, L1 = true, R1 = true, L2 = true, R2 = true }
   local showNumeric = selOpt and
-      (selOpt.optType == "int" or selOpt.optType == "string" or selOpt.optType == "enum" or selOpt.optType == "bool")
+      (selOpt.optType == "string" or selOpt.optType == "enum" or selOpt.optType == "bool")
   local showReset = selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" and getDefaultFn and
       getDefaultFn(selOpt.key) ~= nil
   local out = {}

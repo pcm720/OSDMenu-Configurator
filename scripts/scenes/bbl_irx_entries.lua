@@ -114,7 +114,7 @@ local function run(ctx)
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
     {
       pad = ctx.configModified and "start" or "",
-      label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
       row = 1
     },
     {
@@ -167,14 +167,14 @@ local function run(ctx)
     if hasSelection then
       actionRows[#actionRows + 1] = {
         id = "grab",
-        label = ctx.bblIrxGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Grab"),
+        label = ctx.bblIrxGrab and (_.menu_str.release_grab_label or "Release") or (_.menu_str.grab_label or "Move"),
       }
     end
     if canAddEntry then
       actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
     end
     if hasSelection then
-      actionRows[#actionRows + 1] = { id = "delete", label = (_.menu_str.delete_label or "Delete") }
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
     end
     if actions_menu.run(ctx, {
           openKey = "bblIrxActionsOpen",
@@ -188,7 +188,7 @@ local function run(ctx)
               ctx.bblIrxGrab = not ctx.bblIrxGrab
             elseif row.id == "insert" then
               addIrxEntry()
-            elseif row.id == "delete" then
+            elseif row.id == "remove" then
               removeSelectedIrx()
             end
           end,
@@ -243,7 +243,10 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
-    ctx.bblIrxGrab = nil
+    if ctx.bblIrxGrab then
+      ctx.bblIrxGrab = nil
+      return
+    end
     ctx.state = "editor"
   end
 end

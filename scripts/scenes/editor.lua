@@ -77,6 +77,17 @@ local function getEditorBackState(ctx)
   return "main"
 end
 
+local function prettifyBblGlobalLabel(ctx, o, label)
+  if not (ctx and o and label) then return label end
+  if (ctx.fileType ~= "ps2bbl_ini" and ctx.fileType ~= "psxbbl_ini") then
+    return label
+  end
+  if ctx.editorCategoryIdx ~= 1 then
+    return label
+  end
+  return tostring(label):gsub("_", " ")
+end
+
 local function withStartHintVisibility(items, showStart)
   if showStart then return items end
   local out = {}
@@ -111,7 +122,8 @@ local function startTimerDigitEdit(ctx, _, opt)
   if not (ctx and _ and opt and opt.key) then return end
   local raw = _.config_parse.get(ctx.lines, opt.key) or opt.default or "0"
   local num = tonumber(raw)
-  if not num then return end
+  if not num then num = tonumber(opt.default or "0") end
+  if not num then num = 0 end
   local minV = tonumber(opt.min) or 0
   local maxV = tonumber(opt.max) or 999900
   num = clampNumber(math.floor((num + 50) / 100) * 100, minV, maxV)
@@ -126,40 +138,22 @@ local function startTimerDigitEdit(ctx, _, opt)
   }
 end
 
-local function runTimerDigitOverlay(ctx, _)
-  local edit = ctx.timerDigitEdit
-  if not edit then return false end
-
-  local boxW = math.min(460, (_.w or 640) - (_.MARGIN_X * 2))
-  local boxH = math.floor(_.scaleY(112))
-  local boxX = math.floor(((_.w or 640) - boxW) / 2)
-  local boxY = math.floor(((_.h or 448) - boxH) / 2)
-  if _.Graphics and _.Graphics.drawRect then
-    _.Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 120))
-  end
-
-  _.drawText(_.font, _.drawMode, boxX + 18, boxY + 14, 0.9, edit.label, _.WHITE)
-  _.drawText(_.font, _.drawMode, boxX + 18, boxY + 36, 0.62, "D-pad: Left/Right digit, Up/Down change", _.DIM)
-
+local function drawTimerDigitInlineValue(_, edit, x, y, scale)
   local valueText = formatTimerDigitValue(edit.value)
-  local valueScale = 1.15
-  local valueW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, valueText, valueScale)) or (#valueText * 16)
-  local valueX = boxX + math.floor((boxW - valueW) / 2)
-  local valueY = boxY + math.floor(_.scaleY(62))
   local selectedCharIndex = ({ 1, 2, 3, 5 })[edit.digit] or 1
-  local cursorX = valueX
+  local cursorX = x
   for i = 1, #valueText do
     local ch = valueText:sub(i, i)
     local col = (i == selectedCharIndex) and (_.SELECTED_ENTRY or _.WHITE) or _.WHITE
-    _.drawText(_.font, _.drawMode, cursorX, valueY, valueScale, ch, col)
-    local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, valueScale)) or 10
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, ch, col)
+    local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, scale)) or 10
     cursorX = cursorX + cw
   end
+end
 
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, {
-    { pad = "cross", label = "Confirm", row = 1 },
-    { pad = "circle", label = "Cancel", row = 1 },
-  }, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+local function runTimerDigitInlineInput(ctx, _)
+  local edit = ctx.timerDigitEdit
+  if not edit then return false end
 
   if (_.padEffective & _.PAD_LEFT) ~= 0 then
     edit.digit = edit.digit - 1
@@ -185,6 +179,198 @@ local function runTimerDigitOverlay(ctx, _)
     ctx.timerDigitEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.timerDigitEdit = nil
+  end
+
+  return true
+end
+
+local function resolveIntBounds(opt, currentNum)
+  local minV = tonumber(opt and opt.min)
+  local maxV = tonumber(opt and opt.max)
+  if minV == nil then minV = 0 end
+  if maxV == nil then maxV = 9999 end
+
+  if opt and opt.min == nil and opt.max == nil then
+    local key = tostring(opt.key or "")
+    if key:match("^OSDSYS_.*_x$") then
+      maxV = 639
+    elseif key:match("^OSDSYS_.*_y$") then
+      maxV = 447
+    elseif key:match("num_displayed") then
+      minV, maxV = 1, 30
+    end
+  end
+
+  local defNum = tonumber(opt and opt.default or nil)
+  if defNum and defNum < minV then minV = defNum end
+  if currentNum and currentNum < minV then minV = currentNum end
+  if maxV < minV then maxV = minV end
+  return minV, maxV
+end
+
+local function intDigitCountForRange(minV, maxV)
+  local maxAbs = math.max(math.abs(math.floor(minV or 0)), math.abs(math.floor(maxV or 0)), 0)
+  local digits = #tostring(maxAbs)
+  if digits < 1 then digits = 1 end
+  return digits
+end
+
+local function formatIntDigitValue(edit)
+  local n = tonumber(edit.value) or 0
+  n = math.floor(n)
+  local digits = math.max(1, tonumber(edit.digits) or 1)
+  local absText = string.format("%0" .. tostring(digits) .. "d", math.abs(n))
+  if edit.showSign then
+    return ((n < 0) and "-" or " ") .. absText
+  end
+  return absText
+end
+
+local function startIntDigitEdit(ctx, _, opt)
+  if not (ctx and _ and opt and opt.key) then return end
+  local raw = _.config_parse.get(ctx.lines, opt.key) or opt.default or "0"
+  local num = tonumber(raw)
+  if not num then num = tonumber(opt.default or "0") end
+  if not num then num = 0 end
+  if num >= 0 then
+    num = math.floor(num + 0.5)
+  else
+    num = math.ceil(num - 0.5)
+  end
+  local minV, maxV = resolveIntBounds(opt, num)
+  num = clampNumber(num, minV, maxV)
+  local digits = intDigitCountForRange(minV, maxV)
+  ctx.intDigitEdit = {
+    key = opt.key,
+    value = num,
+    min = minV,
+    max = maxV,
+    digit = 1, -- 1=highest place, N=ones
+    digits = digits,
+    showSign = (minV < 0),
+  }
+end
+
+local function drawIntDigitInlineValue(_, edit, x, y, scale)
+  local valueText = formatIntDigitValue(edit)
+  local selectedCharIndex = edit.digit
+  if edit.showSign then selectedCharIndex = selectedCharIndex + 1 end
+  local cursorX = x
+  for i = 1, #valueText do
+    local ch = valueText:sub(i, i)
+    local isSign = edit.showSign and (i == 1)
+    local col = isSign and _.DIM or _.WHITE
+    if i == selectedCharIndex then
+      col = _.SELECTED_ENTRY or _.WHITE
+    end
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, ch, col)
+    local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, scale)) or 10
+    cursorX = cursorX + cw
+  end
+end
+
+local function runIntDigitInlineInput(ctx, _)
+  local edit = ctx.intDigitEdit
+  if not edit then return false end
+
+  if (_.padEffective & _.PAD_LEFT) ~= 0 then
+    edit.digit = edit.digit - 1
+    if edit.digit < 1 then edit.digit = edit.digits end
+  end
+  if (_.padEffective & _.PAD_RIGHT) ~= 0 then
+    edit.digit = edit.digit + 1
+    if edit.digit > edit.digits then edit.digit = 1 end
+  end
+
+  local place = edit.digits - edit.digit
+  local weight = 10 ^ place
+  if (_.padEffective & _.PAD_UP) ~= 0 then
+    edit.value = clampNumber((tonumber(edit.value) or 0) + weight, edit.min, edit.max)
+  end
+  if (_.padEffective & _.PAD_DOWN) ~= 0 then
+    edit.value = clampNumber((tonumber(edit.value) or 0) - weight, edit.min, edit.max)
+  end
+
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    _.config_parse.set(ctx.lines, edit.key, tostring(math.floor(tonumber(edit.value) or 0)))
+    ctx.configModified = true
+    ctx.intDigitEdit = nil
+  elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.intDigitEdit = nil
+  end
+
+  return true
+end
+
+local function startInlineColorEdit(ctx, _, opt)
+  if not (ctx and _ and opt and opt.key) then return end
+  local r, g, b, a = _.parseColor(_.config_parse.get(ctx.lines, opt.key) or opt.default)
+  ctx.colorInlineEdit = {
+    key = opt.key,
+    values = { r, g, b, a },
+    orig = { r, g, b, a },
+    channel = 1,
+    digit = 1, -- 1=hundreds, 2=tens, 3=ones
+  }
+end
+
+local function drawInlineColorEditValue(_, edit, x, y, scale)
+  if not edit then return end
+  local labels = { "R", "G", "B", "A" }
+  local cursorX = x
+  for ch = 1, 4 do
+    local prefix = labels[ch]
+    local prefixCol = (ch == edit.channel) and (_.SELECTED_ENTRY or _.WHITE) or _.GRAY
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
+    cursorX = cursorX + ((_.common.calcTextWidth and _.common.calcTextWidth(_.font, prefix, scale)) or 8)
+
+    local val = clampNumber(tonumber(edit.values[ch]) or 0, 0, 255)
+    local valStr = string.format("%03d", val)
+    for i = 1, #valStr do
+      local digit = valStr:sub(i, i)
+      local col = (ch == edit.channel and i == edit.digit) and (_.SELECTED_ENTRY or _.WHITE) or _.WHITE
+      _.drawText(_.font, _.drawMode, cursorX, y, scale, digit, col)
+      cursorX = cursorX + ((_.common.calcTextWidth and _.common.calcTextWidth(_.font, digit, scale)) or 8)
+    end
+    if ch < 4 then
+      _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.WHITE)
+      cursorX = cursorX + ((_.common.calcTextWidth and _.common.calcTextWidth(_.font, " ", scale)) or 6)
+    end
+  end
+end
+
+local function runInlineColorEditInput(ctx, _)
+  local edit = ctx.colorInlineEdit
+  if not edit then return false end
+
+  if (_.padEffective & _.PAD_LEFT) ~= 0 then
+    edit.digit = edit.digit - 1
+    if edit.digit < 1 then edit.digit = 3 end
+  end
+  if (_.padEffective & _.PAD_RIGHT) ~= 0 then
+    edit.digit = edit.digit + 1
+    if edit.digit > 3 then edit.digit = 1 end
+  end
+  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    edit.channel = edit.channel + 1
+    if edit.channel > 4 then edit.channel = 1 end
+  end
+
+  local weightByDigit = { 100, 10, 1 }
+  local weight = weightByDigit[edit.digit] or 1
+  if (_.padEffective & _.PAD_UP) ~= 0 then
+    edit.values[edit.channel] = clampNumber((tonumber(edit.values[edit.channel]) or 0) + weight, 0, 255)
+  end
+  if (_.padEffective & _.PAD_DOWN) ~= 0 then
+    edit.values[edit.channel] = clampNumber((tonumber(edit.values[edit.channel]) or 0) - weight, 0, 255)
+  end
+
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    _.config_parse.set(ctx.lines, edit.key, _.formatColor(edit.values[1], edit.values[2], edit.values[3], edit.values[4]))
+    ctx.configModified = true
+    ctx.colorInlineEdit = nil
+  elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.colorInlineEdit = nil
   end
 
   return true
@@ -358,6 +544,7 @@ local function run(ctx)
       local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.WHITE
       local bootKeyDisabled = false
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
+      lab = prettifyBblGlobalLabel(ctx, o, lab)
       local valDisplay
       if o.optType == "header" or o.optType == "action" then
         valDisplay = ""
@@ -427,6 +614,9 @@ local function run(ctx)
             bootHotkeyIconGap = 8
           end
         end
+      end
+      if bootHotkeyIcon then
+        lab = (_.menu_str.launch_key_label or "Launch Key")
       end
       if o.key == "NAME_AUTO" then
         inlineAutoRow = true
@@ -505,10 +695,23 @@ local function run(ctx)
       else
         _.drawListRow(_.MARGIN_X + 16, y, i == ctx.optSel, lab, col)
       end
+      local timerInlineEdit = (i == ctx.optSel) and ctx.timerDigitEdit and ctx.timerDigitEdit.key == o.key
+      local intInlineEdit = (i == ctx.optSel) and ctx.intDigitEdit and ctx.intDigitEdit.key == o.key
+      local colorInlineEdit = (i == ctx.optSel) and ctx.colorInlineEdit and ctx.colorInlineEdit.key == o.key
+
       if (not inlineAutoRow) and valDisplay == "" and (o.optType == "path" or o.optType == "boot_paths" or o.optType == "text" or o.optType == "enum") then
         valDisplay = _.common_str.not_set
       end
-      if valDisplay then
+      if timerInlineEdit then
+        drawTimerDigitInlineValue(_, ctx.timerDigitEdit, _.VALUE_X, y, _.FONT_SCALE)
+      elseif intInlineEdit then
+        drawIntDigitInlineValue(_, ctx.intDigitEdit, _.VALUE_X, y, _.FONT_SCALE)
+      elseif colorInlineEdit then
+        local edit = ctx.colorInlineEdit
+        local swatchColor = _.Color.new(edit.values[1], edit.values[2], edit.values[3], edit.values[4])
+        _.Graphics.drawRect(_.VALUE_X, y, 28, _.scaleY(18), swatchColor)
+        drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
+      elseif valDisplay then
         if valDisplay ~= "" then
           local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set) and _.DIM or
               ((i == ctx.optSel) and _.WHITE or _.GRAY)
@@ -538,6 +741,9 @@ local function run(ctx)
     if selOpt then
       local descStr = (_.strings.options and _.strings.options[selOpt.key] and _.strings.options[selOpt.key].desc) or
           selOpt.desc or ""
+      if ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
+        descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit, Up/Down change, Square channel")
+      end
       if selOpt.key == "LOGO_DISPLAY" then
         local cur = _.config_parse.get(ctx.lines, selOpt.key) or selOpt.default or ""
         local n = tonumber(cur) or 0
@@ -629,7 +835,7 @@ local function run(ctx)
         { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
         {
           pad = ctx.configModified and "start" or "",
-          label = ctx.configModified and (_.menu_str.save_config_label or "Save Config") or "",
+          label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
           row = 1
         },
         {
@@ -641,10 +847,34 @@ local function run(ctx)
       }
     end
 
+    if selOpt and ctx.timerDigitEdit and ctx.timerDigitEdit.key == selOpt.key then
+      hintItems = {
+        { pad = "cross", label = "Confirm", row = 1 },
+        { pad = "circle", label = "Cancel", row = 1 },
+      }
+    elseif selOpt and ctx.intDigitEdit and ctx.intDigitEdit.key == selOpt.key then
+      hintItems = {
+        { pad = "cross", label = "Confirm", row = 1 },
+        { pad = "circle", label = "Cancel", row = 1 },
+      }
+    elseif selOpt and ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
+      hintItems = {
+        { pad = "cross", label = "Confirm", row = 1 },
+        { pad = "square", label = (_.menu_str.channel_label or "Channel"), row = 1 },
+        { pad = "circle", label = "Cancel", row = 1 },
+      }
+    end
+
     hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-    if runTimerDigitOverlay(ctx, _) then
+    if runTimerDigitInlineInput(ctx, _) then
+      return
+    end
+    if runIntDigitInlineInput(ctx, _) then
+      return
+    end
+    if runInlineColorEditInput(ctx, _) then
       return
     end
 
@@ -654,7 +884,7 @@ local function run(ctx)
         actionRows[#actionRows + 1] = {
           id = "grab",
           label = ctx.editorAutoSlotGrab and (_.menu_str.release_grab_label or "Release") or
-              (_.menu_str.grab_label or "Grab")
+              (_.menu_str.grab_label or "Move")
         }
         actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
       end
@@ -727,10 +957,7 @@ local function run(ctx)
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
-      elseif (o.optType == "int" or o.optType == "string") then
-        if isTimerDigitEditKey(o.key) then
-          -- Timer-style integer options are edited via digit editor on Cross.
-        else
+      elseif o.optType == "string" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
         if num then
@@ -764,26 +991,39 @@ local function run(ctx)
             ctx.configModified = true
           end
         end
-        end
       end
     end
     if (_.padEffective & _.PAD_CROSS) ~= 0 then
       local o = ctx.optList[ctx.optSel]
-      if o.optType == "bool" then
+      if o.optType == "enum" and o.enumVals and #o.enumVals > 0 and
+          (((ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and
+            (o.key == "VIDEO_MODE" or o.key == "LOGO_DISPLAY")) or
+            (ctx.fileType == "osdmenu_cnf" and (o.key == "OSDSYS_video_mode" or o.key == "OSDSYS_region")) or
+            (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language"))) then
+        local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+        local idx = 0
+        for ei, v in ipairs(o.enumVals) do
+          if v == cur then
+            idx = ei
+            break
+          end
+        end
+        idx = idx + 1
+        if idx > #o.enumVals then idx = 1 end
+        _.config_parse.set(ctx.lines, o.key, o.enumVals[idx])
+        ctx.configModified = true
+      elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
-      elseif (o.optType == "int" or o.optType == "string") and isTimerDigitEditKey(o.key) then
-        startTimerDigitEdit(ctx, _, o)
+      elseif o.optType == "int" then
+        if isTimerDigitEditKey(o.key) then
+          startTimerDigitEdit(ctx, _, o)
+        else
+          startIntDigitEdit(ctx, _, o)
+        end
       elseif o.optType == "color" then
-        ctx.colorOpt = o
-        local r, g, b, a = _.parseColor(_.config_parse.get(ctx.lines, o.key) or o.default)
-        ctx.colorVals = { r, g, b, a }
-        ctx.colorOrigVals = { r, g, b, a }
-        ctx.colorCh = 1
-        ctx.colorDigitEdit = nil
-        ctx.colorChannelOrig = nil
-        ctx.state = "color_edit"
+        startInlineColorEdit(ctx, _, o)
       elseif o.optType == "text" or o.optType == "string" then
         ctx.textInputTitleIdMode = nil
         ctx.textInputPrompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
@@ -932,7 +1172,13 @@ local function run(ctx)
     end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
-    ctx.editorAutoSlotGrab = nil
+    ctx.timerDigitEdit = nil
+    ctx.intDigitEdit = nil
+    ctx.colorInlineEdit = nil
+    if ctx.editorAutoSlotGrab then
+      ctx.editorAutoSlotGrab = nil
+      return
+    end
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
       setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx
