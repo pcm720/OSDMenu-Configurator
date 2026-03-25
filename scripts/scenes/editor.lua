@@ -117,6 +117,51 @@ local function applyOsdVisualPreset(ctx, _, preset)
   end
 end
 
+local function valuesEquivalent(a, b)
+  local sa = tostring(a or "")
+  local sb = tostring(b or "")
+  if sa == sb then return true end
+  local na = tonumber(sa)
+  local nb = tonumber(sb)
+  if na ~= nil and nb ~= nil then
+    return na == nb
+  end
+  return false
+end
+
+local function optionMatchesDefault(ctx, _, key, def)
+  if not (ctx and _ and key) then return false end
+  if def == nil then return false end
+  local cur = _.config_parse.get(ctx.lines, key)
+  local effective = (cur ~= nil) and cur or def
+  return valuesEquivalent(effective, def)
+end
+
+local function osdVisualGroupMatchesPreset(ctx, _, preset)
+  if not (ctx and _ and preset) then return false end
+  for key, _present in pairs(OSD_VISUAL_COORD_KEYS) do
+    local def = preset[key]
+    local cur = _.config_parse.get(ctx.lines, key)
+    local effective = (cur ~= nil) and cur or def
+    if not valuesEquivalent(effective, def) then
+      return false
+    end
+  end
+  return true
+end
+
+local function removeHintPad(items, padName)
+  local out = {}
+  local target = tostring(padName or ""):lower()
+  for i = 1, #(items or {}) do
+    local item = items[i]
+    if tostring(item and item.pad or ""):lower() ~= target then
+      out[#out + 1] = item
+    end
+  end
+  return out
+end
+
 local function prettifyBblGlobalLabel(ctx, o, label)
   if not (ctx and o and label) then return label end
   if (ctx.fileType ~= "ps2bbl_ini" and ctx.fileType ~= "psxbbl_ini") then
@@ -882,9 +927,6 @@ local function run(ctx)
     if #ctx.optList > maxVis then
       _.drawText(_.font, _.drawMode, _.w - 72, startY - _.scaleY(4), 0.7, ctx.optSel .. "/" .. #ctx.optList, _.DIM)
     end
-    local hintItems = _.common.buildEditorHintItems(selOpt, _.editor_str.hint_edit_items,
-      _.config_options.getOsdmenuDefault,
-      { left = _.common_str.hint_prev, right = _.common_str.hint_next })
     local isAutoSlotRow = selOpt and selOpt.optType == "bbl_slot" and selOpt.bblKeyId == "AUTO" and selOpt.bblEntrySlot
     local autoSlotNum = isAutoSlotRow and tonumber(selOpt.bblEntrySlot) or nil
     local isEsrPathRow = selOpt and ctx.fileType == "freemcboot_cnf" and selOpt.key and selOpt.key:match("^ESR_Path_E%d+$")
@@ -892,6 +934,27 @@ local function run(ctx)
     local isOsdVisualCoordRow = selOpt and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") and
         selOpt.optType == "int" and isOsdVisualCoordKey(selOpt.key)
+    local resetDefaultFn = _.config_options and _.config_options.getOsdmenuDefault
+    if ctx.fileType == "freemcboot_cnf" and _.config_options and _.config_options.getFreemcbootDefault then
+      resetDefaultFn = _.config_options.getFreemcbootDefault
+    end
+    local hintItems = _.common.buildEditorHintItems(selOpt, _.editor_str.hint_edit_items,
+      resetDefaultFn,
+      { left = _.common_str.hint_prev, right = _.common_str.hint_next })
+    local canResetFromTriangle = false
+    if selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" then
+      if isOsdVisualCoordRow then
+        canResetFromTriangle = not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS)
+      else
+        local def = resetDefaultFn and resetDefaultFn(selOpt.key)
+        if def ~= nil then
+          canResetFromTriangle = not optionMatchesDefault(ctx, _, selOpt.key, def)
+        end
+      end
+    end
+    if not canResetFromTriangle then
+      hintItems = removeHintPad(hintItems, "triangle")
+    end
     local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
         ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
@@ -1569,9 +1632,11 @@ local function run(ctx)
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
       local o = ctx.optList[ctx.optSel]
       if isOsdVisualCoordRow then
-        ctx.editorOsdVisualRestoreOpen = true
-        ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
-        ctx.editorOsdVisualRestoreScroll = ctx.editorOsdVisualRestoreScroll or 0
+        if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS) then
+          ctx.editorOsdVisualRestoreOpen = true
+          ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
+          ctx.editorOsdVisualRestoreScroll = ctx.editorOsdVisualRestoreScroll or 0
+        end
       elseif o and o.key and o.key:match("^ESR_Path_E%d+$") and ctx.fileType == "freemcboot_cnf" then
         toggleEsrSlotDisabled()
       elseif o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then
@@ -1591,8 +1656,13 @@ local function run(ctx)
         else
           def = _.config_options.getOsdmenuDefault and _.config_options.getOsdmenuDefault(o.key)
         end
-        if def ~= nil then
-          _.config_parse.set(ctx.lines, o.key, def); ctx.configModified = true
+        if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def) then
+          _.config_parse.set(ctx.lines, o.key, def)
+          if _.common and _.common.refreshConfigModified then
+            _.common.refreshConfigModified(ctx)
+          else
+            ctx.configModified = true
+          end
         end
       end
     end
