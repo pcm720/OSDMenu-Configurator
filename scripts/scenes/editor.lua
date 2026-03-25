@@ -7,16 +7,9 @@ local function formatTimerSeconds(msText, unitSingular, unitPlural)
   if not ms then return msText end
   local singular = unitSingular or "second"
   local plural = unitPlural or "seconds"
-  if ms <= 0 then return "0 " .. plural end
-  local sec10 = math.floor((ms + 50) / 100)
-  local secText
-  if sec10 % 10 == 0 then
-    secText = tostring(math.floor(sec10 / 10))
-  else
-    secText = string.format("%.1f", sec10 / 10)
-  end
-  local unit = (secText == "1") and singular or plural
-  return secText .. " " .. unit
+  local sec = math.max(0, math.floor((ms + 500) / 1000))
+  local unit = (sec == 1) and singular or plural
+  return tostring(sec) .. " " .. unit
 end
 
 local function formatArgCount(n)
@@ -112,10 +105,8 @@ local function clampNumber(n, minV, maxV)
 end
 
 local function formatTimerDigitValue(ms)
-  local rounded = math.max(0, math.floor(((tonumber(ms) or 0) + 50) / 100))
-  local seconds = math.floor(rounded / 10)
-  local tenths = rounded % 10
-  return string.format("%03d.%d", seconds, tenths)
+  local seconds = math.max(0, math.floor(((tonumber(ms) or 0) + 500) / 1000))
+  return string.format("%03d", seconds)
 end
 
 local function startTimerDigitEdit(ctx, _, opt)
@@ -126,7 +117,7 @@ local function startTimerDigitEdit(ctx, _, opt)
   if not num then num = 0 end
   local minV = tonumber(opt.min) or 0
   local maxV = tonumber(opt.max) or 999900
-  num = clampNumber(math.floor((num + 50) / 100) * 100, minV, maxV)
+  num = clampNumber(math.floor((num + 500) / 1000) * 1000, minV, maxV)
   local label = (_.strings.options and _.strings.options[opt.key] and _.strings.options[opt.key].label) or opt.label or opt.key
   ctx.timerDigitEdit = {
     key = opt.key,
@@ -134,13 +125,13 @@ local function startTimerDigitEdit(ctx, _, opt)
     value = num,
     min = minV,
     max = maxV,
-    digit = 1, -- 1=hundreds sec, 2=tens, 3=ones, 4=tenths
+    digit = 1, -- 1=hundreds sec, 2=tens, 3=ones
   }
 end
 
 local function drawTimerDigitInlineValue(_, edit, x, y, scale)
   local valueText = formatTimerDigitValue(edit.value)
-  local selectedCharIndex = ({ 1, 2, 3, 5 })[edit.digit] or 1
+  local selectedCharIndex = edit.digit
   local cursorX = x
   for i = 1, #valueText do
     local ch = valueText:sub(i, i)
@@ -157,15 +148,15 @@ local function runTimerDigitInlineInput(ctx, _)
 
   if (_.padEffective & _.PAD_LEFT) ~= 0 then
     edit.digit = edit.digit - 1
-    if edit.digit < 1 then edit.digit = 4 end
+    if edit.digit < 1 then edit.digit = 3 end
   end
   if (_.padEffective & _.PAD_RIGHT) ~= 0 then
     edit.digit = edit.digit + 1
-    if edit.digit > 4 then edit.digit = 1 end
+    if edit.digit > 3 then edit.digit = 1 end
   end
 
-  local weightByDigit = { 100000, 10000, 1000, 100 }
-  local weight = weightByDigit[edit.digit] or 100
+  local weightByDigit = { 100000, 10000, 1000 }
+  local weight = weightByDigit[edit.digit] or 1000
   if (_.padEffective & _.PAD_UP) ~= 0 then
     edit.value = clampNumber(edit.value + weight, edit.min, edit.max)
   end
@@ -853,7 +844,8 @@ local function run(ctx)
     end
 
     local function removeAutoSlot()
-      if not (isAutoSlotRow and autoSlotNum and autoSlotData and autoSlotData.used) then return end
+      local hasSlotContent = autoSlotData and (autoSlotData.used or autoSlotData.pathExists)
+      if not (isAutoSlotRow and autoSlotNum and hasSlotContent) then return end
       _.config_parse.removeBblHotkeySlot(ctx.lines, "AUTO", autoSlotNum)
       ctx.configModified = true
       confirmAutoMoveState()
@@ -930,7 +922,7 @@ local function run(ctx)
               (_.menu_str.grab_label or "Move")
         }
       end
-      if autoSlotData and autoSlotData.used then
+      if autoSlotData and (autoSlotData.used or autoSlotData.pathExists) then
         actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
       end
       if usedAutoSlots < maxAutoSlots then

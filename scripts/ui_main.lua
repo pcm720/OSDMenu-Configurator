@@ -435,10 +435,23 @@ local function runMain(s, pad)
       return math.floor((8 * (scale or 1)) * #str)
     end
     local titleW = textWidth(title, titleScale)
+    local maxRowW = 0
+    for i = 1, total do
+      local wLabel = textWidth(getLanguageDisplayName(i), rowScale)
+      if wLabel > maxRowW then maxRowW = wLabel end
+    end
+    local rowIndentW = textWidth("  ", rowScale)
     local padTop = math.floor(sc(14))
+    local padX = math.floor(sc(14))
     local titleGap = 0
     local padBottom = math.floor(sc(14))
-    local boxW = math.min(480, (s.w or 640) - (M * 2))
+    local maxBoxW = (s.w or 640) - (M * 2)
+    local minBoxW = math.min(220, maxBoxW)
+    local neededForTitle = titleW + (padX * 2)
+    local neededForRows = (2 * (maxRowW + padX + rowIndentW)) - titleW
+    local boxW = math.max(neededForTitle, neededForRows)
+    if boxW < minBoxW then boxW = minBoxW end
+    if boxW > maxBoxW then boxW = maxBoxW end
     local boxH = padTop + L + titleGap + (maxVis * L) + padBottom
     local boxX = math.floor(((s.w or 640) - boxW) / 2)
     local boxY = math.floor(((s.h or 448) - boxH) / 2)
@@ -448,9 +461,8 @@ local function runMain(s, pad)
     local titleX = boxX + math.floor((boxW - titleW) / 2)
     local titleY = boxY + padTop
     local rowStartY = titleY + L + titleGap
-    local rowIndentW = textWidth("  ", rowScale)
     local rowX = titleX + rowIndentW
-    local rowRight = (boxX + boxW) - 18
+    local rowRight = (boxX + boxW) - padX
     local maxLabelW = rowRight - rowX
     if maxLabelW < 1 then maxLabelW = 1 end
     dt(s.font, s.drawMode, titleX, titleY, titleScale, title, common.WHITE)

@@ -1,5 +1,24 @@
 --[[ PS2BBL/PSXBBL hotkey list (16 buttons, AUTO handled separately). ]]
 
+local function countHotkeyPaths(_, ctx, keyId, maxEntries)
+  local count = 0
+  local cap = tonumber(maxEntries) or 0
+  for slot = 1, cap do
+    local path = _.config_parse.getBblHotkeyPath and _.config_parse.getBblHotkeyPath(ctx.lines, keyId, slot) or nil
+    if type(path) == "string" and path ~= "" then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+local function formatPathCount(count)
+  if count == 1 then
+    return "1 path"
+  end
+  return tostring(count) .. " paths"
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -15,7 +34,9 @@ local function run(ctx)
   end
 
   local title = "Launch Keys"
-  local isFmcb = (ctx.fileType == "freemcboot_cnf")
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
+      ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, title, _.WHITE)
 
   ctx.bblHotkeySel = ctx.bblHotkeySel or 1
@@ -43,7 +64,16 @@ local function run(ctx)
     local keyIcon = _.common.getPadIcon(keyId)
     local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
     local nameVal = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
-    local disp = isFmcb and tostring(keyId or "") or ((nameVal ~= "" and nameVal) or _.common_str.empty)
+    local pathCount = countHotkeyPaths(_, ctx, keyId, maxEntries)
+    local disp
+    if pathCount <= 0 then
+      disp = _.common_str.empty
+    elseif isFmcb then
+      disp = formatPathCount(pathCount)
+    else
+      local nameDisp = (nameVal ~= "" and nameVal) or _.common_str.empty
+      disp = nameDisp .. " " .. formatPathCount(pathCount)
+    end
     local line = disp
     local lineMaxW = maxLabelW - iconW - iconGap
     if _.common.fitListRowText then
