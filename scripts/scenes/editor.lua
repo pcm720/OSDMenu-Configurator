@@ -870,7 +870,6 @@ local function run(ctx)
         valDisplay = ""
       elseif ctx.fileType == "freemcboot_cnf" and o.key and o.key:match("^ESR_Path_E%d+$") then
         inlineAutoRow = true
-        local slotIdx = o.key:match("^ESR_Path_E(%d+)$") or "?"
         local pathVal, pathCommented = nil, nil
         if _.config_parse.getWithComment then
           pathVal, pathCommented = cachedGetWithComment(ctx.lines, o.key)
@@ -879,7 +878,7 @@ local function run(ctx)
           pathVal = ""
         end
         local pathDisp = (pathVal ~= "" and pathVal) or _.common_str.not_set
-        lab = "ESR path E" .. tostring(slotIdx) .. ": " .. pathDisp
+        lab = "  " .. pathDisp
         if ctx.editorEsrPathGrab and i == ctx.optSel then
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
         end
@@ -898,10 +897,10 @@ local function run(ctx)
           pathDisp = _.common_str.empty
         end
         if ctx.fileType == "freemcboot_cnf" then
-          lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp
+          lab = pathDisp
         else
           local argCount = (slot and slot.argCount) or 0
-          lab = "E" .. tostring(slotIdx) .. ": " .. pathDisp .. " " .. formatArgCount(argCount)
+          lab = pathDisp .. " " .. formatArgCount(argCount)
         end
         if ctx.editorAutoSlotGrab and i == ctx.optSel then
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
@@ -1059,6 +1058,9 @@ local function run(ctx)
     end
     if not canResetFromTriangle then
       hintItems = removeHintPad(hintItems, "triangle")
+    end
+    if selOpt and selOpt.optType == "header" then
+      hintItems = removeHintPad(hintItems, "cross")
     end
     local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or

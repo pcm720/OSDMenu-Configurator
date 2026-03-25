@@ -461,6 +461,7 @@ config_options.freemcboot_cnf_categories = {
     name = "Disc Options",
     options = {
       { key = "FastBoot",   optType = "bool", default = "1" },
+      { key = "_esr_paths_header", optType = "header", label = "ESR Paths:" },
       { key = "ESR_Path_E1", optType = "path", default = "mass:/BOOT/ESR.ELF" },
       { key = "ESR_Path_E2", optType = "path", default = "mc?:/BOOT/ESR.ELF" },
       { key = "ESR_Path_E3", optType = "path", default = "hdd0:__sysconf:pfs:/FMCB/ESR.ELF" },

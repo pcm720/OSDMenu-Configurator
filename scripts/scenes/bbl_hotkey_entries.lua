@@ -166,9 +166,9 @@ local function run(ctx)
         p = _.common_str.empty
       end
       if isFmcb then
-        text = "E" .. tostring(row.slot) .. ": " .. p
+        text = p
       else
-        text = "E" .. tostring(row.slot) .. ": " .. p .. " " .. formatArgCount(slot.argCount)
+        text = p .. " " .. formatArgCount(slot.argCount)
       end
       if keyDisabled or slot.disabled then
         col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
@@ -192,10 +192,11 @@ local function run(ctx)
 
   local sel = rows[ctx.bblEntrySel]
   local isEntrySel = sel and sel.kind == "entry"
+  local canCrossOpen = sel and (sel.kind ~= "empty" or canInsert)
   local hint = {
     {
-      pad = (sel and sel.kind ~= "empty") and "cross" or "",
-      label = (sel and sel.kind ~= "empty") and (ctx.bblEntryGrab and (_.menu_str.confirm_label or "Confirm") or "Enter") or "",
+      pad = canCrossOpen and "cross" or "",
+      label = canCrossOpen and (ctx.bblEntryGrab and (_.menu_str.confirm_label or "Confirm") or "Enter") or "",
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -384,6 +385,8 @@ local function run(ctx)
         ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
         ctx.state = "bbl_hotkey_entry"
       end
+    elseif sel.kind == "empty" and canInsert then
+      insertEntryBelowSelected()
     end
   end
 
