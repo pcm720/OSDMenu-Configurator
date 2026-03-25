@@ -21,6 +21,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   local iconScale = 0.6
   local textScale = 0.75
   local drawScale = (scale or 0.7) * textScale
+  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
   local iconW = math.max(10, math.floor((_.common.PAD_ICON_W or 26) * iconScale + 0.5))
   local iconH = math.max(10, math.floor((_.common.PAD_ICON_H or 26) * iconScale + 0.5))
   local gap = math.max(2, math.floor((_.common.PAD_HINT_GAP or 5) * textScale + 0.5))
@@ -55,12 +56,12 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
         else
           _.Graphics.drawImage(icon, px, iconY)
         end
-        _.common.drawText(_.font, _.drawMode, px + iconW + gap, textY, drawScale, label, drawColor, textH)
+        _.common.drawText(hintFont, _.drawMode, px + iconW + gap, textY, drawScale, label, drawColor, textH)
       else
-        local textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawScale)) or
+        local textW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, label, drawScale)) or
             math.floor(8 * drawScale * #label)
         local textX = math.floor(slotCenter - (textW / 2))
-        _.common.drawText(_.font, _.drawMode, textX, textY, drawScale, label, drawColor, textH)
+        _.common.drawText(hintFont, _.drawMode, textX, textY, drawScale, label, drawColor, textH)
       end
     end
   end

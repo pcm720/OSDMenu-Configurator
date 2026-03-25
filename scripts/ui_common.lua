@@ -129,6 +129,15 @@ local function getHintFtFont(scaleFactor)
   return nil
 end
 
+function common.getHintFont(fallbackFont, drawMode, textScale)
+  local hintFont = fallbackFont
+  if drawMode == "ftPrint" then
+    local f = getHintFtFont(textScale or 1)
+    if f then hintFont = f end
+  end
+  return hintFont
+end
+
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
 -- Single-row 5-slot layout (top row removed in new UX).
 -- totalWidth: optional. y = bottom of hint area.
@@ -152,11 +161,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local rowPads = { "cross", "square", "start", "triangle", "circle" }
     local slotCount = #rowPads
     local slotW = widthEff / slotCount
-    local hintFont = font
-    if drawMode == "ftPrint" then
-      local f = getHintFtFont(textScale)
-      if f then hintFont = f end
-    end
+    local hintFont = common.getHintFont(font, drawMode, textScale)
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
