@@ -383,10 +383,17 @@ local function run(ctx)
   local hasSelection = (ctx.entryArgSel >= 1 and ctx.entryArgSel <= total)
   local canAddArg = (isBoot or not hasCdrom)
   local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and args[ctx.entryArgSel].disabled
+  local crossPad = (hasSelection or canAddArg) and "cross" or ""
+  local crossLabel = ""
+  if hasSelection then
+    crossLabel = ctx.entryArgGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")
+  elseif canAddArg then
+    crossLabel = (_.menu_str.insert_label or "Insert")
+  end
   local argHints = {
     {
-      pad = hasSelection and "cross" or "",
-      label = hasSelection and (ctx.entryArgGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")) or "",
+      pad = crossPad,
+      label = crossLabel,
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -543,7 +550,7 @@ local function run(ctx)
       confirmMoveState()
       return
     end
-    if ctx.entryArgSel >= 1 and ctx.entryArgSel <= #args then
+    if hasSelection then
       local editIdx = ctx.entryArgSel
       local editValue = type(args[editIdx]) == "table" and args[editIdx].value or args[editIdx]
       local gsmArgKey, gsmVideoIdx, gsmCompatIdx = arg_gsm_picker.parseExistingGsmArg(_, editValue)
@@ -575,6 +582,9 @@ local function run(ctx)
           state = "text_input",
         })
       end
+    elseif canAddArg then
+      beginAddArg()
+      return
     end
   end
 

@@ -338,10 +338,17 @@ local function run(ctx)
   local hasSelection = (total > 0 and ctx.bblArgSel >= 1 and ctx.bblArgSel <= total and args[ctx.bblArgSel])
   local canAddArg = ((not hasArgCap) or total < maxArgs)
   local selectedDisabled = hasSelection and args[ctx.bblArgSel].disabled
+  local crossPad = (hasSelection or canAddArg) and "cross" or ""
+  local crossLabel = ""
+  if hasSelection then
+    crossLabel = ctx.bblArgGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")
+  elseif canAddArg then
+    crossLabel = (_.menu_str.insert_label or "Insert")
+  end
   local hint = {
     {
-      pad = hasSelection and "cross" or "",
-      label = hasSelection and (ctx.bblArgGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")) or "",
+      pad = crossPad,
+      label = crossLabel,
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -473,38 +480,43 @@ local function run(ctx)
     end
   end
 
-  if total > 0 and (_.padEffective & _.PAD_CROSS) ~= 0 then
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
     if ctx.bblArgGrab then
       confirmMoveState()
       return
     end
-    local editIdx = ctx.bblArgSel
-    local editVal = (args[editIdx] and args[editIdx].value) or ""
-    local gsmArgKey, gsmVideoIdx, gsmCompatIdx = arg_gsm_picker.parseExistingGsmArg(_, editVal)
-    if gsmArgKey then
-      arg_gsm_picker.open(ctx, gsmKeys, gsmArgKey, gsmVideoIdx, gsmCompatIdx)
-      ctx[gsmKeys.editIdxKey] = editIdx
-    else
-      _.common.beginTextInput(ctx, {
-        titleIdMode = nil,
-        prompt = _.menu_str.edit_argument_prompt or "Edit argument",
-        value = editVal,
-        maxLen = 255,
-        callback = function(val)
-          local args2 = getArgs()
-          if args2[editIdx] then
-            args2[editIdx].value = val or ""
-          end
-          setArgs(args2)
-          local refreshed = getArgs()
-          ctx.bblArgSel = findArgIndexByValue(refreshed, val or "", editIdx)
-          ctx.state = "bbl_hotkey_args"
-        end,
-        returnState = "bbl_hotkey_args",
-        gridSel = 1,
-        scroll = 1,
-        state = "text_input",
-      })
+    if hasSelection then
+      local editIdx = ctx.bblArgSel
+      local editVal = (args[editIdx] and args[editIdx].value) or ""
+      local gsmArgKey, gsmVideoIdx, gsmCompatIdx = arg_gsm_picker.parseExistingGsmArg(_, editVal)
+      if gsmArgKey then
+        arg_gsm_picker.open(ctx, gsmKeys, gsmArgKey, gsmVideoIdx, gsmCompatIdx)
+        ctx[gsmKeys.editIdxKey] = editIdx
+      else
+        _.common.beginTextInput(ctx, {
+          titleIdMode = nil,
+          prompt = _.menu_str.edit_argument_prompt or "Edit argument",
+          value = editVal,
+          maxLen = 255,
+          callback = function(val)
+            local args2 = getArgs()
+            if args2[editIdx] then
+              args2[editIdx].value = val or ""
+            end
+            setArgs(args2)
+            local refreshed = getArgs()
+            ctx.bblArgSel = findArgIndexByValue(refreshed, val or "", editIdx)
+            ctx.state = "bbl_hotkey_args"
+          end,
+          returnState = "bbl_hotkey_args",
+          gridSel = 1,
+          scroll = 1,
+          state = "text_input",
+        })
+      end
+    elseif canAddArg then
+      beginAddArg()
+      return
     end
   end
 
