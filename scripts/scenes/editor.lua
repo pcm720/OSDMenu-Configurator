@@ -616,6 +616,29 @@ local function runInlineColorEditInput(ctx, _)
   return true
 end
 
+local function drawLeaveSavePromptModal(_)
+  local prompt = tostring((_ and _.editor_str and _.editor_str.leave_save_prompt) or "Save changes before leaving?")
+  local padX = 24
+  local padY = 14
+  local lineH = _.LINE_H or 22
+  local maxTextW = math.max(80, (_.w or 640) - (((_.MARGIN_X or 40) * 2) + (padX * 2)))
+  if _.common and _.common.truncateTextToWidth then
+    prompt = _.common.truncateTextToWidth(_.font, prompt, maxTextW, 1)
+  end
+  local textW = (_.common and _.common.calcTextWidth and _.common.calcTextWidth(_.font, prompt, 1)) or (#prompt * 14)
+  local boxW = textW + (padX * 2)
+  local boxH = lineH + (padY * 2)
+  local boxX = math.floor(((_.w or 640) - boxW) / 2)
+  local boxY = math.floor(((_.h or 448) - boxH) / 2)
+  local bg = (_.Color and _.Color.new and _.Color.new(40, 40, 48, 110)) or _.DIM
+  if _.Graphics and _.Graphics.drawRect then
+    _.Graphics.drawRect(boxX, boxY, boxW, boxH, bg)
+  end
+  local textX = boxX + math.floor((boxW - textW) / 2)
+  local textY = boxY + math.floor((boxH - lineH) / 2)
+  _.drawText(_.font, _.drawMode, textX, textY, 1, prompt, _.WHITE)
+end
+
 local function run(ctx)
   local _ = ctx._
   local frameParse = getEditorParseCache(ctx, _)
@@ -627,7 +650,7 @@ local function run(ctx)
   local cachedIsBootKeyDisabled = frameParse.isBootKeyDisabled
   -- Leave-save prompt when going back to file select with unsaved changes
   if ctx.editorLeavePrompt then
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.editor_str.leave_save_prompt, _.WHITE)
+    drawLeaveSavePromptModal(_)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM,
       _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_CROSS) ~= 0 then
