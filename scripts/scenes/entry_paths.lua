@@ -178,11 +178,20 @@ local function run(ctx)
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryPathSel, label, col)
   end
   local hasPathSelection = (ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows)
+  local argsRowSelected = isBoot and (hasArgsPaths or hasSpecialArgsPath) and ctx.entryPathSel == argsRow
   local selectedPathDisabled = hasPathSelection and type(paths[ctx.entryPathSel]) == "table" and paths[ctx.entryPathSel].disabled
+  local crossLabel = ""
+  if ctx.entryPathGrab then
+    crossLabel = (_.menu_str.confirm_label or "Confirm")
+  elseif hasPathSelection or argsRowSelected then
+    crossLabel = (_.menu_str.edit_label or "Edit")
+  elseif canAddPath then
+    crossLabel = (_.menu_str.insert_label or "Insert")
+  end
   local pathHints = {
     {
-      pad = "cross",
-      label = ctx.entryPathGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit"),
+      pad = crossLabel ~= "" and "cross" or "",
+      label = crossLabel,
       row = 1
     },
     { pad = "square", label = _.menu_str.actions_label or "Actions", row = 1 },
@@ -382,6 +391,10 @@ local function run(ctx)
       end
     elseif ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths then
       openPathPicker(ctx.entryPathSel)
+    elseif canAddPath and pathRows == 0 then
+      -- After removing all paths, Cross should still insert by opening the device picker.
+      confirmMoveState()
+      openPathPicker(nil)
     end
   end
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then

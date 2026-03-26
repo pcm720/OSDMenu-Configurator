@@ -200,6 +200,7 @@ local function mainLoop()
   local textInputReturnState, textInputCursor, textInputScroll = "menu_entry_edit", 1, 1
   local holdFrameCount = 0
   local holdRepeatCountdown = 0
+  local holdRepeatFps = 0
   local bootKey, pathPickerBootKey, pathPickerReturnState = nil, nil, nil
   local configModified, editorLeavePrompt, returnToSelectConfigAfterSave, returnToSelectConfigAfterSaveFlash = false, nil,
       nil, nil
@@ -233,7 +234,8 @@ local function mainLoop()
     c.pathPickerEditIdx, c.argEditIdx = pathPickerEditIdx, argEditIdx
     c.textInputReturnState, c.textInputCursor, c.textInputScroll = textInputReturnState, textInputCursor, textInputScroll
     c.bootKey, c.pathPickerBootKey, c.pathPickerReturnState = bootKey, pathPickerBootKey, pathPickerReturnState
-    c.prevPad, c.holdFrameCount, c.holdRepeatCountdown = prevPad, holdFrameCount, holdRepeatCountdown
+    c.prevPad, c.holdFrameCount, c.holdRepeatCountdown, c.holdRepeatFps = prevPad, holdFrameCount,
+        holdRepeatCountdown, holdRepeatFps
     c.configModified, c.editorLeavePrompt, c.returnToSelectConfigAfterSave, c.returnToSelectConfigAfterSaveFlash =
         configModified, editorLeavePrompt, returnToSelectConfigAfterSave, returnToSelectConfigAfterSaveFlash
     c.openExplicitPath = openExplicitPath
@@ -267,14 +269,12 @@ local function mainLoop()
     textInputReturnState, textInputCursor, textInputScroll = c.textInputReturnState, c.textInputCursor, c
         .textInputScroll
     bootKey, pathPickerBootKey, pathPickerReturnState = c.bootKey, c.pathPickerBootKey, c.pathPickerReturnState
-    prevPad, holdFrameCount, holdRepeatCountdown = c.prevPad or prevPad, c.holdFrameCount or 0,
-        c.holdRepeatCountdown or 0
+    prevPad, holdFrameCount, holdRepeatCountdown, holdRepeatFps = c.prevPad or prevPad, c.holdFrameCount or 0,
+        c.holdRepeatCountdown or 0, c.holdRepeatFps or 0
     configModified, editorLeavePrompt, returnToSelectConfigAfterSave, returnToSelectConfigAfterSaveFlash =
         c.configModified, c.editorLeavePrompt, c.returnToSelectConfigAfterSave, c.returnToSelectConfigAfterSaveFlash
     openExplicitPath = c.openExplicitPath
   end
-
-  local REPEATABLE_MASK = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT | PAD_L1 | PAD_R1 | PAD_L2 | PAD_R2
 
   -- One-frame dispatch for all states. Main-flow states use runSceneLoop; others use this.
   local function runOneFrame(c)
@@ -302,7 +302,6 @@ local function mainLoop()
     if c.drawBackgroundLayer then
       c.drawBackgroundLayer(c)
     end
-    local fps = (h == 512) and 50 or 60            -- PAL 50Hz, NTSC 60Hz
     local HINT_Y = c.HINT_Y
     local DESC_Y_BOTTOM = c.DESC_Y_BOTTOM
     local KEYBOARD_CENTER_Y = math.floor(h * 220 / 448)
@@ -311,29 +310,15 @@ local function mainLoop()
     local KEY_H = scaleY(common.KEY_HEIGHT)
     local KEY_LH = scaleY(common.KEY_LINE_H)
     if drawMode == "ftPrint" and font then Font.ftSetPixelSize(font, 0, common.FT_PIXEL_H) end
-    local pad = Pads.get(0)
-    local padJust = pad & ~prevPad
-    -- Held inputs: start at 2/sec and accelerate to 5/sec over 4 seconds.
-    local padRepeat = 0
-    local heldMask = pad & REPEATABLE_MASK
-    local prevHeldMask = prevPad & REPEATABLE_MASK
-    if heldMask ~= 0 then
-      if prevHeldMask == 0 then
-        holdFrameCount = 0
-        holdRepeatCountdown = common.getRepeatIntervalFrames(fps, 0)
-      else
-        holdFrameCount = holdFrameCount + 1
-        holdRepeatCountdown = holdRepeatCountdown - 1
-        if holdRepeatCountdown <= 0 then
-          padRepeat = heldMask
-          holdRepeatCountdown = common.getRepeatIntervalFrames(fps, holdFrameCount)
-        end
-      end
-    else
-      holdFrameCount = 0
-      holdRepeatCountdown = 0
-    end
-    local padEffective = padJust | padRepeat
+    c.prevPad = prevPad
+    c.holdFrameCount = holdFrameCount
+    c.holdRepeatCountdown = holdRepeatCountdown
+    c.holdRepeatFps = holdRepeatFps
+    local padEffective = common.getPadEffective(c)
+    prevPad = c.prevPad or prevPad
+    holdFrameCount = c.holdFrameCount or 0
+    holdRepeatCountdown = c.holdRepeatCountdown or 0
+    holdRepeatFps = c.holdRepeatFps or holdRepeatFps
     -- Epochs are used by scene-level caches:
     -- scene epoch bumps on state transitions; input epoch bumps after button activity.
     c._sceneEpoch = c._sceneEpoch or 0
@@ -519,7 +504,7 @@ local function mainLoop()
       c._inputEpoch = (c._inputEpoch or 0) + 1
     end
 
-    prevPad = pad
+    prevPad = c.prevPad or prevPad
     syncToS(c)
     Screen.flip()
     Screen.waitVblankStart()

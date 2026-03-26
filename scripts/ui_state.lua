@@ -84,6 +84,7 @@ local function initContext()
     textInputScroll = 1,
     holdFrameCount = 0,
     holdRepeatCountdown = 0,
+    holdRepeatFps = 0,
     configModified = false,
     configCleanSemanticDigest = nil,
     configNeedsInitialSave = false,

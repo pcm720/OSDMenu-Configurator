@@ -449,63 +449,100 @@ local function runMain(s, pad)
     s.mainLangPromptAnim = anim
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
-    local title = main_str.main_select_language or "Select language"
-    local titleScale = 0.95
-    local rowScale = common.FONT_SCALE or 0.9
+    local title = "Select Language:"
+    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
+    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+    local rowScale = titleScale
+    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
+    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
+        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
     local function textWidth(text, scale)
+      local useScale = scale or rowScale
       if common.calcTextWidth then
-        return common.calcTextWidth(s.font, tostring(text or ""), scale)
+        return common.calcTextWidth(hintFont, tostring(text or ""), useScale)
       end
       local str = tostring(text or "")
-      return math.floor((8 * (scale or 1)) * #str)
+      return math.floor((8 * useScale) * #str)
     end
+
     local titleW = textWidth(title, titleScale)
-    local maxRowW = 0
-    for i = 1, total do
-      local wLabel = textWidth(getLanguageDisplayName(i), rowScale)
-      if wLabel > maxRowW then maxRowW = wLabel end
+    local spaceW = textWidth(" ", rowScale)
+    if spaceW < 1 then
+      local probeW = textWidth("M", rowScale)
+      if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
+      spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
     end
-    local rowIndentW = textWidth("  ", rowScale)
-    local padTop = math.floor(sc(14))
-    local padX = math.floor(sc(14))
+    local markerW = textWidth(">", rowScale)
+    if markerW < 1 then markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5)) end
+    local baseIndentSpaces = 4 -- 2 base + 2 extra
+    local rowIndentW = baseIndentSpaces * spaceW
+
+    local padX = math.floor((sc(8) or 8) + 0.5)
+    local padTop = math.floor((sc(6) or 6) + 0.5)
+    local titleH = textH + 2
     local titleGap = 0
-    local padBottom = math.floor(sc(14))
-    local maxBoxW = (s.w or 640) - (M * 2)
-    local minBoxW = math.min(220, maxBoxW)
-    local neededForTitle = titleW + (padX * 2)
-    local neededForRows = (2 * (maxRowW + padX + rowIndentW)) - titleW
-    local boxW = math.max(neededForTitle, neededForRows)
-    if boxW < minBoxW then boxW = minBoxW end
-    if boxW > maxBoxW then boxW = maxBoxW end
-    local boxH = padTop + L + titleGap + (maxVis * L) + padBottom
-    local boxX = math.floor(((s.w or 640) - boxW) / 2)
-    local finalBoxY = math.floor(((s.h or 448) - boxH) / 2)
-    local slideDist = math.max(10, math.floor(sc(14)))
+    local padBottom = math.floor((sc(6) or 6) + 0.5)
+    local rowStep = textH + math.max(2, math.floor((sc(3) or 3) + 0.5))
+
+    local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
+    local hintGridXShift = common.PAD_HINT_GRID_X_SHIFT or 0
+    local hintGridExtraW = common.PAD_HINT_GRID_EXTRA_W or 0
+    local hintTotalW = ((s.w or 640) - (2 * M)) + hintGridExtraW
+    local hintXEff = M + sideMargin + hintGridXShift
+    local hintWidthEff = hintTotalW - (2 * sideMargin)
+    local slotW = hintWidthEff / 5
+    local squareSlotLeft = hintXEff + slotW
+    local squareSlotCenter = squareSlotLeft + (slotW / 2)
+    local hintIconScale = 0.6
+    local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
+    local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
+
+    local cellGutter = math.max(4, math.floor((sc(4) or 4) + 0.5))
+    local boxW = math.floor(slotW - (cellGutter * 2))
+    if boxW < 90 then boxW = 90 end
+    local boxH = padTop + titleH + titleGap + (maxVis * rowStep) + padBottom
+
+    local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
+    local hintRowTop = math.floor(H) - hintRowH
+    local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((sc(2) or 2) + 0.5))
+    local slideDist = math.max(10, math.floor((sc(14) or 14) + 0.5))
     local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
+    local boxX = squareButtonLeft
+    local minX = M
+    local maxX = (s.w or 640) - boxW - M
+    if boxX < minX then boxX = minX end
+    if boxX > maxX then boxX = maxX end
+
     if Graphics and Graphics.drawRect then
-      local alpha = math.floor(110 * anim + 0.5)
+      local alpha = math.floor(120 * anim + 0.5)
       if alpha < 0 then alpha = 0 end
-      if alpha > 110 then alpha = 110 end
+      if alpha > 120 then alpha = 120 end
       Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, alpha))
     end
+
     local titleX = boxX + math.floor((boxW - titleW) / 2)
     local titleY = boxY + padTop
-    local rowStartY = titleY + L + titleGap
-    local rowX = titleX + rowIndentW
-    local rowRight = (boxX + boxW) - padX
-    local maxLabelW = rowRight - rowX
+    local rowStartY = titleY + titleH + titleGap
+    local rowLabelX = titleX + rowIndentW
+    local rowMarkerX = rowLabelX - markerW
+    local maxLabelW = (boxX + boxW) - padX - rowLabelX
     if maxLabelW < 1 then maxLabelW = 1 end
-    dt(s.font, s.drawMode, titleX, titleY, titleScale, title, common.WHITE)
+
+    dt(hintFont, s.drawMode, titleX, titleY, titleScale, title, common.WHITE)
     for i = scroll + 1, math.min(scroll + maxVis, total) do
-      local y = rowStartY + (i - scroll - 1) * L
+      local y = rowStartY + (i - scroll - 1) * rowStep
       local label = getLanguageDisplayName(i)
       if common.fitListRowText then
-        label = common.fitListRowText(s, "main_lang_row_" .. tostring(i), s.font, label, maxLabelW, rowScale, i == s.mainLangSel)
+        label = common.fitListRowText(s, "main_lang_row_" .. tostring(i), hintFont, label, maxLabelW, rowScale,
+          i == s.mainLangSel)
       elseif common.truncateTextToWidth then
-        label = common.truncateTextToWidth(s.font, label, maxLabelW, rowScale)
+        label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
       end
-      local col = (i == s.mainLangSel) and SE or common.GRAY
-      dlr(rowX, y, i == s.mainLangSel, label, col)
+      local col = (i == s.mainLangSel) and SE or common.WHITE
+      if i == s.mainLangSel then
+        dt(hintFont, s.drawMode, rowMarkerX, y, rowScale, ">", col)
+      end
+      dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, col)
     end
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)

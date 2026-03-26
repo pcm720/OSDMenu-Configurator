@@ -565,9 +565,39 @@ common.REPEATABLE_MASK = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT | PAD_L1 | PAD
 common.REPEAT_START_HZ = 2
 common.REPEAT_END_HZ = 5
 common.REPEAT_ACCEL_SECONDS = 4
+common.REPEAT_FPS_SAMPLE_WINDOW = 8
+common.REPEAT_FPS_SMOOTH_ALPHA = 0.35
+
+function common.getRepeatFps(ctx, nominalFps)
+  local fallback = math.max(1, tonumber(nominalFps) or 60)
+  if not ctx then
+    return fallback
+  end
+
+  local measured = nil
+  if Screen and Screen.getFPS then
+    local sampleWindow = math.max(1, math.floor(tonumber(common.REPEAT_FPS_SAMPLE_WINDOW) or 8))
+    measured = tonumber(Screen.getFPS(sampleWindow))
+  end
+
+  if measured and measured > 0 then
+    local alpha = tonumber(common.REPEAT_FPS_SMOOTH_ALPHA) or 0.35
+    if alpha < 0 then alpha = 0 end
+    if alpha > 1 then alpha = 1 end
+    local prev = tonumber(ctx.holdRepeatFps)
+    if prev and prev > 0 then
+      measured = prev + ((measured - prev) * alpha)
+    end
+    ctx.holdRepeatFps = measured
+    return math.max(1, measured)
+  end
+
+  ctx.holdRepeatFps = tonumber(ctx.holdRepeatFps) or fallback
+  return math.max(1, ctx.holdRepeatFps)
+end
 
 function common.getRepeatIntervalFrames(fps, heldFrames)
-  local safeFps = math.max(1, math.floor(tonumber(fps) or 60))
+  local safeFps = math.max(1, tonumber(fps) or 60)
   local startHz = tonumber(common.REPEAT_START_HZ) or 2
   local endHz = tonumber(common.REPEAT_END_HZ) or 5
   if startHz < 0.1 then startHz = 0.1 end
@@ -625,7 +655,8 @@ function common.getPadEffective(ctx)
   local pad = Pads.get(0)
   local prevPad = ctx.prevPad or 0
   local padJust = pad & ~prevPad
-  local fps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local fps = common.getRepeatFps(ctx, nominalFps)
   ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
   ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
@@ -638,10 +669,14 @@ function common.getPadEffective(ctx)
       ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, 0)
     else
       ctx.holdFrameCount = ctx.holdFrameCount + 1
+      local targetInterval = common.getRepeatIntervalFrames(fps, ctx.holdFrameCount)
+      if ctx.holdRepeatCountdown > targetInterval then
+        ctx.holdRepeatCountdown = targetInterval
+      end
       ctx.holdRepeatCountdown = ctx.holdRepeatCountdown - 1
       if ctx.holdRepeatCountdown <= 0 then
         padRepeat = heldMask
-        ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, ctx.holdFrameCount)
+        ctx.holdRepeatCountdown = targetInterval
       end
     end
   else

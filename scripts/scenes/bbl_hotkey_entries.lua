@@ -331,7 +331,7 @@ local function run(ctx)
     if isEntrySel then
       actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
     end
-    if canInsert then
+    if canInsert and sel and sel.kind ~= "name" then
       actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
     end
     if actions_menu.run(ctx, {

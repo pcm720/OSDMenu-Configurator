@@ -157,9 +157,20 @@ function actions_menu.run(ctx, opts)
   end
 
   local titleW = textWidth(title)
+  local spaceW = textWidth(" ")
+  if spaceW < 1 then
+    local probeW = textWidth("M")
+    if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
+    spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
+  end
+  local markerW = textWidth(">")
+  if markerW < 1 then
+    markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5))
+  end
+  local baseIndentSpaces = 4 -- Was 2; add +2 spaces per UX request.
   local padX = math.floor((_.scaleY and _.scaleY(8) or 8) + 0.5)
   local padTop = math.floor((_.scaleY and _.scaleY(6) or 6) + 0.5)
-  local rowIndentW = textWidth("  ")
+  local rowIndentW = baseIndentSpaces * spaceW
   local titleH = textH + 2
   local titleGap = 0
   local padBottom = math.floor((_.scaleY and _.scaleY(6) or 6) + 0.5)
@@ -184,7 +195,7 @@ function actions_menu.run(ctx, opts)
   local boxW = math.floor(slotW - (cellGutter * 2))
   if boxW < 90 then boxW = 90 end
 
-  -- Fit content within fixed width; choices align to title-left + 2 spaces.
+  -- Fit content within fixed width; choices align to title-left + 4 spaces.
   local maxVisByHeight = maxVisible
   local boxH = padTop + titleH + titleGap + (maxVisByHeight * rowStep) + padBottom
   local hintRowH = math.max(14, math.floor((((_.common and _.common.PAD_HINT_ROW_H) or 28) * textScale) + 0.5))
@@ -212,7 +223,7 @@ function actions_menu.run(ctx, opts)
 
   local rowStartY = titleY + titleH + titleGap
   local rowLabelX = titleX + rowIndentW
-  local rowMarkerX = titleX + textWidth(" ")
+  local rowMarkerX = rowLabelX - markerW
   local maxLabelW = (boxX + boxW) - padX - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
