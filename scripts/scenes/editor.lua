@@ -527,6 +527,8 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
       prefixCol = _.Color.new(80, 200, 80, 128)
     elseif ch == 3 then
       prefixCol = _.Color.new(60, 80, 170, 128)
+    elseif ch == 4 then
+      prefixCol = _.Color.new(210, 210, 210, 255)
     end
     _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
     cursorX = cursorX + textWidth(prefix)
@@ -1044,9 +1046,23 @@ local function run(ctx)
     local isOsdVisualCoordRow = selOpt and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") and
         selOpt.optType == "int" and isOsdVisualCoordKey(selOpt.key)
-    local resetDefaultFn = _.config_options and _.config_options.getOsdmenuDefault
-    if ctx.fileType == "freemcboot_cnf" and _.config_options and _.config_options.getFreemcbootDefault then
-      resetDefaultFn = _.config_options.getFreemcbootDefault
+    local function resetDefaultFn(key)
+      local keyStr = tostring(key or "")
+      if ctx.fileType == "freemcboot_cnf" then
+        if _.config_options and _.config_options.getFreemcbootDefault then
+          local v = _.config_options.getFreemcbootDefault(keyStr)
+          if v ~= nil then return v end
+        end
+      elseif ctx.fileType == "osdmenu_cnf" then
+        if _.config_options and _.config_options.getOsdmenuDefault then
+          local v = _.config_options.getOsdmenuDefault(keyStr)
+          if v ~= nil then return v end
+        end
+      end
+      if selOpt and selOpt.key == keyStr and selOpt.default ~= nil then
+        return selOpt.default
+      end
+      return nil
     end
     local hintItems = _.common.buildEditorHintItems(selOpt, _.editor_str.hint_edit_items,
       resetDefaultFn,
@@ -1793,11 +1809,55 @@ local function run(ctx)
           ctx.state = "bbl_hotkey_entry"
         end
       elseif o.optType == "boot_paths" then
-        ctx.bootKey = o.key
-        ctx.entryIdx = nil
-        ctx.entryPathSel = ctx.entryPathSel or 1
-        ctx.entryPathScroll = ctx.entryPathScroll or 0
-        ctx.state = "entry_paths"
+        local bootEntries = (_.config_parse.getBootPathEntries and _.config_parse.getBootPathEntries(ctx.lines, o.key)) or {}
+        local hasUsableBootPath = false
+        for bi = 1, #bootEntries do
+          local item = bootEntries[bi]
+          local value = type(item) == "table" and item.value or item
+          if tostring(value or "") ~= "" then
+            hasUsableBootPath = true
+            break
+          end
+        end
+        if ctx.fileType == "osdmbr_cnf" and not hasUsableBootPath then
+          -- OSDMenu MBR empty/not-set launch keys: go directly to device picker and create first path slot.
+          local firstEntry = bootEntries[1]
+          local firstEntryValue = type(firstEntry) == "table" and firstEntry.value or firstEntry
+          ctx.editKey = nil
+          ctx.isAddPath = false
+          ctx.addPathKey = nil
+          ctx.bootKey = nil
+          ctx.pathPickerTarget = nil
+          ctx.pathPickerFileExts = nil
+          ctx.pathPickerForEntryIdx = nil
+          ctx.pathPickerBblHotkeyKey = nil
+          ctx.pathPickerBblHotkeySlot = nil
+          ctx.pathPickerBblHotkeyDisabled = nil
+          ctx.pathPickerBblIrxIdx = nil
+          ctx.pathPickerBblIrxDisabled = nil
+          ctx.pathPickerBootKey = o.key
+          if firstEntry ~= nil and tostring(firstEntryValue or "") == "" then
+            ctx.pathPickerEditIdx = 1
+            ctx.pathPickerInsertBelow = nil
+          else
+            ctx.pathPickerEditIdx = nil
+            ctx.pathPickerInsertBelow = 0
+          end
+          ctx.pathPickerReturnState = "editor"
+          ctx.pathPickerContext = "mbr"
+          ctx.pathPickerSub = "device"
+          ctx.pathList = _.file_selector.getDevices("mbr") or {}
+          ctx.pathPickerSel = 1
+          ctx.pathPickerScroll = 0
+          ctx.pathBrowsePath = nil
+          ctx.state = "path_picker"
+        else
+          ctx.bootKey = o.key
+          ctx.entryIdx = nil
+          ctx.entryPathSel = ctx.entryPathSel or 1
+          ctx.entryPathScroll = ctx.entryPathScroll or 0
+          ctx.state = "entry_paths"
+        end
       elseif o.optType == "path" then
         ctx.editKey = o.key
         ctx.isAddPath = false
@@ -1834,10 +1894,13 @@ local function run(ctx)
         ctx.editorEsrPathActionsScroll = ctx.editorEsrPathActionsScroll or 0
       end
     end
-    if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and
-        (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") then
+    if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 then
       local o = ctx.optList[ctx.optSel]
-      if isOsdVisualCoordRow then
+      if o and o.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" and o.key then
+        local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
+        _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
+        ctx.configModified = true
+      elseif isOsdVisualCoordRow then
         if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet) then
           ctx.editorOsdVisualRestoreOpen = true
           ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
@@ -1856,12 +1919,7 @@ local function run(ctx)
           end
         end
       elseif o and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
-        local def = nil
-        if ctx.fileType == "freemcboot_cnf" then
-          def = _.config_options.getFreemcbootDefault and _.config_options.getFreemcbootDefault(o.key)
-        else
-          def = _.config_options.getOsdmenuDefault and _.config_options.getOsdmenuDefault(o.key)
-        end
+        local def = resetDefaultFn and resetDefaultFn(o.key)
         if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def, cachedGet) then
           _.config_parse.set(ctx.lines, o.key, def)
           if _.common and _.common.refreshConfigModified then
@@ -1870,14 +1928,6 @@ local function run(ctx)
             ctx.configModified = true
           end
         end
-      end
-    end
-    if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 and ctx.fileType == "osdmbr_cnf" then
-      local o = ctx.optList[ctx.optSel]
-      if o and o.optType == "boot_paths" and o.key then
-        local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
-        _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
-        ctx.configModified = true
       end
     end
   else

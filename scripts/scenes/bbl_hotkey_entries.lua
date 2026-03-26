@@ -261,6 +261,17 @@ local function run(ctx)
     end
   end
 
+  local function insertFirstEntryAndChoosePath()
+    if not canInsert then return end
+    local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, 0, maxEntries)
+    if not newSlot then return end
+    ctx.configModified = true
+    confirmMoveState()
+    local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or nil
+    local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
+    beginPathPickerForSlot(newSlot, inheritedDisabled)
+  end
+
   local function saveAndStay()
     ctx.saveSplash = nil
     local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
@@ -365,6 +376,11 @@ local function run(ctx)
       return
     end
     if sel.kind == "name" then
+      -- For empty BBL launch keys, choose ELF path first (device picker) before naming.
+      if (not isFmcb) and usedCount == 0 and canInsert then
+        insertFirstEntryAndChoosePath()
+        return
+      end
       local currentName = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
       ctx.textInputTitleIdMode = nil
       ctx.textInputPrompt = "NAME_" .. keyId

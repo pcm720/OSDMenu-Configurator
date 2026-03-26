@@ -180,9 +180,15 @@ local function run(ctx)
   local selKey = hotkeys[ctx.bblHotkeySel]
   local selInfo = selKey and hotkeySummary[selKey] or nil
   local selDisabled = selInfo and selInfo.disabled and true or false
+  local selCanToggleDisabled = selInfo and selInfo.disabledSeen and true or false
   local hint = {
     { pad = "cross", label = "Enter", row = 1 },
-    { pad = "triangle", label = selDisabled and "Enable" or "Disable", layoutLabel = "Disable", row = 1 },
+    {
+      pad = selCanToggleDisabled and "triangle" or "",
+      label = selCanToggleDisabled and (selDisabled and "Enable" or "Disable") or "",
+      layoutLabel = "Disable",
+      row = 1
+    },
     { pad = "circle", label = "Back", row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
@@ -195,8 +201,47 @@ local function run(ctx)
     ctx.bblHotkeySel = ctx.bblHotkeySel + 1
     if ctx.bblHotkeySel > #hotkeys then ctx.bblHotkeySel = 1 end
   end
+  local function beginFirstPathPickerForHotkey(keyId, slotDisabled)
+    if not keyId or not _.config_parse.insertBblHotkeySlotBelow then return false end
+    local firstSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, 0, maxEntries)
+    if not firstSlot then return false end
+    ctx.configModified = true
+    ctx.bblHotkeySummaryCache = nil
+    ctx.editKey = nil
+    ctx.isAddPath = false
+    ctx.addPathKey = nil
+    ctx.pathPickerTarget = nil
+    ctx.pathPickerFileExts = nil
+    ctx.pathPickerBootKey = nil
+    ctx.pathPickerForEntryIdx = nil
+    ctx.pathPickerEditIdx = nil
+    ctx.pathPickerInsertBelow = nil
+    ctx.pathPickerBblIrxIdx = nil
+    ctx.pathPickerBblIrxDisabled = nil
+    ctx.pathPickerBblHotkeyKey = keyId
+    ctx.pathPickerBblHotkeySlot = firstSlot
+    ctx.pathPickerBblHotkeyDisabled = slotDisabled and true or false
+    ctx.pathPickerReturnState = "bbl_hotkeys"
+    ctx.pathPickerContext = "path_only"
+    ctx.pathPickerSub = "device"
+    ctx.pathList = _.file_selector.getDevices("path_only") or {}
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
+    ctx.pathBrowsePath = nil
+    ctx.state = "path_picker"
+    return true
+  end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    ctx.bblHotkeyKey = hotkeys[ctx.bblHotkeySel]
+    local keyId = hotkeys[ctx.bblHotkeySel]
+    local info = keyId and hotkeySummary[keyId] or nil
+    local isEmptyBblHotkey = (not isFmcb) and info and ((tonumber(info.pathCount) or 0) <= 0)
+    if isEmptyBblHotkey then
+      local disabled = info and info.disabled and true or false
+      if beginFirstPathPickerForHotkey(keyId, disabled) then
+        return
+      end
+    end
+    ctx.bblHotkeyKey = keyId
     ctx.bblEntrySel = ctx.bblEntrySel or 1
     ctx.bblEntryScroll = ctx.bblEntryScroll or 0
     ctx.bblEntryFocusSlot = nil
@@ -205,7 +250,9 @@ local function run(ctx)
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     local keyId = hotkeys[ctx.bblHotkeySel]
-    if keyId and _.config_parse.setBblHotkeyDisabled then
+    local info = keyId and hotkeySummary[keyId] or nil
+    local canToggle = info and info.disabledSeen and true or false
+    if keyId and canToggle and _.config_parse.setBblHotkeyDisabled then
       local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
       _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
       ctx.configModified = true

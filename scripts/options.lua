@@ -263,7 +263,7 @@ local function buildBblIniGlobalOptions()
     {
       key = "PS1DRV_USE_PS1VN",
       optType = "bool",
-      default = "0",
+      default = "1",
       label = "PS1DRV_USE_PS1VN",
       desc = "Enable PS1 video negator.",
     },
