@@ -128,7 +128,31 @@ local function run(ctx)
     end
   end
 
-  local function insertBelowSelection(canAddEntry, total)
+  local function openPathPickerForEntry(entryIdx)
+    local idx = tonumber(entryIdx)
+    if not idx then return end
+    ctx.editKey = nil
+    ctx.pathPickerForEntryIdx = idx
+    ctx.pathPickerBootKey = nil
+    ctx.pathPickerBblHotkeyKey = nil
+    ctx.pathPickerBblHotkeySlot = nil
+    ctx.pathPickerBblHotkeyDisabled = nil
+    ctx.pathPickerBblIrxIdx = nil
+    ctx.pathPickerBblIrxDisabled = nil
+    ctx.pathPickerTarget = nil
+    ctx.pathPickerFileExts = nil
+    ctx.pathPickerEditIdx = nil
+    ctx.pathPickerInsertBelow = nil
+    ctx.pathPickerSub = "device"
+    ctx.pathList = _.file_selector.getDevices("osdmenu") or {}
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
+    ctx.pathPickerContext = "osdmenu"
+    ctx.pathPickerReturnState = "menu_entry_edit"
+    ctx.state = "path_picker"
+  end
+
+  local function insertBelowSelection(canAddEntry, total, directPicker)
     if not canAddEntry then return end
     local belowIdx = (total == 0) and 0 or ctx.entryList[ctx.entrySel].idx
     local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, "")
@@ -140,7 +164,11 @@ local function run(ctx)
     ctx.entryIdx = newIdx
     ctx.entryEditSub = ctx.entryEditSub or 1
     confirmMoveState()
-    ctx.state = "menu_entry_edit"
+    if directPicker then
+      openPathPickerForEntry(newIdx)
+    else
+      ctx.state = "menu_entry_edit"
+    end
   end
 
   refreshEntries()
@@ -194,11 +222,14 @@ local function run(ctx)
   end
 
   local hasSelection = (ctx.entrySel >= 1 and ctx.entrySel <= total)
+  local canCrossOpen = hasSelection or canAddEntry
   local selectedDisabled = hasSelection and ctx.entryList[ctx.entrySel].disabled
   local hintItems = {
     {
-      pad = hasSelection and "cross" or "",
-      label = hasSelection and (ctx.menuEntryGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or "",
+      pad = canCrossOpen and "cross" or "",
+      label = canCrossOpen and
+          (hasSelection and (ctx.menuEntryGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or
+            (_.menu_str.edit_label or "Edit")) or "",
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -302,14 +333,18 @@ local function run(ctx)
     refreshEntries()
   end
 
-  if (_.padEffective & _.PAD_CROSS) ~= 0 and hasSelection then
-    if ctx.menuEntryGrab then
-      confirmMoveState()
-      return
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if hasSelection then
+      if ctx.menuEntryGrab then
+        confirmMoveState()
+        return
+      end
+      ctx.entryIdx = ctx.entryList[ctx.entrySel].idx
+      ctx.entryEditSub = ctx.entryEditSub or 1
+      ctx.state = "menu_entry_edit"
+    elseif canAddEntry then
+      insertBelowSelection(canAddEntry, total, true)
     end
-    ctx.entryIdx = ctx.entryList[ctx.entrySel].idx
-    ctx.entryEditSub = ctx.entryEditSub or 1
-    ctx.state = "menu_entry_edit"
   end
 
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then

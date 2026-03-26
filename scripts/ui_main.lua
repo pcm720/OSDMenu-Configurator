@@ -488,6 +488,8 @@ local function runMain(s, pad)
       if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
       spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
     end
+    local markerW = textWidth(">", rowScale)
+    if markerW < 1 then markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5)) end
     local maxLabelWIntrinsic = 0
     for i = 1, total do
       local lw = textWidth(getLanguageDisplayName(i), rowScale)
@@ -510,17 +512,25 @@ local function runMain(s, pad)
     local slotW = hintWidthEff / 5
     local squareSlotLeft = hintXEff + slotW
     local squareSlotCenter = squareSlotLeft + (slotW / 2)
+    local startSlotLeft = hintXEff + (2 * slotW)
+    local startSlotCenter = startSlotLeft + (slotW / 2)
     local hintIconScale = 0.6
     local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
     local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
     local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
+    local startButtonLeft = math.floor(startSlotCenter - (hintIconW / 2))
     local desiredBoxX = squareButtonLeft
     local desiredRowLabelX = squareButtonLeft + hintIconW + hintGap
     local rowLabelOffset = desiredRowLabelX - desiredBoxX
-    if rowLabelOffset < (padX + spaceW) then
-      rowLabelOffset = padX + spaceW
+    if rowLabelOffset < (padX + markerW + spaceW) then
+      rowLabelOffset = padX + markerW + spaceW
     end
-    local boxW = math.max(90, math.floor((rowLabelOffset + maxLabelWIntrinsic + padX) + 0.5))
+    local rightGap = math.max(3, math.floor((sc(4) or 4) + 0.5))
+    local targetRightX = startButtonLeft - rightGap
+    local desiredToStartW = math.floor(targetRightX - desiredBoxX + 0.5)
+    if desiredToStartW < 90 then desiredToStartW = 90 end
+    local contentW = math.max(90, math.floor((rowLabelOffset + maxLabelWIntrinsic + padX) + 0.5))
+    local boxW = math.max(desiredToStartW, contentW)
     local maxBoxW = (s.w or 640) - (2 * M)
     if boxW > maxBoxW then boxW = maxBoxW end
     local boxH = padTop + titleH + titleGap + (maxVis * rowStep) + padBottom
@@ -545,7 +555,7 @@ local function runMain(s, pad)
 
     local rowStartY = boxY + padTop + titleH + titleGap
     local rowLabelX = desiredRowLabelX
-    local rowMarkerX = rowLabelX - spaceW
+    local rowMarkerX = rowLabelX - markerW - spaceW
     local maxLabelW = (boxX + boxW) - padX - rowLabelX
     if maxLabelW < 1 then maxLabelW = 1 end
 

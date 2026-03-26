@@ -168,6 +168,15 @@ function actions_menu.run(ctx, opts)
     if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
     spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
   end
+  local markerW = textWidth(">")
+  if markerW < 1 then
+    markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5))
+  end
+  local maxLabelWIntrinsic = 0
+  for i = 1, #rows do
+    local lw = textWidth(rows[i] and rows[i].label or "")
+    if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+  end
   local hintGap = math.max(2, math.floor((((_.common and _.common.PAD_HINT_GAP) or 5) * textScale) + 0.5))
   local padX = math.floor((_.scaleY and _.scaleY(8) or 8) + 0.5)
   local padTop = math.floor((_.scaleY and _.scaleY(6) or 6) + 0.5)
@@ -186,15 +195,24 @@ function actions_menu.run(ctx, opts)
   local slotW = hintWidthEff / 5
   local squareSlotLeft = hintXEff + slotW -- slot 2: square
   local squareSlotCenter = squareSlotLeft + (slotW / 2)
+  local startSlotLeft = hintXEff + (2 * slotW) -- slot 3: start
+  local startSlotCenter = startSlotLeft + (slotW / 2)
   local hintIconScale = 0.6
   local hintIconW = math.max(10, math.floor((((_.common and _.common.PAD_ICON_W) or 26) * hintIconScale) + 0.5))
   local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
+  local startButtonLeft = math.floor(startSlotCenter - (hintIconW / 2))
   local squareActionLabelX = squareButtonLeft + hintIconW + hintGap
 
-  -- Width is fixed to the square slot cell (minus a small gutter).
-  local cellGutter = math.max(4, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
-  local boxW = math.floor(slotW - (cellGutter * 2))
-  if boxW < 90 then boxW = 90 end
+  -- Keep the overlay right edge near the next button (Start), with a small visual gap.
+  local rightGap = math.max(3, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
+  local boxX = squareButtonLeft
+  local targetRightX = startButtonLeft - rightGap
+  local desiredToStartW = math.floor(targetRightX - boxX + 0.5)
+  if desiredToStartW < 90 then desiredToStartW = 90 end
+  local contentW = math.max(90, math.floor(((squareActionLabelX - boxX) + maxLabelWIntrinsic + padX) + 0.5))
+  local boxW = math.max(desiredToStartW, contentW)
+  local maxBoxWAtX = (_.w or 640) - (_.MARGIN_X or 0) - boxX
+  if boxW > maxBoxWAtX then boxW = maxBoxWAtX end
 
   -- Fit content within fixed width; choices align with Square helper label text.
   local maxVisByHeight = maxVisible
@@ -204,7 +222,6 @@ function actions_menu.run(ctx, opts)
   local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((_.scaleY and _.scaleY(2) or 2) + 0.5))
   local slideDist = math.max(10, math.floor((_.scaleY and _.scaleY(14) or 14) + 0.5))
   local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
-  local boxX = squareButtonLeft
 
   local minX = _.MARGIN_X or 0
   local maxX = (_.w or 640) - boxW - (_.MARGIN_X or 0)
@@ -226,7 +243,7 @@ function actions_menu.run(ctx, opts)
   end
 
   local rowLabelX = squareActionLabelX
-  local rowMarkerX = rowLabelX - spaceW
+  local rowMarkerX = rowLabelX - markerW - spaceW
   local maxLabelW = (boxX + boxW) - padX - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do

@@ -184,6 +184,7 @@ local function run(ctx)
 
   local sel = rows[ctx.bblEntrySel]
   local isEntrySel = sel and sel.kind == "entry"
+  local canOpenActions = sel and sel.kind ~= "name"
   local canCrossOpen = sel and (sel.kind ~= "empty" or canInsert)
   local hint = {
     {
@@ -192,7 +193,11 @@ local function run(ctx)
           (ctx.bblEntryGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or "",
       row = 1
     },
-    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    {
+      pad = canOpenActions and "square" or "",
+      label = canOpenActions and (_.menu_str.actions_label or "Actions") or "",
+      row = 1
+    },
     {
       pad = ctx.configModified and "start" or "",
       label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
@@ -431,7 +436,7 @@ local function run(ctx)
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     toggleSelectedEntryDisabled()
   end
-  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+  if canOpenActions and (_.padEffective & _.PAD_SQUARE) ~= 0 then
     ctx.bblEntryActionsOpen = true
     ctx.bblEntryActionsSel = ctx.bblEntryActionsSel or 1
     ctx.bblEntryActionsScroll = ctx.bblEntryActionsScroll or 0

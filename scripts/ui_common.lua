@@ -561,9 +561,9 @@ end
 
 local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 0x0010, 0x0040, 0x0080, 0x0020
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = 0x0400, 0x0800, 0x0100, 0x0200
-common.REPEATABLE_MASK = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT | PAD_L1 | PAD_R1 | PAD_L2 | PAD_R2
-common.REPEAT_START_HZ = 2
-common.REPEAT_END_HZ = 10
+common.REPEATABLE_MASK = PAD_UP | PAD_DOWN
+common.REPEAT_START_HZ = 3
+common.REPEAT_END_HZ = 12
 common.REPEAT_ACCEL_SECONDS = 4
 common.REPEAT_FPS_SAMPLE_WINDOW = 8
 
@@ -592,8 +592,8 @@ end
 
 function common.getRepeatIntervalFrames(fps, heldFrames)
   local safeFps = math.max(1, tonumber(fps) or 60)
-  local startHz = tonumber(common.REPEAT_START_HZ) or 2
-  local endHz = tonumber(common.REPEAT_END_HZ) or 10
+  local startHz = tonumber(common.REPEAT_START_HZ) or 3
+  local endHz = tonumber(common.REPEAT_END_HZ) or 12
   if startHz < 0.1 then startHz = 0.1 end
   if endHz < 0.1 then endHz = 0.1 end
   local accelFrames = math.max(1, math.floor((tonumber(common.REPEAT_ACCEL_SECONDS) or 4) * safeFps + 0.5))
