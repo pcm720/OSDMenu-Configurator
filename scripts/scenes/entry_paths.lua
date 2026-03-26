@@ -44,11 +44,57 @@ local function run(ctx)
   if isBoot and not ctx.bootKey then
     ctx.state = "editor"; return
   end
-  local paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
-      _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-  local function refreshPaths()
-    paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
+  local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local inputEpoch = tonumber(ctx._inputEpoch) or 0
+  local paths = {}
+  local hasArgsPaths = false
+  local hasSpecialArgsPath = false
+  local function buildPathScan()
+    local outPaths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
+    local outHasArgs = false
+    local outHasSpecialArgs = false
+    for i, p in ipairs(outPaths) do
+      local pv = type(p) == "table" and p.value or p
+      local flags = _.file_selector.getPathFlags and _.file_selector.getPathFlags(pv) or {}
+      if not flags.noargs then outHasArgs = true end
+      if flags.specialargs then outHasSpecialArgs = true end
+    end
+    return outPaths, outHasArgs, outHasSpecialArgs
+  end
+  local function getPathScanCache()
+    local cache = ctx.entryPathsScanCache
+    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+        cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") then
+      return cache
+    end
+    local outPaths, outHasArgs, outHasSpecialArgs = buildPathScan()
+    cache = {
+      sceneEpoch = sceneEpoch,
+      inputEpoch = inputEpoch,
+      linesRef = ctx.lines,
+      isBoot = isBoot,
+      entryIdx = ctx.entryIdx or 0,
+      bootKey = ctx.bootKey or "",
+      paths = outPaths,
+      hasArgsPaths = outHasArgs,
+      hasSpecialArgsPath = outHasSpecialArgs,
+    }
+    ctx.entryPathsScanCache = cache
+    return cache
+  end
+  local function invalidatePathScanCache()
+    ctx.entryPathsScanCache = nil
+  end
+  local function applyPathScan(cache)
+    paths = cache.paths or {}
+    hasArgsPaths = cache.hasArgsPaths and true or false
+    hasSpecialArgsPath = cache.hasSpecialArgsPath and true or false
+  end
+  applyPathScan(getPathScanCache())
+  local function refreshPaths()
+    invalidatePathScanCache()
+    applyPathScan(getPathScanCache())
     if #paths <= 1 then
       ctx.entryPathGrab = nil
     end
@@ -83,16 +129,6 @@ local function run(ctx)
       _.common.refreshConfigModified(ctx)
     end
     clearMoveState()
-  end
-  local hasExclusivePath = false
-  local hasArgsPaths = false
-  local hasSpecialArgsPath = false
-  for i, p in ipairs(paths) do
-    local pv = type(p) == "table" and p.value or p
-    local flags = _.file_selector.getPathFlags and _.file_selector.getPathFlags(pv) or {}
-    if flags.exclusive then hasExclusivePath = true end
-    if not flags.noargs then hasArgsPaths = true end
-    if flags.specialargs then hasSpecialArgsPath = true end
   end
   local pathRows = #paths
   local canMovePaths = pathRows > 1

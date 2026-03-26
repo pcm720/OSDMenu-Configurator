@@ -49,15 +49,43 @@ local function run(ctx)
     ctx.state = "editor"; return
   end
 
-  local paths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
-      _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-  local hasOsdOrShutdown = false
-  for _, p in ipairs(paths or {}) do
-    local pv = type(p) == "table" and p.value or p
-    if (pv or ""):upper() == "OSDSYS" or (pv or ""):upper() == "POWEROFF" then
-      hasOsdOrShutdown = true; break
+  local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local inputEpoch = tonumber(ctx._inputEpoch) or 0
+  local function buildPathsModel()
+    local outPaths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
+        _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
+    local outHasOsdOrShutdown = false
+    for _, p in ipairs(outPaths or {}) do
+      local pv = type(p) == "table" and p.value or p
+      if (pv or ""):upper() == "OSDSYS" or (pv or ""):upper() == "POWEROFF" then
+        outHasOsdOrShutdown = true
+        break
+      end
     end
+    return {
+      sceneEpoch = sceneEpoch,
+      inputEpoch = inputEpoch,
+      linesRef = ctx.lines,
+      isBoot = isBoot,
+      entryIdx = ctx.entryIdx or 0,
+      bootKey = ctx.bootKey or "",
+      paths = outPaths,
+      hasOsdOrShutdown = outHasOsdOrShutdown
+    }
   end
+  local function getPathsModel()
+    local cache = ctx.entryArgsPathsCache
+    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+        cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") then
+      return cache
+    end
+    cache = buildPathsModel()
+    ctx.entryArgsPathsCache = cache
+    return cache
+  end
+  local pathsModel = getPathsModel()
+  local paths = pathsModel.paths or {}
+  local hasOsdOrShutdown = pathsModel.hasOsdOrShutdown and true or false
   if not isBoot and hasOsdOrShutdown then
     ctx.state = "menu_entry_edit"; return
   end
@@ -80,6 +108,7 @@ local function run(ctx)
       _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, a)
       ctx.configModified = true
     end
+    ctx.entryArgsModelCache = nil
   end
 
   local function findArgIndexByValue(argList, value, fallback)
@@ -94,12 +123,15 @@ local function run(ctx)
     return _.common.clampListSelection(fallback or 1, #argList)
   end
 
+  local invalidateArgsModel
+
   local function addArgValue(v)
     local value = tostring(v or "")
     if value == "" then return end
     if isBoot and ctx.entryArgInsertBelow and ctx.entryArgInsertBelow >= 0 then
       _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value)
       ctx.configModified = true
+      invalidateArgsModel()
       local refreshed = getArgs()
       ctx.entryArgSel = findArgIndexByValue(refreshed, value, #refreshed)
     else
@@ -138,8 +170,75 @@ local function run(ctx)
     return true
   end
 
-  local args = getArgs()
-  local total = #args
+  local function buildArgsModel()
+    local outArgs = getArgs()
+    local outTotal = #outArgs
+    local outUsedKnown, outUsedModes = arg_presets.collectUsedArgs(outArgs)
+    local outProfileState = arg_profiles.resolve({
+      surface = "entry_args",
+      context = ctx.context,
+      fileType = ctx.fileType,
+      isBoot = isBoot,
+      hasNhddlPath = hasNhddlElfPath,
+    })
+    local outAddRows = arg_profiles.buildAddRows(outProfileState)
+    if not arg_presets.pathsSupportPatinfo(paths) then
+      local filteredRows = {}
+      for i = 1, #outAddRows do
+        if outAddRows[i].uniqueKey ~= "patinfo" then
+          filteredRows[#filteredRows + 1] = outAddRows[i]
+        end
+      end
+      outAddRows = filteredRows
+    end
+    if not hasCdrom then
+      local filteredRows = {}
+      for i = 1, #outAddRows do
+        if not outAddRows[i].cdromOnly then
+          filteredRows[#filteredRows + 1] = outAddRows[i]
+        end
+      end
+      outAddRows = filteredRows
+    end
+    return {
+      sceneEpoch = sceneEpoch,
+      inputEpoch = inputEpoch,
+      linesRef = ctx.lines,
+      isBoot = isBoot,
+      entryIdx = ctx.entryIdx or 0,
+      bootKey = ctx.bootKey or "",
+      context = ctx.context or "",
+      fileType = ctx.fileType or "",
+      hasCdrom = hasCdrom and true or false,
+      hasNhddlElfPath = hasNhddlElfPath and true or false,
+      args = outArgs,
+      total = outTotal,
+      usedKnown = outUsedKnown,
+      usedModes = outUsedModes,
+      profileState = outProfileState,
+      addRows = outAddRows,
+      removeNhddlPair = arg_profiles.profileUsesNhddl(outProfileState.activeProfileId),
+    }
+  end
+  local function getArgsModel()
+    local cache = ctx.entryArgsModelCache
+    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+        cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") and
+        cache.context == (ctx.context or "") and cache.fileType == (ctx.fileType or "") and
+        cache.hasCdrom == (hasCdrom and true or false) and
+        cache.hasNhddlElfPath == (hasNhddlElfPath and true or false) then
+      return cache
+    end
+    cache = buildArgsModel()
+    ctx.entryArgsModelCache = cache
+    return cache
+  end
+  invalidateArgsModel = function()
+    ctx.entryArgsModelCache = nil
+  end
+  local argsModel = getArgsModel()
+  local args = argsModel.args or {}
+  local total = tonumber(argsModel.total) or #args
   local canMoveArgs = total > 1
   local function clearMoveState()
     ctx.entryArgGrab = nil
@@ -175,34 +274,11 @@ local function run(ctx)
   if not canMoveArgs then
     confirmMoveState()
   end
-  local usedKnown, usedModes = arg_presets.collectUsedArgs(args)
-  local profileState = arg_profiles.resolve({
-    surface = "entry_args",
-    context = ctx.context,
-    fileType = ctx.fileType,
-    isBoot = isBoot,
-    hasNhddlPath = hasNhddlElfPath,
-  })
-  local addRows = arg_profiles.buildAddRows(profileState)
-  local removeNhddlPair = arg_profiles.profileUsesNhddl(profileState.activeProfileId)
-  if not arg_presets.pathsSupportPatinfo(paths) then
-    local filteredRows = {}
-    for i = 1, #addRows do
-      if addRows[i].uniqueKey ~= "patinfo" then
-        filteredRows[#filteredRows + 1] = addRows[i]
-      end
-    end
-    addRows = filteredRows
-  end
-  if not hasCdrom then
-    local filteredRows = {}
-    for i = 1, #addRows do
-      if not addRows[i].cdromOnly then
-        filteredRows[#filteredRows + 1] = addRows[i]
-      end
-    end
-    addRows = filteredRows
-  end
+  local usedKnown = argsModel.usedKnown or {}
+  local usedModes = argsModel.usedModes or {}
+  local profileState = argsModel.profileState or {}
+  local addRows = argsModel.addRows or {}
+  local removeNhddlPair = argsModel.removeNhddlPair and true or false
   local gsmKeys = {
     openKey = "entryArgGsmPickerMenu",
     selKey = "entryArgGsmPickerSel",
@@ -424,6 +500,7 @@ local function run(ctx)
         _.config_parse.setArgDisabled(ctx.lines, ctx.entryIdx, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
       end
       ctx.configModified = true
+      invalidateArgsModel()
     end
   end
 

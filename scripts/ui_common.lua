@@ -426,17 +426,46 @@ function common.refreshConfigModified(ctx)
   if not ctx then return false end
   if not ctx.lines then
     ctx.configModified = false
+    ctx._configModifiedCache = nil
     return false
+  end
+
+  local cache = ctx._configModifiedCache
+  local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local inputEpoch = tonumber(ctx._inputEpoch) or 0
+  local hadInputThisFrame = false
+  if ctx._ and type(ctx._) == "table" then
+    local pe = tonumber(ctx._.padEffective) or 0
+    hadInputThisFrame = (pe ~= 0)
+  end
+  if not hadInputThisFrame then
+    local loopPad = tonumber(ctx._lastPadEffective) or 0
+    hadInputThisFrame = (loopPad ~= 0)
+  end
+  local cleanDigest = ctx.configCleanSemanticDigest
+  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and
+      cache.cleanDigest == cleanDigest and not hadInputThisFrame then
+    ctx.configModified = cache.result and true or false
+    return ctx.configModified
   end
 
   if ctx.configCleanSemanticDigest == nil then
     ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, ctx.lines)
+    cleanDigest = ctx.configCleanSemanticDigest
   end
 
   local currentDigest = computeSemanticDigest(ctx, ctx.lines)
   local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
   local needsInitialSave = (ctx.configNeedsInitialSave == true)
   ctx.configModified = semanticChanged or needsInitialSave
+  ctx._configModifiedCache = {
+    linesRef = ctx.lines,
+    sceneEpoch = sceneEpoch,
+    inputEpoch = inputEpoch,
+    cleanDigest = ctx.configCleanSemanticDigest,
+    result = ctx.configModified and true or false,
+    digest = currentDigest
+  }
   return ctx.configModified
 end
 
@@ -446,6 +475,7 @@ function common.setCleanConfigSnapshot(ctx, opts)
   local snapshotLines = (opts.lines ~= nil) and opts.lines or ctx.lines or {}
   ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, snapshotLines)
   ctx.configNeedsInitialSave = opts.needsInitialSave == true
+  ctx._configModifiedCache = nil
   return common.refreshConfigModified(ctx)
 end
 
@@ -633,6 +663,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       ctx.drawBackgroundLayer(ctx)
     end
     local padEffective = common.getPadEffective(ctx)
+    ctx._lastPadEffective = padEffective
     runHandler(ctx, padEffective)
     common.refreshConfigModified(ctx)
     if ctx.state ~= sceneName then
@@ -725,11 +756,31 @@ function common.calcTextWidth(font, text, scale)
   if not text or text == "" then return 0 end
   local s = scale or 0.72
   local approxCharW = math.floor(8 * s)
+  local cache = common._textWidthCache
+  if not cache then
+    cache = {}
+    common._textWidthCache = cache
+    common._textWidthCacheSize = 0
+  end
+  local cacheKey = tostring(font) .. "\31" .. tostring(s) .. "\31" .. tostring(text)
+  local cachedWidth = cache[cacheKey]
+  if cachedWidth ~= nil then
+    return cachedWidth
+  end
+  local measured
   if font and Font and Font.ftCalcDimensions then
     local w = Font.ftCalcDimensions(font, text)
-    return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #text)
+    measured = (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #text)
+  else
+    measured = math.floor(approxCharW * #text)
   end
-  return math.floor(approxCharW * #text)
+  cache[cacheKey] = measured
+  common._textWidthCacheSize = (common._textWidthCacheSize or 0) + 1
+  if (common._textWidthCacheSize or 0) > 8192 then
+    common._textWidthCache = {}
+    common._textWidthCacheSize = 0
+  end
+  return measured
 end
 
 -- Truncate text to fit within maxPixels at scale, appending "..." when shortened.
@@ -792,16 +843,47 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local raw = tostring(text or "")
   if maxPixels <= 0 or raw == "" then return raw end
   local s = scale or 1
-  if not selected then
-    if ctx and ctx._rowMarqueeStates and stateKey then
-      ctx._rowMarqueeStates[stateKey] = nil
+  local st = nil
+  if ctx and stateKey then
+    local store = ctx._rowMarqueeStates
+    if not store then
+      store = {}
+      ctx._rowMarqueeStates = store
     end
-    return common.truncateTextToWidth(font, raw, maxPixels, s)
+    st = store[stateKey]
+  end
+  if not selected then
+    if st and st.text == raw and st.maxPixels == maxPixels and st.scale == s and st.truncated ~= nil then
+      st.selected = false
+      st.ticks = 0
+      return st.truncated
+    end
+    local truncated = common.truncateTextToWidth(font, raw, maxPixels, s)
+    if ctx and stateKey then
+      local store = ctx._rowMarqueeStates or {}
+      store[stateKey] = {
+        text = raw,
+        maxPixels = maxPixels,
+        scale = s,
+        selected = false,
+        ticks = 0,
+        visibleChars = nil,
+        truncated = truncated
+      }
+      ctx._rowMarqueeStates = store
+    end
+    return truncated
   end
   local textW = common.calcTextWidth(font, raw, s) or 0
   if textW <= maxPixels then
-    if ctx and ctx._rowMarqueeStates and stateKey then
-      ctx._rowMarqueeStates[stateKey] = nil
+    if st then
+      st.text = raw
+      st.maxPixels = maxPixels
+      st.scale = s
+      st.selected = true
+      st.ticks = 0
+      st.visibleChars = nil
+      st.truncated = raw
     end
     return raw
   end
@@ -816,7 +898,7 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
     store = {}
     ctx._rowMarqueeStates = store
   end
-  local st = store[stateKey]
+  st = store[stateKey]
   if not st or st.text ~= raw or st.maxPixels ~= maxPixels or st.scale ~= s then
     st = {
       text = raw,
@@ -824,8 +906,14 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
       scale = s,
       ticks = 0,
       visibleChars = nil,
+      selected = true,
+      truncated = nil,
     }
     store[stateKey] = st
+  elseif st.selected ~= true then
+    st.ticks = 0
+    st.visibleChars = nil
+    st.selected = true
   end
 
   if not st.visibleChars then

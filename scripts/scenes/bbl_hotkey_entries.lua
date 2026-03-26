@@ -37,19 +37,49 @@ local function run(ctx)
     ctx.state = returnState
     return
   end
-  local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
 
   local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
   local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
       ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   local includeNameRow = not isFmcb
-  local rows = buildRows(_, ctx, keyId, maxEntries, includeNameRow)
-  local usedCount = 0
-  for i = 1, #rows do
-    if rows[i].kind == "entry" then
-      usedCount = usedCount + 1
+  local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local inputEpoch = tonumber(ctx._inputEpoch) or 0
+  local function getRowsCache()
+    local cache = ctx.bblHotkeyEntriesRowsCache
+    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+        cache.keyId == keyId and cache.maxEntries == maxEntries and cache.includeNameRow == includeNameRow then
+      return cache
     end
+    local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or
+        false
+    local rows = buildRows(_, ctx, keyId, maxEntries, includeNameRow)
+    local usedCount = 0
+    for i = 1, #rows do
+      if rows[i].kind == "entry" then
+        usedCount = usedCount + 1
+      end
+    end
+    cache = {
+      sceneEpoch = sceneEpoch,
+      inputEpoch = inputEpoch,
+      linesRef = ctx.lines,
+      keyId = keyId,
+      maxEntries = maxEntries,
+      includeNameRow = includeNameRow,
+      keyDisabled = keyDisabled,
+      rows = rows,
+      usedCount = usedCount,
+    }
+    ctx.bblHotkeyEntriesRowsCache = cache
+    return cache
   end
+  local function invalidateRowsCache()
+    ctx.bblHotkeyEntriesRowsCache = nil
+  end
+  local rowsCache = getRowsCache()
+  local keyDisabled = rowsCache.keyDisabled and true or false
+  local rows = rowsCache.rows or {}
+  local usedCount = tonumber(rowsCache.usedCount) or 0
   local canMoveEntries = usedCount > 1
   local function clearMoveState()
     ctx.bblEntryGrab = nil
@@ -76,6 +106,7 @@ local function run(ctx)
       else
         ctx.lines = ctx.bblEntryMoveSnapshot
       end
+      invalidateRowsCache()
       local restoredRows = buildRows(_, ctx, keyId, maxEntries, includeNameRow)
       if #restoredRows == 0 then
         restoredRows[#restoredRows + 1] = { kind = "empty" }
@@ -258,6 +289,7 @@ local function run(ctx)
     local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, belowSlot, maxEntries)
     if newSlot then
       ctx.configModified = true
+      invalidateRowsCache()
       confirmMoveState()
       if isFmcb then
         local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or
@@ -279,6 +311,7 @@ local function run(ctx)
     local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, 0, maxEntries)
     if not newSlot then return end
     ctx.configModified = true
+    invalidateRowsCache()
     confirmMoveState()
     local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or nil
     local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
@@ -313,6 +346,7 @@ local function run(ctx)
     local removed = _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
     if removed then
       ctx.configModified = true
+      invalidateRowsCache()
       confirmMoveState()
     end
   end
@@ -323,6 +357,7 @@ local function run(ctx)
     if dst < 1 or dst > maxEntries then return end
     _.config_parse.swapBblHotkeySlots(ctx.lines, keyId, sel.slot, dst)
     ctx.configModified = true
+    invalidateRowsCache()
     ctx.bblEntryFocusSlot = dst
   end
 
@@ -430,6 +465,7 @@ local function run(ctx)
           _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, sel.slot, not sel.data.disabled)
       if changed then
         ctx.configModified = true
+        invalidateRowsCache()
       end
     end
   end
