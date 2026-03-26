@@ -279,7 +279,6 @@ local function mainLoop()
   -- One-frame dispatch for all states. Main-flow states use runSceneLoop; others use this.
   local function runOneFrame(c)
     syncFromS(c)
-    Screen.clear(BLACK)
     local vmode = Screen.getMode()
     local w = (vmode and vmode.width) or common.DEFAULT_W
     local h = (vmode and vmode.height) or common.DEFAULT_H
@@ -299,9 +298,6 @@ local function mainLoop()
     c.HINT_Y = h - math.floor(24 * sy)
     c.DESC_Y_BOTTOM = c.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
     c.scaleY = function(y) return math.floor((y or 0) * sy) end
-    if c.drawBackgroundLayer then
-      c.drawBackgroundLayer(c)
-    end
     local HINT_Y = c.HINT_Y
     local DESC_Y_BOTTOM = c.DESC_Y_BOTTOM
     local KEYBOARD_CENTER_Y = math.floor(h * 220 / 448)
@@ -413,6 +409,27 @@ local function mainLoop()
       PAD_R2 = PAD_R2,
     }
 
+    -- Global idle skip: on fully static frames we only poll input and wait vblank.
+    local hasAnimatedOverlay = false
+    for k, v in pairs(c) do
+      if v == true and type(k) == "string" and (k:match("Open$") or k:match("Menu$") or k:match("Prompt$")) then
+        hasAnimatedOverlay = true
+        break
+      end
+    end
+    local hasSaveSplash = (c.saveSplash and c.saveSplash.framesLeft and c.saveSplash.framesLeft > 0) and true or false
+    local canIdleSkip = (not hasAnimatedOverlay) and (not hasSaveSplash)
+    if canIdleSkip and padEffective == 0 and c._lastRenderedState == state then
+      syncToS(c)
+      Screen.waitVblankStart()
+      return c.state, c
+    end
+
+    Screen.clear(BLACK)
+    if c.drawBackgroundLayer then
+      c.drawBackgroundLayer(c)
+    end
+
     if state == "main" then
       main.runMain(ctx, padEffective)
       syncFromS(ctx)
@@ -505,6 +522,7 @@ local function mainLoop()
     end
 
     prevPad = c.prevPad or prevPad
+    c._lastRenderedState = state
     syncToS(c)
     Screen.flip()
     Screen.waitVblankStart()
