@@ -2,6 +2,51 @@
 
 local actions_menu = {}
 
+local function copyHintItem(src)
+  if type(src) ~= "table" then return nil end
+  local out = {}
+  for k, v in pairs(src) do
+    out[k] = v
+  end
+  return out
+end
+
+local function buildOverlayHints(_, incoming, actionsLabel)
+  local list = {}
+  if type(incoming) == "table" then
+    for i = 1, #incoming do
+      local it = copyHintItem(incoming[i])
+      if it then list[#list + 1] = it end
+    end
+  end
+
+  if #list == 0 then
+    list = {
+      { pad = "cross", label = "Select", row = 1 },
+      { pad = "square", label = actionsLabel, row = 1 },
+      { pad = "circle", label = "Cancel", row = 1 },
+    }
+  end
+
+  local hasSquare = false
+  for i = 1, #list do
+    local it = list[i]
+    local pad = tostring(it.pad or ""):lower()
+    if pad == "square" then
+      it.pad = "square"
+      it.label = actionsLabel
+      it.row = it.row or 1
+      hasSquare = true
+    end
+  end
+  if not hasSquare then
+    local insertAt = math.min(2, #list + 1)
+    table.insert(list, insertAt, { pad = "square", label = actionsLabel, row = 1 })
+  end
+
+  return list
+end
+
 local function closeMenu(ctx, opts)
   ctx[opts.openKey] = nil
   ctx[opts.selKey] = nil
@@ -130,6 +175,9 @@ function actions_menu.run(ctx, opts)
   local slotW = hintWidthEff / 5
   local squareSlotLeft = hintXEff + slotW -- slot 2: square
   local squareSlotCenter = squareSlotLeft + (slotW / 2)
+  local hintIconScale = 0.6
+  local hintIconW = math.max(10, math.floor((((_.common and _.common.PAD_ICON_W) or 26) * hintIconScale) + 0.5))
+  local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
 
   -- Width is fixed to the square slot cell (minus a small gutter).
   local cellGutter = math.max(4, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
@@ -144,7 +192,7 @@ function actions_menu.run(ctx, opts)
   local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((_.scaleY and _.scaleY(2) or 2) + 0.5))
   local slideDist = math.max(10, math.floor((_.scaleY and _.scaleY(14) or 14) + 0.5))
   local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
-  local boxX = math.floor(squareSlotCenter - (boxW / 2))
+  local boxX = squareButtonLeft
 
   local minX = _.MARGIN_X or 0
   local maxX = (_.w or 640) - boxW - (_.MARGIN_X or 0)
@@ -163,8 +211,9 @@ function actions_menu.run(ctx, opts)
   _.drawText(hintFont, _.drawMode, titleX, titleY, titleScale, title, _.WHITE, textH)
 
   local rowStartY = titleY + titleH + titleGap
-  local rowX = titleX + rowIndentW
-  local maxLabelW = (boxX + boxW) - padX - rowX
+  local rowLabelX = titleX + rowIndentW
+  local rowMarkerX = titleX + textWidth(" ")
+  local maxLabelW = (boxX + boxW) - padX - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
     local row = rows[i]
@@ -177,13 +226,13 @@ function actions_menu.run(ctx, opts)
       label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
     end
     local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
-    _.drawText(hintFont, _.drawMode, rowX, y, rowScale, label, col, textH)
+    if i == ctx[selKey] then
+      _.drawText(hintFont, _.drawMode, rowMarkerX, y, rowScale, ">", col, textH)
+    end
+    _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
   end
 
-  local hintItems = opts.hints or {
-    { pad = "cross", label = "Select", row = 1 },
-    { pad = "circle", label = "Cancel", row = 1 },
-  }
+  local hintItems = buildOverlayHints(_, opts.hints, (_.menu_str and _.menu_str.actions_label) or "Actions")
   if _.Graphics and _.Graphics.drawRect then
     local hintBg = (_.common and _.common.BGCOLOR) or Color.new(20, 20, 20, 255)
     local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * 0.75 + 0.5))
@@ -213,7 +262,7 @@ function actions_menu.run(ctx, opts)
       end
     end
 
-    if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (_.padEffective & _.PAD_SQUARE) ~= 0 then
       ctx[closingKey] = true
       if ctx[animKey] < 0.001 then
         ctx[animKey] = 1

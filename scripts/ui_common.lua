@@ -562,6 +562,24 @@ end
 local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 0x0010, 0x0040, 0x0080, 0x0020
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = 0x0400, 0x0800, 0x0100, 0x0200
 common.REPEATABLE_MASK = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT | PAD_L1 | PAD_R1 | PAD_L2 | PAD_R2
+common.REPEAT_START_HZ = 2
+common.REPEAT_END_HZ = 5
+common.REPEAT_ACCEL_SECONDS = 4
+
+function common.getRepeatIntervalFrames(fps, heldFrames)
+  local safeFps = math.max(1, math.floor(tonumber(fps) or 60))
+  local startHz = tonumber(common.REPEAT_START_HZ) or 2
+  local endHz = tonumber(common.REPEAT_END_HZ) or 5
+  if startHz < 0.1 then startHz = 0.1 end
+  if endHz < 0.1 then endHz = 0.1 end
+  local accelFrames = math.max(1, math.floor((tonumber(common.REPEAT_ACCEL_SECONDS) or 4) * safeFps + 0.5))
+  local t = (tonumber(heldFrames) or 0) / accelFrames
+  if t < 0 then t = 0 end
+  if t > 1 then t = 1 end
+  local hz = startHz + ((endHz - startHz) * t)
+  if hz < 0.1 then hz = 0.1 end
+  return math.max(1, math.floor((safeFps / hz) + 0.5))
+end
 
 -- Update ctx with layout values from current screen mode (for scene runner).
 function common.runLayout(ctx)
@@ -601,22 +619,34 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
   end
 end
 
--- Get pad with repeat logic; updates ctx.prevPad and ctx.holdFrameCount. Returns padEffective.
+-- Get pad with repeat logic; updates ctx.prevPad/ctx.holdFrameCount/ctx.holdRepeatCountdown.
+-- Repeat ramps from REPEAT_START_HZ to REPEAT_END_HZ over REPEAT_ACCEL_SECONDS while held.
 function common.getPadEffective(ctx)
   local pad = Pads.get(0)
-  local padJust = pad & ~(ctx.prevPad or 0)
+  local prevPad = ctx.prevPad or 0
+  local padJust = pad & ~prevPad
   local fps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
-  local REPEAT_DELAY_FRAMES = math.ceil(fps / 3)
-  ctx.holdFrameCount = ctx.holdFrameCount or 0
+  ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
+  ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
-  if (pad & common.REPEATABLE_MASK) ~= 0 then
-    ctx.holdFrameCount = ctx.holdFrameCount + 1
-    if ctx.holdFrameCount >= REPEAT_DELAY_FRAMES then
-      padRepeat = pad & common.REPEATABLE_MASK
+  local heldMask = pad & common.REPEATABLE_MASK
+  local prevHeldMask = prevPad & common.REPEATABLE_MASK
+  if heldMask ~= 0 then
+    if prevHeldMask == 0 then
+      -- New hold starts now: first repeat at start-rate interval.
       ctx.holdFrameCount = 0
+      ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, 0)
+    else
+      ctx.holdFrameCount = ctx.holdFrameCount + 1
+      ctx.holdRepeatCountdown = ctx.holdRepeatCountdown - 1
+      if ctx.holdRepeatCountdown <= 0 then
+        padRepeat = heldMask
+        ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, ctx.holdFrameCount)
+      end
     end
   else
     ctx.holdFrameCount = 0
+    ctx.holdRepeatCountdown = 0
   end
   ctx.prevPad = pad
   return padJust | padRepeat

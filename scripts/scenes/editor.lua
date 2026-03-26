@@ -477,6 +477,8 @@ local function startInlineColorEdit(ctx, _, opt)
     orig = { r, g, b, a },
     channel = 1,
     digit = 1, -- 1=hundreds, 2=tens, 3=ones
+    highlightX = nil,
+    highlightW = nil,
   }
 end
 
@@ -513,8 +515,23 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
     local padY = math.max(1, math.floor((_.scaleY and _.scaleY(2)) or 2))
     local fontPixelH = (_.common and _.common.FT_PIXEL_H) or 18
     local blockH = math.max(8, math.floor(fontPixelH * (scale or 1) + 0.5))
+    local targetX = activeBlock.x - padX
+    local targetW = activeBlock.w + padX * 2
+
+    -- Slide highlight to the currently selected channel for smoother channel changes.
+    if type(edit.highlightX) ~= "number" then edit.highlightX = targetX end
+    if type(edit.highlightW) ~= "number" then edit.highlightW = targetW end
+    local function smoothStep(cur, target, factor)
+      local delta = target - cur
+      if math.abs(delta) < 0.6 then return target end
+      return cur + (delta * factor)
+    end
+    edit.highlightX = smoothStep(edit.highlightX, targetX, 0.45)
+    edit.highlightW = smoothStep(edit.highlightW, targetW, 0.45)
+
     local underlay = _.Color.new(96, 96, 96, 110)
-    _.Graphics.drawRect(activeBlock.x - padX, y - padY, activeBlock.w + padX * 2, blockH + padY * 2, underlay)
+    _.Graphics.drawRect(math.floor(edit.highlightX + 0.5), y - padY, math.floor(edit.highlightW + 0.5), blockH + padY * 2,
+      underlay)
   end
 
   cursorX = x

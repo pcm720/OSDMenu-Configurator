@@ -150,6 +150,18 @@ local function buildMainBaseHintItems(main_str)
   return out
 end
 
+local function buildMainLanguageOverlayHintItems(main_str)
+  local base = main_str.cross_select_circle_back_items or {}
+  local selectLabel = findHintLabel(base, "cross", "Enter")
+  local backLabel = findHintLabel(base, "circle", "Back")
+  local languageLabel = getLanguageHintLabel(main_str)
+  return {
+    { pad = "cross", label = selectLabel, row = 1 },
+    { pad = "square", label = languageLabel, row = 1 },
+    { pad = "circle", label = backLabel, row = 1 },
+  }
+end
+
 local function clearPathPickerState(s)
   s.bootKey = nil
   s.pathPickerBootKey = nil
@@ -418,10 +430,23 @@ local function runMain(s, pad)
   if s.mainLangPrompt and not hasLanguageChoices() then
     s.mainLangPrompt = nil
     s.mainLangSel = nil
+    s.mainLangPromptAnim = nil
+    s.mainLangPromptClosing = nil
   end
   if s.mainLangPrompt then
     local total = #C.langFiles
     s.mainLangSel = common.clampListSelection(s.mainLangSel or (C.langIndex or 1), total)
+    local closing = s.mainLangPromptClosing == true
+    local anim = tonumber(s.mainLangPromptAnim)
+    if type(anim) ~= "number" then
+      anim = closing and 1 or 0
+    end
+    if closing then
+      anim = math.max(0, anim - (1 / 6))
+    else
+      anim = math.min(1, anim + (1 / 6))
+    end
+    s.mainLangPromptAnim = anim
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
     local title = main_str.main_select_language or "Select language"
@@ -454,9 +479,14 @@ local function runMain(s, pad)
     if boxW > maxBoxW then boxW = maxBoxW end
     local boxH = padTop + L + titleGap + (maxVis * L) + padBottom
     local boxX = math.floor(((s.w or 640) - boxW) / 2)
-    local boxY = math.floor(((s.h or 448) - boxH) / 2)
+    local finalBoxY = math.floor(((s.h or 448) - boxH) / 2)
+    local slideDist = math.max(10, math.floor(sc(14)))
+    local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
     if Graphics and Graphics.drawRect then
-      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, 110))
+      local alpha = math.floor(110 * anim + 0.5)
+      if alpha < 0 then alpha = 0 end
+      if alpha > 110 then alpha = 110 end
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, alpha))
     end
     local titleX = boxX + math.floor((boxW - titleW) / 2)
     local titleY = boxY + padTop
@@ -477,24 +507,32 @@ local function runMain(s, pad)
       local col = (i == s.mainLangSel) and SE or common.GRAY
       dlr(rowX, y, i == s.mainLangSel, label, col)
     end
-    local hintItems = main_str.cross_select_circle_back_items or {
-      { pad = "cross", label = "Enter" },
-      { pad = "circle", label = "Back" },
-    }
+    local hintItems = buildMainLanguageOverlayHintItems(main_str)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
-    if (pad & PAD_UP) ~= 0 then
-      s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, -1)
-    end
-    if (pad & PAD_DOWN) ~= 0 then
-      s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, 1)
-    end
-    if (pad & PAD_CROSS) ~= 0 then
-      applyLanguageIndex(s, s.mainLangSel)
+    if not closing then
+      if (pad & PAD_UP) ~= 0 then
+        s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, -1)
+      end
+      if (pad & PAD_DOWN) ~= 0 then
+        s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, 1)
+      end
+      if (pad & PAD_CROSS) ~= 0 then
+        applyLanguageIndex(s, s.mainLangSel)
+        s.mainLangPrompt = nil
+        s.mainLangSel = nil
+        s.mainLangPromptAnim = nil
+        s.mainLangPromptClosing = nil
+      elseif (pad & PAD_CIRCLE) ~= 0 or (pad & PAD_SQUARE) ~= 0 then
+        s.mainLangPromptClosing = true
+        if s.mainLangPromptAnim < 0.001 then
+          s.mainLangPromptAnim = 1
+        end
+      end
+    elseif anim <= 0.001 then
       s.mainLangPrompt = nil
       s.mainLangSel = nil
-    elseif (pad & PAD_CIRCLE) ~= 0 then
-      s.mainLangPrompt = nil
-      s.mainLangSel = nil
+      s.mainLangPromptAnim = nil
+      s.mainLangPromptClosing = nil
     end
     return
   end
@@ -502,6 +540,8 @@ local function runMain(s, pad)
   if hasLanguageChoices() and (pad & PAD_SQUARE) ~= 0 then
     s.mainLangPrompt = true
     s.mainLangSel = C.langIndex or 1
+    s.mainLangPromptAnim = 0
+    s.mainLangPromptClosing = nil
     return
   end
 
