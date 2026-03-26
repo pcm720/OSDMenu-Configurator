@@ -21,10 +21,12 @@ local function buildOverlayHints(_, incoming, actionsLabel)
   end
 
   if #list == 0 then
+    local selectLabel = (_ and _.menu_str and (_.menu_str.enter_label or _.menu_str.confirm_label)) or "Select"
+    local cancelLabel = (_ and _.menu_str and _.menu_str.cancel_label) or "Cancel"
     list = {
-      { pad = "cross", label = "Select", row = 1 },
+      { pad = "cross", label = selectLabel, row = 1 },
       { pad = "square", label = actionsLabel, row = 1 },
-      { pad = "circle", label = "Cancel", row = 1 },
+      { pad = "circle", label = cancelLabel, row = 1 },
     }
   end
 
@@ -135,10 +137,13 @@ function actions_menu.run(ctx, opts)
   end
   ctx[animKey] = anim
 
-  local title = "Select Action:"
+  -- Standard Square Actions overlays intentionally render without a title.
+  -- Keep heading support for explicit override-style dialogs (e.g. restore defaults).
+  local title = ""
   if opts.titleOverride ~= nil and tostring(opts.titleOverride) ~= "" then
     title = tostring(opts.titleOverride)
   end
+  local hasTitle = (title ~= "")
   local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.75)
   local titleScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
   local rowScale = titleScale
@@ -156,23 +161,18 @@ function actions_menu.run(ctx, opts)
     return math.floor((8 * rowScale) * #s)
   end
 
-  local titleW = textWidth(title)
+  local titleW = hasTitle and textWidth(title) or 0
   local spaceW = textWidth(" ")
   if spaceW < 1 then
     local probeW = textWidth("M")
     if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
     spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
   end
-  local markerW = textWidth(">")
-  if markerW < 1 then
-    markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5))
-  end
-  local baseIndentSpaces = 4 -- Was 2; add +2 spaces per UX request.
+  local hintGap = math.max(2, math.floor((((_.common and _.common.PAD_HINT_GAP) or 5) * textScale) + 0.5))
   local padX = math.floor((_.scaleY and _.scaleY(8) or 8) + 0.5)
   local padTop = math.floor((_.scaleY and _.scaleY(6) or 6) + 0.5)
-  local rowIndentW = baseIndentSpaces * spaceW
-  local titleH = textH + 2
-  local titleGap = 0
+  local titleH = hasTitle and (textH + 2) or 0
+  local titleGap = hasTitle and 0 or 0
   local padBottom = math.floor((_.scaleY and _.scaleY(6) or 6) + 0.5)
   local rowStep = textH + math.max(2, math.floor((_.scaleY and _.scaleY(3) or 3) + 0.5))
 
@@ -189,13 +189,14 @@ function actions_menu.run(ctx, opts)
   local hintIconScale = 0.6
   local hintIconW = math.max(10, math.floor((((_.common and _.common.PAD_ICON_W) or 26) * hintIconScale) + 0.5))
   local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
+  local squareActionLabelX = squareButtonLeft + hintIconW + hintGap
 
   -- Width is fixed to the square slot cell (minus a small gutter).
   local cellGutter = math.max(4, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
   local boxW = math.floor(slotW - (cellGutter * 2))
   if boxW < 90 then boxW = 90 end
 
-  -- Fit content within fixed width; choices align to title-left + 4 spaces.
+  -- Fit content within fixed width; choices align with Square helper label text.
   local maxVisByHeight = maxVisible
   local boxH = padTop + titleH + titleGap + (maxVisByHeight * rowStep) + padBottom
   local hintRowH = math.max(14, math.floor((((_.common and _.common.PAD_HINT_ROW_H) or 28) * textScale) + 0.5))
@@ -217,13 +218,15 @@ function actions_menu.run(ctx, opts)
     _.Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, bgAlpha))
   end
 
-  local titleX = boxX + math.floor((boxW - titleW) / 2)
-  local titleY = boxY + padTop
-  _.drawText(hintFont, _.drawMode, titleX, titleY, titleScale, title, _.WHITE, textH)
+  local rowStartY = boxY + padTop + titleH + titleGap
+  if hasTitle then
+    local titleX = boxX + math.floor((boxW - titleW) / 2)
+    local titleY = boxY + padTop
+    _.drawText(hintFont, _.drawMode, titleX, titleY, titleScale, title, _.WHITE, textH)
+  end
 
-  local rowStartY = titleY + titleH + titleGap
-  local rowLabelX = titleX + rowIndentW
-  local rowMarkerX = rowLabelX - markerW
+  local rowLabelX = squareActionLabelX
+  local rowMarkerX = rowLabelX - spaceW
   local maxLabelW = (boxX + boxW) - padX - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do

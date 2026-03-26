@@ -201,7 +201,8 @@ local function run(ctx)
   local hints = {
     {
       pad = canCrossEdit and "cross" or "",
-      label = canCrossEdit and (ctx.bblIrxGrab and (_.menu_str.confirm_label or "Confirm") or "Edit") or "",
+      label = canCrossEdit and
+          (ctx.bblIrxGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")) or "",
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },

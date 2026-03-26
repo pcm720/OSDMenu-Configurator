@@ -563,10 +563,9 @@ local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 0x0010, 0x0040, 0x0080, 0x0020
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = 0x0400, 0x0800, 0x0100, 0x0200
 common.REPEATABLE_MASK = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT | PAD_L1 | PAD_R1 | PAD_L2 | PAD_R2
 common.REPEAT_START_HZ = 2
-common.REPEAT_END_HZ = 5
+common.REPEAT_END_HZ = 10
 common.REPEAT_ACCEL_SECONDS = 4
 common.REPEAT_FPS_SAMPLE_WINDOW = 8
-common.REPEAT_FPS_SMOOTH_ALPHA = 0.35
 
 function common.getRepeatFps(ctx, nominalFps)
   local fallback = math.max(1, tonumber(nominalFps) or 60)
@@ -574,32 +573,27 @@ function common.getRepeatFps(ctx, nominalFps)
     return fallback
   end
 
-  local measured = nil
-  if Screen and Screen.getFPS then
+  local cached = tonumber(ctx.holdRepeatFps) or 0
+  if cached <= 0 and Screen and Screen.getFPS then
     local sampleWindow = math.max(1, math.floor(tonumber(common.REPEAT_FPS_SAMPLE_WINDOW) or 8))
-    measured = tonumber(Screen.getFPS(sampleWindow))
-  end
-
-  if measured and measured > 0 then
-    local alpha = tonumber(common.REPEAT_FPS_SMOOTH_ALPHA) or 0.35
-    if alpha < 0 then alpha = 0 end
-    if alpha > 1 then alpha = 1 end
-    local prev = tonumber(ctx.holdRepeatFps)
-    if prev and prev > 0 then
-      measured = prev + ((measured - prev) * alpha)
+    local measured = tonumber(Screen.getFPS(sampleWindow))
+    if measured and measured > 0 then
+      cached = measured
     end
-    ctx.holdRepeatFps = measured
-    return math.max(1, measured)
   end
 
-  ctx.holdRepeatFps = tonumber(ctx.holdRepeatFps) or fallback
-  return math.max(1, ctx.holdRepeatFps)
+  if cached <= 0 then
+    cached = fallback
+  end
+
+  ctx.holdRepeatFps = cached
+  return math.max(1, cached)
 end
 
 function common.getRepeatIntervalFrames(fps, heldFrames)
   local safeFps = math.max(1, tonumber(fps) or 60)
   local startHz = tonumber(common.REPEAT_START_HZ) or 2
-  local endHz = tonumber(common.REPEAT_END_HZ) or 5
+  local endHz = tonumber(common.REPEAT_END_HZ) or 10
   if startHz < 0.1 then startHz = 0.1 end
   if endHz < 0.1 then endHz = 0.1 end
   local accelFrames = math.max(1, math.floor((tonumber(common.REPEAT_ACCEL_SECONDS) or 4) * safeFps + 0.5))

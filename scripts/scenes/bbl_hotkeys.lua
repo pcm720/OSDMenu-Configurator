@@ -182,14 +182,15 @@ local function run(ctx)
   local selDisabled = selInfo and selInfo.disabled and true or false
   local selCanToggleDisabled = selInfo and selInfo.disabledSeen and true or false
   local hint = {
-    { pad = "cross", label = "Enter", row = 1 },
+    { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
     {
       pad = selCanToggleDisabled and "triangle" or "",
-      label = selCanToggleDisabled and (selDisabled and "Enable" or "Disable") or "",
-      layoutLabel = "Disable",
+      label = selCanToggleDisabled and
+          (selDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      layoutLabel = (_.menu_str.disable_label or "Disable"),
       row = 1
     },
-    { pad = "circle", label = "Back", row = 1 },
+    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 

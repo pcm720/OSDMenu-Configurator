@@ -188,7 +188,8 @@ local function run(ctx)
   local hint = {
     {
       pad = canCrossOpen and "cross" or "",
-      label = canCrossOpen and (ctx.bblEntryGrab and (_.menu_str.confirm_label or "Confirm") or "Enter") or "",
+      label = canCrossOpen and
+          (ctx.bblEntryGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or "",
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -199,7 +200,8 @@ local function run(ctx)
     },
     {
       pad = isEntrySel and "triangle" or "",
-      label = isEntrySel and (sel.data.disabled and "Enable" or "Disable") or "",
+      label = isEntrySel and
+          (sel.data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
     {

@@ -1405,7 +1405,7 @@ local function run(ctx)
       hintItems = {
         {
           pad = "cross",
-          label = ctx.editorAutoSlotGrab and (_.menu_str.confirm_label or "Confirm") or "Edit",
+          label = ctx.editorAutoSlotGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit"),
           row = 1
         },
         { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -1416,7 +1416,9 @@ local function run(ctx)
         },
         {
           pad = autoSlotHasPresence(autoSlotData) and "triangle" or "",
-          label = autoSlotHasPresence(autoSlotData) and ((autoSlotData.disabled and "Enable") or "Disable") or "",
+          label = autoSlotHasPresence(autoSlotData) and
+              ((autoSlotData.disabled and (_.menu_str.enable_label or "Enable")) or
+                (_.menu_str.disable_label or "Disable")) or "",
           row = 1
         },
         {
@@ -1432,7 +1434,7 @@ local function run(ctx)
       hintItems = {
         {
           pad = "cross",
-          label = ctx.editorEsrPathGrab and (_.menu_str.confirm_label or "Confirm") or "Edit",
+          label = ctx.editorEsrPathGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit"),
           row = 1
         },
         { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -1443,7 +1445,7 @@ local function run(ctx)
         },
         {
           pad = "triangle",
-          label = esrSel.disabled and "Enable" or "Disable",
+          label = esrSel.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"),
           row = 1
         },
         {
@@ -1456,19 +1458,19 @@ local function run(ctx)
 
     if selOpt and ctx.timerDigitEdit and ctx.timerDigitEdit.key == selOpt.key then
       hintItems = {
-        { pad = "cross", label = "Confirm", row = 1 },
-        { pad = "circle", label = "Cancel", row = 1 },
+        { pad = "cross", label = (_.menu_str.confirm_label or "Confirm"), row = 1 },
+        { pad = "circle", label = (_.menu_str.cancel_label or "Cancel"), row = 1 },
       }
     elseif selOpt and ctx.intDigitEdit and ctx.intDigitEdit.key == selOpt.key then
       hintItems = {
-        { pad = "cross", label = "Confirm", row = 1 },
-        { pad = "circle", label = "Cancel", row = 1 },
+        { pad = "cross", label = (_.menu_str.confirm_label or "Confirm"), row = 1 },
+        { pad = "circle", label = (_.menu_str.cancel_label or "Cancel"), row = 1 },
       }
     elseif selOpt and ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
       hintItems = {
-        { pad = "cross", label = "Confirm", row = 1 },
+        { pad = "cross", label = (_.menu_str.confirm_label or "Confirm"), row = 1 },
         { pad = "square", label = (_.menu_str.channel_label or "Channel"), row = 1 },
-        { pad = "circle", label = "Cancel", row = 1 },
+        { pad = "circle", label = (_.menu_str.cancel_label or "Cancel"), row = 1 },
       }
     end
 

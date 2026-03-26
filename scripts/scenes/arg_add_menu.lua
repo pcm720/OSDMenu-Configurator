@@ -8,10 +8,10 @@ local function closeMenu(ctx, opts)
   ctx[opts.scrollKey] = nil
 end
 
-local function buildDefaultHints()
+local function buildDefaultHints(_)
   return {
-    { pad = "cross", label = "Select", row = 1 },
-    { pad = "circle", label = "Cancel", row = 1 },
+    { pad = "cross", label = (_ and _.menu_str and (_.menu_str.enter_label or _.menu_str.confirm_label)) or "Select", row = 1 },
+    { pad = "circle", label = (_ and _.menu_str and _.menu_str.cancel_label) or "Cancel", row = 1 },
   }
 end
 
@@ -64,7 +64,7 @@ function arg_add_menu.run(ctx, opts)
   end
   ctx[scrollKey] = _.common.centeredListScroll(ctx[selKey], #rows, maxVisible)
 
-  local title = opts.title or "Add argument"
+  local title = opts.title or (_.menu_str.new_argument_prompt or "Add argument")
   local selectedRow = rows[ctx[selKey]]
   local desc = (selectedRow and selectedRow.desc) or (opts.descDefault or "")
 
@@ -111,7 +111,7 @@ function arg_add_menu.run(ctx, opts)
     _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, desc, hintColor, hintTextH)
   end
 
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, opts.hints or buildDefaultHints(), nil, _.DIM,
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, opts.hints or buildDefaultHints(_), nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then

@@ -427,6 +427,23 @@ local function runMain(s, pad)
   if s.mainSel < 1 then s.mainSel = 1 end
   if s.mainSel > #s.main then s.mainSel = #s.main end
 
+  local function drawMainBaseUi()
+    dt(s.font, s.drawMode, M, MY, 1.1, main_str.main_title or "", common.WHITE)
+    local versionStr = (type(APP_VERSION) == "string" and APP_VERSION ~= "") and APP_VERSION or
+        (main_str.version_unknown or "unknown")
+    local vw = common.calcTextWidth(s.font, versionStr, 0.75) or (#versionStr * 9)
+    local viewW = s.w or 640
+    dt(s.font, s.drawMode, viewW - M - vw, MY, 0.75, versionStr, common.DIM)
+    dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
+    local hintItems = buildMainBaseHintItems(main_str)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
+    for i, label in ipairs(s.main) do
+      local y = MY + sc(50) + (i - 1) * L
+      local col = (i == s.mainSel) and SE or common.GRAY
+      dlr(M + 20, y, i == s.mainSel, label, col)
+    end
+  end
+
   if s.mainLangPrompt and not hasLanguageChoices() then
     s.mainLangPrompt = nil
     s.mainLangSel = nil
@@ -447,9 +464,9 @@ local function runMain(s, pad)
       anim = math.min(1, anim + (1 / 6))
     end
     s.mainLangPromptAnim = anim
+    drawMainBaseUi()
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
-    local title = "Select Language:"
     local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
     local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
     local rowScale = titleScale
@@ -465,21 +482,21 @@ local function runMain(s, pad)
       return math.floor((8 * useScale) * #str)
     end
 
-    local titleW = textWidth(title, titleScale)
     local spaceW = textWidth(" ", rowScale)
     if spaceW < 1 then
       local probeW = textWidth("M", rowScale)
       if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
       spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
     end
-    local markerW = textWidth(">", rowScale)
-    if markerW < 1 then markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5)) end
-    local baseIndentSpaces = 4 -- 2 base + 2 extra
-    local rowIndentW = baseIndentSpaces * spaceW
+    local maxLabelWIntrinsic = 0
+    for i = 1, total do
+      local lw = textWidth(getLanguageDisplayName(i), rowScale)
+      if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+    end
 
     local padX = math.floor((sc(8) or 8) + 0.5)
     local padTop = math.floor((sc(6) or 6) + 0.5)
-    local titleH = textH + 2
+    local titleH = 0
     local titleGap = 0
     local padBottom = math.floor((sc(6) or 6) + 0.5)
     local rowStep = textH + math.max(2, math.floor((sc(3) or 3) + 0.5))
@@ -495,11 +512,17 @@ local function runMain(s, pad)
     local squareSlotCenter = squareSlotLeft + (slotW / 2)
     local hintIconScale = 0.6
     local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
+    local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
     local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
-
-    local cellGutter = math.max(4, math.floor((sc(4) or 4) + 0.5))
-    local boxW = math.floor(slotW - (cellGutter * 2))
-    if boxW < 90 then boxW = 90 end
+    local desiredBoxX = squareButtonLeft
+    local desiredRowLabelX = squareButtonLeft + hintIconW + hintGap
+    local rowLabelOffset = desiredRowLabelX - desiredBoxX
+    if rowLabelOffset < (padX + spaceW) then
+      rowLabelOffset = padX + spaceW
+    end
+    local boxW = math.max(90, math.floor((rowLabelOffset + maxLabelWIntrinsic + padX) + 0.5))
+    local maxBoxW = (s.w or 640) - (2 * M)
+    if boxW > maxBoxW then boxW = maxBoxW end
     local boxH = padTop + titleH + titleGap + (maxVis * rowStep) + padBottom
 
     local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
@@ -507,7 +530,7 @@ local function runMain(s, pad)
     local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((sc(2) or 2) + 0.5))
     local slideDist = math.max(10, math.floor((sc(14) or 14) + 0.5))
     local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
-    local boxX = squareButtonLeft
+    local boxX = desiredBoxX
     local minX = M
     local maxX = (s.w or 640) - boxW - M
     if boxX < minX then boxX = minX end
@@ -520,15 +543,12 @@ local function runMain(s, pad)
       Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, alpha))
     end
 
-    local titleX = boxX + math.floor((boxW - titleW) / 2)
-    local titleY = boxY + padTop
-    local rowStartY = titleY + titleH + titleGap
-    local rowLabelX = titleX + rowIndentW
-    local rowMarkerX = rowLabelX - markerW
+    local rowStartY = boxY + padTop + titleH + titleGap
+    local rowLabelX = desiredRowLabelX
+    local rowMarkerX = rowLabelX - spaceW
     local maxLabelW = (boxX + boxW) - padX - rowLabelX
     if maxLabelW < 1 then maxLabelW = 1 end
 
-    dt(hintFont, s.drawMode, titleX, titleY, titleScale, title, common.WHITE)
     for i = scroll + 1, math.min(scroll + maxVis, total) do
       local y = rowStartY + (i - scroll - 1) * rowStep
       local label = getLanguageDisplayName(i)
@@ -616,20 +636,7 @@ local function runMain(s, pad)
     if (pad & PAD_CIRCLE) ~= 0 and not openedExitPrompt then s.mainExitPrompt = nil end
     return
   end
-  dt(s.font, s.drawMode, M, MY, 1.1, main_str.main_title or "", common.WHITE)
-  local versionStr = (type(APP_VERSION) == "string" and APP_VERSION ~= "") and APP_VERSION or
-      (main_str.version_unknown or "unknown")
-  local vw = common.calcTextWidth(s.font, versionStr, 0.75) or (#versionStr * 9)
-  local w = s.w or 640
-  dt(s.font, s.drawMode, w - M - vw, MY, 0.75, versionStr, common.DIM)
-  dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
-  local hintItems = buildMainBaseHintItems(main_str)
-  common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
-  for i, label in ipairs(s.main) do
-    local y = MY + sc(50) + (i - 1) * L
-    local col = (i == s.mainSel) and SE or common.GRAY
-    dlr(M + 20, y, i == s.mainSel, label, col)
-  end
+  drawMainBaseUi()
   if (pad & PAD_CROSS) ~= 0 then
     if s.mainSel == 1 then
       s.mainOverlayLogoKey = "freemcboot"

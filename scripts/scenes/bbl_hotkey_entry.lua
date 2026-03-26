@@ -191,17 +191,27 @@ local function run(ctx)
     local disableHint = _.menu_str.paths_hint_items_with_disable or _.menu_str.paths_hint_items
     local baseHint = data.disabled and enableHint or disableHint
     local toggleLayoutLabel = findWidestHintLabel(_, enableHint, disableHint, "triangle",
-      data.disabled and "Enable" or "Disable")
+      data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"))
     hint = {
-      { pad = "cross", label = findHintLabel(baseHint, "cross", "Edit"), row = 1 },
-      { pad = "triangle", label = findHintLabel(baseHint, "triangle", data.disabled and "Enable" or "Disable"), layoutLabel = toggleLayoutLabel, row = 1 },
-      { pad = canRemoveSlot and "square" or "", label = canRemoveSlot and findHintLabel(baseHint, "square", "Remove") or "", row = 1 },
-      { pad = "circle", label = findHintLabel(baseHint, "circle", "Back"), row = 1 },
+      { pad = "cross", label = findHintLabel(baseHint, "cross", (_.menu_str.edit_label or "Edit")), row = 1 },
+      {
+        pad = "triangle",
+        label = findHintLabel(baseHint, "triangle",
+          data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")),
+        layoutLabel = toggleLayoutLabel,
+        row = 1
+      },
+      {
+        pad = canRemoveSlot and "square" or "",
+        label = canRemoveSlot and findHintLabel(baseHint, "square", (_.menu_str.remove_label or "Remove")) or "",
+        row = 1
+      },
+      { pad = "circle", label = findHintLabel(baseHint, "circle", (_.menu_str.back_label or "Back")), row = 1 },
     }
   else
     hint = {
-      { pad = "cross", label = "Enter", row = 1 },
-      { pad = "circle", label = "Back", row = 1 },
+      { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
+      { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
     }
   end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
