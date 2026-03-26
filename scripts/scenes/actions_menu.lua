@@ -1,4 +1,4 @@
---[[ Shared centered actions menu (Square picker). ]]
+--[[ Shared anchored actions menu (Square by default; configurable anchor). ]]
 
 local actions_menu = {}
 
@@ -11,7 +11,38 @@ local function copyHintItem(src)
   return out
 end
 
-local function buildOverlayHints(_, incoming, actionsLabel)
+local function normalizePadName(pad)
+  local p = tostring(pad or ""):lower()
+  if p == "l1" or p == "l2" or p == "l3" or p == "r1" or p == "r2" or p == "r3" then
+    return p:upper()
+  end
+  return p
+end
+
+local function padMaskForName(_, pad)
+  local p = normalizePadName(pad)
+  if p == "cross" then return _.PAD_CROSS end
+  if p == "circle" then return _.PAD_CIRCLE end
+  if p == "triangle" then return _.PAD_TRIANGLE end
+  if p == "square" then return _.PAD_SQUARE end
+  if p == "start" then return _.PAD_START end
+  if p == "select" then return _.PAD_SELECT end
+  if p == "up" then return _.PAD_UP end
+  if p == "down" then return _.PAD_DOWN end
+  if p == "left" then return _.PAD_LEFT end
+  if p == "right" then return _.PAD_RIGHT end
+  if p == "L1" then return _.PAD_L1 end
+  if p == "L2" then return _.PAD_L2 end
+  if p == "L3" then return _.PAD_L3 end
+  if p == "R1" then return _.PAD_R1 end
+  if p == "R2" then return _.PAD_R2 end
+  if p == "R3" then return _.PAD_R3 end
+  return nil
+end
+
+local function buildOverlayHints(_, incoming, anchorPad, anchorLabel)
+  anchorPad = normalizePadName(anchorPad ~= nil and anchorPad or "square")
+  anchorLabel = tostring(anchorLabel or "")
   local list = {}
   if type(incoming) == "table" then
     for i = 1, #incoming do
@@ -25,25 +56,25 @@ local function buildOverlayHints(_, incoming, actionsLabel)
     local cancelLabel = (_ and _.menu_str and _.menu_str.cancel_label) or "Cancel"
     list = {
       { pad = "cross", label = selectLabel, row = 1 },
-      { pad = "square", label = actionsLabel, row = 1 },
+      { pad = anchorPad, label = anchorLabel, row = 1 },
       { pad = "circle", label = cancelLabel, row = 1 },
     }
   end
 
-  local hasSquare = false
+  local hasAnchor = false
   for i = 1, #list do
     local it = list[i]
-    local pad = tostring(it.pad or ""):lower()
-    if pad == "square" then
-      it.pad = "square"
-      it.label = actionsLabel
+    local pad = normalizePadName(it.pad)
+    if pad == anchorPad then
+      it.pad = anchorPad
+      it.label = anchorLabel
       it.row = it.row or 1
-      hasSquare = true
+      hasAnchor = true
     end
   end
-  if not hasSquare then
+  if not hasAnchor then
     local insertAt = math.min(2, #list + 1)
-    table.insert(list, insertAt, { pad = "square", label = actionsLabel, row = 1 })
+    table.insert(list, insertAt, { pad = anchorPad, label = anchorLabel, row = 1 })
   end
 
   return list
@@ -92,6 +123,9 @@ function actions_menu.run(ctx, opts)
   if not ctx[openKey] then return false end
   local animKey = tostring(openKey) .. "_anim"
   local closingKey = tostring(openKey) .. "_closing"
+  local anchorPad = normalizePadName(opts.anchorPad ~= nil and opts.anchorPad or "square")
+  local anchorLabel = tostring(opts.anchorLabel or ((_.menu_str and _.menu_str.actions_label) or "Actions"))
+  local anchorPadMask = padMaskForName(_, anchorPad)
 
   local selKey = opts.selKey or "actionsMenuSel"
   local scrollKey = opts.scrollKey or "actionsMenuScroll"
@@ -185,7 +219,7 @@ function actions_menu.run(ctx, opts)
   local padBottom = math.floor((_.scaleY and _.scaleY(6) or 6) + 0.5)
   local rowStep = textH + math.max(2, math.floor((_.scaleY and _.scaleY(3) or 3) + 0.5))
 
-  -- Match hint-grid geometry so this feels like a popup anchored to Square.
+  -- Match hint-grid geometry so this feels like a popup anchored to the active helper button.
   local sideMargin = (_.common and _.common.PAD_HINT_SIDE_MARGIN) or 0
   local hintGridXShift = (_.common and _.common.PAD_HINT_GRID_X_SHIFT) or 0
   local hintGridExtraW = (_.common and _.common.PAD_HINT_GRID_EXTRA_W) or 0
@@ -193,28 +227,38 @@ function actions_menu.run(ctx, opts)
   local hintXEff = (_.MARGIN_X or 0) + sideMargin + hintGridXShift
   local hintWidthEff = hintTotalW - (2 * sideMargin)
   local slotW = hintWidthEff / 5
-  local squareSlotLeft = hintXEff + slotW -- slot 2: square
-  local squareSlotCenter = squareSlotLeft + (slotW / 2)
-  local startSlotLeft = hintXEff + (2 * slotW) -- slot 3: start
-  local startSlotCenter = startSlotLeft + (slotW / 2)
+  local function slotIndexForPad(pad)
+    if pad == "cross" then return 1 end
+    if pad == "square" then return 2 end
+    if pad == "start" then return 3 end
+    if pad == "triangle" then return 4 end
+    if pad == "circle" then return 5 end
+    return 2
+  end
+  local anchorSlotIndex = slotIndexForPad(anchorPad)
+  local nextSlotIndex = math.min(5, anchorSlotIndex + 1)
+  local anchorSlotLeft = hintXEff + ((anchorSlotIndex - 1) * slotW)
+  local anchorSlotCenter = anchorSlotLeft + (slotW / 2)
+  local nextSlotLeft = hintXEff + ((nextSlotIndex - 1) * slotW)
+  local nextSlotCenter = nextSlotLeft + (slotW / 2)
   local hintIconScale = 0.6
   local hintIconW = math.max(10, math.floor((((_.common and _.common.PAD_ICON_W) or 26) * hintIconScale) + 0.5))
-  local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
-  local startButtonLeft = math.floor(startSlotCenter - (hintIconW / 2))
-  local squareActionLabelX = squareButtonLeft + hintIconW + hintGap
+  local anchorButtonLeft = math.floor(anchorSlotCenter - (hintIconW / 2))
+  local nextButtonLeft = math.floor(nextSlotCenter - (hintIconW / 2))
+  local anchorActionLabelX = anchorButtonLeft + hintIconW + hintGap
 
-  -- Keep the overlay right edge near the next button (Start), with a small visual gap.
+  -- Keep the overlay right edge near the next button, with a small visual gap.
   local rightGap = math.max(3, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
-  local boxX = squareButtonLeft
-  local targetRightX = startButtonLeft - rightGap
+  local boxX = anchorButtonLeft
+  local targetRightX = nextButtonLeft - rightGap
   local desiredToStartW = math.floor(targetRightX - boxX + 0.5)
   if desiredToStartW < 90 then desiredToStartW = 90 end
-  local contentW = math.max(90, math.floor(((squareActionLabelX - boxX) + maxLabelWIntrinsic + padX) + 0.5))
+  local contentW = math.max(90, math.floor(((anchorActionLabelX - boxX) + maxLabelWIntrinsic + padX) + 0.5))
   local boxW = math.max(desiredToStartW, contentW)
   local maxBoxWAtX = (_.w or 640) - (_.MARGIN_X or 0) - boxX
   if boxW > maxBoxWAtX then boxW = maxBoxWAtX end
 
-  -- Fit content within fixed width; choices align with Square helper label text.
+  -- Fit content within fixed width; choices align with anchor helper label text.
   local maxVisByHeight = maxVisible
   local boxH = padTop + titleH + titleGap + (maxVisByHeight * rowStep) + padBottom
   local hintRowH = math.max(14, math.floor((((_.common and _.common.PAD_HINT_ROW_H) or 28) * textScale) + 0.5))
@@ -242,7 +286,7 @@ function actions_menu.run(ctx, opts)
     _.drawText(hintFont, _.drawMode, titleX, titleY, titleScale, title, _.WHITE, textH)
   end
 
-  local rowLabelX = squareActionLabelX
+  local rowLabelX = anchorActionLabelX
   local rowMarkerX = rowLabelX - markerW - spaceW
   local maxLabelW = (boxX + boxW) - padX - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
@@ -263,7 +307,7 @@ function actions_menu.run(ctx, opts)
     _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
   end
 
-  local hintItems = buildOverlayHints(_, opts.hints, (_.menu_str and _.menu_str.actions_label) or "Actions")
+  local hintItems = buildOverlayHints(_, opts.hints, anchorPad, anchorLabel)
   if _.Graphics and _.Graphics.drawRect then
     local hintBg = (_.common and _.common.BGCOLOR) or Color.new(20, 20, 20, 255)
     local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * 0.75 + 0.5))
@@ -293,7 +337,7 @@ function actions_menu.run(ctx, opts)
       end
     end
 
-    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (anchorPadMask and (_.padEffective & anchorPadMask) ~= 0) then
       ctx[closingKey] = true
       if ctx[animKey] < 0.001 then
         ctx[animKey] = 1

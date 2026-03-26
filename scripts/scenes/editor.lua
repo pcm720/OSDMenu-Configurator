@@ -1515,7 +1515,8 @@ local function run(ctx)
             openKey = "editorOsdVisualRestoreOpen",
             selKey = "editorOsdVisualRestoreSel",
             scrollKey = "editorOsdVisualRestoreScroll",
-            titleOverride = "Restore OSDSYS visuals:",
+            anchorPad = "triangle",
+            anchorLabel = (_.menu_str.reset_label or "Reset"),
             rows = {
               { id = "patched", label = "Patched Defaults" },
               { id = "ps2", label = "PS2 Defaults" },
