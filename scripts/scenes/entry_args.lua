@@ -82,18 +82,32 @@ local function run(ctx)
     end
   end
 
+  local function findArgIndexByValue(argList, value, fallback)
+    local target = tostring(value or "")
+    for i = #argList, 1, -1 do
+      local item = argList[i]
+      local v = type(item) == "table" and item.value or item
+      if tostring(v or "") == target then
+        return i
+      end
+    end
+    return _.common.clampListSelection(fallback or 1, #argList)
+  end
+
   local function addArgValue(v)
     local value = tostring(v or "")
     if value == "" then return end
     if isBoot and ctx.entryArgInsertBelow and ctx.entryArgInsertBelow >= 0 then
-      local insertAt = _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value)
+      _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value)
       ctx.configModified = true
-      ctx.entryArgSel = insertAt or (ctx.entryArgInsertBelow + 1)
+      local refreshed = getArgs()
+      ctx.entryArgSel = findArgIndexByValue(refreshed, value, #refreshed)
     else
       local args2 = getArgs()
       table.insert(args2, { value = value, disabled = false })
       setArgs(args2)
-      ctx.entryArgSel = #args2
+      local refreshed = getArgs()
+      ctx.entryArgSel = findArgIndexByValue(refreshed, value, #refreshed)
     end
     ctx.entryArgInsertBelow = nil
   end
@@ -118,7 +132,9 @@ local function run(ctx)
     local args2, ok = arg_presets.addUdpbdPair(getArgs(), ipValue)
     if not ok then return false end
     setArgs(args2)
-    ctx.entryArgSel = #args2
+    local refreshed = getArgs()
+    local udpValue = "-udpbd_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ctx.entryArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
     return true
   end
 
@@ -259,7 +275,8 @@ local function run(ctx)
               args2[idx] = { value = arg, disabled = false }
             end
             setArgs(args2)
-            ctx.entryArgSel = _.common.clampListSelection(idx, #args2)
+            local refreshed = getArgs()
+            ctx.entryArgSel = findArgIndexByValue(refreshed, arg, idx)
           else
             addArgValue(arg)
           end
@@ -431,9 +448,12 @@ local function run(ctx)
     local dst = ctx.entryArgSel + step
     if dst < 1 or dst > total then return end
     local args2 = getArgs()
+    local movedItem = args2[ctx.entryArgSel]
+    local movedValue = type(movedItem) == "table" and movedItem.value or movedItem
     args2[ctx.entryArgSel], args2[dst] = args2[dst], args2[ctx.entryArgSel]
     setArgs(args2)
-    ctx.entryArgSel = dst
+    local refreshed = getArgs()
+    ctx.entryArgSel = findArgIndexByValue(refreshed, movedValue, dst)
   end
 
   local function removeSelectedArg()
@@ -545,6 +565,8 @@ local function run(ctx)
               args2[ctx.argEditIdx] = { value = val or "", disabled = false }
             end
             setArgs(args2)
+            local refreshed = getArgs()
+            ctx.entryArgSel = findArgIndexByValue(refreshed, val or "", ctx.argEditIdx)
             ctx.state = "entry_args"
           end,
           returnState = "entry_args",

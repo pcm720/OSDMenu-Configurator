@@ -88,6 +88,11 @@ local function run(ctx)
       ctx.cdromOptSel = ctx.cdromOptSel or 1
       ctx.state = "entry_cdrom_options"
     elseif opt == _.menu_str.arguments then
+      if #args == 0 then
+        ctx.entryArgAddMenu = true
+        ctx.entryArgAddSel = 1
+        ctx.entryArgAddScroll = 0
+      end
       ctx.state = "entry_args"
       ctx.entryArgSel = ctx.entryArgSel or 1
       ctx.entryArgScroll = ctx.entryArgScroll or 0

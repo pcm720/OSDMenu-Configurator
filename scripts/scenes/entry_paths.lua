@@ -370,6 +370,12 @@ local function run(ctx)
         ctx.cdromOptSel = ctx.cdromOptSel or 1
         ctx.state = "entry_cdrom_options"
       else
+        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey) or {}
+        if #args == 0 then
+          ctx.entryArgAddMenu = true
+          ctx.entryArgAddSel = 1
+          ctx.entryArgAddScroll = 0
+        end
         ctx.entryArgSel = ctx.entryArgSel or 1
         ctx.entryArgScroll = ctx.entryArgScroll or 0
         ctx.state = "entry_args"

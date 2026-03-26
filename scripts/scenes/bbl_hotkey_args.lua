@@ -62,6 +62,18 @@ local function run(ctx)
     ctx.configModified = true
   end
 
+  local function findArgIndexByValue(argList, value, fallback)
+    local target = tostring(value or "")
+    for i = #argList, 1, -1 do
+      local item = argList[i]
+      local v = (type(item) == "table") and item.value or item
+      if tostring(v or "") == target then
+        return i
+      end
+    end
+    return _.common.clampListSelection(fallback or 1, #argList)
+  end
+
   local function addArgValue(v)
     local value = tostring(v or "")
     if value == "" then return end
@@ -69,7 +81,8 @@ local function run(ctx)
     if hasArgCap and #args2 >= maxArgs then return end
     table.insert(args2, { value = value, disabled = false })
     setArgs(args2)
-    ctx.bblArgSel = #args2
+    local refreshed = getArgs()
+    ctx.bblArgSel = findArgIndexByValue(refreshed, value, #refreshed)
   end
 
   local function openNewArgumentInput(prompt, maxLen, callback)
@@ -91,7 +104,9 @@ local function run(ctx)
     local args2, ok = arg_presets.addUdpbdPair(getArgs(), ipValue, maxArgs)
     if not ok then return false end
     setArgs(args2)
-    ctx.bblArgSel = #args2
+    local refreshed = getArgs()
+    local udpValue = "-udpbd_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ctx.bblArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
     return true
   end
 
@@ -200,7 +215,8 @@ local function run(ctx)
             if args2[idx] then
               args2[idx].value = arg
               setArgs(args2)
-              ctx.bblArgSel = _.common.clampListSelection(idx, #args2)
+              local refreshed = getArgs()
+              ctx.bblArgSel = findArgIndexByValue(refreshed, arg, idx)
             end
           else
             addArgValue(arg)
@@ -353,9 +369,12 @@ local function run(ctx)
     local dst = ctx.bblArgSel + step
     if dst < 1 or dst > total then return end
     local args2 = getArgs()
+    local movedItem = args2[ctx.bblArgSel]
+    local movedValue = movedItem and movedItem.value or ""
     args2[ctx.bblArgSel], args2[dst] = args2[dst], args2[ctx.bblArgSel]
     setArgs(args2)
-    ctx.bblArgSel = dst
+    local refreshed = getArgs()
+    ctx.bblArgSel = findArgIndexByValue(refreshed, movedValue, dst)
   end
 
   local function saveAndStay()
@@ -477,6 +496,8 @@ local function run(ctx)
             args2[editIdx].value = val or ""
           end
           setArgs(args2)
+          local refreshed = getArgs()
+          ctx.bblArgSel = findArgIndexByValue(refreshed, val or "", editIdx)
           ctx.state = "bbl_hotkey_args"
         end,
         returnState = "bbl_hotkey_args",

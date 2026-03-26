@@ -69,12 +69,6 @@ function arg_add_menu.run(ctx, opts)
   local desc = (selectedRow and selectedRow.desc) or (opts.descDefault or "")
 
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, title, _.WHITE)
-  if desc ~= "" then
-    if _.common.truncateTextToWidth then
-      desc = _.common.truncateTextToWidth(_.font, desc, (_.w or 640) - (_.MARGIN_X * 2), 0.6)
-    end
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(22), 0.6, desc, _.DIM)
-  end
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   local inUseSuffix = opts.inUseSuffix or " (in use)"
@@ -95,6 +89,26 @@ function arg_add_menu.run(ctx, opts)
     local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx[scrollKey] - 1) * _.LINE_H
     local col = disabled and (_.DIM_ENTRY or _.DIM) or ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE)
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx[selKey], label, col)
+  end
+
+  if desc ~= "" then
+    local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
+    local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or
+        (0.7 * hintTextScale)
+    local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
+    local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
+        math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
+    local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+    local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+    if _.common.fitListRowText then
+      desc = _.common.fitListRowText(ctx, (rowStateKeyPrefix or "arg_add_row_") .. "desc", hintFont, desc, descMaxW,
+        hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+    elseif _.common.truncateTextToWidth then
+      desc = _.common.truncateTextToWidth(hintFont, desc, descMaxW, hintDrawScale)
+    end
+    local tw = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, desc, hintDrawScale)) or (#desc * 8)
+    local x = (_.common.centerX and _.common.centerX(_, tw)) or _.MARGIN_X
+    _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, desc, hintColor, hintTextH)
   end
 
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, opts.hints or buildDefaultHints(), nil, _.DIM,

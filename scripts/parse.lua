@@ -66,6 +66,47 @@ local function trim(s)
   return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
+local function classifyTailArgValue(value)
+  local s = trim(tostring(value or "")) or ""
+  if s == "" then return "regular" end
+
+  -- Keep GSM arguments at the absolute end because launcher global-flag parsing
+  -- consumes supported internal flags from the tail.
+  if s:match("^%-[Gg][Ss][Mm]%s*=") ~= nil or s:match("^%-[Gg][Ss][Mm]%s*$") ~= nil then
+    return "gsm"
+  end
+
+  -- Internal launch flags consumed from the tail by OSDMenu launcher/mbr.
+  if s:match("^%-[Aa][Pp][Pp][Ii][Dd]%s*$") ~= nil then return "internal" end
+  if s:match("^%-[Tt][Ii][Tt][Ll][Ee][Ii][Dd]%s*=") ~= nil then return "internal" end
+  if s:match("^%-[Dd][Ee][Vv]9%s*=") ~= nil then return "internal" end
+  if s:match("^%-[Pp][Aa][Tt][Ii][Nn][Ff][Oo]%s*$") ~= nil then return "internal" end
+
+  return "regular"
+end
+
+local function normalizeArgsWithGsmLast(args)
+  local regular, internal, gsm = {}, {}, {}
+  for i = 1, #(args or {}) do
+    local item = args[i]
+    local value = (type(item) == "table") and item.value or item
+    local kind = classifyTailArgValue(value)
+    if kind == "gsm" then
+      gsm[#gsm + 1] = item
+    elseif kind == "internal" then
+      internal[#internal + 1] = item
+    else
+      regular[#regular + 1] = item
+    end
+  end
+
+  local out = {}
+  for i = 1, #regular do out[#out + 1] = regular[i] end
+  for i = 1, #internal do out[#out + 1] = internal[i] end
+  for i = 1, #gsm do out[#out + 1] = gsm[i] end
+  return out
+end
+
 -- Parse CNF content string into list of line entries.
 -- Returns { { comment = "..." }, { key = "k", value = "v" }, ... }
 function config_parse.parse(content)
@@ -525,6 +566,7 @@ function config_parse.getBootArgEntries(lines, key)
 end
 
 function config_parse.setBootArgEntries(lines, key, args)
+  args = normalizeArgsWithGsmLast(args)
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
   local i = 1
@@ -999,6 +1041,7 @@ end
 function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
   local canonical = canonicalBblHotkeyId(keyId)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end
+  args = normalizeArgsWithGsmLast(args)
   local ids = bblHotkeyIdVariants(canonical)
   local keys = {}
   for i = 1, #ids do keys[#keys + 1] = bblArgKey(ids[i], entryIdx) end
@@ -1445,6 +1488,7 @@ end
 
 -- Replace all arg_OSDSYS_ITEM_<idx> with the given list. Each item is { value, disabled } or a plain value (treated as enabled).
 function config_parse.setMenuEntryArgs(lines, idx, args)
+  args = normalizeArgsWithGsmLast(args)
   local key = "arg_OSDSYS_ITEM_" .. tostring(idx)
   local i = 1
   while i <= #lines do
@@ -1739,10 +1783,63 @@ end
 function config_parse.regenerateForSave(lines, fileType, options)
   if not lines or not fileType then return lines end
   local opt = options or {}
+
+  local function normalizeMenuEntryArgsInPlace()
+    local entries = config_parse.getMenuEntryIndices(lines)
+    for i = 1, #entries do
+      local idx = entries[i] and entries[i].idx
+      if idx then
+        local args = config_parse.getMenuEntryArgs(lines, idx)
+        if #args > 0 then
+          config_parse.setMenuEntryArgs(lines, idx, args)
+        end
+      end
+    end
+  end
+
+  local function bootKeysFromOptions(osdmbrOpts)
+    local out = {}
+    for i = 1, #(osdmbrOpts or {}) do
+      local row = osdmbrOpts[i]
+      if row and row.optType == "boot_paths" and row.key and row.key ~= "" then
+        out[#out + 1] = row.key
+      end
+    end
+    if #out == 0 then
+      out = { "boot_auto", "boot_start", "boot_triangle", "boot_circle", "boot_cross", "boot_square" }
+    end
+    return out
+  end
+
+  local function normalizeBootArgsInPlace(osdmbrOpts)
+    local keys = bootKeysFromOptions(osdmbrOpts)
+    for i = 1, #keys do
+      local k = keys[i]
+      local args = config_parse.getBootArgEntries(lines, k)
+      if #args > 0 then
+        config_parse.setBootArgEntries(lines, k, args)
+      end
+    end
+  end
+
+  local function normalizeBblArgsInPlace()
+    for _, keyId in ipairs(BBL_KEYS_ALL) do
+      for slot = 1, BBL_MAX_ENTRIES do
+        local args = config_parse.getBblHotkeyArgs(lines, keyId, slot)
+        if #args > 0 then
+          config_parse.setBblHotkeyArgs(lines, keyId, slot, args)
+        end
+      end
+    end
+  end
+
   if fileType == "osdmenu_cnf" then
+    normalizeMenuEntryArgsInPlace()
     return config_parse.regenerateLines(lines, opt.osdmenu_cnf_categories or {})
   end
   if fileType == "freemcboot_cnf" then
+    -- FMCB/FHDB do not support per-entry args, but normalize defensively if present.
+    normalizeMenuEntryArgsInPlace()
     local cats = opt.freemcboot_cnf_categories or opt.osdmenu_cnf_categories or {}
     local maxEntries = (type(opt.FMCB_MAX_ENTRIES) == "number" and opt.FMCB_MAX_ENTRIES) or 99
     local maxPathsPerEntry = (type(opt.FMCB_MAX_PATHS_PER_ENTRY) == "number" and opt.FMCB_MAX_PATHS_PER_ENTRY) or 3
@@ -1765,9 +1862,11 @@ function config_parse.regenerateForSave(lines, fileType, options)
     return out
   end
   if fileType == "ps2bbl_ini" or fileType == "psxbbl_ini" then
+    normalizeBblArgsInPlace()
     return config_parse.regenerateLinesBbl(lines, opt)
   end
   if fileType == "osdmbr_cnf" then
+    normalizeBootArgsInPlace(opt.osdmbr_cnf or {})
     return config_parse.regenerateLinesMBR(lines, opt.osdmbr_cnf or {})
   end
   if fileType == "osdgsm_cnf" then

@@ -240,6 +240,11 @@ local function run(ctx)
       ctx.pathPickerBblHotkeyDisabled = data.disabled and true or false
       ctx.state = "path_picker"
     elseif allowArgs then
+      if (tonumber(data.argCount) or 0) <= 0 then
+        ctx.bblArgAddMenu = true
+        ctx.bblArgAddSel = 1
+        ctx.bblArgAddScroll = 0
+      end
       ctx.bblArgSel = ctx.bblArgSel or 1
       ctx.bblArgScroll = ctx.bblArgScroll or 0
       ctx.state = "bbl_hotkey_args"
