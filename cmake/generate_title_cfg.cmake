@@ -36,8 +36,10 @@ endif()
 set(RELEASE_DATE "${BUILD_MONTH} ${BUILD_DAY_NUM}${BUILD_DAY_SUFFIX}, ${BUILD_YEAR}")
 
 file(READ "${INPUT}" TITLE_CFG_CONTENT)
-string(REGEX REPLACE "Version=[^\r\n]*" "Version=${TITLE_VERSION}" TITLE_CFG_CONTENT "${TITLE_CFG_CONTENT}")
-string(REGEX REPLACE "Release=[^\r\n]*" "Release=${RELEASE_DATE}" TITLE_CFG_CONTENT "${TITLE_CFG_CONTENT}")
+# Match only full Version/Release keys at start-of-line (or immediately after newline)
+# so we never touch CfgVersion=8.
+string(REGEX REPLACE "(^|[\r\n])Version=[^\r\n]*" "\\1Version=${TITLE_VERSION}" TITLE_CFG_CONTENT "${TITLE_CFG_CONTENT}")
+string(REGEX REPLACE "(^|[\r\n])Release=[^\r\n]*" "\\1Release=${RELEASE_DATE}" TITLE_CFG_CONTENT "${TITLE_CFG_CONTENT}")
 
 get_filename_component(OUTPUT_DIR "${OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
