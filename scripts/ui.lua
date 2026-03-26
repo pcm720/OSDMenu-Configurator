@@ -309,7 +309,13 @@ local function mainLoop()
     local scaleY = c.scaleY
     local KEY_H = scaleY(common.KEY_HEIGHT)
     local KEY_LH = scaleY(common.KEY_LINE_H)
-    if drawMode == "ftPrint" and font then Font.ftSetPixelSize(font, 0, common.FT_PIXEL_H) end
+    if drawMode == "ftPrint" and font then
+      local wantPx = common.FT_PIXEL_H or 18
+      if c._ftPixelSizeApplied ~= wantPx then
+        Font.ftSetPixelSize(font, 0, wantPx)
+        c._ftPixelSizeApplied = wantPx
+      end
+    end
     c.prevPad = prevPad
     c.holdFrameCount = holdFrameCount
     c.holdRepeatCountdown = holdRepeatCountdown
