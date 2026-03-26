@@ -657,40 +657,20 @@ end
 -- Shared scene loop: clear, layout, getPadEffective, runHandler(ctx, pad), exit when ctx.state ~= sceneName.
 function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
+    Screen.clear(common.BGCOLOR)
     common.runLayout(ctx)
+    if ctx and ctx.drawBackgroundLayer then
+      ctx.drawBackgroundLayer(ctx)
+    end
     local padEffective = common.getPadEffective(ctx)
-
-    local hasAnimatedOverlay = false
-    for k, v in pairs(ctx or {}) do
-      if v == true and type(k) == "string" and (k:match("Open$") or k:match("Menu$") or k:match("Prompt$")) then
-        hasAnimatedOverlay = true
-        break
-      end
+    ctx._lastPadEffective = padEffective
+    runHandler(ctx, padEffective)
+    common.refreshConfigModified(ctx)
+    if ctx.state ~= sceneName then
+      return ctx.state, ctx
     end
-    local hasSaveSplash = (ctx and ctx.saveSplash and ctx.saveSplash.framesLeft and ctx.saveSplash.framesLeft > 0) and true or false
-    local canIdleSkip = (not hasAnimatedOverlay) and (not hasSaveSplash)
-
-    if canIdleSkip and padEffective == 0 and ctx and ctx._lastRenderedState == sceneName then
-      Screen.waitVblankStart()
-    else
-      Screen.clear(common.BGCOLOR)
-      if ctx and ctx.drawBackgroundLayer then
-        ctx.drawBackgroundLayer(ctx)
-      end
-      if ctx then
-        ctx._lastPadEffective = padEffective
-      end
-      runHandler(ctx, padEffective)
-      common.refreshConfigModified(ctx)
-      if ctx and ctx.state ~= sceneName then
-        return ctx.state, ctx
-      end
-      if ctx then
-        ctx._lastRenderedState = sceneName
-      end
-      Screen.flip()
-      Screen.waitVblankStart()
-    end
+    Screen.flip()
+    Screen.waitVblankStart()
   end
 end
 
