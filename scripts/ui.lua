@@ -64,6 +64,10 @@ local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY
 local KEY_CHAR_W, KEY_LINE_H = common.KEY_CHAR_W, common.KEY_LINE_H
 
 local function applyStartupVideoModeOpt()
+  -- Keep a fixed NTSC-style UI canvas across forced output modes so layout
+  -- and placement remain consistent (scaled by GS output mode, not reflowed).
+  local BASE_W, BASE_H = 640, 448
+
   local cwd = nil
   if System and System.currentDirectory then
     local okCwd, cwdValue = pcall(System.currentDirectory)
@@ -93,10 +97,10 @@ local function applyStartupVideoModeOpt()
   end
 
   local opts = {
-    { file = "720p.opt", mode = _720p, width = 1280, height = 720, interlace = NONINTERLACED, field = FRAME },
-    { file = "480p.opt", mode = _480p, width = 704,  height = 480, interlace = NONINTERLACED, field = FRAME },
-    { file = "pal.opt",  mode = PAL,   width = 704,  height = 576, interlace = INTERLACED,    field = FIELD },
-    { file = "ntsc.opt", mode = NTSC,  width = 704,  height = 480, interlace = INTERLACED,    field = FIELD },
+    { file = "720p.opt", mode = _720p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
+    { file = "480p.opt", mode = _480p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
+    { file = "pal.opt",  mode = PAL,   width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
+    { file = "ntsc.opt", mode = NTSC,  width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
   }
 
   local selected = nil
