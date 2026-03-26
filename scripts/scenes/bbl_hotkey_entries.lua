@@ -210,7 +210,7 @@ local function run(ctx)
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-  local function beginPathPickerForSlot(slotNum, slotDisabled)
+  local function beginPathPickerForSlot(slotNum, slotDisabled, returnStateOverride)
     local sNum = tonumber(slotNum)
     if not sNum then return end
     ctx.editKey = nil
@@ -227,7 +227,12 @@ local function run(ctx)
     ctx.pathPickerBblHotkeyKey = keyId
     ctx.pathPickerBblHotkeySlot = sNum
     ctx.pathPickerBblHotkeyDisabled = slotDisabled and true or false
-    ctx.pathPickerReturnState = "bbl_hotkey_entries"
+    ctx.pathPickerReturnState = returnStateOverride or "bbl_hotkey_entries"
+    if ctx.pathPickerReturnState == "bbl_hotkey_entry" then
+      ctx.bblEntrySlot = sNum
+      ctx.bblEntryDetailSel = 1
+      ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
+    end
     ctx.pathPickerContext = "path_only"
     ctx.pathPickerSub = "device"
     ctx.pathList = _.file_selector.getDevices("path_only") or {}
@@ -251,12 +256,13 @@ local function run(ctx)
         local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or
             nil
         local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
-        beginPathPickerForSlot(newSlot, inheritedDisabled)
+        beginPathPickerForSlot(newSlot, inheritedDisabled, "bbl_hotkey_entries")
       else
-        ctx.bblEntrySlot = newSlot
-        ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
-        ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
-        ctx.state = "bbl_hotkey_entry"
+        -- For BBL (non-FreeBoot), choose path first, then land on path/args detail.
+        local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or
+            nil
+        local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
+        beginPathPickerForSlot(newSlot, inheritedDisabled, "bbl_hotkey_entry")
       end
     end
   end
@@ -269,7 +275,7 @@ local function run(ctx)
     confirmMoveState()
     local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or nil
     local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
-    beginPathPickerForSlot(newSlot, inheritedDisabled)
+    beginPathPickerForSlot(newSlot, inheritedDisabled, isFmcb and "bbl_hotkey_entries" or "bbl_hotkey_entry")
   end
 
   local function saveAndStay()

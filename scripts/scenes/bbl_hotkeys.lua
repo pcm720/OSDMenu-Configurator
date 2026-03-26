@@ -207,6 +207,9 @@ local function run(ctx)
     if not firstSlot then return false end
     ctx.configModified = true
     ctx.bblHotkeySummaryCache = nil
+    ctx.bblHotkeyKey = keyId
+    ctx.bblEntryListReturnState = "bbl_hotkeys"
+    ctx.bblEntryFocusSlot = firstSlot
     ctx.editKey = nil
     ctx.isAddPath = false
     ctx.addPathKey = nil
@@ -221,7 +224,7 @@ local function run(ctx)
     ctx.pathPickerBblHotkeyKey = keyId
     ctx.pathPickerBblHotkeySlot = firstSlot
     ctx.pathPickerBblHotkeyDisabled = slotDisabled and true or false
-    ctx.pathPickerReturnState = "bbl_hotkeys"
+    ctx.pathPickerReturnState = "bbl_hotkey_entries"
     ctx.pathPickerContext = "path_only"
     ctx.pathPickerSub = "device"
     ctx.pathList = _.file_selector.getDevices("path_only") or {}
