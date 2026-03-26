@@ -1010,22 +1010,28 @@ local function run(ctx)
         descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
       end
       if descStr ~= "" then
+        local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
+        local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * hintTextScale)
+        local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
+        local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
+            math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
+        local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
         local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
         if _.common.fitListRowText then
           descStr = _.common.fitListRowText(ctx,
             "editor_desc_" .. tostring(selOpt.key or ""),
-            _.font,
+            hintFont,
             descStr,
             descMaxW,
-            0.72,
+            hintDrawScale,
             true,
             { holdStart = 55, stepFrames = 16, holdEnd = 85 })
         elseif _.common.truncateTextToWidth then
-          descStr = _.common.truncateTextToWidth(_.font, descStr, descMaxW, 0.72)
+          descStr = _.common.truncateTextToWidth(hintFont, descStr, descMaxW, hintDrawScale)
         end
-        local tw = _.common.calcTextWidth(_.font, descStr, 0.72)
+        local tw = _.common.calcTextWidth(hintFont, descStr, hintDrawScale)
         local x = _.common.centerX(_, tw)
-        _.drawText(_.font, _.drawMode, x, _.DESC_Y_BOTTOM, 0.72, descStr, _.DIM)
+        _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, descStr, hintColor, hintTextH)
       end
     end
     if #ctx.optList > maxVis then

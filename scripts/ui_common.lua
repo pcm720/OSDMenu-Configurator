@@ -29,6 +29,7 @@ common.HIGHLIGHT                   = Color.new(255, 220, 100)
 common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0)
 common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80)
 common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0)
+common.OPTION_HINT_COLOR           = Color.new(246, 231, 173) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
 
 -- Layout
@@ -52,6 +53,8 @@ common.PAD_ICON_H                  = 26
 common.PAD_HINT_GAP                = 5
 common.PAD_HINT_ROW_H              = 28
 common.PAD_HINT_SIDE_MARGIN        = 16
+common.PAD_HINT_TEXT_SCALE         = 0.75
+common.PAD_HINT_BASE_SCALE         = 0.7
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
@@ -134,6 +137,17 @@ function common.getHintFont(fallbackFont, drawMode, textScale)
   return hintFont
 end
 
+function common.getHintLabelDrawScale(baseScale)
+  local bs = tonumber(baseScale) or common.PAD_HINT_BASE_SCALE or 0.7
+  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  return bs * ts
+end
+
+function common.getHintLabelTextHeight()
+  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  return math.max(10, math.floor((common.FT_PIXEL_H or 18) * ts + 0.5))
+end
+
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
 -- Single-row 5-slot layout (top row removed in new UX).
 -- totalWidth: optional. y = bottom of hint area.
@@ -141,14 +155,14 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
     local iconScale = 0.6
-    local textScale = 0.75
-    local drawScale = (scale or 0.7) * textScale
+    local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+    local drawScale = common.getHintLabelDrawScale(scale)
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
     local approxCharW = math.floor(8 * drawScale)
-    local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * textScale + 0.5))
+    local textH = common.getHintLabelTextHeight()
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
