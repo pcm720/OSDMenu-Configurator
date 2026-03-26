@@ -269,6 +269,55 @@ static int lua_getDeviceMountpoint(lua_State *L) {
   return 1;
 }
 
+// Returns launch device family inferred from boot_path:
+// "mc", "mmce", "hdd", "usb", "mx4sio", "ata", "bdm", or "unknown".
+static int lua_getLaunchDeviceFamily(lua_State *L) {
+  if (!boot_path || boot_path[0] == '\0') {
+    lua_pushstring(L, "unknown");
+    return 1;
+  }
+
+  uint32_t device = devices_guess_device_type(boot_path);
+  if (device & Device_MMCE) {
+    lua_pushstring(L, "mmce");
+    return 1;
+  }
+  if (device & Device_HDD) {
+    lua_pushstring(L, "hdd");
+    return 1;
+  }
+  if (device & Device_Basic) {
+    if (!strncmp(boot_path, "mc", 2))
+      lua_pushstring(L, "mc");
+    else
+      lua_pushstring(L, "basic");
+    return 1;
+  }
+
+  if (device & Device_BDM) {
+    const char *colon = strchr(boot_path, ':');
+    if (colon) {
+      char mountpoint[16] = {0};
+      size_t len = (size_t)(colon - boot_path + 1);
+      if (len > sizeof(mountpoint) - 2)
+        len = sizeof(mountpoint) - 2;
+      memcpy(mountpoint, boot_path, len);
+      mountpoint[len] = '/';
+      mountpoint[len + 1] = '\0';
+      const char *driver = devices_get_bdm_driver(mountpoint);
+      if (driver) {
+        lua_pushstring(L, driver);
+        return 1;
+      }
+    }
+    lua_pushstring(L, "bdm");
+    return 1;
+  }
+
+  lua_pushstring(L, "unknown");
+  return 1;
+}
+
 static int lua_createDir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
   if (!path)
@@ -670,6 +719,7 @@ static const luaL_Reg System_functions[] = {
     {"exitToBrowser", lua_exit},
     {"getMCInfo", lua_getmcinfo},
     {"getDeviceMountpoint", lua_getDeviceMountpoint},
+    {"getLaunchDeviceFamily", lua_getLaunchDeviceFamily},
     {"listHddPartitions", lua_listHddPartitions},
     {"loadModules", lua_loadModules},
     {"fileXioMount", lua_fileXioMount},

@@ -687,11 +687,117 @@ local function appendUniquePath(paths, path)
   paths[#paths + 1] = path
 end
 
-local function buildBblSourceOptions(iniFileType)
+local function normalizeMountpoint(mp)
+  if type(mp) ~= "string" or mp == "" then return nil end
+  return (mp:sub(-1) == ":") and mp or (mp .. ":")
+end
+
+local function normalizeLaunchFamily(value)
+  local fam = tostring(value or ""):lower()
+  if fam == "mass" then fam = "usb" end
+  if fam == "usb" or fam == "mmce" or fam == "mx4sio" or fam == "ata" or fam == "hdd" or fam == "mc" or fam == "bdm" then
+    return fam
+  end
+  return nil
+end
+
+local function inferLaunchFamilyFromPath(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  local p = path:lower()
+  if p:match("^mmce%d*:") then return "mmce" end
+  if p:match("^mass%d*:") then return "usb" end
+  if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end
+  if p:match("^mc%d:") then return "mc" end
+  return nil
+end
+
+local function getLaunchSourceFamily(s)
+  if type(s.launchSourceFamily) == "string" and s.launchSourceFamily ~= "" then
+    return s.launchSourceFamily
+  end
+  local family = nil
+  if System and System.getLaunchDeviceFamily then
+    local ok, val = pcall(System.getLaunchDeviceFamily)
+    if ok then family = normalizeLaunchFamily(val) end
+  end
+  if not family and System and System.currentDirectory then
+    local ok, cwd = pcall(System.currentDirectory)
+    if ok then family = inferLaunchFamilyFromPath(cwd) end
+  end
+  if not family then family = "unknown" end
+  s.launchSourceFamily = family
+  return family
+end
+
+local function getDeviceMountpoint(deviceId)
+  if not deviceId or deviceId == "" then return nil end
+  if C.file_selector and C.file_selector.getDeviceMountpoint then
+    local ok, mp = pcall(C.file_selector.getDeviceMountpoint, deviceId)
+    if ok then return normalizeMountpoint(mp) end
+  end
+  if System and System.getDeviceMountpoint then
+    local ok, mp = pcall(System.getDeviceMountpoint, deviceId)
+    if ok then return normalizeMountpoint(mp) end
+  end
+  return nil
+end
+
+local function isPrefixAvailable(prefix)
+  if not prefix or prefix == "" then return false end
+  local probe = tostring(prefix)
+  if probe:sub(-1) == ":" then probe = probe .. "/" end
+  return common.tryOpen(probe)
+end
+
+local function hasMountedUsbSlot(deviceId, fallbackPrefix)
+  local mountpoint = getDeviceMountpoint(deviceId)
+  if mountpoint and isPrefixAvailable(mountpoint) then
+    return true
+  end
+  return isPrefixAvailable(fallbackPrefix)
+end
+
+local function getSelectConfigDevicePresence(s)
+  local sceneEpoch = s._sceneEpoch or 0
+  local inputEpoch = s._inputEpoch or 0
+  local cache = s.selectConfigDevicePresenceCache
+  if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
+    return cache
+  end
+  local launchFamily = getLaunchSourceFamily(s)
+  local restrictToExistingRemovables = (launchFamily == "mmce" or launchFamily == "usb")
+  local mmce0Visible, mmce1Visible, usb0Visible, usb1Visible
+  if restrictToExistingRemovables then
+    mmce0Visible = isPrefixAvailable("mmce0:")
+    mmce1Visible = isPrefixAvailable("mmce1:")
+    usb0Visible = hasMountedUsbSlot("usb0", "mass:")
+    usb1Visible = hasMountedUsbSlot("usb1", "mass1:")
+  else
+    -- For non-USB/MMCE launch sources, keep legacy behavior: show these rows in fixed order.
+    mmce0Visible = true
+    mmce1Visible = true
+    usb0Visible = true
+    usb1Visible = true
+  end
+  cache = {
+    sceneEpoch = sceneEpoch,
+    inputEpoch = inputEpoch,
+    launchFamily = launchFamily,
+    mmce0 = mmce0Visible,
+    mmce1 = mmce1Visible,
+    usb0 = usb0Visible,
+    usb1 = usb1Visible,
+  }
+  s.selectConfigDevicePresenceCache = cache
+  return cache
+end
+
+local function buildBblSourceOptions(s, iniFileType)
   local dev_str = (C.strings and C.strings.devices) or {}
   local visibility = (C.config_options and C.config_options.getBblPathDeviceVisibility and
       C.config_options.getBblPathDeviceVisibility()) or nil
   local iniName = (iniFileType == "psxbbl_ini") and "PSXBBL.INI" or "PS2BBL.INI"
+  local presence = getSelectConfigDevicePresence(s)
   local presentMc = {}
   local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
   for i = 1, #slots do
@@ -726,17 +832,26 @@ local function buildBblSourceOptions(iniFileType)
   if presentMc[1] then
     addDevice("mc", dev_str.memory_card_2 or "Memory Card 2", { "mc1:/SYS-CONF/" .. iniName }, "mc1:")
   end
-  addDevice("mmce", dev_str.mmce_0 or "MMCE in slot 1", { "mmce0:/PS2BBL/PS2BBL.INI" }, "mmce0:", nil, "mmce")
-  addDevice("mmce", dev_str.mmce_1 or "MMCE in slot 2", { "mmce1:/PS2BBL/PS2BBL.INI" }, "mmce1:", nil, "mmce")
-  addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
-  addDevice("usb", dev_str.usb_storage_0 or "USB Mass Storage 1", { "mass:/PS2BBL/CONFIG.INI" }, nil, "usb0", "usb")
-  addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
+  if presence.mmce0 then
+    addDevice("mmce", dev_str.mmce_0 or "MMCE in slot 1", { "mmce0:/PS2BBL/PS2BBL.INI" }, "mmce0:", nil, "mmce")
+  end
+  if presence.mmce1 then
+    addDevice("mmce", dev_str.mmce_1 or "MMCE in slot 2", { "mmce1:/PS2BBL/PS2BBL.INI" }, "mmce1:", nil, "mmce")
+  end
+  if presence.usb0 then
+    addDevice("usb", dev_str.usb_storage_0 or "USB Mass Storage 1", { "mass:/PS2BBL/CONFIG.INI" }, nil, "usb0", "usb")
+  end
+  if presence.usb1 then
+    addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
+  end
   addDevice("mx4sio", dev_str.mx4sio_sd or "MX4SIO", { "massX:/PS2BBL/CONFIG.INI" }, nil, "mx4sio", "mx4sio")
+  addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
   return out
 end
 
-local function buildFreemcbootSourceOptions(context)
+local function buildFreemcbootSourceOptions(s, context)
   local dev_str = (C.strings and C.strings.devices) or {}
+  local presence = getSelectConfigDevicePresence(s)
   local presentMc = {}
   local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
   for i = 1, #slots do
@@ -765,8 +880,12 @@ local function buildFreemcbootSourceOptions(context)
   if presentMc[1] then
     add(dev_str.memory_card_2 or "Memory Card 2", "mc1:/SYS-CONF/" .. fileName, "mc")
   end
-  add(dev_str.usb_storage_0 or "USB Mass Storage 1", "mass:/" .. fileName, "usb")
-  add(dev_str.usb_storage_1 or "USB Mass Storage 2", "mass1:/" .. fileName, "usb")
+  if presence.usb0 then
+    add(dev_str.usb_storage_0 or "USB Mass Storage 1", "mass:/" .. fileName, "usb")
+  end
+  if presence.usb1 then
+    add(dev_str.usb_storage_1 or "USB Mass Storage 2", "mass1:/" .. fileName, "usb")
+  end
   return out
 end
 
@@ -873,7 +992,7 @@ local function runSelectConfig(s, pad)
   end
 
   if s.context == "freemcboot" or s.context == "freehddboot" then
-    local options = buildFreemcbootSourceOptions(s.context)
+    local options = buildFreemcbootSourceOptions(s, s.context)
     if s.pendingKnownPathPick then
       local pendingPick = s.pendingKnownPathPick
       s.pendingKnownPathPick = nil
@@ -926,7 +1045,7 @@ local function runSelectConfig(s, pad)
     return
   end
 
-  local options = buildBblSourceOptions(iniFileType)
+  local options = buildBblSourceOptions(s, iniFileType)
   if s.pendingKnownPathPick then
     local pendingPick = s.pendingKnownPathPick
     s.pendingKnownPathPick = nil
