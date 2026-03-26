@@ -179,20 +179,149 @@ local function clearLoadChoiceState(s)
   s.loadReturnState = nil
 end
 
-local function buildMainChoices(main_str)
-  local out = {
-    main_str.main_freemcboot or "FreeMCBoot",
-    main_str.main_freehddboot or "FreeHDBoot",
-    main_str.main_osdmenu or "OSDMenu",
-    main_str.main_osdmenu_mbr or "OSDMenu MBR",
-    main_str.main_hosdmenu or "HOSDMenu",
-    main_str.main_ps2bbl_mc or "PS2BBL",
-    main_str.main_psxbbl_mc or "PSXBBL",
-  }
-  if C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled() then
-    table.insert(out, 6, main_str.main_egsm or "eGSM")
+local MAIN_FILTER_OPTS = {
+  { file = "fmcb.opt", id = "freemcboot" },
+  { file = "fhdb.opt", id = "freehddboot" },
+  { file = "osdmenu.opt", id = "osdmenu" },
+  { file = "osdmenumbr.opt", id = "mbr" },
+  { file = "hosdmenu.opt", id = "hosdmenu" },
+  { file = "ps2bbl.opt", id = "ps2bbl" },
+  { file = "psxbbl.opt", id = "psxbbl" },
+}
+
+local function detectMainOptWhitelist()
+  local cwd = nil
+  if System and System.currentDirectory then
+    local okCwd, cwdValue = pcall(System.currentDirectory)
+    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
+      cwd = cwdValue
+    end
+  end
+
+  local function checkExists(path)
+    local ok, exists = pcall(doesFileExist, path)
+    return ok and exists == true
+  end
+
+  local function optExists(path)
+    if checkExists(path) or checkExists("./" .. path) then
+      return true
+    end
+    if cwd and cwd ~= "" then
+      local base = cwd
+      if base:sub(-1) ~= "/" then base = base .. "/" end
+      return checkExists(base .. path)
+    end
+    return false
+  end
+
+  local out = {}
+  local any = false
+  for i = 1, #MAIN_FILTER_OPTS do
+    local item = MAIN_FILTER_OPTS[i]
+    if optExists(item.file) then
+      out[item.id] = true
+      any = true
+    end
+  end
+  if not any then
+    return nil
   end
   return out
+end
+
+local MAIN_OPT_WHITELIST = detectMainOptWhitelist()
+
+local function includeMainEntry(id)
+  if MAIN_OPT_WHITELIST == nil then return true end
+  return MAIN_OPT_WHITELIST[id] == true
+end
+
+local function buildMainEntries(main_str)
+  local out = {}
+  local function addEntry(entry)
+    if includeMainEntry(entry.id) then
+      out[#out + 1] = entry
+    end
+  end
+
+  addEntry({
+    id = "freemcboot",
+    label = main_str.main_freemcboot or "FreeMCBoot",
+    logoKey = "freemcboot",
+    context = "freemcboot",
+    fileType = "freemcboot_cnf",
+    state = "select_config",
+  })
+  addEntry({
+    id = "freehddboot",
+    label = main_str.main_freehddboot or "FreeHDBoot",
+    logoKey = "freehdboot",
+    context = "freehddboot",
+    fileType = "freemcboot_cnf",
+    state = "select_config",
+  })
+  addEntry({
+    id = "osdmenu",
+    label = main_str.main_osdmenu or "OSDMenu",
+    logoKey = "osdmenu",
+    context = "osdmenu",
+    fileType = "osdmenu_cnf",
+    state = "choose_mc",
+  })
+  addEntry({
+    id = "mbr",
+    label = main_str.main_osdmenu_mbr or "OSDMenu MBR",
+    logoKey = "osdmenu_mbr",
+    context = "mbr",
+    fileType = "osdmbr_cnf",
+    state = "open",
+  })
+  addEntry({
+    id = "hosdmenu",
+    label = main_str.main_hosdmenu or "HOSDMenu",
+    logoKey = "hosdmenu",
+    context = "hosdmenu",
+    fileType = "osdmenu_cnf",
+    state = "open",
+  })
+  if C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled() then
+    addEntry({
+      id = "egsm",
+      label = main_str.main_egsm or "eGSM",
+      logoKey = "osdmenu",
+      context = "osdmenu",
+      fileType = "osdgsm_cnf",
+      state = "choose_mc",
+    })
+  end
+  addEntry({
+    id = "ps2bbl",
+    label = main_str.main_ps2bbl_mc or "PS2BBL",
+    logoKey = "ps2bbl",
+    context = "ps2bbl",
+    fileType = "ps2bbl_ini",
+    state = "select_config",
+  })
+  addEntry({
+    id = "psxbbl",
+    label = main_str.main_psxbbl_mc or "PSXBBL",
+    logoKey = "psxbbl",
+    context = "psxbbl",
+    fileType = "psxbbl_ini",
+    state = "select_config",
+  })
+
+  return out
+end
+
+local function buildMainChoices(main_str)
+  local entries = buildMainEntries(main_str)
+  local out = {}
+  for i = 1, #entries do
+    out[i] = entries[i].label
+  end
+  return out, entries
 end
 
 local function applyLanguageIndex(s, idx)
@@ -203,7 +332,10 @@ local function applyLanguageIndex(s, idx)
   if okLoad and newStrings and type(newStrings) == "table" then
     C.strings = newStrings
     C.langIndex = target
-    s.main = buildMainChoices(newStrings.main or {})
+    local labels, entries = buildMainChoices(newStrings.main or {})
+    s.main = labels
+    s.mainEntries = entries
+    s.mainBuildKey = nil
     return true
   end
   return false
@@ -405,25 +537,34 @@ local function runMain(s, pad)
 
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
-  local expectedMainCount = egsmEnabled and 8 or 7
-  local egsmIndex = egsmEnabled and 6 or nil
-  local ps2bblIndex = egsmEnabled and 7 or 6
-  local psxbblIndex = egsmEnabled and 8 or 7
-  local function getMainOverlayLogoKey(sel)
-    if sel == 1 then return "freemcboot" end
-    if sel == 2 then return "freehdboot" end
-    if sel == 3 then return "osdmenu" end
-    if sel == 4 then return "osdmenu_mbr" end
-    if sel == 5 then return "hosdmenu" end
-    if egsmEnabled and sel == egsmIndex then return "osdmenu" end
-    if sel == ps2bblIndex then return "ps2bbl" end
-    if sel == psxbblIndex then return "psxbbl" end
-    return nil
+  local filterKey = (MAIN_OPT_WHITELIST and "filtered") or "all"
+  local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey
+  if type(s.main) ~= "table" or type(s.mainEntries) ~= "table" or s.mainBuildKey ~= expectedBuildKey then
+    local labels, entries = buildMainChoices(main_str)
+    s.main = labels
+    s.mainEntries = entries
+    s.mainBuildKey = expectedBuildKey
   end
 
-  if type(s.main) ~= "table" or #s.main ~= expectedMainCount then
-    s.main = buildMainChoices(main_str)
+  if #s.main < 1 then
+    s.main = { main_str.main_freemcboot or "FreeMCBoot" }
+    s.mainEntries = {
+      {
+        id = "freemcboot",
+        label = main_str.main_freemcboot or "FreeMCBoot",
+        logoKey = "freemcboot",
+        context = "freemcboot",
+        fileType = "freemcboot_cnf",
+        state = "select_config",
+      }
+    }
   end
+
+  local function getMainOverlayLogoKey(sel)
+    local entry = s.mainEntries and s.mainEntries[sel]
+    return entry and entry.logoKey or nil
+  end
+
   if s.mainSel < 1 then s.mainSel = 1 end
   if s.mainSel > #s.main then s.mainSel = #s.main end
 
@@ -648,70 +789,15 @@ local function runMain(s, pad)
   end
   drawMainBaseUi()
   if (pad & PAD_CROSS) ~= 0 then
-    if s.mainSel == 1 then
-      s.mainOverlayLogoKey = "freemcboot"
-      s.context = "freemcboot"
-      s.fileType = "freemcboot_cnf"
+    local entry = s.mainEntries and s.mainEntries[s.mainSel]
+    if entry then
+      s.mainOverlayLogoKey = entry.logoKey
+      s.context = entry.context
+      s.fileType = entry.fileType
       s.chosenMcSlot = nil
       clearLoadChoiceState(s)
       clearPathPickerState(s)
-      s.state = "select_config"
-    elseif s.mainSel == 2 then
-      s.mainOverlayLogoKey = "freehdboot"
-      s.context = "freehddboot"
-      s.fileType = "freemcboot_cnf"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "select_config"
-    elseif s.mainSel == 3 then
-      s.mainOverlayLogoKey = "osdmenu"
-      s.context = "osdmenu"
-      s.fileType = "osdmenu_cnf"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "choose_mc"
-    elseif s.mainSel == 4 then
-      s.mainOverlayLogoKey = "osdmenu_mbr"
-      s.context = "mbr"
-      s.fileType = "osdmbr_cnf"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "open"
-    elseif s.mainSel == 5 then
-      s.mainOverlayLogoKey = "hosdmenu"
-      s.context = "hosdmenu"
-      s.fileType = "osdmenu_cnf"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "open"
-    elseif egsmEnabled and s.mainSel == egsmIndex then
-      s.mainOverlayLogoKey = "osdmenu"
-      s.context = "osdmenu"
-      s.fileType = "osdgsm_cnf"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "choose_mc"
-    elseif s.mainSel == ps2bblIndex then
-      s.mainOverlayLogoKey = "ps2bbl"
-      s.context = "ps2bbl"
-      s.fileType = "ps2bbl_ini"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "select_config"
-    elseif s.mainSel == psxbblIndex then
-      s.mainOverlayLogoKey = "psxbbl"
-      s.context = "psxbbl"
-      s.fileType = "psxbbl_ini"
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = "select_config"
+      s.state = entry.state
     end
   end
 end

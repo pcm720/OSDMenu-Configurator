@@ -57,8 +57,8 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 
 ### PS2BBL Extended (`PS2BBL.INI` / `CONFIG.INI`)
 
-1. `mmce1:/PS2BBL/PS2BBL.INI`
-2. `mmce0:/PS2BBL/PS2BBL.INI`
+1. `mmce1:/PS2BBL/CONFIG.INI`
+2. `mmce0:/PS2BBL/CONFIG.INI`
 3. `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
 4. `massX:/PS2BBL/CONFIG.INI`
 5. `mass:/PS2BBL/CONFIG.INI`
@@ -69,8 +69,8 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 
 1. `mc1:/SYS-CONF/PSXBBL.INI`
 2. `mc0:/SYS-CONF/PSXBBL.INI`
-3. `mmce1:/PS2BBL/PS2BBL.INI`
-4. `mmce0:/PS2BBL/PS2BBL.INI`
+3. `mmce1:/PS2BBL/CONFIG.INI`
+4. `mmce0:/PS2BBL/CONFIG>INI`
 5. `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
 6. `massX:/PS2BBL/CONFIG.INI`
 7. `mass:/PS2BBL/CONFIG.INI`
@@ -101,6 +101,43 @@ The app’s working directory (CWD) is where the ELF is launched from (e.g. `mas
 - Without `EMBED_VFS`: place the `scripts/` directory (and optionally `res/` if not embedded) and the ELF so that paths like `scripts/ui.lua`, `scripts/lang/strings_en.lua`, and `scripts/font/font.ttf` are available from CWD
 
 The automated build comes with `EMBED_VFS` flag set, so all scripts are already embedded.
+
+## Startup `.opt` files (CWD)
+
+You can place optional `.opt` marker files next to `r3configurator.elf` (in CWD) to change startup behavior.
+
+### Video mode override
+
+Supported files:
+
+- `ntsc.opt`
+- `pal.opt`
+- `480p.opt`
+- `720p.opt`
+
+Behavior:
+
+- If one or more are present, the app forces video mode at startup using this priority:
+  `720p.opt` -> `480p.opt` -> `pal.opt` -> `ntsc.opt`
+- If none are present, the app keeps the default startup mode (console/ROM default behavior).
+
+### Main menu app filtering
+
+Supported files:
+
+- `fmcb.opt` -> show `FreeMCBoot`
+- `fhdb.opt` -> show `FreeHDBoot`
+- `osdmenu.opt` -> show `OSDMenu`
+- `osdmenumbr.opt` -> show `OSDMenu MBR`
+- `hosdmenu.opt` -> show `HOSDMenu`
+- `ps2bbl.opt` -> show `PS2BBL`
+- `psxbbl.opt` -> show `PSXBBL`
+
+Behavior:
+
+- If none are present, the full normal main menu is shown.
+- If one is present, only that associated app is shown.
+- If multiple are present, all associated apps are shown.
 
 ## Language and font overrides
 

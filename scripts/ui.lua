@@ -63,6 +63,66 @@ local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY
     common.KEY_BORDER_SEL
 local KEY_CHAR_W, KEY_LINE_H = common.KEY_CHAR_W, common.KEY_LINE_H
 
+local function applyStartupVideoModeOpt()
+  -- Keep a fixed NTSC-style UI canvas across forced output modes so layout
+  -- and placement remain consistent (scaled by GS output mode, not reflowed).
+  local BASE_W, BASE_H = 640, 448
+
+  local cwd = nil
+  if System and System.currentDirectory then
+    local okCwd, cwdValue = pcall(System.currentDirectory)
+    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
+      cwd = cwdValue
+    end
+  end
+
+  local function checkExists(path)
+    local ok, exists = pcall(doesFileExist, path)
+    return ok and exists == true
+  end
+
+  local function optExists(path)
+    if type(path) ~= "string" or path == "" then return false end
+    if checkExists(path) or checkExists("./" .. path) then
+      return true
+    end
+    if cwd and cwd ~= "" then
+      local base = cwd
+      if base:sub(-1) ~= "/" then base = base .. "/" end
+      if checkExists(base .. path) then
+        return true
+      end
+    end
+    return false
+  end
+
+  local opts = {
+    { file = "720p.opt", mode = _720p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
+    { file = "480p.opt", mode = _480p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
+    { file = "pal.opt",  mode = PAL,   width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
+    { file = "ntsc.opt", mode = NTSC,  width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
+  }
+
+  local selected = nil
+  for i = 1, #opts do
+    local spec = opts[i]
+    if type(spec.mode) == "number" and optExists(spec.file) then
+      selected = spec
+      break
+    end
+  end
+  if not selected then return end
+
+  local ok, err = pcall(function()
+    Screen.setMode(selected.mode, selected.width, selected.height, CT24, selected.interlace, selected.field)
+  end)
+  if ok then
+    print("ui: startup video mode override from " .. tostring(selected.file))
+  else
+    print("ui: failed startup video mode override from " .. tostring(selected.file) .. ": " .. tostring(err))
+  end
+end
+
 local function getLocations(ctx, ft, slot) return config_options.getLocations(ctx, ft, slot) end
 local function loadCustomFont() return common.loadCustomFont() end
 local function drawText(font, mode, x, y, scale, text, color) return common.drawText(font, mode, x, y, scale, text, color) end
@@ -549,4 +609,5 @@ local function mainLoop()
   end
 end
 
+applyStartupVideoModeOpt()
 return mainLoop()
