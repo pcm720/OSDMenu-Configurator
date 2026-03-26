@@ -692,6 +692,13 @@ local function buildBblSourceOptions(iniFileType)
   local visibility = (C.config_options and C.config_options.getBblPathDeviceVisibility and
       C.config_options.getBblPathDeviceVisibility()) or nil
   local iniName = (iniFileType == "psxbbl_ini") and "PSXBBL.INI" or "PS2BBL.INI"
+  local presentMc = {}
+  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  for i = 1, #slots do
+    if slots[i] == 0 or slots[i] == 1 then
+      presentMc[slots[i]] = true
+    end
+  end
   local out = {}
   local function addDevice(visKey, label, paths, browseDeviceName, browseDeviceId, browseDeviceType)
     if not isVisible(visibility, visKey) then return end
@@ -713,8 +720,12 @@ local function buildBblSourceOptions(iniFileType)
       browseDeviceType = browseDeviceType,
     }
   end
-  addDevice("mc", dev_str.memory_card_1 or "Memory Card 1", { "mc0:/SYS-CONF/" .. iniName }, "mc0:")
-  addDevice("mc", dev_str.memory_card_2 or "Memory Card 2", { "mc1:/SYS-CONF/" .. iniName }, "mc1:")
+  if presentMc[0] then
+    addDevice("mc", dev_str.memory_card_1 or "Memory Card 1", { "mc0:/SYS-CONF/" .. iniName }, "mc0:")
+  end
+  if presentMc[1] then
+    addDevice("mc", dev_str.memory_card_2 or "Memory Card 2", { "mc1:/SYS-CONF/" .. iniName }, "mc1:")
+  end
   addDevice("mmce", dev_str.mmce_0 or "MMCE in slot 1", { "mmce0:/PS2BBL/PS2BBL.INI" }, "mmce0:", nil, "mmce")
   addDevice("mmce", dev_str.mmce_1 or "MMCE in slot 2", { "mmce1:/PS2BBL/PS2BBL.INI" }, "mmce1:", nil, "mmce")
   addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
@@ -726,6 +737,13 @@ end
 
 local function buildFreemcbootSourceOptions(context)
   local dev_str = (C.strings and C.strings.devices) or {}
+  local presentMc = {}
+  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  for i = 1, #slots do
+    if slots[i] == 0 or slots[i] == 1 then
+      presentMc[slots[i]] = true
+    end
+  end
   local out = {}
   local fileName = (context == "freehddboot") and "FREEHDB.CNF" or "FREEMCB.CNF"
 
@@ -741,8 +759,12 @@ local function buildFreemcbootSourceOptions(context)
   if context == "freehddboot" then
     add(dev_str.hdd or "APA-formatted HDD", "hdd0:__sysconf/FMCB/FREEHDB.CNF", "hdd")
   end
-  add(dev_str.memory_card_1 or "Memory Card 1", "mc0:/SYS-CONF/" .. fileName, "mc")
-  add(dev_str.memory_card_2 or "Memory Card 2", "mc1:/SYS-CONF/" .. fileName, "mc")
+  if presentMc[0] then
+    add(dev_str.memory_card_1 or "Memory Card 1", "mc0:/SYS-CONF/" .. fileName, "mc")
+  end
+  if presentMc[1] then
+    add(dev_str.memory_card_2 or "Memory Card 2", "mc1:/SYS-CONF/" .. fileName, "mc")
+  end
   add(dev_str.usb_storage_0 or "USB Mass Storage 1", "mass:/" .. fileName, "usb")
   add(dev_str.usb_storage_1 or "USB Mass Storage 2", "mass1:/" .. fileName, "usb")
   return out
