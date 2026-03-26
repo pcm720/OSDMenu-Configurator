@@ -1114,7 +1114,7 @@ end
 function config_parse.getBblHotkeySlot(lines, keyId, entryIdx)
   local path, disabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
   local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
-  local used = ((path ~= nil and path ~= "") or #args > 0)
+  local used = ((path ~= nil) or #args > 0)
   return {
     slot = entryIdx,
     used = used,
@@ -1440,8 +1440,12 @@ function config_parse.getMenuEntryPaths(lines, idx)
     end
   end
   local out = {}
-  for n = 1, 200 do
-    if byNum[n] then table.insert(out, byNum[n]) else break end
+  local nums = {}
+  for n in pairs(byNum) do nums[#nums + 1] = n end
+  table.sort(nums)
+  for i = 1, #nums do
+    local n = nums[i]
+    if byNum[n] then table.insert(out, byNum[n]) end
   end
   return out
 end
@@ -1848,17 +1852,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
     table.insert(out, 1, { key = "CNF_version", value = cnfVersion })
     table.insert(out, 2, { comment = '# --------------------------------' })
     local maxLaunchKeyEntries = (type(opt.FMCB_BBL_MAX_ENTRIES) == "number" and opt.FMCB_BBL_MAX_ENTRIES) or 3
-    -- Insert separator between each launch key section for visual clarity
-    local launchKeyStart = #out + 1
     appendFreemcbootLaunchKeys(out, lines, maxLaunchKeyEntries)
-    -- Add separator after each launch key section (if any were added)
-    if #out > launchKeyStart then
-      for i = #out, launchKeyStart, -1 do
-        if out[i] and out[i].key and out[i].key:match("^LK_") then
-          table.insert(out, i + 1, { comment = '# --------------------------------' })
-        end
-      end
-    end
     return out
   end
   if fileType == "ps2bbl_ini" or fileType == "psxbbl_ini" then

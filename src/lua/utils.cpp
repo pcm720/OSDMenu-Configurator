@@ -1,4 +1,5 @@
 #include <malloc.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -8,12 +9,16 @@
 char *ps2_normalize_path(char *path_name) {
   int i, j;
   int first, next;
-  static char out[255];
+  static char out[512];
 
   // First copy the path into our temp buffer
-  strcpy(out, path_name);
+  if (path_name == NULL) {
+    out[0] = '\0';
+    return (char *)out;
+  }
+  snprintf(out, sizeof(out), "%s", path_name);
   // Then append "/" to make the rest easier
-  strcat(out, "/");
+  strncat(out, "/", sizeof(out) - strlen(out) - 1);
 
   // Convert "//" to "/"
   for (i = 0; out[i + 1]; i++) {

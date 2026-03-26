@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -20,21 +21,42 @@ static uint8_t imgThreadStack[4096] __attribute__((aligned(16)));
 // Extern symbol
 extern void *_gp;
 
+static char *dup_cstr(const char *src) {
+  size_t len;
+  char *dst;
+  if (!src)
+    return NULL;
+  len = strlen(src) + 1;
+  dst = (char *)malloc(len);
+  if (!dst)
+    return NULL;
+  memcpy(dst, src, len);
+  return dst;
+}
+
 static int imgThread(void *data) {
   char *text = (char *)data;
   bool delayed = asyncDelayed;
   GSTEXTURE *image = load_image(text, delayed);
   if (image == NULL) {
     imgThreadResult = 2;
+    free(text);
     ExitDeleteThread();
     return 0;
   }
   char *buffer = (char *)malloc(16);
+  if (!buffer) {
+    imgThreadResult = 2;
+    free(text);
+    ExitDeleteThread();
+    return 0;
+  }
   memset(buffer, 0, 16);
-  sprintf(buffer, "%i", (int)image);
+  snprintf(buffer, 16, "%i", (int)image);
   imgThreadData = (unsigned char *)buffer;
   imgThreadSize = strlen(buffer);
   imgThreadResult = 1;
+  free(text);
   ExitDeleteThread();
   return 0;
 }
@@ -194,9 +216,14 @@ static const luaL_Reg Font_functions[] = {
 
 static int lua_loadimgasync(lua_State *L) {
   int argc = lua_gettop(L);
-  if (argc != 1)
+  if (argc != 1 && argc != 2)
     return luaL_error(L, "wrong number of arguments");
-  char *text = (char *)(luaL_checkstring(L, 1));
+  const char *text = luaL_checkstring(L, 1);
+  char *textCopy = dup_cstr(text);
+  if (!textCopy) {
+    imgThreadResult = -1;
+    return luaL_error(L, "Graphics.threadLoadImage: out of memory");
+  }
   if (argc == 2)
     asyncDelayed = lua_toboolean(L, 2);
 
@@ -210,11 +237,12 @@ static int lua_loadimgasync(lua_State *L) {
   int thread = CreateThread(&thread_param);
   if (thread < 0) {
     imgThreadResult = -1;
+    free(textCopy);
     return 0;
   }
 
   imgThreadResult = 0;
-  StartThread(thread, (void *)text);
+  StartThread(thread, (void *)textCopy);
   return 0;
 }
 

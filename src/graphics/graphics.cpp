@@ -374,9 +374,13 @@ float FPSCounter(int interval) {
 
 GSFONT *loadFont(const char *path) {
   int file = open(path, O_RDONLY, 0777);
-  uint16_t magic;
-  read(file, &magic, 2);
+  uint16_t magic = 0;
+  if (file < 0)
+    return NULL;
+  ssize_t readBytes = read(file, &magic, sizeof(magic));
   close(file);
+  if (readBytes != (ssize_t)sizeof(magic))
+    return NULL;
   GSFONT *font = NULL;
   if (magic == 0x4D42) {
     font = gsKit_init_font(GSKIT_FTYPE_BMP_DAT, (char *)path);

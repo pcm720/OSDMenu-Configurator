@@ -137,7 +137,8 @@ static int init_modules(uint32_t device) {
     if (!(device & moduleList[i].type) || (loadedModules & (1u << i)))
       continue;
 
-    if ((res = load_module(&moduleList[i]) != 0) < 0)
+    res = load_module(&moduleList[i]);
+    if (res < 0)
       return res;
 
     // Mark module as loaded
