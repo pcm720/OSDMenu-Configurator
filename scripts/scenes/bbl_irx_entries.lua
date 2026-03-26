@@ -151,11 +151,14 @@ local function run(ctx)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.edit_irx_entries or "Edit IRX entries", _.WHITE)
   _.drawText(_.font, _.drawMode, 540, _.MARGIN_Y, 0.9, counterStr, _.DIM)
   local irxOrderHint = (_.menu_str.irx_order_hint or "IRX entry order matters!")
-  local hintScale = 0.7
+  local hintTextScale = (_.common.PAD_HINT_TEXT_SCALE or 0.75)
+  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
+  local hintScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(_.common.PAD_HINT_BASE_SCALE or 0.7)) or
+      0.525
   local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
-  local hintW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, irxOrderHint, hintScale)) or (#irxOrderHint * 8)
+  local hintW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, irxOrderHint, hintScale)) or (#irxOrderHint * 8)
   local hintX = (_.common.centerX and _.common.centerX(_, hintW)) or _.MARGIN_X
-  _.drawText(_.font, _.drawMode, hintX, (_.DESC_Y_BOTTOM or (_.HINT_Y - _.scaleY(22))), hintScale, irxOrderHint, hintColor)
+  _.drawText(hintFont, _.drawMode, hintX, (_.DESC_Y_BOTTOM or (_.HINT_Y - _.scaleY(22))), hintScale, irxOrderHint, hintColor)
 
   local startY = _.MARGIN_Y + _.scaleY(50)
   local maxVis = _.MAX_VISIBLE_LIST

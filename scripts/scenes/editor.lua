@@ -1036,9 +1036,6 @@ local function run(ctx)
         _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, descStr, hintColor, hintTextH)
       end
     end
-    if #ctx.optList > maxVis then
-      _.drawText(_.font, _.drawMode, _.w - 72, startY - _.scaleY(4), 0.7, ctx.optSel .. "/" .. #ctx.optList, _.DIM)
-    end
     local isAutoSlotRow = selOpt and selOpt.optType == "bbl_slot" and selOpt.bblKeyId == "AUTO" and selOpt.bblEntrySlot
     local autoSlotNum = isAutoSlotRow and tonumber(selOpt.bblEntrySlot) or nil
     local isEsrPathRow = selOpt and ctx.fileType == "freemcboot_cnf" and selOpt.key and selOpt.key:match("^ESR_Path_E%d+$")
