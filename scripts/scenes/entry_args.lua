@@ -50,7 +50,6 @@ local function run(ctx)
   end
 
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
-  local inputEpoch = tonumber(ctx._inputEpoch) or 0
   local function buildPathsModel()
     local outPaths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
@@ -64,7 +63,6 @@ local function run(ctx)
     end
     return {
       sceneEpoch = sceneEpoch,
-      inputEpoch = inputEpoch,
       linesRef = ctx.lines,
       isBoot = isBoot,
       entryIdx = ctx.entryIdx or 0,
@@ -75,7 +73,7 @@ local function run(ctx)
   end
   local function getPathsModel()
     local cache = ctx.entryArgsPathsCache
-    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+    if cache and cache.sceneEpoch == sceneEpoch and cache.linesRef == ctx.lines and
         cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") then
       return cache
     end
@@ -202,7 +200,6 @@ local function run(ctx)
     end
     return {
       sceneEpoch = sceneEpoch,
-      inputEpoch = inputEpoch,
       linesRef = ctx.lines,
       isBoot = isBoot,
       entryIdx = ctx.entryIdx or 0,
@@ -222,7 +219,7 @@ local function run(ctx)
   end
   local function getArgsModel()
     local cache = ctx.entryArgsModelCache
-    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+    if cache and cache.sceneEpoch == sceneEpoch and cache.linesRef == ctx.lines and
         cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") and
         cache.context == (ctx.context or "") and cache.fileType == (ctx.fileType or "") and
         cache.hasCdrom == (hasCdrom and true or false) and

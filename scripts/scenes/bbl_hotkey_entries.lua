@@ -43,10 +43,9 @@ local function run(ctx)
       ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   local includeNameRow = not isFmcb
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
-  local inputEpoch = tonumber(ctx._inputEpoch) or 0
   local function getRowsCache()
     local cache = ctx.bblHotkeyEntriesRowsCache
-    if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and cache.linesRef == ctx.lines and
+    if cache and cache.sceneEpoch == sceneEpoch and cache.linesRef == ctx.lines and
         cache.keyId == keyId and cache.maxEntries == maxEntries and cache.includeNameRow == includeNameRow then
       return cache
     end
@@ -61,7 +60,6 @@ local function run(ctx)
     end
     cache = {
       sceneEpoch = sceneEpoch,
-      inputEpoch = inputEpoch,
       linesRef = ctx.lines,
       keyId = keyId,
       maxEntries = maxEntries,
