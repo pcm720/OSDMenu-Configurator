@@ -263,7 +263,7 @@ local function buildBblIniGlobalOptions()
     {
       key = "PS1DRV_USE_PS1VN",
       optType = "bool",
-      default = "0",
+      default = "1",
       label = "PS1DRV_USE_PS1VN",
       desc = "Enable PS1 video negator.",
     },
@@ -343,13 +343,13 @@ local function buildFreemcbootAutoOptions()
   }
   local maxSlots = (type(config_options.FMCB_BBL_MAX_ENTRIES) == "number" and config_options.FMCB_BBL_MAX_ENTRIES) or 3
   for i = 1, maxSlots do
-    table.insert(out, {
+      table.insert(out, {
       key = "_auto_e" .. tostring(i),
       optType = "bbl_slot",
       bblKeyId = "AUTO",
       bblEntrySlot = i,
       label = "E" .. tostring(i),
-      desc = "Edit LK_Auto_E" .. tostring(i) .. " (no arguments).",
+      desc = "Edit LK_Auto_E" .. tostring(i) .. ".",
     })
   end
   return out
@@ -461,6 +461,7 @@ config_options.freemcboot_cnf_categories = {
     name = "Disc Options",
     options = {
       { key = "FastBoot",   optType = "bool", default = "1" },
+      { key = "_esr_paths_header", optType = "header", label = "ESR Paths:" },
       { key = "ESR_Path_E1", optType = "path", default = "mass:/BOOT/ESR.ELF" },
       { key = "ESR_Path_E2", optType = "path", default = "mc?:/BOOT/ESR.ELF" },
       { key = "ESR_Path_E3", optType = "path", default = "hdd0:__sysconf:pfs:/FMCB/ESR.ELF" },

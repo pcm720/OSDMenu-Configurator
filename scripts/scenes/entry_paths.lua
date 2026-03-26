@@ -1,5 +1,7 @@
 --[[ Paths list for a menu entry or MBR boot key (when ctx.bootKey is set and we're in MBR). ]]
 
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
+
 local function getBootPadName(key)
   if key == "boot_start" then return "start" end
   if key == "boot_triangle" then return "triangle" end
@@ -42,19 +44,95 @@ local function run(ctx)
   if isBoot and not ctx.bootKey then
     ctx.state = "editor"; return
   end
-  local paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
-      _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-  local hasExclusivePath = false
+  local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local paths = {}
   local hasArgsPaths = false
   local hasSpecialArgsPath = false
-  for i, p in ipairs(paths) do
-    local pv = type(p) == "table" and p.value or p
-    local flags = _.file_selector.getPathFlags and _.file_selector.getPathFlags(pv) or {}
-    if flags.exclusive then hasExclusivePath = true end
-    if not flags.noargs then hasArgsPaths = true end
-    if flags.specialargs then hasSpecialArgsPath = true end
+  local function buildPathScan()
+    local outPaths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
+        _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
+    local outHasArgs = false
+    local outHasSpecialArgs = false
+    for i, p in ipairs(outPaths) do
+      local pv = type(p) == "table" and p.value or p
+      local flags = _.file_selector.getPathFlags and _.file_selector.getPathFlags(pv) or {}
+      if not flags.noargs then outHasArgs = true end
+      if flags.specialargs then outHasSpecialArgs = true end
+    end
+    return outPaths, outHasArgs, outHasSpecialArgs
+  end
+  local function getPathScanCache()
+    local cache = ctx.entryPathsScanCache
+    if cache and cache.sceneEpoch == sceneEpoch and cache.linesRef == ctx.lines and
+        cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") then
+      return cache
+    end
+    local outPaths, outHasArgs, outHasSpecialArgs = buildPathScan()
+    cache = {
+      sceneEpoch = sceneEpoch,
+      linesRef = ctx.lines,
+      isBoot = isBoot,
+      entryIdx = ctx.entryIdx or 0,
+      bootKey = ctx.bootKey or "",
+      paths = outPaths,
+      hasArgsPaths = outHasArgs,
+      hasSpecialArgsPath = outHasSpecialArgs,
+    }
+    ctx.entryPathsScanCache = cache
+    return cache
+  end
+  local function invalidatePathScanCache()
+    ctx.entryPathsScanCache = nil
+  end
+  local function applyPathScan(cache)
+    paths = cache.paths or {}
+    hasArgsPaths = cache.hasArgsPaths and true or false
+    hasSpecialArgsPath = cache.hasSpecialArgsPath and true or false
+  end
+  applyPathScan(getPathScanCache())
+  local function refreshPaths()
+    invalidatePathScanCache()
+    applyPathScan(getPathScanCache())
+    if #paths <= 1 then
+      ctx.entryPathGrab = nil
+    end
+  end
+  local function clearMoveState()
+    ctx.entryPathGrab = nil
+    ctx.entryPathMoveSnapshot = nil
+    ctx.entryPathMoveSel = nil
+  end
+  local function beginMoveState()
+    if ctx.entryPathGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.entryPathMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.entryPathMoveSnapshot = nil
+    end
+    ctx.entryPathMoveSel = ctx.entryPathSel
+    ctx.entryPathGrab = true
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.entryPathMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.entryPathMoveSnapshot)
+      else
+        ctx.lines = ctx.entryPathMoveSnapshot
+      end
+      refreshPaths()
+      ctx.entryPathSel = _.common.clampListSelection(ctx.entryPathMoveSel or ctx.entryPathSel, #paths)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
   end
   local pathRows = #paths
+  local canMovePaths = pathRows > 1
+  if not canMovePaths then
+    confirmMoveState()
+  end
   local isFmcbEntry = (not isBoot) and (ctx.fileType == "freemcboot_cnf")
   local maxPathsPerEntry = (isFmcbEntry and ((_.config_options and _.config_options.FMCB_MAX_PATHS_PER_ENTRY) or 3)) or nil
   local canAddPath = (not isFmcbEntry) or (pathRows < maxPathsPerEntry)
@@ -128,32 +206,49 @@ local function run(ctx)
     if i <= pathRows and type(paths[i]) == "table" and paths[i].disabled then
       col = (i == ctx.entryPathSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
+    if canMovePaths and ctx.entryPathGrab and i == ctx.entryPathSel and i <= pathRows then
+      label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
+    end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryPathSel, label, col)
   end
-  local pathHints = _.menu_str.paths_hint_items
-  if ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
-    pathHints = paths[ctx.entryPathSel].disabled and (_.menu_str.paths_hint_items_with_enable or pathHints)
-        or (_.menu_str.paths_hint_items_with_disable or pathHints)
+  local hasPathSelection = (ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows)
+  local argsRowSelected = isBoot and (hasArgsPaths or hasSpecialArgsPath) and ctx.entryPathSel == argsRow
+  local selectedPathDisabled = hasPathSelection and type(paths[ctx.entryPathSel]) == "table" and paths[ctx.entryPathSel].disabled
+  local crossLabel = ""
+  if ctx.entryPathGrab then
+    crossLabel = (_.menu_str.confirm_label or "Confirm")
+  elseif hasPathSelection or argsRowSelected then
+    crossLabel = (_.menu_str.edit_label or "Edit")
+  elseif canAddPath then
+    crossLabel = (_.menu_str.insert_label or "Insert")
   end
-  if not canAddPath then
-    local filtered = {}
-    for _, item in ipairs(pathHints or {}) do
-      if item.pad ~= "select" then
-        filtered[#filtered + 1] = item
-      else
-        filtered[#filtered + 1] = { pad = "", label = "", row = item.row }
-      end
-    end
-    pathHints = filtered
-  end
+  local pathHints = {
+    {
+      pad = crossLabel ~= "" and "cross" or "",
+      label = crossLabel,
+      row = 1
+    },
+    { pad = "square", label = _.menu_str.actions_label or "Actions", row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    {
+      pad = hasPathSelection and "triangle" or "",
+      label = hasPathSelection and
+          (selectedPathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      row = 1
+    },
+    {
+      pad = "circle",
+      label = ctx.entryPathGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
+  }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, pathHints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
-  if (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.entryPathSel = ctx.entryPathSel - 1; if ctx.entryPathSel < 1 then ctx.entryPathSel = total end
-  end
-  if (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.entryPathSel = ctx.entryPathSel + 1; if ctx.entryPathSel > total then ctx.entryPathSel = 1 end
-  end
+
   local function openPathPicker(editIdx)
     ctx.editKey = nil
     ctx.pathPickerForEntryIdx = isBoot and nil or ctx.entryIdx
@@ -185,77 +280,172 @@ local function run(ctx)
       ctx.configModified = true
     end
   end
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
+  local function removeSelectedPath()
+    if not hasPathSelection then return end
+    refreshPaths()
+    table.remove(paths, ctx.entryPathSel)
+    if isBoot then
+      _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
+    else
+      _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, paths)
+    end
+    ctx.configModified = true
+    refreshPaths()
+    if ctx.entryPathSel > #paths then
+      ctx.entryPathSel = math.max(1, #paths)
+    end
+  end
+  local function insertPathFromActions()
+    if not canAddPath then return end
+    if isBoot and hasPathSelection then
+      ctx.pathPickerInsertBelow = ctx.entryPathSel
+    else
+      ctx.pathPickerInsertBelow = nil
+    end
+    confirmMoveState()
+    openPathPicker(nil)
+  end
+  local function swapSelectedPath(step)
+    refreshPaths()
+    if not hasPathSelection then return end
+    local dst = ctx.entryPathSel + step
+    if dst < 1 or dst > #paths then return end
+    paths[ctx.entryPathSel], paths[dst] = paths[dst], paths[ctx.entryPathSel]
+    if isBoot then
+      _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
+    else
+      _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, paths)
+    end
+    ctx.configModified = true
+    ctx.entryPathSel = dst
+    refreshPaths()
+  end
+
+  if ctx.entryPathsActionsOpen then
+    local actionRows = {}
+    if hasPathSelection and canMovePaths then
+      actionRows[#actionRows + 1] = {
+        id = "grab",
+        label = ctx.entryPathGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+            (_.menu_str.grab_label or "Move"),
+      }
+    end
+    if canAddPath then
+      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+    end
+    if hasPathSelection then
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "entryPathsActionsOpen",
+          selKey = "entryPathsActionsSel",
+          scrollKey = "entryPathsActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "entry_paths_actions_row_",
+          onSelect = function(row)
+            if row.id == "grab" then
+              if ctx.entryPathGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
+            elseif row.id == "insert" then
+              insertPathFromActions()
+            elseif row.id == "remove" then
+              removeSelectedPath()
+            end
+          end,
+        }) then
+      return
+    end
+  end
+
+  if (_.padEffective & _.PAD_UP) ~= 0 then
+    if ctx.entryPathGrab and hasPathSelection then
+      swapSelectedPath(-1)
+    else
+      ctx.entryPathSel = ctx.entryPathSel - 1
+      if ctx.entryPathSel < 1 then ctx.entryPathSel = total end
+    end
+  end
+  if (_.padEffective & _.PAD_DOWN) ~= 0 then
+    if ctx.entryPathGrab and hasPathSelection then
+      swapSelectedPath(1)
+    else
+      ctx.entryPathSel = ctx.entryPathSel + 1
+      if ctx.entryPathSel > total then ctx.entryPathSel = 1 end
+    end
+  end
+
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     toggleSelectedPathDisabled()
   end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if ctx.entryPathGrab then
+      confirmMoveState()
+      return
+    end
     if isBoot and (hasArgsPaths or hasSpecialArgsPath) and ctx.entryPathSel == argsRow then
       if argsRowIsSpecial then
         ctx.cdromOptSel = ctx.cdromOptSel or 1
         ctx.state = "entry_cdrom_options"
       else
+        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey) or {}
+        if #args == 0 then
+          ctx.entryArgAddMenu = true
+          ctx.entryArgAddSel = 1
+          ctx.entryArgAddScroll = 0
+        end
         ctx.entryArgSel = ctx.entryArgSel or 1
         ctx.entryArgScroll = ctx.entryArgScroll or 0
         ctx.state = "entry_args"
       end
     elseif ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths then
       openPathPicker(ctx.entryPathSel)
-    end
-  end
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and canAddPath then
-    if isBoot and ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows then
-      ctx.pathPickerInsertBelow = ctx.entryPathSel
-    else
-      ctx.pathPickerInsertBelow = nil
-    end
-    openPathPicker(nil)
-  end
-  if (_.padEffective & _.PAD_L1) ~= 0 then
-    if ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths and ctx.entryPathSel > 1 then
-      paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
-          _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-      paths[ctx.entryPathSel], paths[ctx.entryPathSel - 1] = paths[ctx.entryPathSel - 1], paths[ctx.entryPathSel]
-      if isBoot then
-        _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
-      else
-        _.config_parse.setMenuEntryPaths(
-          ctx.lines, ctx.entryIdx, paths)
-      end
-      ctx.configModified = true
-      ctx.entryPathSel = ctx.entryPathSel - 1
-    end
-  end
-  if (_.padEffective & _.PAD_R1) ~= 0 then
-    if ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths and ctx.entryPathSel < #paths then
-      paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
-          _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-      paths[ctx.entryPathSel], paths[ctx.entryPathSel + 1] = paths[ctx.entryPathSel + 1], paths[ctx.entryPathSel]
-      if isBoot then
-        _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
-      else
-        _.config_parse.setMenuEntryPaths(
-          ctx.lines, ctx.entryIdx, paths)
-      end
-      ctx.configModified = true
-      ctx.entryPathSel = ctx.entryPathSel + 1
+    elseif canAddPath and pathRows == 0 then
+      -- After removing all paths, Cross should still insert by opening the device picker.
+      confirmMoveState()
+      openPathPicker(nil)
     end
   end
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    if ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths then
-      paths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
-          _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
-      table.remove(paths, ctx.entryPathSel)
-      if isBoot then
-        _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
-      else
-        _.config_parse.setMenuEntryPaths(
-          ctx.lines, ctx.entryIdx, paths)
-      end
-      ctx.configModified = true
-      if ctx.entryPathSel > #paths then ctx.entryPathSel = math.max(1, #paths) end
-    end
+    ctx.entryPathsActionsOpen = true
+    ctx.entryPathsActionsSel = ctx.entryPathsActionsSel or 1
+    ctx.entryPathsActionsScroll = ctx.entryPathsActionsScroll or 0
   end
-  if (_.padEffective & _.PAD_CIRCLE) ~= 0 then ctx.state = isBoot and "editor" or "menu_entry_edit" end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
+  end
+  if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    if ctx.entryPathGrab then
+      cancelMoveState()
+      return
+    end
+    ctx.state = isBoot and "editor" or "menu_entry_edit"
+  end
 end
 
 return { run = run }

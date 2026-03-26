@@ -1,5 +1,7 @@
 --[[ eGSM single-screen editor: default + title overrides + Add. Title ID = 4 letters + 5 digits. ]]
 
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
+
 local function getEgsmBackState(ctx)
   local context = ctx and ctx.context or nil
   if context == "ps2bbl" or context == "psxbbl" then
@@ -132,15 +134,18 @@ local function run(ctx)
     end
   end
 
-  local hintItems = _.strings.egsm.hint_items
-  if ctx.egsmSel == 1 then
-    hintItems = defCommented and (_.strings.egsm.hint_items_with_enable or hintItems) or
-        (_.strings.egsm.hint_items_with_disable or hintItems)
-  elseif ctx.egsmSel >= 2 and ctx.egsmSel <= 1 + #entries then
-    local ent = entries[ctx.egsmSel - 1]
-    hintItems = ent.commented and (_.strings.egsm.hint_items_with_enable or hintItems) or
-        (_.strings.egsm.hint_items_with_disable or hintItems)
+  local hasEntrySelection = (ctx.egsmSel >= 2 and ctx.egsmSel <= 1 + #entries)
+  local selectedCommented = defCommented
+  if hasEntrySelection then
+    selectedCommented = entries[ctx.egsmSel - 1].commented
   end
+  local hintItems = {
+    { pad = "cross", label = (_.menu_str.edit_label or "Edit"), row = 1 },
+    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    { pad = ctx.configModified and "start" or "", label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "", row = 1 },
+    { pad = "triangle", label = selectedCommented and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"), row = 1 },
+    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+  }
   hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
@@ -162,26 +167,11 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT | _.PAD_TRIANGLE)) ~= 0 then
+  if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     toggleSelectedEgsmDisabled()
   end
 
-  if (_.padEffective & _.PAD_CROSS) ~= 0 and (ctx.egsmSel == 1 or (ctx.egsmSel >= 2 and ctx.egsmSel <= 1 + #entries)) then
-    ctx.egsmEditDefault = (ctx.egsmSel == 1)
-    if not ctx.egsmEditDefault then
-      local ent = entries[ctx.egsmSel - 1]
-      ctx.egsmEditTitleId = ent.titleId
-      ctx.egsmEditCommented = ent.commented
-    else
-      ctx.egsmEditTitleId = nil
-      ctx.egsmEditCommented = defCommented
-    end
-    ctx.egsmVideoIdx = nil
-    ctx.egsmCompatIdx = nil
-    ctx.state = "egsm_value_edit"
-  end
-
-  if (_.padEffective & _.PAD_SELECT) ~= 0 then
+  local function beginInsertEgsmEntry()
     ctx.textInputPrompt = _.strings.egsm.title_id_prompt
     ctx.textInputValue = ""
     ctx.textInputMaxLen = 15
@@ -190,6 +180,7 @@ local function run(ctx)
       local id = _.config_parse.parseTitleIdInput and _.config_parse.parseTitleIdInput(val or "")
       if id and _.config_parse.isValidTitleId(id) then
         _.config_parse.setEgsmEntry(ctx.lines, id, "", true)
+        ctx.configModified = true
         local entriesAfter = _.config_parse.getEgsmEntries(ctx.lines)
         for i, ent in ipairs(entriesAfter) do
           if ent.titleId == id then
@@ -207,11 +198,60 @@ local function run(ctx)
     ctx.state = "text_input"
   end
 
-  if (_.padEffective & _.PAD_SQUARE) ~= 0 and ctx.egsmSel >= 2 and ctx.egsmSel <= 1 + #entries then
+  local function removeSelectedEgsmEntry()
+    if not hasEntrySelection then return end
     local ent = entries[ctx.egsmSel - 1]
     _.config_parse.removeEgsmEntry(ctx.lines, ent.titleId)
+    ctx.configModified = true
     ctx.egsmSel = math.min(ctx.egsmSel, 1 + #entries - 1)
     if ctx.egsmSel < 1 then ctx.egsmSel = 1 end
+  end
+
+  if ctx.egsmActionsOpen then
+    local actionRows = {
+      { id = "insert", label = (_.menu_str.insert_label or "Insert") },
+    }
+    if hasEntrySelection then
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "egsmActionsOpen",
+          selKey = "egsmActionsSel",
+          scrollKey = "egsmActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "egsm_actions_row_",
+          onSelect = function(row)
+            if row.id == "insert" then
+              beginInsertEgsmEntry()
+            elseif row.id == "remove" then
+              removeSelectedEgsmEntry()
+            end
+          end,
+        }) then
+      return
+    end
+  end
+
+  if (_.padEffective & _.PAD_CROSS) ~= 0 and (ctx.egsmSel == 1 or (ctx.egsmSel >= 2 and ctx.egsmSel <= 1 + #entries)) then
+    ctx.egsmEditDefault = (ctx.egsmSel == 1)
+    if not ctx.egsmEditDefault then
+      local ent = entries[ctx.egsmSel - 1]
+      ctx.egsmEditTitleId = ent.titleId
+      ctx.egsmEditCommented = ent.commented
+    else
+      ctx.egsmEditTitleId = nil
+      ctx.egsmEditCommented = defCommented
+    end
+    ctx.egsmVideoIdx = nil
+    ctx.egsmCompatIdx = nil
+    ctx.state = "egsm_value_edit"
+  end
+
+  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    ctx.egsmActionsOpen = true
+    ctx.egsmActionsSel = ctx.egsmActionsSel or 1
+    ctx.egsmActionsScroll = ctx.egsmActionsScroll or 0
   end
 
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then

@@ -1,5 +1,7 @@
 --[[ Path picker: device list, partitions, or directory browse. ]]
 
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
+
 -- Apply chosen path for MBR boot key and return next state. Returns nil if not a boot-key pick.
 local function applyBootPathAndReturn(ctx, val)
   if not ctx.pathPickerBootKey or not ctx.lines then return nil end
@@ -83,6 +85,16 @@ local function hasIniFilter(ctx)
     local ext = tostring(ctx.pathPickerFileExts[i] or ""):lower()
     if ext ~= "" and ext:sub(1, 1) ~= "." then ext = "." .. ext end
     if ext == ".ini" then return true end
+  end
+  return false
+end
+
+local function hasIrxFilter(ctx)
+  if not ctx or type(ctx.pathPickerFileExts) ~= "table" then return false end
+  for i = 1, #ctx.pathPickerFileExts do
+    local ext = tostring(ctx.pathPickerFileExts[i] or ""):lower()
+    if ext ~= "" and ext:sub(1, 1) ~= "." then ext = "." .. ext end
+    if ext == ".irx" then return true end
   end
   return false
 end
@@ -933,24 +945,75 @@ local function run(ctx)
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.pathPickerSel, label, col)
     end
     if #show == 0 then
-      local noFilesLabel = hasIniFilter(ctx) and (_.path_str.no_ini_files or "No INI files or folders") or _.path_str.no_elf_files
+      local noFilesLabel
+      if hasIniFilter(ctx) then
+        noFilesLabel = _.path_str.no_ini_files or "No INI files or folders"
+      elseif hasIrxFilter(ctx) then
+        noFilesLabel = _.path_str.no_irx_files or "No IRX files or folders"
+      else
+        noFilesLabel = _.path_str.no_elf_files
+      end
       _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(55), _.FONT_SCALE, noFilesLabel, _.DIM)
     end
-    local browseHint = _.path_str.cross_select_file_items
-    if isConfigOpenTarget(ctx) and ctx.pathBrowsePath then
-      browseHint = _.path_str.cross_select_create_circle_back_items or browseHint
+    local canCreateConfigIni = isConfigOpenTarget(ctx) and ctx.pathBrowsePath
+    if not canCreateConfigIni then
+      ctx.pathBrowseActionsOpen = nil
+      ctx.pathBrowseActionsSel = nil
+      ctx.pathBrowseActionsScroll = nil
     end
+    local createIniLabel = "Create CONFIG.INI"
+    if canCreateConfigIni and type(_.path_str.cross_select_create_circle_back_items) == "table" then
+      for i = 1, #_.path_str.cross_select_create_circle_back_items do
+        local item = _.path_str.cross_select_create_circle_back_items[i]
+        local pad = tostring(item and item.pad or ""):lower()
+        if item and (pad == "square" or pad == "select") and item.label and item.label ~= "" then
+          createIniLabel = tostring(item.label)
+          break
+        end
+      end
+    end
+    local browseHint = {
+      { pad = "cross", label = (_.path_str.cross_select_file_items and _.path_str.cross_select_file_items[1] and _.path_str.cross_select_file_items[1].label) or "Select", row = 1 },
+      { pad = canCreateConfigIni and "square" or "", label = canCreateConfigIni and (_.menu_str.actions_label or "Actions") or "", row = 1 },
+      { pad = "circle", label = (_.path_str.cross_select_file_items and _.path_str.cross_select_file_items[2] and _.path_str.cross_select_file_items[2].label) or "Back", row = 1 },
+    }
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, browseHint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
-    if isConfigOpenTarget(ctx) and ctx.pathBrowsePath and (_.padEffective & _.PAD_SELECT) ~= 0 then
+
+    local function createConfigIniInBrowseDir()
       local dir = tostring(ctx.pathBrowsePath):gsub("/$", "")
       local val = dir .. "/CONFIG.INI"
       local partPath = ctx.pfs1Mounted or ctx.pfs0Mounted
       if partPath then
         val = pfsToPartitionPath(val, partPath) or val
       end
-      if applyConfigOpenPathAndReturn(ctx, val) then
+      return applyConfigOpenPathAndReturn(ctx, val) == true
+    end
+
+    if ctx.pathBrowseActionsOpen and canCreateConfigIni then
+      if actions_menu.run(ctx, {
+            openKey = "pathBrowseActionsOpen",
+            selKey = "pathBrowseActionsSel",
+            scrollKey = "pathBrowseActionsScroll",
+            title = (_.menu_str.actions_title or "Actions"),
+            rows = {
+              { id = "create_ini", label = createIniLabel },
+            },
+            rowStateKeyPrefix = "path_browse_actions_row_",
+            onSelect = function(row)
+              if row.id == "create_ini" then
+                createConfigIniInBrowseDir()
+              end
+            end,
+          }) then
         return
       end
+    end
+
+    if canCreateConfigIni and (_.padEffective & _.PAD_SQUARE) ~= 0 then
+      ctx.pathBrowseActionsOpen = true
+      ctx.pathBrowseActionsSel = ctx.pathBrowseActionsSel or 1
+      ctx.pathBrowseActionsScroll = ctx.pathBrowseActionsScroll or 0
+      return
     end
     if #show > 0 then
       if (_.padEffective & _.PAD_UP) ~= 0 then

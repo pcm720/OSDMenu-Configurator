@@ -57,26 +57,29 @@ static int lua_setCurrentDirectory(lua_State *L) {
   // some normalization... :)
   // if absolute path (contains [drive]:path/)
   if (strchr(path, ':')) {
-    strcpy(temp_path, path);
+    snprintf(temp_path, sizeof(temp_path), "%s", path);
   } else // relative path
   {
     // remove last directory ?
     if (!strncmp(path, "..", 2)) {
-      getcwd(temp_path, 256);
-      if ((temp_path[strlen(temp_path) - 1] != ':')) {
-        int idx = strlen(temp_path) - 1;
+      if (!getcwd(temp_path, sizeof(temp_path)))
+        temp_path[0] = '\0';
+      if (temp_path[0] != '\0' && (temp_path[strlen(temp_path) - 1] != ':')) {
+        int idx = (int)strlen(temp_path) - 1;
         do {
           idx--;
-        } while (temp_path[idx] != '/');
-        temp_path[idx] = '\0';
+        } while (idx > 0 && temp_path[idx] != '/');
+        if (idx >= 0)
+          temp_path[idx] = '\0';
       }
 
     }
     // add given directory to the existing path
     else {
-      getcwd(temp_path, 256);
-      strcat(temp_path, "/");
-      strcat(temp_path, path);
+      char cwd[256];
+      if (!getcwd(cwd, sizeof(cwd)))
+        cwd[0] = '\0';
+      snprintf(temp_path, sizeof(temp_path), "%s/%s", cwd, path);
     }
   }
 
@@ -102,31 +105,34 @@ static int lua_dir(lua_State *L) {
     return luaL_error(L, "Argument error: System.listDirectory([path]) takes zero or one argument.");
 
   char path[256];
-  getcwd(path, sizeof(path));
+  if (!getcwd(path, sizeof(path)))
+    path[0] = '\0';
 
   if (argc == 1) {
     const char *temp_path = luaL_checkstring(L, 1);
-    strcpy(path, boot_path);
     if (strchr(temp_path, ':'))
-      strcpy(path, temp_path);
+      snprintf(path, sizeof(path), "%s", temp_path);
     else
-      strcat(path, temp_path);
+      snprintf(path, sizeof(path), "%s%s", boot_path ? boot_path : "", temp_path);
   }
-  strcpy(path, ps2_normalize_path(path));
+  {
+    const char *normalized = ps2_normalize_path(path);
+    snprintf(path, sizeof(path), "%s", normalized ? normalized : "");
+  }
 
   // Memory cards: libmc
   if (strcmp(path, "mc0:") == 0 || strcmp(path, "mc1:") == 0) {
     int nPort = (path[2] == '0') ? 0 : 1;
     char mcPath[256];
     size_t plen = strlen(path);
-    strcpy(mcPath, plen >= 4 ? path + 4 : "/");
+    snprintf(mcPath, sizeof(mcPath), "%s", plen >= 4 ? path + 4 : "/");
     if (mcPath[0] == '\0')
-      strcpy(mcPath, "/");
+      snprintf(mcPath, sizeof(mcPath), "%s", "/");
     size_t mlen = strlen(mcPath);
     if (mlen > 0 && mcPath[mlen - 1] != '/')
-      strcat(mcPath, "/-*");
+      strncat(mcPath, "/-*", sizeof(mcPath) - strlen(mcPath) - 1);
     else
-      strcat(mcPath, "*");
+      strncat(mcPath, "*", sizeof(mcPath) - strlen(mcPath) - 1);
 
     sceMcTblGetDir mcEntries[MAX_DIR_FILES] __attribute__((aligned(64)));
     int numRead;
@@ -155,8 +161,8 @@ static int lua_dir(lua_State *L) {
   // All other paths: fileXio. Device roots need trailing /.
   size_t plen = strlen(path);
   if (plen > 0 && path[plen - 1] != '/' && strchr(path, ':')) {
-    if (plen < sizeof(path) - 2)
-      strcat(path, "/");
+    if (plen < sizeof(path) - 1)
+      strncat(path, "/", sizeof(path) - strlen(path) - 1);
   }
 
   int fd = fileXioDopen(path);
@@ -269,6 +275,55 @@ static int lua_getDeviceMountpoint(lua_State *L) {
   return 1;
 }
 
+// Returns launch device family inferred from boot_path:
+// "mc", "mmce", "hdd", "usb", "mx4sio", "ata", "bdm", or "unknown".
+static int lua_getLaunchDeviceFamily(lua_State *L) {
+  if (!boot_path || boot_path[0] == '\0') {
+    lua_pushstring(L, "unknown");
+    return 1;
+  }
+
+  uint32_t device = devices_guess_device_type(boot_path);
+  if (device & Device_MMCE) {
+    lua_pushstring(L, "mmce");
+    return 1;
+  }
+  if (device & Device_HDD) {
+    lua_pushstring(L, "hdd");
+    return 1;
+  }
+  if (device & Device_Basic) {
+    if (!strncmp(boot_path, "mc", 2))
+      lua_pushstring(L, "mc");
+    else
+      lua_pushstring(L, "basic");
+    return 1;
+  }
+
+  if (device & Device_BDM) {
+    const char *colon = strchr(boot_path, ':');
+    if (colon) {
+      char mountpoint[16] = {0};
+      size_t len = (size_t)(colon - boot_path + 1);
+      if (len > sizeof(mountpoint) - 2)
+        len = sizeof(mountpoint) - 2;
+      memcpy(mountpoint, boot_path, len);
+      mountpoint[len] = '/';
+      mountpoint[len + 1] = '\0';
+      const char *driver = devices_get_bdm_driver(mountpoint);
+      if (driver) {
+        lua_pushstring(L, driver);
+        return 1;
+      }
+    }
+    lua_pushstring(L, "bdm");
+    return 1;
+  }
+
+  lua_pushstring(L, "unknown");
+  return 1;
+}
+
 static int lua_createDir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
   if (!path)
@@ -289,29 +344,58 @@ static int lua_removeDir(lua_State *L) {
   return 1;
 }
 
+static int copy_file_contents(const char *sourcePath, const char *destPath, int removeSource) {
+  char buf[BUFSIZ];
+  ssize_t bytesRead = 0;
+  int source = -1;
+  int dest = -1;
+  int ok = 1;
+
+  source = open(sourcePath, O_RDONLY, 0);
+  if (source < 0)
+    return 0;
+
+  dest = open(destPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (dest < 0) {
+    close(source);
+    return 0;
+  }
+
+  while ((bytesRead = read(source, buf, sizeof(buf))) > 0) {
+    ssize_t totalWritten = 0;
+    while (totalWritten < bytesRead) {
+      ssize_t bytesWritten = write(dest, buf + totalWritten, bytesRead - totalWritten);
+      if (bytesWritten <= 0) {
+        ok = 0;
+        goto done;
+      }
+      totalWritten += bytesWritten;
+    }
+  }
+  if (bytesRead < 0)
+    ok = 0;
+
+done:
+  if (close(source) < 0)
+    ok = 0;
+  if (close(dest) < 0)
+    ok = 0;
+  if (ok && removeSource && remove(sourcePath) < 0)
+    ok = 0;
+  return ok;
+}
+
 static int lua_movefile(lua_State *L) {
-  const char *path = luaL_checkstring(L, 1);
-  if (!path)
-    return luaL_error(L, "Argument error: System.moveFile(filename) takes a filename as string as argument.");
+  int argc = lua_gettop(L);
+  if (argc != 2)
+    return luaL_error(L, "Argument error: System.moveFile(source, destination) takes two filenames as strings as arguments.");
   const char *oldName = luaL_checkstring(L, 1);
   const char *newName = luaL_checkstring(L, 2);
   if (!oldName || !newName)
     return luaL_error(L, "Argument error: System.moveFile(source, destination) takes two filenames as strings as arguments.");
 
-  char buf[BUFSIZ];
-  size_t size;
-
-  int source = open(oldName, O_RDONLY, 0);
-  int dest = open(newName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
-  while ((size = read(source, buf, BUFSIZ)) > 0) {
-    write(dest, buf, size);
-  }
-
-  close(source);
-  close(dest);
-
-  remove(oldName);
+  if (!copy_file_contents(oldName, newName, 1))
+    return luaL_error(L, "System.moveFile failed.");
 
   return 0;
 }
@@ -327,23 +411,16 @@ static int lua_removeFile(lua_State *L) {
 }
 
 static int lua_copyfile(lua_State *L) {
+  int argc = lua_gettop(L);
+  if (argc != 2)
+    return luaL_error(L, "Argument error: System.copyFile(source, destination) takes two filenames as strings as arguments.");
   const char *ogfile = luaL_checkstring(L, 1);
   const char *newfile = luaL_checkstring(L, 2);
   if (!ogfile || !newfile)
     return luaL_error(L, "Argument error: System.copyFile(source, destination) takes two filenames as strings as arguments.");
 
-  char buf[BUFSIZ];
-  size_t size;
-
-  int source = open(ogfile, O_RDONLY, 0);
-  int dest = open(newfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
-  while ((size = read(source, buf, BUFSIZ)) > 0) {
-    write(dest, buf, size);
-  }
-
-  close(source);
-  close(dest);
+  if (!copy_file_contents(ogfile, newfile, 0))
+    return luaL_error(L, "System.copyFile failed.");
 
   return 0;
 }
@@ -354,7 +431,7 @@ static void setModulePath() { getcwd(modulePath, 256); }
 
 static int lua_sleep(lua_State *L) {
   if (lua_gettop(L) != 1)
-    return luaL_error(L, "milliseconds expected.");
+    return luaL_error(L, "seconds expected.");
   int sec = luaL_checkinteger(L, 1);
   sleep(sec);
   return 0;
@@ -447,11 +524,22 @@ static int lua_readfile(lua_State *L) {
     return luaL_error(L, "wrong number of arguments");
   int file = luaL_checkinteger(L, 1);
   uint32_t size = luaL_checkinteger(L, 2);
-  uint8_t *buffer = (uint8_t *)malloc(size + 1);
-  int len = read(file, buffer, size);
+  uint8_t *buffer = (uint8_t *)malloc((size_t)size + 1);
+  if (buffer == NULL) {
+    lua_pushnil(L);
+    lua_pushinteger(L, -1);
+    return 2;
+  }
+  ssize_t len = read(file, buffer, size);
+  if (len < 0) {
+    free(buffer);
+    lua_pushnil(L);
+    lua_pushinteger(L, (lua_Integer)len);
+    return 2;
+  }
   buffer[len] = 0;
-  lua_pushlstring(L, (const char *)buffer, len);
-  lua_pushinteger(L, len);
+  lua_pushlstring(L, (const char *)buffer, (size_t)len);
+  lua_pushinteger(L, (lua_Integer)len);
   free(buffer);
   return 2;
 }
@@ -531,34 +619,71 @@ extern void *_gp;
 static volatile off_t progress, max_progress;
 
 struct pathMap {
-  const char *in;
-  const char *out;
+  char *in;
+  char *out;
 };
+
+static char *dup_cstr(const char *src) {
+  size_t len;
+  char *dst;
+  if (!src)
+    return NULL;
+  len = strlen(src) + 1;
+  dst = (char *)malloc(len);
+  if (!dst)
+    return NULL;
+  memcpy(dst, src, len);
+  return dst;
+}
 
 static int copyThread(void *data) {
   pathMap *paths = (pathMap *)data;
-
+  int in = -1;
+  int out = -1;
   char buffer[BUFSIZE];
-  int in = open(paths->in, O_RDONLY, 0);
-  int out = open(paths->out, O_WRONLY | O_CREAT | O_TRUNC, 644);
-
-  // Get the input file size
-  uint32_t size = lseek(in, 0, SEEK_END);
-  lseek(in, 0, SEEK_SET);
-
   progress = 0;
-  max_progress = size;
+  max_progress = 0;
+
+  if (paths == NULL || paths->in == NULL || paths->out == NULL)
+    goto done;
+  in = open(paths->in, O_RDONLY, 0);
+  if (in < 0)
+    goto done;
+  out = open(paths->out, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (out < 0)
+    goto done;
+  // Get the input file size.
+  {
+    off_t size = lseek(in, 0, SEEK_END);
+    if (size >= 0) {
+      max_progress = size;
+      lseek(in, 0, SEEK_SET);
+    }
+  }
 
   ssize_t bytes_read;
   while ((bytes_read = read(in, buffer, BUFSIZE)) > 0) {
-    write(out, buffer, bytes_read);
-    progress += bytes_read;
+    ssize_t totalWritten = 0;
+    while (totalWritten < bytes_read) {
+      ssize_t bytesWritten = write(out, buffer + totalWritten, bytes_read - totalWritten);
+      if (bytesWritten <= 0)
+        goto done;
+      totalWritten += bytesWritten;
+    }
+    progress += totalWritten;
   }
 
   // copy is done, or an error occurred
-  close(in);
-  close(out);
-  free(paths);
+done:
+  if (in >= 0)
+    close(in);
+  if (out >= 0)
+    close(out);
+  if (paths != NULL) {
+    free(paths->in);
+    free(paths->out);
+    free(paths);
+  }
   ExitDeleteThread();
   return 0;
 }
@@ -567,11 +692,23 @@ static int lua_copyasync(lua_State *L) {
   int argc = lua_gettop(L);
   if (argc != 2)
     return luaL_error(L, "wrong number of arguments");
+  const char *inPath = luaL_checkstring(L, 1);
+  const char *outPath = luaL_checkstring(L, 2);
 
   pathMap *copypaths = (pathMap *)malloc(sizeof(pathMap));
+  if (!copypaths)
+    return luaL_error(L, "System.threadCopyFile: out of memory.");
+  copypaths->in = NULL;
+  copypaths->out = NULL;
 
-  copypaths->in = luaL_checkstring(L, 1);
-  copypaths->out = luaL_checkstring(L, 2);
+  copypaths->in = dup_cstr(inPath);
+  copypaths->out = dup_cstr(outPath);
+  if (!copypaths->in || !copypaths->out) {
+    free(copypaths->in);
+    free(copypaths->out);
+    free(copypaths);
+    return luaL_error(L, "System.threadCopyFile: out of memory.");
+  }
 
   static uint8_t copyThreadStack[65 * 1024] __attribute__((aligned(16)));
 
@@ -583,6 +720,12 @@ static int lua_copyasync(lua_State *L) {
   thread_param.stack_size = sizeof(copyThreadStack);
   thread_param.initial_priority = 0x12;
   int thread = CreateThread(&thread_param);
+  if (thread < 0) {
+    free(copypaths->in);
+    free(copypaths->out);
+    free(copypaths);
+    return luaL_error(L, "System.threadCopyFile: failed to create thread.");
+  }
 
   StartThread(thread, (void *)copypaths);
   return 0;
@@ -670,6 +813,7 @@ static const luaL_Reg System_functions[] = {
     {"exitToBrowser", lua_exit},
     {"getMCInfo", lua_getmcinfo},
     {"getDeviceMountpoint", lua_getDeviceMountpoint},
+    {"getLaunchDeviceFamily", lua_getLaunchDeviceFamily},
     {"listHddPartitions", lua_listHddPartitions},
     {"loadModules", lua_loadModules},
     {"fileXioMount", lua_fileXioMount},

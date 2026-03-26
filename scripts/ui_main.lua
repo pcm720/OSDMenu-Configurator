@@ -85,9 +85,8 @@ local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
 
-local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START = common.PAD_UP, common.PAD_DOWN, common.PAD_CROSS,
-    common.PAD_CIRCLE, common.PAD_START
-local PAD_L1, PAD_R1 = common.PAD_L1, common.PAD_R1
+local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE = common.PAD_UP, common.PAD_DOWN,
+    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE
 
 local function openDbg(...)
   if _G and _G.CONFIG_UI_OPEN_DEBUG == false then return end
@@ -115,15 +114,6 @@ local function findHintLabel(items, pad, fallback)
   return fallback
 end
 
-local function widerLabel(font, scale, a, b)
-  local wa = common.calcTextWidth and common.calcTextWidth(font, a or "", scale) or #(a or "")
-  local wb = common.calcTextWidth and common.calcTextWidth(font, b or "", scale) or #(b or "")
-  if wa >= wb then
-    return a or ""
-  end
-  return b or ""
-end
-
 local function getLanguageDisplayName(idx)
   local names = C.langDisplayNames
   if names and names[idx] and names[idx] ~= "" then
@@ -133,68 +123,42 @@ local function getLanguageDisplayName(idx)
   return defaultLanguageDisplayName(code)
 end
 
-local function withoutUpDownHints(items)
-  local out = {}
-  for i = 1, #(items or {}) do
-    local it = items[i]
-    local pad = tostring((it and it.pad) or ""):lower()
-    if pad ~= "up" and pad ~= "down" then
-      out[#out + 1] = it
-    end
-  end
-  return out
+local function hasLanguageChoices()
+  return not C.langCycleDisabled and C.langFiles and #C.langFiles > 1
+end
+
+local function getLanguageHintLabel(main_str)
+  local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
+  local raw = findHintLabel(baseHint, "L1", findHintLabel(baseHint, "R1", "Language"))
+  local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  cleaned = cleaned:gsub("%s*[%+%-]$", "")
+  if cleaned == "" then cleaned = "Language" end
+  return cleaned
 end
 
 local function buildMainBaseHintItems(main_str)
-  local base = withoutUpDownHints(main_str.main_hint_items or {})
-  local out = {}
-  for i = 1, #base do
-    local item = base[i]
-    local rawPad = tostring((item and item.pad) or "")
-    local padLower = rawPad:lower()
-    local isExit = (padLower == "start" or padLower == "circle")
-    local pad = isExit and "circle" or rawPad
-    local row = isExit and 1 or 2
-    out[#out + 1] = {
-      pad = pad,
-      label = (item and item.label) or "",
-      layoutLabel = item and item.layoutLabel,
-      row = row,
-    }
+  local baseHint = main_str.main_hint_items or {}
+  local enterLabel = findHintLabel(baseHint, "cross", "Enter")
+  local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
+  local out = {
+    { pad = "cross", label = enterLabel, row = 1 },
+    { pad = "circle", label = exitLabel, row = 1 },
+  }
+  if hasLanguageChoices() then
+    table.insert(out, 2, { pad = "square", label = getLanguageHintLabel(main_str), row = 1 })
   end
   return out
 end
 
-local function buildMainLangHintItems(s, main_str)
-  if C.langCycleDisabled or not C.langFiles or #C.langFiles <= 1 then
-    return buildMainBaseHintItems(main_str)
-  end
-
-  local idx = C.langIndex or 1
-  local prevIdx = idx - 1
-  local nextIdx = idx + 1
-  if prevIdx < 1 then prevIdx = #C.langFiles end
-  if nextIdx > #C.langFiles then nextIdx = 1 end
-
-  local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
-  local enterLabel = findHintLabel(baseHint, "cross", "Enter")
-  local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
-  local prevLabel = getLanguageDisplayName(prevIdx)
-  local nextLabel = getLanguageDisplayName(nextIdx)
-  local l1Label = findHintLabel(baseHint, "L1", prevLabel)
-  local r1Label = findHintLabel(baseHint, "R1", nextLabel)
-
-  local leftLayout = widerLabel(s.font, 0.7, l1Label, prevLabel)
-  local centerLayout = widerLabel(s.font, 0.7, enterLabel, exitLabel)
-  local rightLayout = widerLabel(s.font, 0.7, r1Label, nextLabel)
-
+local function buildMainLanguageOverlayHintItems(main_str)
+  local base = main_str.cross_select_circle_back_items or {}
+  local selectLabel = findHintLabel(base, "cross", "Enter")
+  local backLabel = findHintLabel(base, "circle", "Back")
+  local languageLabel = getLanguageHintLabel(main_str)
   return {
-    { pad = "L1", label = prevLabel, layoutLabel = leftLayout, row = 2 },
-    { pad = "", label = "", layoutLabel = centerLayout, row = 2 },
-    { pad = "R1", label = nextLabel, layoutLabel = rightLayout, row = 2 },
-    { pad = "cross", label = enterLabel, layoutLabel = leftLayout, row = 1 },
-    { pad = "", label = "", row = 1 },
-    { pad = "circle", label = exitLabel, layoutLabel = rightLayout, row = 1 },
+    { pad = "cross", label = selectLabel, row = 1 },
+    { pad = "square", label = languageLabel, row = 1 },
+    { pad = "circle", label = backLabel, row = 1 },
   }
 end
 
@@ -229,6 +193,20 @@ local function buildMainChoices(main_str)
     table.insert(out, 6, main_str.main_egsm or "eGSM")
   end
   return out
+end
+
+local function applyLanguageIndex(s, idx)
+  if not hasLanguageChoices() then return false end
+  local total = #C.langFiles
+  local target = common.clampListSelection(idx or (C.langIndex or 1), total)
+  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[target])
+  if okLoad and newStrings and type(newStrings) == "table" then
+    C.strings = newStrings
+    C.langIndex = target
+    s.main = buildMainChoices(newStrings.main or {})
+    return true
+  end
+  return false
 end
 
 local function isBblContext(context)
@@ -449,27 +427,189 @@ local function runMain(s, pad)
   if s.mainSel < 1 then s.mainSel = 1 end
   if s.mainSel > #s.main then s.mainSel = #s.main end
 
-  -- L1/R1: cycle language (only when not using CWD strings.lua override and more than one lang file)
-  if not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 then
-    local idx = C.langIndex or 1
-    if (pad & PAD_L1) ~= 0 then
-      idx = idx - 1
-      if idx < 1 then idx = #C.langFiles end
-      local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[idx])
-      if okLoad and newStrings and type(newStrings) == "table" then
-        C.strings = newStrings
-        C.langIndex = idx
-        s.main = buildMainChoices(newStrings.main or {})
-      end
-    elseif (pad & PAD_R1) ~= 0 then
-      idx = idx % #C.langFiles + 1
-      local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[idx])
-      if okLoad and newStrings and type(newStrings) == "table" then
-        C.strings = newStrings
-        C.langIndex = idx
-        s.main = buildMainChoices(newStrings.main or {})
-      end
+  local function drawMainBaseUi()
+    dt(s.font, s.drawMode, M, MY, 1.1, main_str.main_title or "", common.WHITE)
+    local versionStr = (type(APP_VERSION) == "string" and APP_VERSION ~= "") and APP_VERSION or
+        (main_str.version_unknown or "unknown")
+    local vw = common.calcTextWidth(s.font, versionStr, 0.75) or (#versionStr * 9)
+    local viewW = s.w or 640
+    dt(s.font, s.drawMode, viewW - M - vw, MY, 0.75, versionStr, common.DIM)
+    dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
+    local hintItems = buildMainBaseHintItems(main_str)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
+    for i, label in ipairs(s.main) do
+      local y = MY + sc(50) + (i - 1) * L
+      local col = (i == s.mainSel) and SE or common.GRAY
+      dlr(M + 20, y, i == s.mainSel, label, col)
     end
+  end
+
+  if s.mainLangPrompt and not hasLanguageChoices() then
+    s.mainLangPrompt = nil
+    s.mainLangSel = nil
+    s.mainLangPromptAnim = nil
+    s.mainLangPromptClosing = nil
+  end
+  if s.mainLangPrompt then
+    local total = #C.langFiles
+    s.mainLangSel = common.clampListSelection(s.mainLangSel or (C.langIndex or 1), total)
+    local closing = s.mainLangPromptClosing == true
+    local anim = tonumber(s.mainLangPromptAnim)
+    if type(anim) ~= "number" then
+      anim = closing and 1 or 0
+    end
+    if closing then
+      anim = math.max(0, anim - (1 / 6))
+    else
+      anim = math.min(1, anim + (1 / 6))
+    end
+    s.mainLangPromptAnim = anim
+    drawMainBaseUi()
+    local maxVis = math.max(1, math.min(8, total))
+    local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
+    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
+    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+    local rowScale = titleScale
+    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
+    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
+        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local function textWidth(text, scale)
+      local useScale = scale or rowScale
+      if common.calcTextWidth then
+        return common.calcTextWidth(hintFont, tostring(text or ""), useScale)
+      end
+      local str = tostring(text or "")
+      return math.floor((8 * useScale) * #str)
+    end
+
+    local spaceW = textWidth(" ", rowScale)
+    if spaceW < 1 then
+      local probeW = textWidth("M", rowScale)
+      if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
+      spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
+    end
+    local markerW = textWidth(">", rowScale)
+    if markerW < 1 then markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5)) end
+    local maxLabelWIntrinsic = 0
+    for i = 1, total do
+      local lw = textWidth(getLanguageDisplayName(i), rowScale)
+      if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+    end
+
+    local padX = math.floor((sc(8) or 8) + 0.5)
+    local padTop = math.floor((sc(6) or 6) + 0.5)
+    local titleH = 0
+    local titleGap = 0
+    local padBottom = math.floor((sc(6) or 6) + 0.5)
+    local rowStep = textH + math.max(2, math.floor((sc(3) or 3) + 0.5))
+
+    local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
+    local hintGridXShift = common.PAD_HINT_GRID_X_SHIFT or 0
+    local hintGridExtraW = common.PAD_HINT_GRID_EXTRA_W or 0
+    local hintTotalW = ((s.w or 640) - (2 * M)) + hintGridExtraW
+    local hintXEff = M + sideMargin + hintGridXShift
+    local hintWidthEff = hintTotalW - (2 * sideMargin)
+    local slotW = hintWidthEff / 5
+    local squareSlotLeft = hintXEff + slotW
+    local squareSlotCenter = squareSlotLeft + (slotW / 2)
+    local startSlotLeft = hintXEff + (2 * slotW)
+    local startSlotCenter = startSlotLeft + (slotW / 2)
+    local hintIconScale = 0.6
+    local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
+    local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
+    local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
+    local startButtonLeft = math.floor(startSlotCenter - (hintIconW / 2))
+    local desiredBoxX = squareButtonLeft
+    local desiredRowLabelX = squareButtonLeft + hintIconW + hintGap
+    local rowLabelOffset = desiredRowLabelX - desiredBoxX
+    if rowLabelOffset < (padX + markerW + spaceW) then
+      rowLabelOffset = padX + markerW + spaceW
+    end
+    local rightGap = math.max(3, math.floor((sc(4) or 4) + 0.5))
+    local targetRightX = startButtonLeft - rightGap
+    local desiredToStartW = math.floor(targetRightX - desiredBoxX + 0.5)
+    if desiredToStartW < 90 then desiredToStartW = 90 end
+    local contentW = math.max(90, math.floor((rowLabelOffset + maxLabelWIntrinsic + padX) + 0.5))
+    local boxW = math.max(desiredToStartW, contentW)
+    local maxBoxW = (s.w or 640) - (2 * M)
+    if boxW > maxBoxW then boxW = maxBoxW end
+    local boxH = padTop + titleH + titleGap + (maxVis * rowStep) + padBottom
+
+    local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
+    local hintRowTop = math.floor(H) - hintRowH
+    local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((sc(2) or 2) + 0.5))
+    local slideDist = math.max(10, math.floor((sc(14) or 14) + 0.5))
+    local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
+    local boxX = desiredBoxX
+    local minX = M
+    local maxX = (s.w or 640) - boxW - M
+    if boxX < minX then boxX = minX end
+    if boxX > maxX then boxX = maxX end
+
+    if Graphics and Graphics.drawRect then
+      local alpha = math.floor(120 * anim + 0.5)
+      if alpha < 0 then alpha = 0 end
+      if alpha > 120 then alpha = 120 end
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, alpha))
+    end
+
+    local rowStartY = boxY + padTop + titleH + titleGap
+    local rowLabelX = desiredRowLabelX
+    local rowMarkerX = rowLabelX - markerW - spaceW
+    local maxLabelW = (boxX + boxW) - padX - rowLabelX
+    if maxLabelW < 1 then maxLabelW = 1 end
+
+    for i = scroll + 1, math.min(scroll + maxVis, total) do
+      local y = rowStartY + (i - scroll - 1) * rowStep
+      local label = getLanguageDisplayName(i)
+      if common.fitListRowText then
+        label = common.fitListRowText(s, "main_lang_row_" .. tostring(i), hintFont, label, maxLabelW, rowScale,
+          i == s.mainLangSel)
+      elseif common.truncateTextToWidth then
+        label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+      end
+      local col = (i == s.mainLangSel) and SE or common.WHITE
+      if i == s.mainLangSel then
+        dt(hintFont, s.drawMode, rowMarkerX, y, rowScale, ">", col)
+      end
+      dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, col)
+    end
+    local hintItems = buildMainLanguageOverlayHintItems(main_str)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
+    if not closing then
+      if (pad & PAD_UP) ~= 0 then
+        s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, -1)
+      end
+      if (pad & PAD_DOWN) ~= 0 then
+        s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, 1)
+      end
+      if (pad & PAD_CROSS) ~= 0 then
+        applyLanguageIndex(s, s.mainLangSel)
+        s.mainLangPrompt = nil
+        s.mainLangSel = nil
+        s.mainLangPromptAnim = nil
+        s.mainLangPromptClosing = nil
+      elseif (pad & PAD_CIRCLE) ~= 0 or (pad & PAD_SQUARE) ~= 0 then
+        s.mainLangPromptClosing = true
+        if s.mainLangPromptAnim < 0.001 then
+          s.mainLangPromptAnim = 1
+        end
+      end
+    elseif anim <= 0.001 then
+      s.mainLangPrompt = nil
+      s.mainLangSel = nil
+      s.mainLangPromptAnim = nil
+      s.mainLangPromptClosing = nil
+    end
+    return
+  end
+
+  if hasLanguageChoices() and (pad & PAD_SQUARE) ~= 0 then
+    s.mainLangPrompt = true
+    s.mainLangSel = C.langIndex or 1
+    s.mainLangPromptAnim = 0
+    s.mainLangPromptClosing = nil
+    return
   end
 
   if (pad & PAD_UP) ~= 0 and s.mainSel > 1 then
@@ -506,21 +646,7 @@ local function runMain(s, pad)
     if (pad & PAD_CIRCLE) ~= 0 and not openedExitPrompt then s.mainExitPrompt = nil end
     return
   end
-  dt(s.font, s.drawMode, M, MY, 1.1, main_str.main_title or "", common.WHITE)
-  local versionStr = (type(APP_VERSION) == "string" and APP_VERSION ~= "") and APP_VERSION or
-      (main_str.version_unknown or "unknown")
-  local vw = common.calcTextWidth(s.font, versionStr, 0.75) or (#versionStr * 9)
-  local w = s.w or 640
-  dt(s.font, s.drawMode, w - M - vw, MY, 0.75, versionStr, common.DIM)
-  dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
-  local hintItems = (not C.langCycleDisabled and C.langFiles and #C.langFiles > 1 and buildMainLangHintItems(s, main_str)) or
-      buildMainBaseHintItems(main_str)
-  common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
-  for i, label in ipairs(s.main) do
-    local y = MY + sc(50) + (i - 1) * L
-    local col = (i == s.mainSel) and SE or common.GRAY
-    dlr(M + 20, y, i == s.mainSel, label, col)
-  end
+  drawMainBaseUi()
   if (pad & PAD_CROSS) ~= 0 then
     if s.mainSel == 1 then
       s.mainOverlayLogoKey = "freemcboot"
@@ -655,11 +781,124 @@ local function appendUniquePath(paths, path)
   paths[#paths + 1] = path
 end
 
-local function buildBblSourceOptions(iniFileType)
+local function normalizeMountpoint(mp)
+  if type(mp) ~= "string" or mp == "" then return nil end
+  return (mp:sub(-1) == ":") and mp or (mp .. ":")
+end
+
+local function normalizeLaunchFamily(value)
+  local fam = tostring(value or ""):lower()
+  if fam == "mass" then fam = "usb" end
+  if fam == "usb" or fam == "mmce" or fam == "mx4sio" or fam == "ata" or fam == "hdd" or fam == "mc" or fam == "bdm" then
+    return fam
+  end
+  return nil
+end
+
+local function inferLaunchFamilyFromPath(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  local p = path:lower()
+  if p:match("^mmce%d*:") then return "mmce" end
+  if p:match("^mass%d*:") then return "usb" end
+  if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end
+  if p:match("^mc%d:") then return "mc" end
+  return nil
+end
+
+local function getLaunchSourceFamily(s)
+  if type(s.launchSourceFamily) == "string" and s.launchSourceFamily ~= "" then
+    return s.launchSourceFamily
+  end
+  local family = nil
+  if System and System.getLaunchDeviceFamily then
+    local ok, val = pcall(System.getLaunchDeviceFamily)
+    if ok then family = normalizeLaunchFamily(val) end
+  end
+  if not family and System and System.currentDirectory then
+    local ok, cwd = pcall(System.currentDirectory)
+    if ok then family = inferLaunchFamilyFromPath(cwd) end
+  end
+  if not family then family = "unknown" end
+  s.launchSourceFamily = family
+  return family
+end
+
+local function getDeviceMountpoint(deviceId)
+  if not deviceId or deviceId == "" then return nil end
+  if C.file_selector and C.file_selector.getDeviceMountpoint then
+    local ok, mp = pcall(C.file_selector.getDeviceMountpoint, deviceId)
+    if ok then return normalizeMountpoint(mp) end
+  end
+  if System and System.getDeviceMountpoint then
+    local ok, mp = pcall(System.getDeviceMountpoint, deviceId)
+    if ok then return normalizeMountpoint(mp) end
+  end
+  return nil
+end
+
+local function isPrefixAvailable(prefix)
+  if not prefix or prefix == "" then return false end
+  local probe = tostring(prefix)
+  if probe:sub(-1) == ":" then probe = probe .. "/" end
+  return common.tryOpen(probe)
+end
+
+local function hasMountedUsbSlot(deviceId, fallbackPrefix)
+  local mountpoint = getDeviceMountpoint(deviceId)
+  if mountpoint and isPrefixAvailable(mountpoint) then
+    return true
+  end
+  return isPrefixAvailable(fallbackPrefix)
+end
+
+local function getSelectConfigDevicePresence(s)
+  local sceneEpoch = s._sceneEpoch or 0
+  local inputEpoch = s._inputEpoch or 0
+  local cache = s.selectConfigDevicePresenceCache
+  if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
+    return cache
+  end
+  local launchFamily = getLaunchSourceFamily(s)
+  local restrictToExistingRemovables = (launchFamily == "mmce" or launchFamily == "usb")
+  local mmce0Visible, mmce1Visible, usb0Visible, usb1Visible
+  if restrictToExistingRemovables then
+    mmce0Visible = isPrefixAvailable("mmce0:")
+    mmce1Visible = isPrefixAvailable("mmce1:")
+    usb0Visible = hasMountedUsbSlot("usb0", "mass:")
+    usb1Visible = hasMountedUsbSlot("usb1", "mass1:")
+  else
+    -- For non-USB/MMCE launch sources, keep legacy behavior: show these rows in fixed order.
+    mmce0Visible = true
+    mmce1Visible = true
+    usb0Visible = true
+    usb1Visible = true
+  end
+  cache = {
+    sceneEpoch = sceneEpoch,
+    inputEpoch = inputEpoch,
+    launchFamily = launchFamily,
+    mmce0 = mmce0Visible,
+    mmce1 = mmce1Visible,
+    usb0 = usb0Visible,
+    usb1 = usb1Visible,
+  }
+  s.selectConfigDevicePresenceCache = cache
+  return cache
+end
+
+local function buildBblSourceOptions(s, iniFileType)
   local dev_str = (C.strings and C.strings.devices) or {}
   local visibility = (C.config_options and C.config_options.getBblPathDeviceVisibility and
       C.config_options.getBblPathDeviceVisibility()) or nil
   local iniName = (iniFileType == "psxbbl_ini") and "PSXBBL.INI" or "PS2BBL.INI"
+  local presence = getSelectConfigDevicePresence(s)
+  local presentMc = {}
+  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  for i = 1, #slots do
+    if slots[i] == 0 or slots[i] == 1 then
+      presentMc[slots[i]] = true
+    end
+  end
   local out = {}
   local function addDevice(visKey, label, paths, browseDeviceName, browseDeviceId, browseDeviceType)
     if not isVisible(visibility, visKey) then return end
@@ -681,19 +920,39 @@ local function buildBblSourceOptions(iniFileType)
       browseDeviceType = browseDeviceType,
     }
   end
-  addDevice("mc", dev_str.memory_card_1 or "Memory Card 1", { "mc0:/SYS-CONF/" .. iniName }, "mc0:")
-  addDevice("mc", dev_str.memory_card_2 or "Memory Card 2", { "mc1:/SYS-CONF/" .. iniName }, "mc1:")
-  addDevice("mmce", dev_str.mmce_0 or "MMCE in slot 1", { "mmce0:/PS2BBL/PS2BBL.INI" }, "mmce0:", nil, "mmce")
-  addDevice("mmce", dev_str.mmce_1 or "MMCE in slot 2", { "mmce1:/PS2BBL/PS2BBL.INI" }, "mmce1:", nil, "mmce")
-  addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
-  addDevice("usb", dev_str.usb_storage_0 or "USB Mass Storage 1", { "mass:/PS2BBL/CONFIG.INI" }, nil, "usb0", "usb")
-  addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
+  if presentMc[0] then
+    addDevice("mc", dev_str.memory_card_1 or "Memory Card 1", { "mc0:/SYS-CONF/" .. iniName }, "mc0:")
+  end
+  if presentMc[1] then
+    addDevice("mc", dev_str.memory_card_2 or "Memory Card 2", { "mc1:/SYS-CONF/" .. iniName }, "mc1:")
+  end
+  if presence.mmce0 then
+    addDevice("mmce", dev_str.mmce_0 or "MMCE in slot 1", { "mmce0:/PS2BBL/PS2BBL.INI" }, "mmce0:", nil, "mmce")
+  end
+  if presence.mmce1 then
+    addDevice("mmce", dev_str.mmce_1 or "MMCE in slot 2", { "mmce1:/PS2BBL/PS2BBL.INI" }, "mmce1:", nil, "mmce")
+  end
+  if presence.usb0 then
+    addDevice("usb", dev_str.usb_storage_0 or "USB Mass Storage 1", { "mass:/PS2BBL/CONFIG.INI" }, nil, "usb0", "usb")
+  end
+  if presence.usb1 then
+    addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
+  end
   addDevice("mx4sio", dev_str.mx4sio_sd or "MX4SIO", { "massX:/PS2BBL/CONFIG.INI" }, nil, "mx4sio", "mx4sio")
+  addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
   return out
 end
 
-local function buildFreemcbootSourceOptions(context)
+local function buildFreemcbootSourceOptions(s, context)
   local dev_str = (C.strings and C.strings.devices) or {}
+  local presence = getSelectConfigDevicePresence(s)
+  local presentMc = {}
+  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  for i = 1, #slots do
+    if slots[i] == 0 or slots[i] == 1 then
+      presentMc[slots[i]] = true
+    end
+  end
   local out = {}
   local fileName = (context == "freehddboot") and "FREEHDB.CNF" or "FREEMCB.CNF"
 
@@ -709,10 +968,18 @@ local function buildFreemcbootSourceOptions(context)
   if context == "freehddboot" then
     add(dev_str.hdd or "APA-formatted HDD", "hdd0:__sysconf/FMCB/FREEHDB.CNF", "hdd")
   end
-  add(dev_str.memory_card_1 or "Memory Card 1", "mc0:/SYS-CONF/" .. fileName, "mc")
-  add(dev_str.memory_card_2 or "Memory Card 2", "mc1:/SYS-CONF/" .. fileName, "mc")
-  add(dev_str.usb_storage_0 or "USB Mass Storage 1", "mass:/" .. fileName, "usb")
-  add(dev_str.usb_storage_1 or "USB Mass Storage 2", "mass1:/" .. fileName, "usb")
+  if presentMc[0] then
+    add(dev_str.memory_card_1 or "Memory Card 1", "mc0:/SYS-CONF/" .. fileName, "mc")
+  end
+  if presentMc[1] then
+    add(dev_str.memory_card_2 or "Memory Card 2", "mc1:/SYS-CONF/" .. fileName, "mc")
+  end
+  if presence.usb0 then
+    add(dev_str.usb_storage_0 or "USB Mass Storage 1", "mass:/" .. fileName, "usb")
+  end
+  if presence.usb1 then
+    add(dev_str.usb_storage_1 or "USB Mass Storage 2", "mass1:/" .. fileName, "usb")
+  end
   return out
 end
 
@@ -819,7 +1086,7 @@ local function runSelectConfig(s, pad)
   end
 
   if s.context == "freemcboot" or s.context == "freehddboot" then
-    local options = buildFreemcbootSourceOptions(s.context)
+    local options = buildFreemcbootSourceOptions(s, s.context)
     if s.pendingKnownPathPick then
       local pendingPick = s.pendingKnownPathPick
       s.pendingKnownPathPick = nil
@@ -872,7 +1139,7 @@ local function runSelectConfig(s, pad)
     return
   end
 
-  local options = buildBblSourceOptions(iniFileType)
+  local options = buildBblSourceOptions(s, iniFileType)
   if s.pendingKnownPathPick then
     local pendingPick = s.pendingKnownPathPick
     s.pendingKnownPathPick = nil

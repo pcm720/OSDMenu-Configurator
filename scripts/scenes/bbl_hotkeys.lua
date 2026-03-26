@@ -1,5 +1,89 @@
 --[[ PS2BBL/PSXBBL hotkey list (16 buttons, AUTO handled separately). ]]
 
+local function formatPathCount(count)
+  if count == 1 then
+    return "1 path"
+  end
+  return tostring(count) .. " paths"
+end
+
+local function canonicalHotkeyId(raw, hotkeySet)
+  if type(raw) ~= "string" then return nil end
+  local upper = raw:upper()
+  if hotkeySet[upper] then return upper end
+  return nil
+end
+
+-- Build per-hotkey summary in one pass to avoid repeated O(lines) lookups per row/slot.
+local function buildHotkeySummary(lines, hotkeys, maxEntries)
+  local cap = math.max(0, math.floor(tonumber(maxEntries) or 0))
+  local hotkeySet = {}
+  local summary = {}
+  for i = 1, #hotkeys do
+    local keyId = hotkeys[i]
+    hotkeySet[keyId] = true
+    summary[keyId] = {
+      disabled = false,
+      disabledSeen = false,
+      name = "",
+      pathCount = 0,
+      pathSeen = {},
+    }
+  end
+
+  for _, entry in ipairs(lines or {}) do
+    local key = entry and entry.key
+    if type(key) == "string" then
+      local nameId = key:match("^NAME_(.+)$")
+      if nameId then
+        local canon = canonicalHotkeyId(nameId, hotkeySet)
+        local s = canon and summary[canon] or nil
+        if s then
+          if not s.disabledSeen then
+            s.disabled = entry.comment and true or false
+            s.disabledSeen = true
+          end
+          if s.name == "" then
+            s.name = entry.value or ""
+          end
+        end
+      else
+        local pathId, slotStr = key:match("^LK_(.+)_E(%d+)$")
+        if pathId then
+          local canon = canonicalHotkeyId(pathId, hotkeySet)
+          local s = canon and summary[canon] or nil
+          if s then
+            if not s.disabledSeen then
+              s.disabled = entry.comment and true or false
+              s.disabledSeen = true
+            end
+            local slot = tonumber(slotStr)
+            if slot and slot >= 1 and slot <= cap and not s.pathSeen[slot] then
+              s.pathSeen[slot] = true
+              local v = entry.value
+              if type(v) == "string" and v ~= "" then
+                s.pathCount = s.pathCount + 1
+              end
+            end
+          end
+        else
+          local argId = key:match("^ARG_(.+)_E%d+$")
+          if argId then
+            local canon = canonicalHotkeyId(argId, hotkeySet)
+            local s = canon and summary[canon] or nil
+            if s and not s.disabledSeen then
+              s.disabled = entry.comment and true or false
+              s.disabledSeen = true
+            end
+          end
+        end
+      end
+    end
+  end
+
+  return summary
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -15,7 +99,22 @@ local function run(ctx)
   end
 
   local title = "Launch Keys"
-  local isFmcb = (ctx.fileType == "freemcboot_cnf")
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
+      ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
+  local sceneEpoch = ctx._sceneEpoch or 0
+  local hotkeySummaryCache = ctx.bblHotkeySummaryCache
+  if not hotkeySummaryCache or hotkeySummaryCache.linesRef ~= ctx.lines or hotkeySummaryCache.maxEntries ~= maxEntries or
+      hotkeySummaryCache.sceneEpoch ~= sceneEpoch then
+    hotkeySummaryCache = {
+      linesRef = ctx.lines,
+      maxEntries = maxEntries,
+      sceneEpoch = sceneEpoch,
+      summary = buildHotkeySummary(ctx.lines, hotkeys, maxEntries),
+    }
+    ctx.bblHotkeySummaryCache = hotkeySummaryCache
+  end
+  local hotkeySummary = hotkeySummaryCache.summary or {}
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, title, _.WHITE)
 
   ctx.bblHotkeySel = ctx.bblHotkeySel or 1
@@ -40,10 +139,20 @@ local function run(ctx)
   local iconGap = 8
   for i = ctx.bblHotkeyScroll + 1, math.min(ctx.bblHotkeyScroll + _.MAX_VISIBLE_LIST, #hotkeys) do
     local keyId = hotkeys[i]
+    local info = hotkeySummary[keyId] or { disabled = false, name = "", pathCount = 0 }
     local keyIcon = _.common.getPadIcon(keyId)
-    local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
-    local nameVal = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
-    local disp = isFmcb and tostring(keyId or "") or ((nameVal ~= "" and nameVal) or _.common_str.empty)
+    local keyDisabled = info.disabled and true or false
+    local nameVal = info.name or ""
+    local pathCount = tonumber(info.pathCount) or 0
+    local disp
+    if pathCount <= 0 then
+      disp = _.common_str.empty
+    elseif isFmcb then
+      disp = formatPathCount(pathCount)
+    else
+      local nameDisp = (nameVal ~= "" and nameVal) or _.common_str.empty
+      disp = nameDisp .. " (" .. formatPathCount(pathCount) .. ")"
+    end
     local line = disp
     local lineMaxW = maxLabelW - iconW - iconGap
     if _.common.fitListRowText then
@@ -69,11 +178,19 @@ local function run(ctx)
   end
 
   local selKey = hotkeys[ctx.bblHotkeySel]
-  local selDisabled = selKey and _.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, selKey)
+  local selInfo = selKey and hotkeySummary[selKey] or nil
+  local selDisabled = selInfo and selInfo.disabled and true or false
+  local selCanToggleDisabled = selInfo and selInfo.disabledSeen and true or false
   local hint = {
-    { pad = "cross", label = "Enter", row = 1 },
-    { pad = "triangle", label = selDisabled and "Enable" or "Disable", layoutLabel = "Disable", row = 1 },
-    { pad = "circle", label = "Back", row = 1 },
+    { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
+    {
+      pad = selCanToggleDisabled and "triangle" or "",
+      label = selCanToggleDisabled and
+          (selDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      layoutLabel = (_.menu_str.disable_label or "Disable"),
+      row = 1
+    },
+    { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
@@ -85,8 +202,50 @@ local function run(ctx)
     ctx.bblHotkeySel = ctx.bblHotkeySel + 1
     if ctx.bblHotkeySel > #hotkeys then ctx.bblHotkeySel = 1 end
   end
+  local function beginFirstPathPickerForHotkey(keyId, slotDisabled)
+    if not keyId or not _.config_parse.insertBblHotkeySlotBelow then return false end
+    local firstSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, 0, maxEntries)
+    if not firstSlot then return false end
+    ctx.configModified = true
+    ctx.bblHotkeySummaryCache = nil
+    ctx.bblHotkeyKey = keyId
+    ctx.bblEntryListReturnState = "bbl_hotkeys"
+    ctx.bblEntryFocusSlot = firstSlot
+    ctx.editKey = nil
+    ctx.isAddPath = false
+    ctx.addPathKey = nil
+    ctx.pathPickerTarget = nil
+    ctx.pathPickerFileExts = nil
+    ctx.pathPickerBootKey = nil
+    ctx.pathPickerForEntryIdx = nil
+    ctx.pathPickerEditIdx = nil
+    ctx.pathPickerInsertBelow = nil
+    ctx.pathPickerBblIrxIdx = nil
+    ctx.pathPickerBblIrxDisabled = nil
+    ctx.pathPickerBblHotkeyKey = keyId
+    ctx.pathPickerBblHotkeySlot = firstSlot
+    ctx.pathPickerBblHotkeyDisabled = slotDisabled and true or false
+    ctx.pathPickerReturnState = "bbl_hotkey_entries"
+    ctx.pathPickerContext = "path_only"
+    ctx.pathPickerSub = "device"
+    ctx.pathList = _.file_selector.getDevices("path_only") or {}
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
+    ctx.pathBrowsePath = nil
+    ctx.state = "path_picker"
+    return true
+  end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    ctx.bblHotkeyKey = hotkeys[ctx.bblHotkeySel]
+    local keyId = hotkeys[ctx.bblHotkeySel]
+    local info = keyId and hotkeySummary[keyId] or nil
+    local isEmptyBblHotkey = (not isFmcb) and info and ((tonumber(info.pathCount) or 0) <= 0)
+    if isEmptyBblHotkey then
+      local disabled = info and info.disabled and true or false
+      if beginFirstPathPickerForHotkey(keyId, disabled) then
+        return
+      end
+    end
+    ctx.bblHotkeyKey = keyId
     ctx.bblEntrySel = ctx.bblEntrySel or 1
     ctx.bblEntryScroll = ctx.bblEntryScroll or 0
     ctx.bblEntryFocusSlot = nil
@@ -95,10 +254,13 @@ local function run(ctx)
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     local keyId = hotkeys[ctx.bblHotkeySel]
-    if keyId and _.config_parse.setBblHotkeyDisabled then
+    local info = keyId and hotkeySummary[keyId] or nil
+    local canToggle = info and info.disabledSeen and true or false
+    if keyId and canToggle and _.config_parse.setBblHotkeyDisabled then
       local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
       _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
       ctx.configModified = true
+      ctx.bblHotkeySummaryCache = nil
     end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

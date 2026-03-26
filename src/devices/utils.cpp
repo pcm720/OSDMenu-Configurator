@@ -59,7 +59,13 @@ int devices_probe(char *path, int attempts) {
     return -ENODEV;
   m++;
 
-  strncpy(mountpoint, path, m - path);
+  {
+    size_t mountLen = (size_t)(m - path);
+    if (mountLen >= sizeof(mountpoint))
+      return -ENAMETOOLONG;
+    memcpy(mountpoint, path, mountLen);
+    mountpoint[mountLen] = '\0';
+  }
 
   // Wait for IOP to initialize device driver
   int fd = 0;

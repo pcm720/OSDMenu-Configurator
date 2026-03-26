@@ -145,6 +145,7 @@ cmake --build build
 - `-DOUTDIR=<dir>` for custom output directory
 - `-DPOWERPC_UART=ON` for enabling stdout redirection on Deckard consoles
 - `-DEMBED_VFS=ON` for embedding the contents of `scripts/` into the ELF so the app can run without external script files (e.g. from a single ELF on memory card)
+- `-DSAS_TITLE_VERSION=<value>` to override `Version=` in `SAS/title.cfg` (defaults to current git commit hash)
 
 ## Lua syntax checks
 

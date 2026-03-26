@@ -50,9 +50,15 @@ local function run(ctx)
   local selOpt = opts[ctx.cdromOptSel]
   local selCoSt = selOpt and cdromStrings[cdromStringKey(selOpt.key)]
   if selCoSt and selCoSt.desc then
-    local tw = _.common.calcTextWidth(_.font, selCoSt.desc, 0.72)
+    local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
+    local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * hintTextScale)
+    local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
+    local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
+        math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
+    local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+    local tw = _.common.calcTextWidth(hintFont, selCoSt.desc, hintDrawScale)
     local x = _.common.centerX(_, tw)
-    _.drawText(_.font, _.drawMode, x, _.DESC_Y_BOTTOM, 0.72, selCoSt.desc, _.DIM)
+    _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selCoSt.desc, hintColor, hintTextH)
   end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.menu_str.cdrom_toggle_hint_items, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)

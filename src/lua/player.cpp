@@ -3,12 +3,34 @@
 #include "lua/system.h"
 #include <kernel.h>
 #include <malloc.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 static lua_State *L;
+
+static void append_error(char *dst, size_t dstSize, int *offset, const char *fmt, ...) {
+  if (!dst || !offset || !fmt || dstSize == 0)
+    return;
+  if (*offset < 0)
+    *offset = 0;
+  if ((size_t)*offset >= dstSize)
+    return;
+
+  va_list args;
+  va_start(args, fmt);
+  int wrote = vsnprintf(dst + *offset, dstSize - (size_t)*offset, fmt, args);
+  va_end(args);
+  if (wrote < 0)
+    return;
+
+  if ((size_t)wrote >= dstSize - (size_t)*offset)
+    *offset = (int)dstSize - 1;
+  else
+    *offset += wrote;
+}
 
 // Dofile wrapper: Lua's dofile() calls the C API luaL_loadfile directly, so we must replace dofile to intercept. Try VFS first, then original dofile.
 static int vfs_dofile_wrapper(lua_State *L) {
@@ -112,6 +134,11 @@ const char *runScript(const char *script, bool isStringBuffer) {
 
   int s = 0, l = 0;
   char *errMsg = (char *)malloc(sizeof(char) * 512);
+  if (errMsg == NULL) {
+    lua_close(L);
+    return "lua_player: out of memory while formatting error.";
+  }
+  errMsg[0] = '\0';
 
   if (!isStringBuffer) {
     // Match dofile: try VFS first when available so behaviour is same in- or outside bin
@@ -133,47 +160,46 @@ const char *runScript(const char *script, bool isStringBuffer) {
     s = lua_pcall(L, 0, LUA_MULTRET, 0);
 
   if (s) {
-    l = sprintf(&errMsg[l], "\t%s\n", lua_tostring(L, -1));
+    append_error(errMsg, 512, &l, "\t%s\n", lua_tostring(L, -1));
     printf("%s\n", lua_tostring(L, -1));
 #ifndef LUAERROR_DONT_PRINT_STACK
     int n = lua_gettop(L);
     int i;
 
     if (n == 0) {
-      l += sprintf(&errMsg[l], "Stack is empty.\n");
-      return 0;
+      append_error(errMsg, 512, &l, "Stack is empty.\n");
     }
 
     for (i = 1; i <= n; i++) {
-      l += sprintf(&errMsg[l], "\tLUA Stack:\n");
-      l += sprintf(&errMsg[l], "\t[%i]: ", i);
+      append_error(errMsg, 512, &l, "\tLUA Stack:\n");
+      append_error(errMsg, 512, &l, "\t[%i]: ", i);
       switch (lua_type(L, i)) {
       case LUA_TNONE:
-        l += sprintf(&errMsg[l], "Invalid");
+        append_error(errMsg, 512, &l, "Invalid");
         break;
       case LUA_TNIL:
-        l += sprintf(&errMsg[l], "(Nil)");
+        append_error(errMsg, 512, &l, "(Nil)");
         break;
       case LUA_TNUMBER:
-        l += sprintf(&errMsg[l], "(Number) %f", lua_tonumber(L, i));
+        append_error(errMsg, 512, &l, "(Number) %f", lua_tonumber(L, i));
         break;
       case LUA_TBOOLEAN:
-        l += sprintf(&errMsg[l], "(Bool)   %s", (lua_toboolean(L, i) ? "true" : "false"));
+        append_error(errMsg, 512, &l, "(Bool)   %s", (lua_toboolean(L, i) ? "true" : "false"));
         break;
       case LUA_TSTRING:
-        l += sprintf(&errMsg[l], "(String) %s", lua_tostring(L, i));
+        append_error(errMsg, 512, &l, "(String) %s", lua_tostring(L, i));
         break;
       case LUA_TTABLE:
-        l += sprintf(&errMsg[l], "(Table)");
+        append_error(errMsg, 512, &l, "(Table)");
         break;
       case LUA_TFUNCTION:
-        l += sprintf(&errMsg[l], "(Function)");
+        append_error(errMsg, 512, &l, "(Function)");
         break;
       default:
-        l += sprintf(&errMsg[l], "Unknown");
+        append_error(errMsg, 512, &l, "Unknown");
       }
 
-      l += sprintf(&errMsg[l], "\n");
+      append_error(errMsg, 512, &l, "\n");
     }
 #endif
 

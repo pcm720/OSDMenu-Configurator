@@ -19,7 +19,6 @@ function config_parse.regenerateLinesBbl(lines, options)
   if addedGlobals then table.insert(out, { comment = SEPARATOR }) end
   -- 2. Autoboot section (NAME_AUTO, LK_AUTO_E#, ARG_AUTO_E#)
   local function writeHotkeySection(keyId)
-    local sectionStart = #out
     local name = config_parse.getBblHotkeyName(lines, keyId)
     local wrote = false
     if name ~= nil then
@@ -65,6 +64,47 @@ local MODE_WRITE = O_WRONLY | O_CREAT | O_TRUNC
 local function trim(s)
   if type(s) ~= "string" then return s end
   return (s:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+local function classifyTailArgValue(value)
+  local s = trim(tostring(value or "")) or ""
+  if s == "" then return "regular" end
+
+  -- Keep GSM arguments at the absolute end because launcher global-flag parsing
+  -- consumes supported internal flags from the tail.
+  if s:match("^%-[Gg][Ss][Mm]%s*=") ~= nil or s:match("^%-[Gg][Ss][Mm]%s*$") ~= nil then
+    return "gsm"
+  end
+
+  -- Internal launch flags consumed from the tail by OSDMenu launcher/mbr.
+  if s:match("^%-[Aa][Pp][Pp][Ii][Dd]%s*$") ~= nil then return "internal" end
+  if s:match("^%-[Tt][Ii][Tt][Ll][Ee][Ii][Dd]%s*=") ~= nil then return "internal" end
+  if s:match("^%-[Dd][Ee][Vv]9%s*=") ~= nil then return "internal" end
+  if s:match("^%-[Pp][Aa][Tt][Ii][Nn][Ff][Oo]%s*$") ~= nil then return "internal" end
+
+  return "regular"
+end
+
+local function normalizeArgsWithGsmLast(args)
+  local regular, internal, gsm = {}, {}, {}
+  for i = 1, #(args or {}) do
+    local item = args[i]
+    local value = (type(item) == "table") and item.value or item
+    local kind = classifyTailArgValue(value)
+    if kind == "gsm" then
+      gsm[#gsm + 1] = item
+    elseif kind == "internal" then
+      internal[#internal + 1] = item
+    else
+      regular[#regular + 1] = item
+    end
+  end
+
+  local out = {}
+  for i = 1, #regular do out[#out + 1] = regular[i] end
+  for i = 1, #internal do out[#out + 1] = internal[i] end
+  for i = 1, #gsm do out[#out + 1] = gsm[i] end
+  return out
 end
 
 -- Parse CNF content string into list of line entries.
@@ -499,18 +539,6 @@ function config_parse.getBootPaths(lines, key)
   return out
 end
 
-function config_parse.setBootPaths(lines, key, paths)
-  local normalized = {}
-  for _, p in ipairs(paths or {}) do
-    if type(p) == "table" then
-      normalized[#normalized + 1] = { value = p.value or "", disabled = p.disabled and true or false }
-    else
-      normalized[#normalized + 1] = { value = p or "", disabled = false }
-    end
-  end
-  config_parse.setBootPathEntries(lines, key, normalized)
-end
-
 -- Boot args: key_arg or key_argN (suffix ignored); fallback legacy arg_key.
 function config_parse.getBootArgEntries(lines, key)
   local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
@@ -538,6 +566,7 @@ function config_parse.getBootArgEntries(lines, key)
 end
 
 function config_parse.setBootArgEntries(lines, key, args)
+  args = normalizeArgsWithGsmLast(args)
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
   local i = 1
@@ -765,11 +794,26 @@ function config_parse.insertBblIrxEntryBelow(lines, belowIdx, value, disabled)
   while gapIdx <= BBL_MAX_IRX_ENTRIES and occupied[gapIdx] do
     gapIdx = gapIdx + 1
   end
-  if gapIdx > BBL_MAX_IRX_ENTRIES then
+  if gapIdx <= BBL_MAX_IRX_ENTRIES then
+    for idx = gapIdx - 1, insertIdx, -1 do
+      config_parse.changeBblIrxEntryIndex(lines, idx, idx + 1)
+    end
+    config_parse.setBblIrxEntry(lines, insertIdx, value == nil and "" or value, disabled)
+    return insertIdx
+  end
+
+  -- No free slot exists at/after insertIdx (e.g. selecting E10 with only lower gaps free).
+  -- Shift the contiguous block below insertIdx down by one to make room at insertIdx.
+  local lowerGap = insertIdx - 1
+  while lowerGap >= 1 and occupied[lowerGap] do
+    lowerGap = lowerGap - 1
+  end
+  if lowerGap < 1 then
     return nil
   end
-  for idx = gapIdx - 1, insertIdx, -1 do
-    config_parse.changeBblIrxEntryIndex(lines, idx, idx + 1)
+
+  for idx = lowerGap + 1, insertIdx do
+    config_parse.changeBblIrxEntryIndex(lines, idx, idx - 1)
   end
   config_parse.setBblIrxEntry(lines, insertIdx, value == nil and "" or value, disabled)
   return insertIdx
@@ -812,8 +856,10 @@ local function bblHotkeyIdVariants(keyId)
   if not canonical then return {} end
   local out = { canonical }
   if canonical:match("^[A-Z]+$") then
+    local lower = canonical:lower()
+    if lower ~= canonical then out[#out + 1] = lower end
     local title = canonical:sub(1, 1) .. canonical:sub(2):lower()
-    if title ~= canonical then out[#out + 1] = title end
+    if title ~= canonical and title ~= lower then out[#out + 1] = title end
   end
   return out
 end
@@ -822,13 +868,16 @@ local function removeAllKeys(lines, keys)
   local keep = {}
   for i = 1, #keys do keep[keys[i]] = true end
   local i = 1
+  local removed = 0
   while i <= #lines do
     if keep[lines[i].key] then
       table.remove(lines, i)
+      removed = removed + 1
     else
       i = i + 1
     end
   end
+  return removed
 end
 
 local function getWithCommentAnyKey(lines, keys)
@@ -867,17 +916,6 @@ end
 
 local function bblArgKey(keyId, entryIdx)
   return "ARG_" .. tostring(keyId or "") .. "_E" .. tostring(entryIdx or "")
-end
-
-local function removeAllKey(lines, key)
-  local i = 1
-  while i <= #lines do
-    if lines[i].key == key then
-      table.remove(lines, i)
-    else
-      i = i + 1
-    end
-  end
 end
 
 local function isValidBblEntryIdx(entryIdx)
@@ -981,12 +1019,6 @@ function config_parse.setBblHotkeyPath(lines, keyId, entryIdx, value, disabled)
   return true
 end
 
-function config_parse.setBblHotkeyPathDisabled(lines, keyId, entryIdx, disabled)
-  local value = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
-  if value == nil then return false end
-  return config_parse.setBblHotkeyPath(lines, keyId, entryIdx, value, disabled)
-end
-
 -- BBL args for one entry (ARG_<HOTKEY>_E#). Each item = { value, disabled }.
 function config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
   local out = {}
@@ -1009,6 +1041,7 @@ end
 function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
   local canonical = canonicalBblHotkeyId(keyId)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end
+  args = normalizeArgsWithGsmLast(args)
   local ids = bblHotkeyIdVariants(canonical)
   local keys = {}
   for i = 1, #ids do keys[#keys + 1] = bblArgKey(ids[i], entryIdx) end
@@ -1072,15 +1105,16 @@ function config_parse.removeBblHotkeySlot(lines, keyId, entryIdx)
     pathKeys[#pathKeys + 1] = bblPathKey(ids[i], entryIdx)
     argKeys[#argKeys + 1] = bblArgKey(ids[i], entryIdx)
   end
-  removeAllKeys(lines, pathKeys)
-  removeAllKeys(lines, argKeys)
-  return true
+  local removed = 0
+  removed = removed + removeAllKeys(lines, pathKeys)
+  removed = removed + removeAllKeys(lines, argKeys)
+  return removed > 0
 end
 
 function config_parse.getBblHotkeySlot(lines, keyId, entryIdx)
   local path, disabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
   local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
-  local used = ((path ~= nil and path ~= "") or #args > 0)
+  local used = ((path ~= nil) or #args > 0)
   return {
     slot = entryIdx,
     used = used,
@@ -1090,16 +1124,6 @@ function config_parse.getBblHotkeySlot(lines, keyId, entryIdx)
     args = args,
     argCount = #args,
   }
-end
-
-function config_parse.getBblHotkeyUsedSlots(lines, keyId)
-  local out = {}
-  if not isBblHotkeyId(keyId) then return out end
-  for i = 1, BBL_MAX_ENTRIES do
-    local slot = config_parse.getBblHotkeySlot(lines, keyId, i)
-    if slot.used then table.insert(out, slot) end
-  end
-  return out
 end
 
 function config_parse.swapBblHotkeySlots(lines, keyId, slotA, slotB)
@@ -1115,23 +1139,6 @@ function config_parse.swapBblHotkeySlots(lines, keyId, slotA, slotB)
 
   config_parse.setBblHotkeyPath(lines, keyId, slotB, slotAData.pathExists and slotAData.path or nil, slotAData.disabled)
   config_parse.setBblHotkeyArgs(lines, keyId, slotB, slotAData.args)
-  return true
-end
-
-function config_parse.changeBblHotkeySlotIndex(lines, keyId, oldIdx, newIdx)
-  if not isBblHotkeyId(keyId) then return false end
-  if not isValidBblEntryIdx(oldIdx) or not isValidBblEntryIdx(newIdx) then return false end
-  if oldIdx == newIdx then return true end
-
-  local oldData = config_parse.getBblHotkeySlot(lines, keyId, oldIdx)
-  if not oldData.used then return false end
-
-  local newData = config_parse.getBblHotkeySlot(lines, keyId, newIdx)
-  if newData.used then return false end
-
-  config_parse.setBblHotkeyPath(lines, keyId, newIdx, oldData.pathExists and oldData.path or nil, oldData.disabled)
-  config_parse.setBblHotkeyArgs(lines, keyId, newIdx, oldData.args)
-  config_parse.removeBblHotkeySlot(lines, keyId, oldIdx)
   return true
 end
 
@@ -1262,24 +1269,6 @@ function config_parse.buildEgsmValue(videoIdx, compatIdx)
   return v .. (c ~= "" and (":" .. c) or "")
 end
 
-function config_parse.isValidEgsmOption(s)
-  if type(s) ~= "string" then return false end
-  if s == "" or s == "disabled" then return true end
-  local v, c = s:match("^([^:]*):?(.*)$")
-  if not v then return false end
-  local EGSM_VIDEO, EGSM_COMPAT = getEgsmVideoOpts(), getEgsmCompatOpts()
-  for _, opt in ipairs(EGSM_VIDEO) do
-    if v == opt then
-      if c == "" then return true end
-      for _, co in ipairs(EGSM_COMPAT) do
-        if co ~= "" and c == co then return true end
-      end
-      return false
-    end
-  end
-  return false
-end
-
 -- OSDGSM.CNF: default and per-title entries (title ID = AAAA_000.00). Commented = disabled; value is always stored (even when commented).
 function config_parse.getEgsmDefault(lines)
   for _, e in ipairs(lines) do
@@ -1353,12 +1342,6 @@ config_parse.LIMIT_NAME = 79
 config_parse.LIMIT_CURSOR = 19
 config_parse.LIMIT_DELIMITER = 79
 config_parse.LIMIT_DKWDRV = 49
-
-function config_parse.clampLength(s, limit)
-  if type(s) ~= "string" or type(limit) ~= "number" then return s end
-  if #s <= limit then return s end
-  return s:sub(1, limit)
-end
 
 -- OSDMENU.CNF menu entries: name_OSDSYS_ITEM_<N>, path1_OSDSYS_ITEM_<N>, path2_..., arg_OSDSYS_ITEM_<N> (multi).
 -- Commented-out name_/path_/arg_ lines form a "disabled" entry; show in list and allow enabling (triangle).
@@ -1457,8 +1440,12 @@ function config_parse.getMenuEntryPaths(lines, idx)
     end
   end
   local out = {}
-  for n = 1, 200 do
-    if byNum[n] then table.insert(out, byNum[n]) else break end
+  local nums = {}
+  for n in pairs(byNum) do nums[#nums + 1] = n end
+  table.sort(nums)
+  for i = 1, #nums do
+    local n = nums[i]
+    if byNum[n] then table.insert(out, byNum[n]) end
   end
   return out
 end
@@ -1505,6 +1492,7 @@ end
 
 -- Replace all arg_OSDSYS_ITEM_<idx> with the given list. Each item is { value, disabled } or a plain value (treated as enabled).
 function config_parse.setMenuEntryArgs(lines, idx, args)
+  args = normalizeArgsWithGsmLast(args)
   local key = "arg_OSDSYS_ITEM_" .. tostring(idx)
   local i = 1
   while i <= #lines do
@@ -1799,10 +1787,63 @@ end
 function config_parse.regenerateForSave(lines, fileType, options)
   if not lines or not fileType then return lines end
   local opt = options or {}
+
+  local function normalizeMenuEntryArgsInPlace()
+    local entries = config_parse.getMenuEntryIndices(lines)
+    for i = 1, #entries do
+      local idx = entries[i] and entries[i].idx
+      if idx then
+        local args = config_parse.getMenuEntryArgs(lines, idx)
+        if #args > 0 then
+          config_parse.setMenuEntryArgs(lines, idx, args)
+        end
+      end
+    end
+  end
+
+  local function bootKeysFromOptions(osdmbrOpts)
+    local out = {}
+    for i = 1, #(osdmbrOpts or {}) do
+      local row = osdmbrOpts[i]
+      if row and row.optType == "boot_paths" and row.key and row.key ~= "" then
+        out[#out + 1] = row.key
+      end
+    end
+    if #out == 0 then
+      out = { "boot_auto", "boot_start", "boot_triangle", "boot_circle", "boot_cross", "boot_square" }
+    end
+    return out
+  end
+
+  local function normalizeBootArgsInPlace(osdmbrOpts)
+    local keys = bootKeysFromOptions(osdmbrOpts)
+    for i = 1, #keys do
+      local k = keys[i]
+      local args = config_parse.getBootArgEntries(lines, k)
+      if #args > 0 then
+        config_parse.setBootArgEntries(lines, k, args)
+      end
+    end
+  end
+
+  local function normalizeBblArgsInPlace()
+    for _, keyId in ipairs(BBL_KEYS_ALL) do
+      for slot = 1, BBL_MAX_ENTRIES do
+        local args = config_parse.getBblHotkeyArgs(lines, keyId, slot)
+        if #args > 0 then
+          config_parse.setBblHotkeyArgs(lines, keyId, slot, args)
+        end
+      end
+    end
+  end
+
   if fileType == "osdmenu_cnf" then
+    normalizeMenuEntryArgsInPlace()
     return config_parse.regenerateLines(lines, opt.osdmenu_cnf_categories or {})
   end
   if fileType == "freemcboot_cnf" then
+    -- FMCB/FHDB do not support per-entry args, but normalize defensively if present.
+    normalizeMenuEntryArgsInPlace()
     local cats = opt.freemcboot_cnf_categories or opt.osdmenu_cnf_categories or {}
     local maxEntries = (type(opt.FMCB_MAX_ENTRIES) == "number" and opt.FMCB_MAX_ENTRIES) or 99
     local maxPathsPerEntry = (type(opt.FMCB_MAX_PATHS_PER_ENTRY) == "number" and opt.FMCB_MAX_PATHS_PER_ENTRY) or 3
@@ -1811,23 +1852,15 @@ function config_parse.regenerateForSave(lines, fileType, options)
     table.insert(out, 1, { key = "CNF_version", value = cnfVersion })
     table.insert(out, 2, { comment = '# --------------------------------' })
     local maxLaunchKeyEntries = (type(opt.FMCB_BBL_MAX_ENTRIES) == "number" and opt.FMCB_BBL_MAX_ENTRIES) or 3
-    -- Insert separator between each launch key section for visual clarity
-    local launchKeyStart = #out + 1
     appendFreemcbootLaunchKeys(out, lines, maxLaunchKeyEntries)
-    -- Add separator after each launch key section (if any were added)
-    if #out > launchKeyStart then
-      for i = #out, launchKeyStart, -1 do
-        if out[i] and out[i].key and out[i].key:match("^LK_") then
-          table.insert(out, i + 1, { comment = '# --------------------------------' })
-        end
-      end
-    end
     return out
   end
   if fileType == "ps2bbl_ini" or fileType == "psxbbl_ini" then
+    normalizeBblArgsInPlace()
     return config_parse.regenerateLinesBbl(lines, opt)
   end
   if fileType == "osdmbr_cnf" then
+    normalizeBootArgsInPlace(opt.osdmbr_cnf or {})
     return config_parse.regenerateLinesMBR(lines, opt.osdmbr_cnf or {})
   end
   if fileType == "osdgsm_cnf" then

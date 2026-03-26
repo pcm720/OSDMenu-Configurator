@@ -24,6 +24,8 @@ strings.main = {
   main_freehddboot = "FreeHDBoot",
   main_exit = "Quitter vers le navigateur",
   main_exit_prompt = "Quitter vers le navigateur ?",
+  main_select_language = "Choisir la langue",
+  main_select_language_title = "Choisir la langue :",
   main_exit_hint_items = { { pad = "cross", label = "Oui" }, { pad = "circle", label = "Non" } },
   no_memory_card = "Aucune carte memoire detectee",
   insert_mc = "Inserez une carte memoire et reessayez",
@@ -41,11 +43,8 @@ strings.main = {
   cross_back_items = { { pad = "cross", label = "Retour" } },
   failed_to_load = "Echec du chargement : ",
   cross_load_circle_back_items = { { pad = "cross", label = "Charger" }, { pad = "circle", label = "Retour" } },
-  select_config_ps2bbl_ini = "PS2BBL.INI",
-  select_config_psxbbl_ini = "PSXBBL.INI",
   select_config_browse_ini = "Parcourir CONFIG.INI (CWD)",
   select_config_osdmenu_cnf = "OSDMENU.CNF",
-  select_config_osdmbr_cnf = "OSDMBR.CNF",
   select_config_osdgsm_cnf = "OSDGSM.CNF",
 }
 
@@ -67,25 +66,17 @@ strings.editor = {
   cross_save_circle_cancel_items = { { pad = "cross", label = "Sauver" }, { pad = "circle", label = "Annuler" } },
   leave_save_prompt = "Enregistrer les modifications avant de quitter ?",
   leave_save_hint_items = { { pad = "cross", label = "Sauver" }, { pad = "triangle", label = "Ignorer" }, { pad = "circle", label = "Annuler" } },
-  edit_color_suffix = " - Modifier la couleur",
-  red = "Rouge",
-  green = "Vert",
-  blue = "Bleu",
-  alpha = "Alpha",
-  color_edit_hint_items = { { pad = "cross", label = "Appliquer", row = 1 }, { pad = "up", label = "Haut", row = 1 }, { pad = "down", label = "Bas", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "-1", row = 2 }, { pad = "L1", label = "-10", row = 2 }, { pad = "L2", label = "-50", row = 2 }, { pad = "R2", label = "+50", row = 2 }, { pad = "R1", label = "+10", row = 2 }, { pad = "right", label = "+1", row = 2 } },
 }
 
 -- Entrees du menu
 strings.menu_entries = {
   edit_menu_entries = "Modifier les entrees du menu",
   edit_irx_entries = "Modifier les entrees IRX",
+  irx_order_hint = "L'ordre des entrees IRX est important !",
   item = "Element ",
   hint_items = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "select", label = "Inserer", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "Precedent", row = 2 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "start", label = "Sauver", row = 2 }, { pad = "R1", label = "Bas", row = 2 }, { pad = "right", label = "Suivant", row = 2 } },
   hint_items_with_enable = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Activer", layoutLabel = "Desactiver", row = 1 }, { pad = "select", label = "Inserer", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "Precedent", row = 2 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "start", label = "Sauver", row = 2 }, { pad = "R1", label = "Bas", row = 2 }, { pad = "right", label = "Suivant", row = 2 } },
   hint_items_with_disable = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Desactiver", layoutLabel = "Desactiver", row = 1 }, { pad = "select", label = "Inserer", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "Precedent", row = 2 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "start", label = "Sauver", row = 2 }, { pad = "R1", label = "Bas", row = 2 }, { pad = "right", label = "Suivant", row = 2 } },
-  irx_hint_items = { { pad = "", label = "", row = 2 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "start", label = "Sauver", row = 2 }, { pad = "R1", label = "Bas", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Desactiver", row = 1 }, { pad = "select", label = "Inserer", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 } },
-  irx_hint_items_with_enable = { { pad = "", label = "", row = 2 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "start", label = "Sauver", row = 2 }, { pad = "R1", label = "Bas", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Activer", layoutLabel = "Desactiver", row = 1 }, { pad = "select", label = "Inserer", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 } },
-  irx_hint_items_with_disable = { { pad = "", label = "", row = 2 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "start", label = "Sauver", row = 2 }, { pad = "R1", label = "Bas", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Desactiver", layoutLabel = "Desactiver", row = 1 }, { pad = "select", label = "Inserer", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 } },
   entry_index = "Entree ",
   name = "Nom : ",
   paths = "Chemins : ",
@@ -98,6 +89,8 @@ strings.menu_entries = {
   paths_label = "Chemins",
   launch_disc_options = "Options de lancement du disque",
   arguments = "Arguments",
+  launch_key_label = "Touche de lancement",
+  channel_label = "Canal",
   entry_name_prompt = "Nom de l'entree",
   add_entry_label = "Nouvelle entree",
   launch_disc_options_title = "Options de lancement du disque",
@@ -107,13 +100,25 @@ strings.menu_entries = {
   paths_hint_items_with_enable = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Activer", layoutLabel = "Desactiver", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "select", label = "Ajouter", row = 2 }, { pad = "R1", label = "Bas", row = 2 } },
   paths_hint_items_with_disable = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Desactiver", layoutLabel = "Desactiver", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "select", label = "Ajouter", row = 2 }, { pad = "R1", label = "Bas", row = 2 } },
   args_for_entry_title = "Arguments pour %s (entree %s)",
-  args_hint_items = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "select", label = "Ajouter", row = 2 }, { pad = "R1", label = "Bas", row = 2 } },
-  args_hint_items_with_enable = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Activer", layoutLabel = "Desactiver", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "select", label = "Ajouter", row = 2 }, { pad = "R1", label = "Bas", row = 2 } },
-  args_hint_items_with_disable = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Desactiver", layoutLabel = "Desactiver", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "select", label = "Ajouter", row = 2 }, { pad = "R1", label = "Bas", row = 2 } },
   cdrom_hint = "Entree de lancement du disque : utilisez les options de lancement du disque pour les drapeaux",
   cdrom_toggle_hint_items = { { pad = "cross", label = "Basculer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "Precedent", row = 2 }, { pad = "right", label = "Suivant", row = 2 } },
   new_argument_prompt = "Nouvel argument",
   edit_argument_prompt = "Modifier l'argument",
+  actions_label = "Actions",
+  actions_title = "Choisir action :",
+  back_label = "Retour",
+  cancel_label = "Annuler",
+  cancel_move_label = "Annuler deplacement",
+  confirm_label = "Confirmer",
+  disable_label = "Desactiver",
+  edit_label = "Modifier",
+  enable_label = "Activer",
+  enter_label = "Entrer",
+  grab_label = "Deplacer",
+  grabbed_tag = "Deplacer",
+  insert_label = "Inserer",
+  remove_label = "Supprimer",
+  save_config_label = "Sauver",
 }
 
 -- Selecteur de chemin
@@ -136,8 +141,9 @@ strings.path_picker = {
   cross_open_square_patinfo_circle_back_items = { { pad = "cross", label = "Entrer" }, { pad = "square", label = "PATINFO" }, { pad = "circle", label = "Retour" } },
   no_elf_files = "Aucun fichier ELF ni dossier",
   no_ini_files = "Aucun fichier INI ni dossier",
+  no_irx_files = "Aucun fichier IRX ni dossier",
   cross_select_file_items = { { pad = "cross", label = "Selectionner" }, { pad = "circle", label = "Retour" } },
-  cross_select_create_circle_back_items = { { pad = "cross", label = "Selectionner" }, { pad = "select", label = "Creer CONFIG.INI" }, { pad = "circle", label = "Retour" } },
+  cross_select_create_circle_back_items = { { pad = "cross", label = "Selectionner" }, { pad = "square", label = "Creer CONFIG.INI" }, { pad = "circle", label = "Retour" } },
   no_devices = "Aucun peripherique",
   waiting_for_device_drivers = "En attente du peripherique...",
   circle_back_items = { { pad = "circle", label = "Retour" } },
@@ -225,12 +231,12 @@ strings.options_osdmenu = {
   OSDSYS_selected_color = { label = "Couleur selectionnee", desc = "Couleur de surbrillance de l'entree du menu" },
   OSDSYS_unselected_color = { label = "Couleur non selectionnee", desc = "Couleur de l'entree du menu" },
   cdrom_skip_ps2logo = { label = "Ignorer PS2LOGO", desc = "Ignorer le logo PlayStation 2 au demarrage du disque" },
-  cdrom_disable_gameid = { label = "Desactiver l'ID visuel du jeu", desc = "Desactiver l'ID visuel du jeu" },
+  cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "Utiliser DKWDRV", desc = "Utiliser DKWDRV pour les disques PS1" },
   ps1drv_enable_fast = { label = "Chargement rapide PS1", desc = "Forcer la vitesse rapide du disque PS1" },
   ps1drv_enable_smooth = { label = "Lissage des textures PS1", desc = "Forcer le lissage des textures PS1" },
   ps1drv_use_ps1vn = { label = "Utiliser PS1VN", desc = "Utiliser le neutraliseur de mode video PS1" },
-  app_gameid = { label = "ID jeu application", desc = "Activer l'ID visuel du jeu pour les fichiers ELF" },
+  app_gameid = { label = "Application visual game ID", desc = "Enable visual game ID for ELF files" },
   path_DKWDRV_ELF = { label = "Chemin DKWDRV", desc = "Chemin personnalise vers DKWDRV.ELF" },
   pad_delay = { label = "Minuteur", desc = "Delai avant la selection de la touche de lancement AUTOBOOT" },
   FastBoot = { label = "Demarrage rapide", desc = "Activer la gestion rapide du demarrage du disque" },
@@ -249,23 +255,30 @@ strings.options_osdmbr = {
   boot_cross = { label = "Demarrage CROSS", desc = "Chemins et arguments pour le bouton cross" },
   boot_square = { label = "Demarrage SQUARE", desc = "Chemins et arguments pour le bouton square" },
   cdrom_skip_ps2logo = { label = "Ignorer PS2LOGO", desc = "Ignorer le logo PlayStation 2 au demarrage du disque" },
-  cdrom_disable_gameid = { label = "Desactiver l'ID visuel du jeu", desc = "Desactiver l'ID visuel du jeu" },
+  cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "Utiliser DKWDRV", desc = "Utiliser DKWDRV pour les disques PS1" },
   ps1drv_enable_fast = { label = "Chargement rapide PS1", desc = "Forcer la vitesse rapide du disque PS1" },
   ps1drv_enable_smooth = { label = "Lissage des textures PS1", desc = "Forcer le lissage des textures PS1" },
   ps1drv_use_ps1vn = { label = "Utiliser PS1VN", desc = "Utiliser le neutraliseur de mode video PS1" },
   prefer_bbn = { label = "Preferer BBN", desc = "Charger PSBBN lors du redemarrage" },
-  app_gameid = { label = "ID jeu application", desc = "Afficher l'ID visuel du jeu pour les fichiers ELF" },
+  app_gameid = { label = "Application visual game ID", desc = "Display visual Game ID for ELF files" },
   osd_screentype = { label = "Type d'ecran OSD", desc = "Forcer le type d'ecran OSD (4:3, 16:9, plein ecran)" },
   osd_language = { label = "Langue OSD", desc = "Forcer la langue OSD (depend du modele de console)" },
 }
 
 strings.options_bbl = {
+  VIDEO_MODE = { label = "Force video mode", desc = "Loader UI mode" },
+  LOGO_DISPLAY = { label = "Logo display", desc = "Display speed for boot logo/info text" },
+  OSDHISTORY_READ = { label = "OSD history read", desc = "Read previous OSD history state" },
+  EJECT_TRAY = { label = "Eject tray", desc = "Eject tray before launch" },
+  PS1DRV_ENABLE_FAST = { label = "PS1 fast loading", desc = "Force PS1 fast disc speed" },
+  PS1DRV_ENABLE_SMOOTH = { label = "PS1 texture smoothing", desc = "Force PS1 texture smoothing" },
+  PS1DRV_USE_PS1VN = { label = "Use PS1VN", desc = "Use PS1 Video Mode Negator" },
   _bbl_irx_entries = { label = "Modifier les entrees IRX", desc = "Modifier les chemins des modules LOAD_IRX_E#" },
-  APP_GAMEID = { label = "APP_GAMEID", desc = "Game ID for RetroGem" },
-  CDROM_DISABLE_GAMEID = { label = "CDROM_DISABLE_GAMEID", desc = "Disable RetroGem Game ID for DISCS" },
-  app_gameid = { label = "ID jeu application", desc = "Game ID for RetroGem" },
-  cdrom_disable_gameid = { label = "Desactiver l'ID visuel du jeu", desc = "Disable RetroGem Game ID for DISCS" },
+  APP_GAMEID = { label = "Application visual game ID", desc = "Game ID for RetroGem" },
+  CDROM_DISABLE_GAMEID = { label = "Disable disc visual game ID", desc = "Disable RetroGem Game ID for DISCS" },
+  app_gameid = { label = "Application visual game ID", desc = "Display visual game ID for ELF files" },
+  cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
 }
 
 -- Editeur eGSM (ecran unique : valeurs par defaut + remplacements par titre)
@@ -301,7 +314,7 @@ for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
 -- Libelles / descriptions des options CDROM
 strings.cdrom_options = {
   nologo = { label = "Ignorer PS2LOGO", desc = "Ignorer le logo PlayStation 2 au demarrage du disque" },
-  nogameid = { label = "Desactiver l'ID visuel du jeu", desc = "Desactiver l'ID visuel du jeu" },
+  nogameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   dkwdrv = { label = "Utiliser DKWDRV", desc = "Utiliser DKWDRV pour les disques PS1" },
   ps1fast = { label = "Chargement rapide PS1", desc = "Forcer la vitesse rapide du disque PS1" },
   ps1smooth = { label = "Lissage des textures PS1", desc = "Forcer le lissage des textures PS1" },
@@ -310,8 +323,8 @@ strings.cdrom_options = {
 
 -- Saisie de texte (clavier)
 strings.text_input = {
-  hint_items = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "triangle", label = "Majusc.", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "start", label = "Termine", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
-  hint_items_title_id = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "start", label = "Termine", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
+  hint_items = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "start", label = "Termine", row = 1 }, { pad = "triangle", label = "Majusc.", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
+  hint_items_title_id = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "start", label = "Termine", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
 }
 
 return strings

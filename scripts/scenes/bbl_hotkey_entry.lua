@@ -71,7 +71,11 @@ local function run(ctx)
   end
 
   local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  local maxEntries = isFmcb and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
+      ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
   local data = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot)
+  local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
   local allowArgs = (ctx.fileType ~= "freemcboot_cnf") and (ctx.context ~= "freehddboot")
   local rows = allowArgs and { "path", "args" } or { "path" }
   ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
@@ -80,7 +84,12 @@ local function run(ctx)
 
   drawPadTitle(_, keyId, " - E" .. tostring(slot))
 
-  local pathDisp = (data.path ~= "" and data.path) or _.common_str.not_set
+  local pathDisp = _.common_str.not_set
+  if data.path ~= "" then
+    pathDisp = data.path
+  elseif data.pathExists then
+    pathDisp = _.common_str.empty
+  end
   local pathLine = "Path: " .. pathDisp
   local argsLine = (type(maxArgs) == "number" and maxArgs > 0)
       and ("Arguments: " .. tostring(data.argCount) .. "/" .. tostring(maxArgs))
@@ -97,29 +106,112 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       line = _.common.truncateTextToWidth(_.font, line, maxLabelW, _.FONT_SCALE)
     end
-    if rows[i] == "path" and data.disabled then
+    if rows[i] == "path" and (data.disabled or keyDisabled) then
       col = (i == ctx.bblEntryDetailSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblEntryDetailSel, line, col)
   end
 
   local hint
+  local function cloneBblArgs(args)
+    local out = {}
+    for i = 1, #(args or {}) do
+      local a = args[i]
+      if type(a) == "table" then
+        out[#out + 1] = {
+          value = a.value or "",
+          disabled = a.disabled and true or false
+        }
+      else
+        out[#out + 1] = {
+          value = tostring(a or ""),
+          disabled = false
+        }
+      end
+    end
+    return out
+  end
+
+  local function slotHasPresence(slotData)
+    if not slotData then return false end
+    if slotData.pathExists then return true end
+    if slotData.used then return true end
+    local argCount = tonumber(slotData.argCount) or 0
+    return argCount > 0
+  end
+
+  local function canRemoveCurrentSlot()
+    local getSlot = _.config_parse.getBblHotkeySlot
+    if not getSlot then return false end
+    local current = getSlot(ctx.lines, keyId, slot)
+    if slotHasPresence(current) then return true end
+    for i = slot + 1, maxEntries do
+      local s = getSlot(ctx.lines, keyId, i)
+      if slotHasPresence(s) then
+        return true
+      end
+    end
+    return false
+  end
+
+  local function removeCurrentSlotCompact()
+    if not canRemoveCurrentSlot() then return false end
+    local getSlot = _.config_parse.getBblHotkeySlot
+    local packed = {}
+    for i = 1, maxEntries do
+      if i ~= slot then
+        local s = getSlot and getSlot(ctx.lines, keyId, i) or nil
+        if s and s.used then
+          packed[#packed + 1] = {
+            pathExists = s.pathExists and true or false,
+            path = s.path or "",
+            disabled = s.disabled and true or false,
+            args = cloneBblArgs(s.args),
+          }
+        end
+      end
+    end
+    for i = 1, maxEntries do
+      local row = packed[i]
+      if row then
+        _.config_parse.setBblHotkeyPath(ctx.lines, keyId, i, row.pathExists and row.path or nil, row.disabled)
+        _.config_parse.setBblHotkeyArgs(ctx.lines, keyId, i, row.args)
+      else
+        _.config_parse.setBblHotkeyPath(ctx.lines, keyId, i, nil, false)
+        _.config_parse.setBblHotkeyArgs(ctx.lines, keyId, i, {})
+      end
+    end
+    return true
+  end
+
+  local canRemoveSlot = canRemoveCurrentSlot()
+
   if rows[ctx.bblEntryDetailSel] == "path" then
     local enableHint = _.menu_str.paths_hint_items_with_enable or _.menu_str.paths_hint_items
     local disableHint = _.menu_str.paths_hint_items_with_disable or _.menu_str.paths_hint_items
     local baseHint = data.disabled and enableHint or disableHint
     local toggleLayoutLabel = findWidestHintLabel(_, enableHint, disableHint, "triangle",
-      data.disabled and "Enable" or "Disable")
+      data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"))
     hint = {
-      { pad = "cross", label = findHintLabel(baseHint, "cross", "Edit"), row = 1 },
-      { pad = "triangle", label = findHintLabel(baseHint, "triangle", data.disabled and "Enable" or "Disable"), layoutLabel = toggleLayoutLabel, row = 1 },
-      { pad = "square", label = findHintLabel(baseHint, "square", "Remove"), row = 1 },
-      { pad = "circle", label = findHintLabel(baseHint, "circle", "Back"), row = 1 },
+      { pad = "cross", label = findHintLabel(baseHint, "cross", (_.menu_str.edit_label or "Edit")), row = 1 },
+      {
+        pad = "triangle",
+        label = findHintLabel(baseHint, "triangle",
+          data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")),
+        layoutLabel = toggleLayoutLabel,
+        row = 1
+      },
+      {
+        pad = canRemoveSlot and "square" or "",
+        label = canRemoveSlot and findHintLabel(baseHint, "square", (_.menu_str.remove_label or "Remove")) or "",
+        row = 1
+      },
+      { pad = "circle", label = findHintLabel(baseHint, "circle", (_.menu_str.back_label or "Back")), row = 1 },
     }
   else
     hint = {
-      { pad = "cross", label = "Enter", row = 1 },
-      { pad = "circle", label = "Back", row = 1 },
+      { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
+      { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
     }
   end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
@@ -158,6 +250,11 @@ local function run(ctx)
       ctx.pathPickerBblHotkeyDisabled = data.disabled and true or false
       ctx.state = "path_picker"
     elseif allowArgs then
+      if (tonumber(data.argCount) or 0) <= 0 then
+        ctx.bblArgAddMenu = true
+        ctx.bblArgAddSel = 1
+        ctx.bblArgAddScroll = 0
+      end
       ctx.bblArgSel = ctx.bblArgSel or 1
       ctx.bblArgScroll = ctx.bblArgScroll or 0
       ctx.state = "bbl_hotkey_args"
@@ -177,9 +274,12 @@ local function run(ctx)
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
     toggleSelectedPathDisabled()
   end
-  if rows[ctx.bblEntryDetailSel] == "path" and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, slot)
-    ctx.configModified = true
+  if rows[ctx.bblEntryDetailSel] == "path" and canRemoveSlot and (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    local removed = removeCurrentSlotCompact()
+    if removed then
+      ctx.configModified = true
+      ctx.bblEntryFocusSlot = math.max(1, math.min(slot, maxEntries))
+    end
     ctx.bblEntryDetailReturnState = nil
     ctx.state = returnState
   end

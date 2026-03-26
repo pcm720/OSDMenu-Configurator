@@ -80,10 +80,29 @@ void createLight(int lightid, float dir_x, float dir_y, float dir_z, int type, f
 model *loadOBJ(const char *path, GSTEXTURE *text) {
   // Opening model file and loading it on RAM
   int file = open(path, O_RDONLY, 0777);
-  uint32_t size = lseek(file, 0, SEEK_END);
-  lseek(file, 0, SEEK_SET);
-  char *content = (char *)malloc(size + 1);
-  read(file, content, size);
+  if (file < 0)
+    return NULL;
+  off_t endPos = lseek(file, 0, SEEK_END);
+  if (endPos < 0) {
+    close(file);
+    return NULL;
+  }
+  uint32_t size = (uint32_t)endPos;
+  if (lseek(file, 0, SEEK_SET) < 0) {
+    close(file);
+    return NULL;
+  }
+  char *content = (char *)malloc((size_t)size + 1);
+  if (!content) {
+    close(file);
+    return NULL;
+  }
+  ssize_t readBytes = read(file, content, size);
+  if (readBytes != (ssize_t)size) {
+    close(file);
+    free(content);
+    return NULL;
+  }
   content[size] = 0;
 
   // Closing file

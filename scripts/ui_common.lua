@@ -29,6 +29,7 @@ common.HIGHLIGHT                   = Color.new(255, 220, 100)
 common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0)
 common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80)
 common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0)
+common.OPTION_HINT_COLOR           = Color.new(246, 231, 173) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
 
 -- Layout
@@ -50,24 +51,22 @@ common.HINT_Y                      = 424
 common.PAD_ICON_W                  = 26
 common.PAD_ICON_H                  = 26
 common.PAD_HINT_GAP                = 5
-common.PAD_HINT_GROUP_GAP          = 20
 common.PAD_HINT_ROW_H              = 28
-common.PAD_HINT_ROW_GAP            = 6
 common.PAD_HINT_SIDE_MARGIN        = 16
-common.PAD_HINT_ITEM_GAP           = 20
-common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H * 2 + common.PAD_HINT_ROW_GAP -- height when 2 rows
+common.PAD_HINT_TEXT_SCALE         = 0.75
+common.PAD_HINT_BASE_SCALE         = 0.7
+common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
 
--- 6x2 grid geometry tuning (code-only).
+-- Hint-row geometry tuning (single-row 5-slot layout).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
-common.PAD_HINT_MAX_PER_ROW        = 4
-common.PAD_HINT_GRID_EXTRA_W       = 40
-common.PAD_HINT_GRID_X_SHIFT       = -35
+common.PAD_HINT_GRID_EXTRA_W       = 60
+common.PAD_HINT_GRID_X_SHIFT       = -55
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
-common.PAD_HINT_UNUSED_ALPHA       = 20 -- ~8% opaque = ~92% transparent
+common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local padIconNames                 = {
@@ -129,34 +128,50 @@ local function getHintFtFont(scaleFactor)
   return nil
 end
 
--- Draw a hint line: list of { pad = "cross", label = "Select" [, row = 1|2 ] }. Uses pad textures when available; else falls back to text.
--- row: 1 = bottom row, 2 = top row. If any item has row=2, rows are from lang; else first PAD_HINT_MAX_PER_ROW on bottom, rest on top.
--- totalWidth: optional. y = bottom of hint area. Full width (minus side margin) divided into equal slots. Odd: icon+label centered in slot. Even: left half left-aligned, right half right-aligned. Uses Font.ftCalcDimensions when available for accurate text width.
+function common.getHintFont(fallbackFont, drawMode, textScale)
+  local hintFont = fallbackFont
+  if drawMode == "ftPrint" then
+    local f = getHintFtFont(textScale or 1)
+    if f then hintFont = f end
+  end
+  return hintFont
+end
+
+function common.getHintLabelDrawScale(baseScale)
+  local bs = tonumber(baseScale) or common.PAD_HINT_BASE_SCALE or 0.7
+  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  return bs * ts
+end
+
+function common.getHintLabelTextHeight()
+  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  return math.max(10, math.floor((common.FT_PIXEL_H or 18) * ts + 0.5))
+end
+
+-- Draw a hint line: list of { pad = "cross", label = "Select" }.
+-- Single-row 5-slot layout (top row removed in new UX).
+-- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
   if hintItems and #hintItems > 0 then
     local iconScale = 0.6
-    local textScale = 0.75
-    local drawScale = (scale or 0.7) * textScale
+    local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+    local drawScale = common.getHintLabelDrawScale(scale)
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-    local rowGap = math.max(2, math.floor((common.PAD_HINT_ROW_GAP or 6) * textScale + 0.5))
     local approxCharW = math.floor(8 * drawScale)
-    local textH = math.max(10, math.floor((common.FT_PIXEL_H or 18) * textScale + 0.5))
+    local textH = common.getHintLabelTextHeight()
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
     local widthEff = width - 2 * sideMargin
-    local slotCount = 6
+    local rowPads = { "cross", "square", "start", "triangle", "circle" }
+    local slotCount = #rowPads
     local slotW = widthEff / slotCount
-    local hintFont = font
-    if drawMode == "ftPrint" then
-      local f = getHintFtFont(textScale)
-      if f then hintFont = f end
-    end
+    local hintFont = common.getHintFont(font, drawMode, textScale)
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
@@ -167,14 +182,11 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return math.floor(approxCharW * #label)
     end
 
-    local topPads = { "left", "l1", "l2", "r2", "r1", "right" }
-    local bottomPads = { "cross", "square", "select", "start", "triangle", "circle" }
-    local topSlots, bottomSlots = {}, {}
-    local topMap, bottomMap = {}, {}
+    local rowSlots = {}
+    local rowMap = {}
     local drawUnusedButtons = common.PAD_HINT_DRAW_UNUSED_BUTTONS == true
     for i = 1, slotCount do
-      topMap[topPads[i]] = true
-      bottomMap[bottomPads[i]] = true
+      rowMap[rowPads[i]] = true
     end
 
     local activeByPad = {}
@@ -182,30 +194,24 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local item = hintItems[i]
       local rawPad = tostring((item and item.pad) or "")
       local key = rawPad:gsub("^%s+", ""):gsub("%s+$", ""):lower()
-      if key ~= "" and not activeByPad[key] and (topMap[key] or bottomMap[key]) then
+      if key ~= "" and not activeByPad[key] and rowMap[key] then
         activeByPad[key] = { label = tostring(item.label or "") }
       end
     end
 
     for i = 1, slotCount do
-      local topKey = topPads[i]
-      local topActive = activeByPad[topKey]
-      if drawUnusedButtons or topActive then
-        topSlots[i] = { pad = topKey, label = topActive and topActive.label or "", used = not not topActive }
-      end
-
-      local bottomKey = bottomPads[i]
-      local bottomActive = activeByPad[bottomKey]
-      if drawUnusedButtons or bottomActive then
-        bottomSlots[i] = { pad = bottomKey, label = bottomActive and bottomActive.label or "", used = not not bottomActive }
+      local key = rowPads[i]
+      local active = activeByPad[key]
+      if drawUnusedButtons or active then
+        rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
       end
     end
 
-    local totalRowH = rowH * 2 + rowGap
+    local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH
 
     local function drawRow(slots, rowIndex)
-      local rTop = rowTop + rowIndex * (rowH + rowGap)
+      local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
@@ -264,8 +270,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
     end
 
-    drawRow(topSlots, 0)
-    drawRow(bottomSlots, 1)
+    drawRow(rowSlots, 0)
     return
   end
   if textFallback and textFallback ~= "" then
@@ -274,13 +279,13 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
   end
 end
 
--- Build editor hint items: show ±1/±10/±50 only for int/string; enum/bool use left/right with enumHintLabels.
+-- Build editor hint items: show ±1/±10/±50 only for string; enum/bool use left/right with enumHintLabels.
 -- Show Reset only when option has default.
 function common.buildEditorHintItems(selOpt, hintEditItems, getDefaultFn, enumHintLabels)
   if not hintEditItems or #hintEditItems == 0 then return hintEditItems end
   local numericPads = { left = true, right = true, L1 = true, R1 = true, L2 = true, R2 = true }
   local showNumeric = selOpt and
-      (selOpt.optType == "int" or selOpt.optType == "string" or selOpt.optType == "enum" or selOpt.optType == "bool")
+      (selOpt.optType == "string" or selOpt.optType == "enum" or selOpt.optType == "bool")
   local showReset = selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" and getDefaultFn and
       getDefaultFn(selOpt.key) ~= nil
   local out = {}
@@ -365,6 +370,30 @@ local function getConfigParser(ctx)
   return nil
 end
 
+local function deepCloneValue(value, seen)
+  if type(value) ~= "table" then
+    return value
+  end
+  seen = seen or {}
+  if seen[value] then
+    return seen[value]
+  end
+  local out = {}
+  seen[value] = out
+  for k, v in pairs(value) do
+    out[deepCloneValue(k, seen)] = deepCloneValue(v, seen)
+  end
+  local mt = getmetatable(value)
+  if mt ~= nil then
+    setmetatable(out, mt)
+  end
+  return out
+end
+
+function common.cloneConfigLines(lines)
+  return deepCloneValue(lines or {})
+end
+
 local function fallbackSemanticDigest(lines)
   local out = {}
   for i = 1, #(lines or {}) do
@@ -397,17 +426,46 @@ function common.refreshConfigModified(ctx)
   if not ctx then return false end
   if not ctx.lines then
     ctx.configModified = false
+    ctx._configModifiedCache = nil
     return false
+  end
+
+  local cache = ctx._configModifiedCache
+  local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local inputEpoch = tonumber(ctx._inputEpoch) or 0
+  local hadInputThisFrame = false
+  if ctx._ and type(ctx._) == "table" then
+    local pe = tonumber(ctx._.padEffective) or 0
+    hadInputThisFrame = (pe ~= 0)
+  end
+  if not hadInputThisFrame then
+    local loopPad = tonumber(ctx._lastPadEffective) or 0
+    hadInputThisFrame = (loopPad ~= 0)
+  end
+  local cleanDigest = ctx.configCleanSemanticDigest
+  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and
+      cache.cleanDigest == cleanDigest and not hadInputThisFrame then
+    ctx.configModified = cache.result and true or false
+    return ctx.configModified
   end
 
   if ctx.configCleanSemanticDigest == nil then
     ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, ctx.lines)
+    cleanDigest = ctx.configCleanSemanticDigest
   end
 
   local currentDigest = computeSemanticDigest(ctx, ctx.lines)
   local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
   local needsInitialSave = (ctx.configNeedsInitialSave == true)
   ctx.configModified = semanticChanged or needsInitialSave
+  ctx._configModifiedCache = {
+    linesRef = ctx.lines,
+    sceneEpoch = sceneEpoch,
+    inputEpoch = inputEpoch,
+    cleanDigest = ctx.configCleanSemanticDigest,
+    result = ctx.configModified and true or false,
+    digest = currentDigest
+  }
   return ctx.configModified
 end
 
@@ -417,6 +475,7 @@ function common.setCleanConfigSnapshot(ctx, opts)
   local snapshotLines = (opts.lines ~= nil) and opts.lines or ctx.lines or {}
   ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, snapshotLines)
   ctx.configNeedsInitialSave = opts.needsInitialSave == true
+  ctx._configModifiedCache = nil
   return common.refreshConfigModified(ctx)
 end
 
@@ -532,7 +591,49 @@ end
 
 local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 0x0010, 0x0040, 0x0080, 0x0020
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = 0x0400, 0x0800, 0x0100, 0x0200
-common.REPEATABLE_MASK = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT | PAD_L1 | PAD_R1 | PAD_L2 | PAD_R2
+common.REPEATABLE_MASK = PAD_UP | PAD_DOWN
+common.REPEAT_START_HZ = 3
+common.REPEAT_END_HZ = 12
+common.REPEAT_ACCEL_SECONDS = 4
+common.REPEAT_FPS_SAMPLE_WINDOW = 8
+
+function common.getRepeatFps(ctx, nominalFps)
+  local fallback = math.max(1, tonumber(nominalFps) or 60)
+  if not ctx then
+    return fallback
+  end
+
+  local cached = tonumber(ctx.holdRepeatFps) or 0
+  if cached <= 0 and Screen and Screen.getFPS then
+    local sampleWindow = math.max(1, math.floor(tonumber(common.REPEAT_FPS_SAMPLE_WINDOW) or 8))
+    local measured = tonumber(Screen.getFPS(sampleWindow))
+    if measured and measured > 0 then
+      cached = measured
+    end
+  end
+
+  if cached <= 0 then
+    cached = fallback
+  end
+
+  ctx.holdRepeatFps = cached
+  return math.max(1, cached)
+end
+
+function common.getRepeatIntervalFrames(fps, heldFrames)
+  local safeFps = math.max(1, tonumber(fps) or 60)
+  local startHz = tonumber(common.REPEAT_START_HZ) or 3
+  local endHz = tonumber(common.REPEAT_END_HZ) or 12
+  if startHz < 0.1 then startHz = 0.1 end
+  if endHz < 0.1 then endHz = 0.1 end
+  local accelFrames = math.max(1, math.floor((tonumber(common.REPEAT_ACCEL_SECONDS) or 4) * safeFps + 0.5))
+  local t = (tonumber(heldFrames) or 0) / accelFrames
+  if t < 0 then t = 0 end
+  if t > 1 then t = 1 end
+  local hz = startHz + ((endHz - startHz) * t)
+  if hz < 0.1 then hz = 0.1 end
+  return math.max(1, math.floor((safeFps / hz) + 0.5))
+end
 
 -- Update ctx with layout values from current screen mode (for scene runner).
 function common.runLayout(ctx)
@@ -562,6 +663,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       ctx.drawBackgroundLayer(ctx)
     end
     local padEffective = common.getPadEffective(ctx)
+    ctx._lastPadEffective = padEffective
     runHandler(ctx, padEffective)
     common.refreshConfigModified(ctx)
     if ctx.state ~= sceneName then
@@ -572,22 +674,39 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
   end
 end
 
--- Get pad with repeat logic; updates ctx.prevPad and ctx.holdFrameCount. Returns padEffective.
+-- Get pad with repeat logic; updates ctx.prevPad/ctx.holdFrameCount/ctx.holdRepeatCountdown.
+-- Repeat ramps from REPEAT_START_HZ to REPEAT_END_HZ over REPEAT_ACCEL_SECONDS while held.
 function common.getPadEffective(ctx)
   local pad = Pads.get(0)
-  local padJust = pad & ~(ctx.prevPad or 0)
-  local fps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
-  local REPEAT_DELAY_FRAMES = math.ceil(fps / 3)
-  ctx.holdFrameCount = ctx.holdFrameCount or 0
+  local prevPad = ctx.prevPad or 0
+  local padJust = pad & ~prevPad
+  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local fps = common.getRepeatFps(ctx, nominalFps)
+  ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
+  ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
-  if (pad & common.REPEATABLE_MASK) ~= 0 then
-    ctx.holdFrameCount = ctx.holdFrameCount + 1
-    if ctx.holdFrameCount >= REPEAT_DELAY_FRAMES then
-      padRepeat = pad & common.REPEATABLE_MASK
+  local heldMask = pad & common.REPEATABLE_MASK
+  local prevHeldMask = prevPad & common.REPEATABLE_MASK
+  if heldMask ~= 0 then
+    if prevHeldMask == 0 then
+      -- New hold starts now: first repeat at start-rate interval.
       ctx.holdFrameCount = 0
+      ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, 0)
+    else
+      ctx.holdFrameCount = ctx.holdFrameCount + 1
+      local targetInterval = common.getRepeatIntervalFrames(fps, ctx.holdFrameCount)
+      if ctx.holdRepeatCountdown > targetInterval then
+        ctx.holdRepeatCountdown = targetInterval
+      end
+      ctx.holdRepeatCountdown = ctx.holdRepeatCountdown - 1
+      if ctx.holdRepeatCountdown <= 0 then
+        padRepeat = heldMask
+        ctx.holdRepeatCountdown = targetInterval
+      end
     end
   else
     ctx.holdFrameCount = 0
+    ctx.holdRepeatCountdown = 0
   end
   ctx.prevPad = pad
   return padJust | padRepeat
@@ -637,11 +756,31 @@ function common.calcTextWidth(font, text, scale)
   if not text or text == "" then return 0 end
   local s = scale or 0.72
   local approxCharW = math.floor(8 * s)
+  local cache = common._textWidthCache
+  if not cache then
+    cache = {}
+    common._textWidthCache = cache
+    common._textWidthCacheSize = 0
+  end
+  local cacheKey = tostring(font) .. "\31" .. tostring(s) .. "\31" .. tostring(text)
+  local cachedWidth = cache[cacheKey]
+  if cachedWidth ~= nil then
+    return cachedWidth
+  end
+  local measured
   if font and Font and Font.ftCalcDimensions then
     local w = Font.ftCalcDimensions(font, text)
-    return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #text)
+    measured = (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #text)
+  else
+    measured = math.floor(approxCharW * #text)
   end
-  return math.floor(approxCharW * #text)
+  cache[cacheKey] = measured
+  common._textWidthCacheSize = (common._textWidthCacheSize or 0) + 1
+  if (common._textWidthCacheSize or 0) > 8192 then
+    common._textWidthCache = {}
+    common._textWidthCacheSize = 0
+  end
+  return measured
 end
 
 -- Truncate text to fit within maxPixels at scale, appending "..." when shortened.
@@ -704,16 +843,47 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local raw = tostring(text or "")
   if maxPixels <= 0 or raw == "" then return raw end
   local s = scale or 1
-  if not selected then
-    if ctx and ctx._rowMarqueeStates and stateKey then
-      ctx._rowMarqueeStates[stateKey] = nil
+  local st = nil
+  if ctx and stateKey then
+    local store = ctx._rowMarqueeStates
+    if not store then
+      store = {}
+      ctx._rowMarqueeStates = store
     end
-    return common.truncateTextToWidth(font, raw, maxPixels, s)
+    st = store[stateKey]
+  end
+  if not selected then
+    if st and st.text == raw and st.maxPixels == maxPixels and st.scale == s and st.truncated ~= nil then
+      st.selected = false
+      st.ticks = 0
+      return st.truncated
+    end
+    local truncated = common.truncateTextToWidth(font, raw, maxPixels, s)
+    if ctx and stateKey then
+      local store = ctx._rowMarqueeStates or {}
+      store[stateKey] = {
+        text = raw,
+        maxPixels = maxPixels,
+        scale = s,
+        selected = false,
+        ticks = 0,
+        visibleChars = nil,
+        truncated = truncated
+      }
+      ctx._rowMarqueeStates = store
+    end
+    return truncated
   end
   local textW = common.calcTextWidth(font, raw, s) or 0
   if textW <= maxPixels then
-    if ctx and ctx._rowMarqueeStates and stateKey then
-      ctx._rowMarqueeStates[stateKey] = nil
+    if st then
+      st.text = raw
+      st.maxPixels = maxPixels
+      st.scale = s
+      st.selected = true
+      st.ticks = 0
+      st.visibleChars = nil
+      st.truncated = raw
     end
     return raw
   end
@@ -728,7 +898,7 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
     store = {}
     ctx._rowMarqueeStates = store
   end
-  local st = store[stateKey]
+  st = store[stateKey]
   if not st or st.text ~= raw or st.maxPixels ~= maxPixels or st.scale ~= s then
     st = {
       text = raw,
@@ -736,8 +906,14 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
       scale = s,
       ticks = 0,
       visibleChars = nil,
+      selected = true,
+      truncated = nil,
     }
     store[stateKey] = st
+  elseif st.selected ~= true then
+    st.ticks = 0
+    st.visibleChars = nil
+    st.selected = true
   end
 
   if not st.visibleChars then

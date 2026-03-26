@@ -166,7 +166,8 @@ function arg_gsm_picker.run(ctx, opts)
   end
 
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7,
-    s.value_edit_hint or { { pad = "cross", label = "Select", row = 1 }, { pad = "circle", label = "Back", row = 1 } },
+    s.value_edit_hint or
+    { { pad = "cross", label = (_.menu_str.enter_label or "Select"), row = 1 }, { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 } },
     nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then

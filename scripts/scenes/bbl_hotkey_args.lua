@@ -4,6 +4,7 @@ local arg_presets = dofile("scripts/scenes/arg_presets.lua")
 local arg_profiles = dofile("scripts/scenes/arg_profiles.lua")
 local arg_gsm_picker = dofile("scripts/scenes/arg_gsm_picker.lua")
 local arg_add_menu = dofile("scripts/scenes/arg_add_menu.lua")
+local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function drawPadTitle(_, keyId, suffix)
   local tail = tostring(suffix or "")
@@ -47,6 +48,7 @@ local function run(ctx)
     ctx.state = "bbl_hotkey_entry"
     return
   end
+  local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
 
   local maxArgs = _.config_parse.getBblMaxArgsPerEntry and _.config_parse.getBblMaxArgsPerEntry() or nil
   local hasArgCap = (type(maxArgs) == "number" and maxArgs > 0)
@@ -60,6 +62,18 @@ local function run(ctx)
     ctx.configModified = true
   end
 
+  local function findArgIndexByValue(argList, value, fallback)
+    local target = tostring(value or "")
+    for i = #argList, 1, -1 do
+      local item = argList[i]
+      local v = (type(item) == "table") and item.value or item
+      if tostring(v or "") == target then
+        return i
+      end
+    end
+    return _.common.clampListSelection(fallback or 1, #argList)
+  end
+
   local function addArgValue(v)
     local value = tostring(v or "")
     if value == "" then return end
@@ -67,7 +81,8 @@ local function run(ctx)
     if hasArgCap and #args2 >= maxArgs then return end
     table.insert(args2, { value = value, disabled = false })
     setArgs(args2)
-    ctx.bblArgSel = #args2
+    local refreshed = getArgs()
+    ctx.bblArgSel = findArgIndexByValue(refreshed, value, #refreshed)
   end
 
   local function openNewArgumentInput(prompt, maxLen, callback)
@@ -89,12 +104,49 @@ local function run(ctx)
     local args2, ok = arg_presets.addUdpbdPair(getArgs(), ipValue, maxArgs)
     if not ok then return false end
     setArgs(args2)
-    ctx.bblArgSel = #args2
+    local refreshed = getArgs()
+    local udpValue = "-udpbd_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ctx.bblArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
     return true
   end
 
   local args = getArgs()
   local total = #args
+  local canMoveArgs = total > 1
+  local function clearMoveState()
+    ctx.bblArgGrab = nil
+    ctx.bblArgMoveSnapshot = nil
+    ctx.bblArgMoveSel = nil
+  end
+  local function beginMoveState()
+    if ctx.bblArgGrab then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.bblArgMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.bblArgMoveSnapshot = nil
+    end
+    ctx.bblArgMoveSel = ctx.bblArgSel
+    ctx.bblArgGrab = true
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.bblArgMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.bblArgMoveSnapshot)
+      else
+        ctx.lines = ctx.bblArgMoveSnapshot
+      end
+      local restoredArgs = getArgs()
+      ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgMoveSel or ctx.bblArgSel, #restoredArgs)
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
+  end
+  if not canMoveArgs then
+    confirmMoveState()
+  end
   local slotData = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot) or nil
   local entryPath = (slotData and slotData.path) or ""
   local hasCdrom = arg_presets.hasCdromPath(entryPath)
@@ -137,10 +189,6 @@ local function run(ctx)
     rowStateKeyPrefix = "bbl_hotkey_args_gsm_picker_row_",
   }
 
-  local function clearGsmMenus()
-    arg_gsm_picker.clearState(ctx, gsmKeys)
-  end
-
   local function reopenAddMenu()
     if hasArgCap and total >= maxArgs then return end
     ctx.bblArgAddMenu = true
@@ -167,7 +215,8 @@ local function run(ctx)
             if args2[idx] then
               args2[idx].value = arg
               setArgs(args2)
-              ctx.bblArgSel = _.common.clampListSelection(idx, #args2)
+              local refreshed = getArgs()
+              ctx.bblArgSel = findArgIndexByValue(refreshed, arg, idx)
             end
           else
             addArgValue(arg)
@@ -269,6 +318,9 @@ local function run(ctx)
       local a = args[i]
       local text = (a and a.value) or ""
       if text == "" then text = _.common_str.empty end
+      if canMoveArgs and ctx.bblArgGrab and i == ctx.bblArgSel then
+        text = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. text
+      end
       if _.common.fitListRowText then
         text = _.common.fitListRowText(ctx, "bbl_hotkey_args_row_" .. tostring(i), _.font, text, maxLabelW,
           _.FONT_SCALE, i == ctx.bblArgSel)
@@ -276,76 +328,196 @@ local function run(ctx)
         text = _.common.truncateTextToWidth(_.font, text, maxLabelW, _.FONT_SCALE)
       end
       local col = (i == ctx.bblArgSel) and _.SELECTED_ENTRY or _.WHITE
-      if a and a.disabled then
+      if keyDisabled or (a and a.disabled) then
         col = (i == ctx.bblArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblArgSel, text, col)
     end
   end
 
-  local hint
-  if total > 0 and args[ctx.bblArgSel] then
-    hint = args[ctx.bblArgSel].disabled and (_.menu_str.args_hint_items_with_enable or _.menu_str.args_hint_items) or
-        (_.menu_str.args_hint_items_with_disable or _.menu_str.args_hint_items)
-    if hasArgCap and total >= maxArgs then
-      local filtered = {}
-      for _, item in ipairs(hint or {}) do
-        if item.pad ~= "select" then
-          filtered[#filtered + 1] = item
-        else
-          filtered[#filtered + 1] = { pad = "", label = "", row = item.row }
-        end
-      end
-      hint = filtered
-    end
-  else
-    hint = {
-      { pad = "select", label = "Add", row = 1 },
-      { pad = "circle", label = "Back", row = 1 },
-    }
+  local hasSelection = (total > 0 and ctx.bblArgSel >= 1 and ctx.bblArgSel <= total and args[ctx.bblArgSel])
+  local canAddArg = ((not hasArgCap) or total < maxArgs)
+  local selectedDisabled = hasSelection and args[ctx.bblArgSel].disabled
+  local crossPad = (hasSelection or canAddArg) and "cross" or ""
+  local crossLabel = ""
+  if hasSelection then
+    crossLabel = ctx.bblArgGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.edit_label or "Edit")
+  elseif canAddArg then
+    crossLabel = (_.menu_str.insert_label or "Insert")
   end
+  local hint = {
+    {
+      pad = crossPad,
+      label = crossLabel,
+      row = 1
+    },
+    { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    {
+      pad = hasSelection and "triangle" or "",
+      label = hasSelection and
+          (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+      row = 1
+    },
+    {
+      pad = "circle",
+      label = ctx.bblArgGrab and (_.menu_str.cancel_label or "Cancel") or (_.menu_str.back_label or "Back"),
+      row = 1
+    },
+  }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-  if total > 0 and (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, -1)
-  end
-  if total > 0 and (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, 1)
+  local function moveSelectedArg(step)
+    if not hasSelection or total <= 1 then return end
+    local dst = ctx.bblArgSel + step
+    if dst < 1 or dst > total then return end
+    local args2 = getArgs()
+    local movedItem = args2[ctx.bblArgSel]
+    local movedValue = movedItem and movedItem.value or ""
+    args2[ctx.bblArgSel], args2[dst] = args2[dst], args2[ctx.bblArgSel]
+    setArgs(args2)
+    local refreshed = getArgs()
+    ctx.bblArgSel = findArgIndexByValue(refreshed, movedValue, dst)
   end
 
-  if total > 0 and (_.padEffective & _.PAD_CROSS) ~= 0 then
-    local editIdx = ctx.bblArgSel
-    local editVal = (args[editIdx] and args[editIdx].value) or ""
-    local gsmArgKey, gsmVideoIdx, gsmCompatIdx = arg_gsm_picker.parseExistingGsmArg(_, editVal)
-    if gsmArgKey then
-      arg_gsm_picker.open(ctx, gsmKeys, gsmArgKey, gsmVideoIdx, gsmCompatIdx)
-      ctx[gsmKeys.editIdxKey] = editIdx
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
     else
-      _.common.beginTextInput(ctx, {
-        titleIdMode = nil,
-        prompt = _.menu_str.edit_argument_prompt or "Edit argument",
-        value = editVal,
-        maxLen = 255,
-        callback = function(val)
-          local args2 = getArgs()
-          if args2[editIdx] then
-            args2[editIdx].value = val or ""
-          end
-          setArgs(args2)
-          ctx.state = "bbl_hotkey_args"
-        end,
-        returnState = "bbl_hotkey_args",
-        gridSel = 1,
-        scroll = 1,
-        state = "text_input",
-      })
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
     end
   end
 
-  if (_.padEffective & _.PAD_SELECT) ~= 0 and ((not hasArgCap) or total < maxArgs) then
+  local function removeSelectedArg()
+    if not hasSelection then return end
+    local args2 = arg_presets.removeArgAndPairedUdpbd(getArgs(), ctx.bblArgSel, removeNhddlPair)
+    setArgs(args2)
+    ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgSel, #args2)
+    if #args2 == 0 then
+      confirmMoveState()
+    end
+  end
+
+  local function beginAddArg()
+    if not canAddArg then return end
+    confirmMoveState()
     ctx.bblArgAddMenu = true
     ctx.bblArgAddSel = ctx.bblArgAddSel or 1
     ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
+  end
+
+  if ctx.bblArgActionsOpen then
+    local actionRows = {}
+    if hasSelection and canMoveArgs then
+      actionRows[#actionRows + 1] = {
+        id = "grab",
+        label = ctx.bblArgGrab and (_.menu_str.cancel_move_label or "Cancel move") or
+            (_.menu_str.grab_label or "Move"),
+      }
+    end
+    if hasSelection then
+      actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
+    end
+    if canAddArg then
+      actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+    end
+    if actions_menu.run(ctx, {
+          openKey = "bblArgActionsOpen",
+          selKey = "bblArgActionsSel",
+          scrollKey = "bblArgActionsScroll",
+          title = (_.menu_str.actions_title or "Actions"),
+          rows = actionRows,
+          rowStateKeyPrefix = "bbl_hotkey_args_actions_row_",
+          onSelect = function(row)
+            if row.id == "grab" then
+              if ctx.bblArgGrab then
+                cancelMoveState()
+              else
+                beginMoveState()
+              end
+            elseif row.id == "remove" then
+              removeSelectedArg()
+            elseif row.id == "insert" then
+              beginAddArg()
+            end
+          end,
+        }) then
+      return
+    end
+  end
+
+  if total > 0 and (_.padEffective & _.PAD_UP) ~= 0 then
+    if ctx.bblArgGrab then
+      moveSelectedArg(-1)
+    else
+      ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, -1)
+    end
+  end
+  if total > 0 and (_.padEffective & _.PAD_DOWN) ~= 0 then
+    if ctx.bblArgGrab then
+      moveSelectedArg(1)
+    else
+      ctx.bblArgSel = _.common.wrapListSelection(ctx.bblArgSel, total, 1)
+    end
+  end
+
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if ctx.bblArgGrab then
+      confirmMoveState()
+      return
+    end
+    if hasSelection then
+      local editIdx = ctx.bblArgSel
+      local editVal = (args[editIdx] and args[editIdx].value) or ""
+      local gsmArgKey, gsmVideoIdx, gsmCompatIdx = arg_gsm_picker.parseExistingGsmArg(_, editVal)
+      if gsmArgKey then
+        arg_gsm_picker.open(ctx, gsmKeys, gsmArgKey, gsmVideoIdx, gsmCompatIdx)
+        ctx[gsmKeys.editIdxKey] = editIdx
+      else
+        _.common.beginTextInput(ctx, {
+          titleIdMode = nil,
+          prompt = _.menu_str.edit_argument_prompt or "Edit argument",
+          value = editVal,
+          maxLen = 255,
+          callback = function(val)
+            local args2 = getArgs()
+            if args2[editIdx] then
+              args2[editIdx].value = val or ""
+            end
+            setArgs(args2)
+            local refreshed = getArgs()
+            ctx.bblArgSel = findArgIndexByValue(refreshed, val or "", editIdx)
+            ctx.state = "bbl_hotkey_args"
+          end,
+          returnState = "bbl_hotkey_args",
+          gridSel = 1,
+          scroll = 1,
+          state = "text_input",
+        })
+      end
+    elseif canAddArg then
+      beginAddArg()
+      return
+    end
   end
 
   local function toggleSelectedArgDisabled()
@@ -359,30 +531,20 @@ local function run(ctx)
     toggleSelectedArgDisabled()
   end
 
-  if total > 0 and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    local args2 = arg_presets.removeArgAndPairedUdpbd(getArgs(), ctx.bblArgSel, removeNhddlPair)
-    setArgs(args2)
-    ctx.bblArgSel = _.common.clampListSelection(ctx.bblArgSel, #args2)
+  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+    ctx.bblArgActionsOpen = true
+    ctx.bblArgActionsSel = ctx.bblArgActionsSel or 1
+    ctx.bblArgActionsScroll = ctx.bblArgActionsScroll or 0
   end
-
-  if total > 1 and (_.padEffective & _.PAD_L1) ~= 0 then
-    if ctx.bblArgSel > 1 then
-      local args2 = getArgs()
-      args2[ctx.bblArgSel], args2[ctx.bblArgSel - 1] = args2[ctx.bblArgSel - 1], args2[ctx.bblArgSel]
-      setArgs(args2)
-      ctx.bblArgSel = ctx.bblArgSel - 1
-    end
-  end
-  if total > 1 and (_.padEffective & _.PAD_R1) ~= 0 then
-    if ctx.bblArgSel < total then
-      local args2 = getArgs()
-      args2[ctx.bblArgSel], args2[ctx.bblArgSel + 1] = args2[ctx.bblArgSel + 1], args2[ctx.bblArgSel]
-      setArgs(args2)
-      ctx.bblArgSel = ctx.bblArgSel + 1
-    end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    if ctx.bblArgGrab then
+      cancelMoveState()
+      return
+    end
     ctx.state = "bbl_hotkey_entry"
   end
 end

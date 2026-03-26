@@ -1,6 +1,7 @@
 #include "devices/pad.h"
 #include "lua/player.h"
 #include <stdint.h>
+#include <string.h>
 
 static int lua_gettype(lua_State *L) {
   int argc = lua_gettop(L);
@@ -29,6 +30,7 @@ static int lua_getpad(lua_State *L) {
   }
 
   padButtonStatus buttons;
+  memset(&buttons, 0, sizeof(buttons));
   uint32_t paddata = 0;
   int ret;
 
@@ -57,6 +59,9 @@ static int lua_getleft(lua_State *L) {
   }
 
   padButtonStatus buttons;
+  memset(&buttons, 0, sizeof(buttons));
+  buttons.ljoy_h = 127;
+  buttons.ljoy_v = 127;
 
   int state = padGetState(port, 0);
 
@@ -80,6 +85,9 @@ static int lua_getright(lua_State *L) {
   }
 
   padButtonStatus buttons;
+  memset(&buttons, 0, sizeof(buttons));
+  buttons.rjoy_h = 127;
+  buttons.rjoy_v = 127;
 
   int state = padGetState(port, 0);
 
