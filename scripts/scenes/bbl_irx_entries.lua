@@ -187,11 +187,12 @@ local function run(ctx)
   end
 
   local hasSelection = (total > 0 and ctx.bblIrxSel >= 1 and ctx.bblIrxSel <= total)
+  local canCrossEdit = hasSelection or canAddEntry
   local selectedDisabled = hasSelection and entries[ctx.bblIrxSel].disabled
   local hints = {
     {
-      pad = hasSelection and "cross" or "",
-      label = hasSelection and (ctx.bblIrxGrab and (_.menu_str.confirm_label or "Confirm") or (_.menu_str.enter_label or "Enter")) or "",
+      pad = canCrossEdit and "cross" or "",
+      label = canCrossEdit and (ctx.bblIrxGrab and (_.menu_str.confirm_label or "Confirm") or "Edit") or "",
       row = 1
     },
     { pad = "square", label = (_.menu_str.actions_label or "Actions"), row = 1 },
@@ -329,6 +330,11 @@ local function run(ctx)
     end
     local ent = entries[ctx.bblIrxSel]
     beginIrxPathEdit(_, ctx, ent.idx, ent.disabled)
+    return
+  end
+
+  if (_.padEffective & _.PAD_CROSS) ~= 0 and total == 0 and canAddEntry then
+    addIrxEntry()
     return
   end
 

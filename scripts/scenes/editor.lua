@@ -1761,20 +1761,78 @@ local function run(ctx)
         ctx.entrySel = ctx.entrySel or 1
         ctx.entryScroll = ctx.entryScroll or 0
       elseif o.key == "_bbl_irx_entries" then
-        ctx.bblIrxSel = ctx.bblIrxSel or 1
-        ctx.bblIrxScroll = ctx.bblIrxScroll or 0
-        ctx.state = "bbl_irx_entries"
+        local irxEntries = (_.config_parse.getBblIrxEntryIndices and _.config_parse.getBblIrxEntryIndices(ctx.lines)) or {}
+        local targetIrxIdx, targetIrxDisabled = nil, false
+        local hasUsableIrx = false
+        for ii = 1, #irxEntries do
+          local idx = irxEntries[ii] and tonumber(irxEntries[ii].idx) or nil
+          if idx and not targetIrxIdx then
+            targetIrxIdx = idx
+            targetIrxDisabled = irxEntries[ii].disabled and true or false
+          end
+          if idx and _.config_parse.getBblIrxEntry then
+            local v = _.config_parse.getBblIrxEntry(ctx.lines, idx)
+            if tostring(v or "") ~= "" then
+              hasUsableIrx = true
+              break
+            end
+          end
+        end
+        if not hasUsableIrx then
+          if not targetIrxIdx and _.config_parse.insertBblIrxEntryBelow then
+            targetIrxIdx = _.config_parse.insertBblIrxEntryBelow(ctx.lines, 0, "")
+            if targetIrxIdx then
+              ctx.configModified = true
+            end
+          end
+          if targetIrxIdx then
+            ctx.bblIrxSel = 1
+            ctx.bblIrxScroll = 0
+            ctx.editKey = nil
+            ctx.isAddPath = false
+            ctx.addPathKey = nil
+            ctx.pathPickerBootKey = nil
+            ctx.pathPickerForEntryIdx = nil
+            ctx.pathPickerEditIdx = nil
+            ctx.pathPickerBblHotkeyKey = nil
+            ctx.pathPickerBblHotkeySlot = nil
+            ctx.pathPickerBblHotkeyDisabled = nil
+            ctx.pathPickerBblIrxIdx = targetIrxIdx
+            ctx.pathPickerBblIrxDisabled = targetIrxDisabled and true or false
+            ctx.pathPickerContext = "path_only"
+            ctx.pathPickerSub = "device"
+            ctx.pathList = _.file_selector.getDevices("path_only") or {}
+            ctx.pathPickerSel = 1
+            ctx.pathPickerScroll = 0
+            ctx.pathBrowsePath = nil
+            ctx.pathPickerTarget = nil
+            ctx.pathPickerFileExts = { ".irx" }
+            ctx.pathPickerReturnState = "bbl_irx_entries"
+            ctx.state = "path_picker"
+          else
+            ctx.bblIrxSel = ctx.bblIrxSel or 1
+            ctx.bblIrxScroll = ctx.bblIrxScroll or 0
+            ctx.state = "bbl_irx_entries"
+          end
+        else
+          ctx.bblIrxSel = ctx.bblIrxSel or 1
+          ctx.bblIrxScroll = ctx.bblIrxScroll or 0
+          ctx.state = "bbl_irx_entries"
+        end
       elseif o.key == "_bbl_hotkeys" then
         ctx.bblHotkeySel = ctx.bblHotkeySel or 1
         ctx.state = "bbl_hotkeys"
       elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
         local isAutoKey = tostring(ctx.bblHotkeyKey or ""):upper() == "AUTO"
-        if isAutoKey and ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) then
-          local slotNum = tonumber(o.bblEntrySlot)
+        local slotNum = tonumber(o.bblEntrySlot)
+        local slotData = (slotNum and _.config_parse.getBblHotkeySlot and
+          _.config_parse.getBblHotkeySlot(ctx.lines, ctx.bblHotkeyKey, slotNum)) or nil
+        local isFmcbAuto = isAutoKey and ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot"))
+        local isBblAutoEmptyOrNotSet = isAutoKey and (not isFmcbAuto) and slotData and
+            ((not slotData.pathExists or tostring(slotData.path or "") == "") and ((tonumber(slotData.argCount) or 0) == 0))
+        if isFmcbAuto or isBblAutoEmptyOrNotSet then
           if slotNum then
-            local slotData = (_.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, "AUTO", slotNum)) or
-                nil
             ctx.editKey = nil
             ctx.isAddPath = false
             ctx.addPathKey = nil
@@ -1785,10 +1843,17 @@ local function run(ctx)
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerBblIrxIdx = nil
             ctx.pathPickerBblIrxDisabled = nil
-            ctx.pathPickerBblHotkeyKey = "AUTO"
+            ctx.pathPickerBblHotkeyKey = ctx.bblHotkeyKey
             ctx.pathPickerBblHotkeySlot = slotNum
             ctx.pathPickerBblHotkeyDisabled = (slotData and slotData.disabled) and true or false
-            ctx.pathPickerReturnState = "editor"
+            if isFmcbAuto then
+              ctx.pathPickerReturnState = "editor"
+            else
+              ctx.pathPickerReturnState = "bbl_hotkey_entry"
+              ctx.bblEntrySlot = slotNum
+              ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+              ctx.bblEntryDetailReturnState = "editor"
+            end
             ctx.pathPickerContext = "path_only"
             ctx.pathPickerSub = "device"
             ctx.pathList = _.file_selector.getDevices("path_only") or {}
