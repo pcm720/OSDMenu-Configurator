@@ -89,6 +89,16 @@ local function hasIniFilter(ctx)
   return false
 end
 
+local function hasIrxFilter(ctx)
+  if not ctx or type(ctx.pathPickerFileExts) ~= "table" then return false end
+  for i = 1, #ctx.pathPickerFileExts do
+    local ext = tostring(ctx.pathPickerFileExts[i] or ""):lower()
+    if ext ~= "" and ext:sub(1, 1) ~= "." then ext = "." .. ext end
+    if ext == ".irx" then return true end
+  end
+  return false
+end
+
 local function isBblIrxPath(path)
   local s = tostring(path or ""):gsub("^%s+", ""):gsub("%s+$", "")
   return s ~= "" and s:lower():match("%.irx$") ~= nil, s
@@ -935,7 +945,14 @@ local function run(ctx)
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.pathPickerSel, label, col)
     end
     if #show == 0 then
-      local noFilesLabel = hasIniFilter(ctx) and (_.path_str.no_ini_files or "No INI files or folders") or _.path_str.no_elf_files
+      local noFilesLabel
+      if hasIniFilter(ctx) then
+        noFilesLabel = _.path_str.no_ini_files or "No INI files or folders"
+      elseif hasIrxFilter(ctx) then
+        noFilesLabel = _.path_str.no_irx_files or "No IRX files or folders"
+      else
+        noFilesLabel = _.path_str.no_elf_files
+      end
       _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(55), _.FONT_SCALE, noFilesLabel, _.DIM)
     end
     local canCreateConfigIni = isConfigOpenTarget(ctx) and ctx.pathBrowsePath

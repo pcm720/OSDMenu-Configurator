@@ -150,6 +150,12 @@ local function run(ctx)
   local counterStr = (total == 0 and "0 / 0") or (tostring(ctx.bblIrxSel) .. " / " .. tostring(total))
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.edit_irx_entries or "Edit IRX entries", _.WHITE)
   _.drawText(_.font, _.drawMode, 540, _.MARGIN_Y, 0.9, counterStr, _.DIM)
+  local irxOrderHint = (_.menu_str.irx_order_hint or "IRX entry order matters!")
+  local hintScale = 0.7
+  local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+  local hintW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, irxOrderHint, hintScale)) or (#irxOrderHint * 8)
+  local hintX = (_.common.centerX and _.common.centerX(_, hintW)) or _.MARGIN_X
+  _.drawText(_.font, _.drawMode, hintX, (_.DESC_Y_BOTTOM or (_.HINT_Y - _.scaleY(22))), hintScale, irxOrderHint, hintColor)
 
   local startY = _.MARGIN_Y + _.scaleY(50)
   local maxVis = _.MAX_VISIBLE_LIST

@@ -71,6 +71,7 @@ strings.editor = {
 strings.menu_entries = {
   edit_menu_entries = "Edit menu entries",
   edit_irx_entries = "Edit IRX entries",
+  irx_order_hint = "IRX entry order matters!",
   item = "Item ",
   hint_items = { { pad = "cross", label = "Enter", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "right", label = "Next", row = 2 } },
   hint_items_with_enable = { { pad = "cross", label = "Enter", row = 1 }, { pad = "triangle", label = "Enable", layoutLabel = "Disable", row = 1 }, { pad = "select", label = "Insert", row = 1 }, { pad = "square", label = "Delete", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "L1", label = "Up", row = 2 }, { pad = "start", label = "Save", row = 2 }, { pad = "R1", label = "Down", row = 2 }, { pad = "right", label = "Next", row = 2 } },
@@ -122,6 +123,7 @@ strings.path_picker = {
   cross_open_square_patinfo_circle_back_items = { { pad = "cross", label = "Enter" }, { pad = "square", label = "PATINFO" }, { pad = "circle", label = "Back" } },
   no_elf_files = "No ELF files or folders",
   no_ini_files = "No INI files or folders",
+  no_irx_files = "No IRX files or folders",
   cross_select_file_items = { { pad = "cross", label = "Select" }, { pad = "circle", label = "Back" } },
   cross_select_create_circle_back_items = { { pad = "cross", label = "Select" }, { pad = "square", label = "Create CONFIG.INI" }, { pad = "circle", label = "Back" } },
   no_devices = "No devices",
