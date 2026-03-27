@@ -758,6 +758,8 @@ local function runMain(s, pad)
     s.mainLangSel = C.langIndex or 1
     s.mainLangPromptAnim = 0
     s.mainLangPromptClosing = nil
+    -- Avoid a one-frame background-only flash on prompt open.
+    drawMainBaseUi()
     return
   end
 
