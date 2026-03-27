@@ -153,12 +153,13 @@ end
 local function buildMainLanguageOverlayHintItems(main_str)
   local base = main_str.cross_select_circle_back_items or {}
   local selectLabel = findHintLabel(base, "cross", "Enter")
-  local backLabel = findHintLabel(base, "circle", "Back")
+  local cancelLabel = (strings and strings.menu_entries and strings.menu_entries.cancel_label) or
+      findHintLabel(base, "circle", "Cancel")
   local languageLabel = getLanguageHintLabel(main_str)
   return {
     { pad = "cross", label = selectLabel, row = 1 },
     { pad = "square", label = languageLabel, row = 1 },
-    { pad = "circle", label = backLabel, row = 1 },
+    { pad = "circle", label = cancelLabel, row = 1 },
   }
 end
 
@@ -716,6 +717,13 @@ local function runMain(s, pad)
       dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, col)
     end
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
+    if Graphics and Graphics.drawRect then
+      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 255)
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowTop = math.floor(H) - hintRowH
+      local hintW = (s.w or 640) - (2 * M)
+      Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
+    end
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
     if not closing then
       if (pad & PAD_UP) ~= 0 then
@@ -1305,8 +1313,9 @@ local function runInitHdd(s, pad)
     local descY = titleY + lineH + gap
     dt(s.font, s.drawMode, math.max(M, cx1), titleY, 1.1, main_str.init_hdd_title, common.WHITE)
     dt(s.font, s.drawMode, math.max(M, cx2), descY, 0.85, main_str.init_hdd_sub, common.DIM)
-    Screen.flip()
+    -- Show this frame on vblank before module load to avoid a visible full-screen flash.
     Screen.waitVblankStart()
+    Screen.flip()
     if System.loadModules then System.loadModules("hdd") end
     s.initHddPhase = "wait"
     s.initHddFrames = 0
