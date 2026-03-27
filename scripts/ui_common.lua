@@ -18,6 +18,7 @@ common.PAD_TRIANGLE                = 0x1000
 common.PAD_SQUARE                  = 0x8000
 common.PAD_L1, common.PAD_R1       = 0x0400, 0x0800
 common.PAD_L2, common.PAD_R2       = 0x0100, 0x0200
+common.SWAP_CROSS_CIRCLE           = false
 
 -- Colors
 common.WHITE                       = Color.new(255, 255, 255)
@@ -107,6 +108,34 @@ function common.getPadIcon(name)
   return (padIconCache[file] ~= false) and padIconCache[file] or nil
 end
 
+function common.setSwapCrossCircle(enabled)
+  common.SWAP_CROSS_CIRCLE = (enabled == true)
+end
+
+function common.isSwapCrossCircle()
+  return common.SWAP_CROSS_CIRCLE == true
+end
+
+function common.remapCrossCirclePadName(name)
+  local key = tostring(name or ""):lower()
+  if not common.isSwapCrossCircle() then return key end
+  if key == "cross" then return "circle" end
+  if key == "circle" then return "cross" end
+  return key
+end
+
+function common.remapCrossCircleMask(mask)
+  if not common.isSwapCrossCircle() then
+    return mask
+  end
+  local hasCross = (mask & common.PAD_CROSS) ~= 0
+  local hasCircle = (mask & common.PAD_CIRCLE) ~= 0
+  local out = mask & ~(common.PAD_CROSS | common.PAD_CIRCLE)
+  if hasCross then out = out | common.PAD_CIRCLE end
+  if hasCircle then out = out | common.PAD_CROSS end
+  return out
+end
+
 local function getHintFtFont(scaleFactor)
   local sf = tonumber(scaleFactor) or 1
   if sf <= 0 then sf = 1 end
@@ -168,7 +197,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
     local widthEff = width - 2 * sideMargin
-    local rowPads = { "cross", "square", "start", "triangle", "circle" }
+    local rowPads
+    if common.isSwapCrossCircle() then
+      rowPads = { "circle", "square", "start", "triangle", "cross" }
+    else
+      rowPads = { "cross", "square", "start", "triangle", "circle" }
+    end
     local slotCount = #rowPads
     local slotW = widthEff / slotCount
     local hintFont = common.getHintFont(font, drawMode, textScale)
@@ -194,6 +228,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local item = hintItems[i]
       local rawPad = tostring((item and item.pad) or "")
       local key = rawPad:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+      key = common.remapCrossCirclePadName(key)
       if key ~= "" and not activeByPad[key] and rowMap[key] then
         activeByPad[key] = { label = tostring(item.label or "") }
       end
@@ -669,8 +704,9 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end
-    Screen.flip()
+    -- Present on vblank to avoid whole-frame shimmer/tearing on animated transitions.
     Screen.waitVblankStart()
+    Screen.flip()
   end
 end
 
@@ -709,7 +745,7 @@ function common.getPadEffective(ctx)
     ctx.holdRepeatCountdown = 0
   end
   ctx.prevPad = pad
-  return padJust | padRepeat
+  return common.remapCrossCircleMask(padJust | padRepeat)
 end
 
 function common.loadCustomFont()

@@ -139,6 +139,20 @@ Behavior:
 - If one is present, only that associated app is shown.
 - If multiple are present, all associated apps are shown.
 
+### Confirm/Cancel button swap
+
+Supported file:
+
+- `swap_buttons.opt`
+
+Behavior:
+
+- If `swap_buttons.opt` is present at startup, `Circle` and `Cross` are swapped globally in the UI:
+  - `Circle` becomes confirm/accept.
+  - `Cross` becomes cancel/back.
+- Hint icons/text positions also swap between the first and last hint slots so on-screen guidance matches the active controls.
+- If `swap_buttons.opt` is not present, default button behavior is used (`Cross` confirm/accept, `Circle` cancel/back).
+
 ## Language and font overrides
 
 You can override the built-in strings and font by placing files in the **current working directory** (the directory from which the ELF is run).

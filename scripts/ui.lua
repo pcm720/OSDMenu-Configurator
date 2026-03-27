@@ -123,6 +123,47 @@ local function applyStartupVideoModeOpt()
   end
 end
 
+local function applyStartupSwapButtonsOpt()
+  local cwd = nil
+  if System and System.currentDirectory then
+    local okCwd, cwdValue = pcall(System.currentDirectory)
+    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
+      cwd = cwdValue
+    end
+  end
+
+  local function checkExists(path)
+    local ok, exists = pcall(doesFileExist, path)
+    return ok and exists == true
+  end
+
+  local function optExists(path)
+    if type(path) ~= "string" or path == "" then return false end
+    if checkExists(path) or checkExists("./" .. path) then
+      return true
+    end
+    if cwd and cwd ~= "" then
+      local base = cwd
+      if base:sub(-1) ~= "/" then base = base .. "/" end
+      if checkExists(base .. path) then
+        return true
+      end
+    end
+    return false
+  end
+
+  local enabled = optExists("swap_buttons.opt")
+  if common.setSwapCrossCircle then
+    common.setSwapCrossCircle(enabled)
+  else
+    common.SWAP_CROSS_CIRCLE = (enabled == true)
+  end
+  _G.CONFIG_UI.swapCrossCircle = enabled == true
+  if enabled then
+    print("ui: startup button swap override from swap_buttons.opt (circle confirm/cross cancel)")
+  end
+end
+
 local function getLocations(ctx, ft, slot) return config_options.getLocations(ctx, ft, slot) end
 local function loadCustomFont() return common.loadCustomFont() end
 local function drawText(font, mode, x, y, scale, text, color) return common.drawText(font, mode, x, y, scale, text, color) end
@@ -572,8 +613,9 @@ local function mainLoop()
 
     prevPad = c.prevPad or prevPad
     syncToS(c)
-    Screen.flip()
+    -- Present on vblank to reduce full-screen flicker during motion/overlay animation.
     Screen.waitVblankStart()
+    Screen.flip()
     return c.state, c
   end
   local sceneNames = { "main", "choose_mc", "select_config", "initHdd", "open", "choose_load", "editor", "choose_save",
@@ -610,4 +652,5 @@ local function mainLoop()
 end
 
 applyStartupVideoModeOpt()
+applyStartupSwapButtonsOpt()
 return mainLoop()
