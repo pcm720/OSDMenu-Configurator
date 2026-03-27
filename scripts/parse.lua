@@ -19,19 +19,24 @@ function config_parse.regenerateLinesBbl(lines, options)
   if addedGlobals then table.insert(out, { comment = SEPARATOR }) end
   -- 2. Autoboot section (NAME_AUTO, LK_AUTO_E#, ARG_AUTO_E#)
   local function writeHotkeySection(keyId)
+    local keyDisabled = config_parse.isBblHotkeyDisabled(lines, keyId)
     local name = config_parse.getBblHotkeyName(lines, keyId)
     local wrote = false
     if name ~= nil then
-      table.insert(out, { key = "NAME_" .. keyId, value = name })
+      table.insert(out, { key = "NAME_" .. keyId, value = name, comment = keyDisabled and true or nil })
       wrote = true
     end
     for entryIdx = 1, maxEntries do
       local path, pathDisabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
       if path ~= nil then
-        table.insert(out, { key = "LK_" .. keyId .. "_E" .. entryIdx, value = path, comment = pathDisabled and true or nil })
+        local pathIsDisabled = pathDisabled and true or false
+        local pathComment = keyDisabled and (pathIsDisabled and 2 or true) or (pathIsDisabled and true or nil)
+        table.insert(out, { key = "LK_" .. keyId .. "_E" .. entryIdx, value = path, comment = pathComment })
         local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
         for _, arg in ipairs(args) do
-          table.insert(out, { key = "ARG_" .. keyId .. "_E" .. entryIdx, value = arg.value, comment = arg.disabled and true or nil })
+          local argDisabled = (type(arg) == "table" and arg.disabled) and true or false
+          local argComment = keyDisabled and (argDisabled and 2 or true) or (argDisabled and true or nil)
+          table.insert(out, { key = "ARG_" .. keyId .. "_E" .. entryIdx, value = arg.value, comment = argComment })
         end
         wrote = true
       end

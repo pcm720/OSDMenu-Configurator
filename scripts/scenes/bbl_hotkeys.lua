@@ -184,6 +184,11 @@ local function run(ctx)
   local hint = {
     { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
     {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    {
       pad = selCanToggleDisabled and "triangle" or "",
       label = selCanToggleDisabled and
           (selDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
@@ -193,6 +198,29 @@ local function run(ctx)
     { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.bblHotkeySel = ctx.bblHotkeySel - 1
@@ -258,10 +286,15 @@ local function run(ctx)
     local canToggle = info and info.disabledSeen and true or false
     if keyId and canToggle and _.config_parse.setBblHotkeyDisabled then
       local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
-      _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
-      ctx.configModified = true
-      ctx.bblHotkeySummaryCache = nil
+      local changed = _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
+      if changed then
+        ctx.configModified = true
+        ctx.bblHotkeySummaryCache = nil
+      end
     end
+  end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.state = "editor"
