@@ -150,7 +150,6 @@ Behavior:
 - If `swap_buttons.opt` is present at startup, `Circle` and `Cross` are swapped globally in the UI:
   - `Circle` becomes confirm/accept.
   - `Cross` becomes cancel/back.
-- Hint icons/text positions also swap between the first and last hint slots so on-screen guidance matches the active controls.
 - If `swap_buttons.opt` is not present, default button behavior is used (`Cross` confirm/accept, `Circle` cancel/back).
 
 ## Language and font overrides
@@ -173,7 +172,7 @@ You can override the built-in strings and font by placing files in the **current
 - UI strings are in **`scripts/lang/strings_XX.lua`** (e.g. `strings_en.lua`, `strings_fr.lua`)
 - To add a language: copy `scripts/lang/strings_en.lua` to `scripts/lang/strings_<lang>.lua`, then translate the **values** and keep all **keys** unchanged
 - If more than one `strings_*.lua` exists in `scripts/lang/` and you are *not* using a CWD `strings.lua` override, **L1 / R1** on the main menu cycle the language  
-  When a CWD `strings.lua` override is used, L1/R1 language cycling is disabled
+  When a CWD `strings.lua` override is used, language cycling is disabled
 
 ### Contributing
 
@@ -192,7 +191,7 @@ Requires [PS2SDK](https://github.com/ps2dev/ps2sdk) installed.
 cmake -B build
 cmake --build build
 ```
-### Configuration flags
+### Build Configuration flags
 - `-DOUTDIR=<dir>` for custom output directory
 - `-DPOWERPC_UART=ON` for enabling stdout redirection on Deckard consoles
 - `-DEMBED_VFS=ON` for embedding the contents of `scripts/` into the ELF so the app can run without external script files (e.g. from a single ELF on memory card)
