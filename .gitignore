@@ -2,6 +2,7 @@
 build*/
 release*/
 .vscode/settings.json
+/.codex
 *.elf
 build/
 thirdparty/

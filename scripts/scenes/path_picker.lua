@@ -141,6 +141,79 @@ local function clearConfigOpenPickerState(ctx)
   ctx.pathPickerLockedDeviceStarted = nil
 end
 
+local function countOtherTargetPaths(ctx)
+  local _ = ctx._
+  local editIdx = tonumber(ctx.pathPickerEditIdx)
+  local count = 0
+  if ctx.pathPickerForEntryIdx and ctx.lines then
+    local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+    for i = 1, #paths do
+      if not editIdx or i ~= editIdx then
+        local item = paths[i]
+        local pv = type(item) == "table" and item.value or item
+        if pv and pv ~= "" then
+          count = count + 1
+        end
+      end
+    end
+    return count
+  end
+  if ctx.pathPickerBootKey and ctx.lines then
+    local paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+    for i = 1, #paths do
+      if not editIdx or i ~= editIdx then
+        local item = paths[i]
+        local pv = type(item) == "table" and item.value or item
+        if pv and pv ~= "" then
+          count = count + 1
+        end
+      end
+    end
+    return count
+  end
+  return 0
+end
+
+local function showExclusivePathWarning(ctx, pathVal)
+  local _ = ctx._
+  local p = tostring(pathVal or "")
+  local pLower = p:lower()
+  local detail
+  if pLower == "cdrom" then
+    detail = _.menu_str and _.menu_str.cdrom_exclusive_warning
+  end
+  if not detail or detail == "" then
+    detail = (_.path_str and _.path_str.exclusive_path_warning) or
+        "This path must be the first and only path for this entry."
+  end
+  ctx.saveSplash = {
+    kind = "failed",
+    title = (_.menu_str and _.menu_str.invalid_selection_title) or
+        (_.path_str and _.path_str.invalid_selection_title) or "Invalid selection",
+    detail = detail,
+    framesLeft = 120
+  }
+end
+
+local function canUseExclusivePath(ctx, pathVal)
+  local _ = ctx._
+  local getPathFlags = _.file_selector and _.file_selector.getPathFlags
+  local flags = (getPathFlags and getPathFlags(pathVal)) or {}
+  if (not flags.exclusive) and getPathFlags and type(pathVal) == "string" then
+    local lower = pathVal:lower()
+    if lower ~= pathVal then
+      local lowerFlags = getPathFlags(lower) or {}
+      if lowerFlags.exclusive then
+        flags = lowerFlags
+      end
+    end
+  end
+  if not flags.exclusive then return true end
+  if countOtherTargetPaths(ctx) == 0 then return true end
+  showExclusivePathWarning(ctx, pathVal)
+  return false
+end
+
 local function leaveLockedConfigBrowse(ctx)
   if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
   if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
@@ -227,6 +300,13 @@ local function applyManualPath(ctx, val)
       return
     end
     val = normalizedVal
+  end
+  if not canUseExclusivePath(ctx, val) then
+    ctx.state = "path_picker"
+    ctx.pathPickerSub = "device"
+    ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+    ctx.pathPickerScroll = 0
+    return
   end
   if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
   if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
@@ -566,39 +646,12 @@ local function run(ctx)
         if ctx.pathPickerSel > totalCount then ctx.pathPickerSel = totalCount end
         _.drawText(_.font, _.drawMode, _.w - _.MARGIN_X - 56, _.MARGIN_Y, 0.9,
           ctx.pathPickerSel .. " / " .. totalCount, _.DIM)
-        local exclusiveSet = {}
-        for _, dev in ipairs(ctx.pathList) do
-          if dev.exclusive and dev.name then exclusiveSet[dev.name] = true end
-        end
         local function deviceFromListIndex(listIdx)
           local devIdx = listIdx - manualOffset
           if devIdx < 1 or devIdx > #ctx.pathList then return nil end
           return ctx.pathList[devIdx]
         end
-        local function pathIsExclusive(p)
-          if not p or p == "" then return false end
-          return exclusiveSet[p] or exclusiveSet[(p):upper()] == true
-        end
-        local entryHasOtherPaths = false
-        local bootHasOtherPaths = false
-        if ctx.pathPickerForEntryIdx and ctx.lines then
-          local entryPaths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-          for _, p in ipairs(entryPaths) do
-            local pv = type(p) == "table" and p.value or p
-            if not pathIsExclusive(pv) then
-              entryHasOtherPaths = true; break
-            end
-          end
-        end
-        if ctx.pathPickerBootKey and ctx.lines then
-          local bootPaths = _.config_parse.getBootPaths(ctx.lines, ctx.pathPickerBootKey) or {}
-          for _, p in ipairs(bootPaths) do
-            if not pathIsExclusive(p) then
-              bootHasOtherPaths = true; break
-            end
-          end
-        end
-        local hasOtherPaths = entryHasOtherPaths or bootHasOtherPaths
+        local hasOtherPaths = countOtherTargetPaths(ctx) > 0
         local function isGreyed(e)
           if not e then return true end
           return (e.exclusive and hasOtherPaths) or false
@@ -683,45 +736,47 @@ local function run(ctx)
           else
             local e = deviceFromListIndex(ctx.pathPickerSel)
             if isGreyed(e) then
-              -- exclusive and other paths exist; ignore
+              showExclusivePathWarning(ctx, e and e.name)
             elseif e.special then
               local pathVal = e.name or ""
-	              if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
-	              if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
-	              ctx.pathList = nil
-	              ctx.pfs0Mounted = nil
-	              ctx.pfs1Mounted = nil
+              if canUseExclusivePath(ctx, pathVal) then
+                if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
+                if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
+                ctx.pathList = nil
+                ctx.pfs0Mounted = nil
+                ctx.pfs1Mounted = nil
                 if ctx.pathPickerBootKey and ctx.lines then
                   local bootKey = ctx.pathPickerBootKey
                   applyBootPathAndReturn(ctx, pathVal)
                   if e.noargs then _.config_parse.setBootArgs(ctx.lines, bootKey, {}) end
-	              elseif applyBblHotkeyPathAndReturn(ctx, pathVal) then
-	              elseif applyBblIrxPathAndReturn(ctx, pathVal) then
-	              elseif ctx.pathPickerForEntryIdx then
-                local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-                if ctx.pathPickerEditIdx then
-                  local item = paths[ctx.pathPickerEditIdx]
-                  if type(item) == "table" then item.value = pathVal else paths[ctx.pathPickerEditIdx] = { value =
-                    pathVal, disabled = false } end
+                elseif applyBblHotkeyPathAndReturn(ctx, pathVal) then
+                elseif applyBblIrxPathAndReturn(ctx, pathVal) then
+                elseif ctx.pathPickerForEntryIdx then
+                  local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
+                  if ctx.pathPickerEditIdx then
+                    local item = paths[ctx.pathPickerEditIdx]
+                    if type(item) == "table" then item.value = pathVal else paths[ctx.pathPickerEditIdx] = { value =
+                      pathVal, disabled = false } end
+                  else
+                    table.insert(paths, { value = pathVal, disabled = false })
+                  end
+                  _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
+                  if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
+                  ctx.entryIdx = ctx.pathPickerForEntryIdx
+                  ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+                  ctx.pathPickerForEntryIdx = nil
+                  ctx.pathPickerEditIdx = nil
+                elseif ctx.isAddPath then
+                  local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
+                      ctx.addPathKey
+                  _.config_parse.append(ctx.lines, key, pathVal)
+                  ctx.state = "editor"
                 else
-                  table.insert(paths, { value = pathVal, disabled = false })
+                  _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
+                  ctx.state = "editor"
                 end
-                _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
-                if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
-                ctx.entryIdx = ctx.pathPickerForEntryIdx
-                ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
-                ctx.pathPickerForEntryIdx = nil
-                ctx.pathPickerEditIdx = nil
-              elseif ctx.isAddPath then
-                local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
-                    ctx.addPathKey
-                _.config_parse.append(ctx.lines, key, pathVal)
-                ctx.state = "editor"
-              else
-                _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
-                ctx.state = "editor"
+                ctx.configModified = true
               end
-              ctx.configModified = true
             else
               beginBrowseForDevice(ctx, e)
             end
