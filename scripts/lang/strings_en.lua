@@ -272,7 +272,7 @@ strings.options_osdmbr = {
   prefer_bbn = { label = "Prefer BBN", desc = "Load PSBBN when rebooting" },
   app_gameid = { label = "Application visual game ID", desc = "Display visual Game ID for ELF files" },
   osd_screentype = { label = "OSD screen type", desc = "Force OSD screen type (4:3, 16:9, full)" },
-  osd_language = { label = "OSD language", desc = "Force OSD language (depends on console model)" },
+  osd_language = { label = "OSD language", desc = "Force OSD language (depends on console model). Console must support selected language." },
 }
 
 strings.options_bbl = {

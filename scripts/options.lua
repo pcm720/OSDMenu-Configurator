@@ -537,6 +537,21 @@ config_options.cdrom_options = {
   { key = "-ps1vneg" },
 }
 
+local OSD_LANGUAGE_DISPLAY = {
+  jap = "Japanese (Nihongo)",
+  eng = "English",
+  fre = "French (Francais)",
+  spa = "Spanish (Espanol)",
+  ger = "German (Deutsch)",
+  ita = "Italian (Italiano)",
+  dut = "Dutch (Nederlands)",
+  por = "Portuguese (Portugues)",
+  rus = "Russian (Russkiy)",
+  kor = "Korean (Hangugeo)",
+  tch = "Traditional Chinese (Zhongwen)",
+  sch = "Simplified Chinese (Zhongwen)",
+}
+
 -- OSDMBR.CNF: boot button paths (multi) + args; then other options. Label/desc from strings.options[key].
 config_options.osdmbr_cnf = {
   { key = "boot_auto",            optType = "boot_paths" },
@@ -554,7 +569,13 @@ config_options.osdmbr_cnf = {
   { key = "prefer_bbn",           optType = "bool",      default = "0" },
   { key = "app_gameid",           optType = "bool",      default = "0" },
   { key = "osd_screentype",       optType = "enum",      default = "", enumVals = { "4:3", "16:9", "full" } },
-  { key = "osd_language",         optType = "enum",      default = "", enumVals = { "jap", "eng", "fre", "spa", "ger", "ita", "dut", "por", "rus", "kor", "tch", "sch" } },
+  {
+    key = "osd_language",
+    optType = "enum",
+    default = "",
+    enumVals = { "jap", "eng", "fre", "spa", "ger", "ita", "dut", "por", "rus", "kor", "tch", "sch" },
+    enumDisplayMap = OSD_LANGUAGE_DISPLAY,
+  },
 }
 
 -- OSDGSM.CNF: edited in egsm_editor state (default + title overrides on one screen). Option list not used.

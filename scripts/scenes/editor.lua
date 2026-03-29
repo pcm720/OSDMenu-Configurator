@@ -28,6 +28,26 @@ local function getOsdmbrHotkeyPadName(key)
   return nil
 end
 
+local function isOsdmbrToggleableBootKey(key)
+  return key == "boot_start" or key == "boot_triangle" or key == "boot_circle" or key == "boot_cross" or
+      key == "boot_square"
+end
+
+local function osdmbrBootKeyHasEntries(ctx, _, key)
+  if not (ctx and _ and key) then return false end
+  local getBootPathEntries = _.config_parse and _.config_parse.getBootPathEntries
+  if getBootPathEntries then
+    local paths = getBootPathEntries(ctx.lines, key) or {}
+    if #paths > 0 then return true end
+  end
+  local getBootArgEntries = _.config_parse and _.config_parse.getBootArgEntries
+  if getBootArgEntries then
+    local args = getBootArgEntries(ctx.lines, key) or {}
+    if #args > 0 then return true end
+  end
+  return false
+end
+
 local function getCategoryOptSel(ctx, categoryIdx)
   if not categoryIdx or categoryIdx < 1 then return 1 end
   local byFile = ctx.editorCategoryOptSelByFile
@@ -1121,6 +1141,25 @@ local function run(ctx)
     if selOpt and selOpt.optType == "header" then
       hintItems = removeHintPad(hintItems, "cross")
     end
+    if selOpt and selOpt.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" then
+      local canToggle = selOpt.key and isOsdmbrToggleableBootKey(selOpt.key) and osdmbrBootKeyHasEntries(ctx, _, selOpt.key)
+      local keyDisabled = canToggle and cachedIsBootKeyDisabled(ctx.lines, selOpt.key) or false
+      hintItems = {
+        { pad = "cross", label = (_.menu_str.edit_label or "Edit"), row = 1 },
+        {
+          pad = canToggle and "triangle" or "",
+          label = canToggle and
+              ((keyDisabled and (_.menu_str.enable_label or "Enable")) or (_.menu_str.disable_label or "Disable")) or "",
+          row = 1
+        },
+        {
+          pad = ctx.configModified and "start" or "",
+          label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+          row = 1
+        },
+        { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+      }
+    end
     local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
         ((_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10)
@@ -1931,7 +1970,7 @@ local function run(ctx)
           ctx.editKey = nil
           ctx.isAddPath = false
           ctx.addPathKey = nil
-          ctx.bootKey = nil
+          ctx.bootKey = o.key
           ctx.pathPickerTarget = nil
           ctx.pathPickerFileExts = nil
           ctx.pathPickerForEntryIdx = nil
@@ -1948,7 +1987,7 @@ local function run(ctx)
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerInsertBelow = 0
           end
-          ctx.pathPickerReturnState = "editor"
+          ctx.pathPickerReturnState = "entry_paths"
           ctx.pathPickerContext = "mbr"
           ctx.pathPickerSub = "device"
           ctx.pathList = _.file_selector.getDevices("mbr") or {}
@@ -2004,7 +2043,8 @@ local function run(ctx)
     end
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 then
       local o = ctx.optList[ctx.optSel]
-      if o and o.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" and o.key then
+      if o and o.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" and o.key and
+          isOsdmbrToggleableBootKey(o.key) and osdmbrBootKeyHasEntries(ctx, _, o.key) then
         local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
         _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
         ctx.configModified = true
