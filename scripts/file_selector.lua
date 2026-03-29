@@ -197,6 +197,7 @@ end
 -- Every device gets withFlags(entry).
 function file_selector.getDevices(context)
   local dev = (_G.CONFIG_UI and _G.CONFIG_UI.strings and _G.CONFIG_UI.strings.devices) or dev
+  local isFmcbContext = (context == "fmcb_entry" or context == "fmcb_launch")
   if context == "mc_only" then
     local out = {}
     for i = 1, 2 do
@@ -259,6 +260,9 @@ function file_selector.getDevices(context)
   for _, s in ipairs(SPECIAL) do
     if inContext(s.contexts, context) then
       local desc = (s.descKey and dev[s.descKey]) or s.name
+      if isFmcbContext and s.name == "POWEROFF" then
+        desc = "POWEROFF"
+      end
       table.insert(out, withFlags({ name = s.name, desc = desc, special = s.special }))
     end
   end
