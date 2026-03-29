@@ -942,6 +942,8 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
       scale = s,
       ticks = 0,
       visibleChars = nil,
+      stepDurations = nil,
+      travelSpan = nil,
       selected = true,
       truncated = nil,
     }
@@ -949,6 +951,8 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   elseif st.selected ~= true then
     st.ticks = 0
     st.visibleChars = nil
+    st.stepDurations = nil
+    st.travelSpan = nil
     st.selected = true
   end
 
@@ -968,7 +972,7 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
 
   local holdStart = (opts and tonumber(opts.holdStart)) or 36
   local stepFrames = (opts and tonumber(opts.stepFrames)) or 5
-  local holdEnd = (opts and tonumber(opts.holdEnd)) or 36
+  local holdEnd = (opts and tonumber(opts.holdEnd)) or 52
   local pingPong = false
   if opts and opts.pingPong ~= nil then
     pingPong = (opts.pingPong == true)
@@ -977,8 +981,28 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   if holdEnd < 0 then holdEnd = 0 end
   if stepFrames < 1 then stepFrames = 1 end
 
+  -- Smoothness improvement: keep a near-constant pixel-rate across proportional glyph widths.
+  -- This avoids abrupt jumps on wide characters while preserving average speed.
+  local stepDurations = st.stepDurations
+  local travelSpan = st.travelSpan
+  if (not stepDurations) or (not travelSpan) or (#stepDurations ~= totalSteps) then
+    stepDurations = {}
+    travelSpan = 0
+    local baseCharW = math.max(1, math.floor(8 * s + 0.5))
+    local pxPerFrame = (opts and tonumber(opts.pixelsPerFrame)) or (baseCharW / stepFrames)
+    if pxPerFrame <= 0 then pxPerFrame = 1 end
+    for idx = 1, totalSteps do
+      local ch = raw:sub(idx, idx)
+      local cw = common.calcTextWidth(font, ch, s) or baseCharW
+      local dur = math.max(1, math.floor((cw / pxPerFrame) + 0.5))
+      stepDurations[idx] = dur
+      travelSpan = travelSpan + dur
+    end
+    st.stepDurations = stepDurations
+    st.travelSpan = travelSpan
+  end
+
   st.ticks = (st.ticks or 0) + 1
-  local travelSpan = totalSteps * stepFrames
   local cycleLen
   if pingPong then
     cycleLen = holdStart + travelSpan + holdEnd + travelSpan
@@ -995,12 +1019,29 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   if ticks < holdStart then
     startIdx = 1
   elseif ticks < holdStart + travelSpan then
-    startIdx = 1 + math.floor((ticks - holdStart) / stepFrames)
+    local t = ticks - holdStart
+    local acc = 0
+    startIdx = totalSteps
+    for idx = 1, totalSteps do
+      acc = acc + (stepDurations[idx] or stepFrames)
+      if t < acc then
+        startIdx = idx
+        break
+      end
+    end
   elseif ticks < holdStart + travelSpan + holdEnd then
     startIdx = totalSteps + 1
   elseif pingPong then
     local backTicks = ticks - (holdStart + travelSpan + holdEnd)
-    startIdx = (totalSteps + 1) - math.floor(backTicks / stepFrames)
+    local acc = 0
+    startIdx = 1
+    for rev = totalSteps, 1, -1 do
+      acc = acc + (stepDurations[rev] or stepFrames)
+      if backTicks < acc then
+        startIdx = rev
+        break
+      end
+    end
   else
     startIdx = totalSteps + 1
   end
