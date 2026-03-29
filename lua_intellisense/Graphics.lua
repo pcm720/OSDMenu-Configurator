@@ -245,20 +245,6 @@ ALIGN_CENTER = (ALIGN_VCENTER | ALIGN_HCENTER);
 --- @see Color.new
 function Font.ftPrint(font, x, y, fontalign, width, height, text, color) end
 
---- Prints text inside a fixed draw window while applying a horizontal pixel offset
---- (useful for smooth marquee/ticker effects).
---- @param font ttf font handle
---- @param x integer X coordinate (left edge of clip window)
---- @param y integer Y coordinate
---- @param fontalign fontalign alignment commands for text
---- @param width integer clip window width
---- @param height integer clip window height
---- @param offset number horizontal pixel offset from the left edge (supports fractions for smoother motion)
---- @param text string the text to be written
---- @param color color **[Optional]**: if not specified default is RGBA #80808080
---- @overload fun(font:ttf, x:integer, y:integer, fontalign:fontalign, width:integer, height:integer, offset:number, text:string)
-function Font.ftPrintSlide(font, x, y, fontalign, width, height, offset, text, color) end
-
 --- Returns the rendered pixel width of the given text with the given font (same as used by ftPrint).
 --- @param font ttf font handle
 --- @param text string

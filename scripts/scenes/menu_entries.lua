@@ -131,6 +131,8 @@ local function run(ctx)
   local function openPathPickerForEntry(entryIdx)
     local idx = tonumber(entryIdx)
     if not idx then return end
+    local pickerContext = ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) and "fmcb_entry" or
+        "osdmenu"
     ctx.editKey = nil
     ctx.pathPickerForEntryIdx = idx
     ctx.pathPickerBootKey = nil
@@ -144,10 +146,10 @@ local function run(ctx)
     ctx.pathPickerEditIdx = nil
     ctx.pathPickerInsertBelow = nil
     ctx.pathPickerSub = "device"
-    ctx.pathList = _.file_selector.getDevices("osdmenu") or {}
+    ctx.pathList = _.file_selector.getDevices(pickerContext) or {}
     ctx.pathPickerSel = 1
     ctx.pathPickerScroll = 0
-    ctx.pathPickerContext = "osdmenu"
+    ctx.pathPickerContext = pickerContext
     ctx.pathPickerReturnState = "menu_entry_edit"
     ctx.state = "path_picker"
   end

@@ -384,6 +384,9 @@ local function ensureBblCommandRows(ctx)
   if ctx.fileType == "freemcboot_cnf" then
     cmdRows = {
       { name = "OSDSYS", desc = p.fmcb_cmd_osdsys or "OSDSYS", special = "bbl_cmd" },
+      { name = "OSDMENU", desc = p.fmcb_cmd_osdmenu or "OSDMENU", special = "bbl_cmd" },
+      { name = "FASTBOOT", desc = p.fmcb_cmd_fastboot or "FASTBOOT", special = "bbl_cmd" },
+      { name = "POWEROFF", desc = p.fmcb_cmd_poweroff or "POWEROFF", special = "bbl_cmd" },
     }
   else
     cmdRows = {

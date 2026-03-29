@@ -546,50 +546,6 @@ static void fntRenderGlyph(fnt_glyph_cache_entry_t *glyph, int pen_x, int pen_y)
   }
 }
 
-static void fntRenderGlyphClippedX(fnt_glyph_cache_entry_t *glyph, float pen_x, int pen_y, float clipLeft, float clipRight) {
-  if (!glyph->allocation || !glyph->atlas)
-    return;
-
-  float x1 = pen_x + glyph->ox;
-  float x2 = x1 + glyph->width;
-  if (x2 <= clipLeft || x1 >= clipRight)
-    return;
-
-  float u1 = glyph->allocation->x;
-  float u2 = u1 + glyph->width;
-  if (x1 < clipLeft) {
-    float dx = clipLeft - x1;
-    x1 = clipLeft;
-    u1 += dx;
-  }
-  if (x2 > clipRight) {
-    float dx = x2 - clipRight;
-    x2 = clipRight;
-    u2 -= dx;
-  }
-  if (x2 <= x1 || u2 <= u1)
-    return;
-
-  quad.ul.x = x1;
-  if (GetInterlacedFrameMode() == 0)
-    quad.ul.y = pen_y + glyph->oy;
-  else
-    quad.ul.y = (float)pen_y + ((float)glyph->oy / 2.0f);
-  quad.ul.u = u1;
-  quad.ul.v = glyph->allocation->y;
-
-  quad.br.x = x2;
-  if (GetInterlacedFrameMode() == 0)
-    quad.br.y = quad.ul.y + glyph->height;
-  else
-    quad.br.y = quad.ul.y + ((float)glyph->height / 2.0f);
-  quad.br.u = u2;
-  quad.br.v = glyph->allocation->y + glyph->height;
-
-  quad.txt = &glyph->atlas->surface;
-  fntDrawQuad(&quad);
-}
-
 #ifndef __RTL
 int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, uint64_t colour) {
   if (!fntIdValid(id))
@@ -670,81 +626,6 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
   }
 
   return pen_x;
-}
-
-int fntRenderStringSliding(int id, int x, int y, short aligned, size_t width, size_t height, float offset, const char *string,
-                           uint64_t colour) {
-  if (!fntIdValid(id))
-    return 0;
-  if (!string)
-    return 0;
-
-  if (offset < 0)
-    offset = 0;
-  if (width == 0 || offset <= 0.0f)
-    return fntRenderString(id, x, y, aligned, width, height, string, colour);
-
-  // wait for font lock to unlock
-  WaitSema(gFontSemaId);
-  font_t *font = &fonts[id];
-  SignalSema(gFontSemaId);
-
-  if (aligned & ALIGN_HCENTER) {
-    if (width) {
-      x -= min(fntCalcDimensions(id, string), width) >> 1;
-    } else {
-      x -= fntCalcDimensions(id, string) >> 1;
-    }
-  }
-
-  if (aligned & ALIGN_VCENTER) {
-    y += (FNTSYS_CHAR_SIZE - 4) >> 1;
-  } else {
-    y += (FNTSYS_CHAR_SIZE - 2);
-  }
-
-  quad.color = colour;
-
-  float clipLeft = x;
-  float clipRight = x + width;
-  float pen_x = x - offset;
-  int ymax = y + height;
-
-  use_kerning = FT_HAS_KERNING(font->face);
-  state = UTF8_ACCEPT;
-  previous = 0;
-
-  for (; *string; ++string) {
-    if (utf8Decode(&state, &codepoint, *string))
-      continue;
-
-    glyph = fntCacheGlyph(font, codepoint);
-    if (!glyph)
-      continue;
-
-    if (use_kerning && previous) {
-      glyph_index = FT_Get_Char_Index(font->face, codepoint);
-      if (glyph_index) {
-        FT_Get_Kerning(font->face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
-        pen_x += delta.x >> 6;
-      }
-      previous = glyph_index;
-    }
-
-    if (height && y > ymax)
-      break;
-
-    if (codepoint == '\n') {
-      pen_x = x - offset;
-      y += 19;
-      continue;
-    }
-
-    fntRenderGlyphClippedX(glyph, pen_x, y, clipLeft, clipRight);
-    pen_x += glyph->shx >> 6;
-  }
-
-  return (int)pen_x;
 }
 
 #else
@@ -896,13 +777,6 @@ int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t he
   }
 
   return rmUnScaleX(pen_x);
-}
-
-int fntRenderStringSliding(int id, int x, int y, short aligned, size_t width, size_t height, float offset, const char *string,
-                           uint64_t colour) {
-  if (offset < 0)
-    offset = 0;
-  return fntRenderString(id, x - (int)offset, y, aligned, width, height, string, colour);
 }
 #endif
 

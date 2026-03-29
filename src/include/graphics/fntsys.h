@@ -42,10 +42,6 @@ void fntUpdateAspectRatio();
 // Renders a text with specified window dimensions
 int fntRenderString(int id, int x, int y, short aligned, size_t width, size_t height, const char *string, uint64_t colour);
 
-// Renders a text inside a fixed window while applying a horizontal pixel offset (for smooth ticker/marquee).
-int fntRenderStringSliding(int id, int x, int y, short aligned, size_t width, size_t height, float offset, const char *string,
-                           uint64_t colour);
-
 // Replaces spaces with newlines so that the text fits into the specified width. Destructive - modifies the given string!
 void fntFitString(int id, char *string, size_t width);
 

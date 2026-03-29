@@ -144,7 +144,7 @@ local function run(ctx)
   if not canMovePaths then
     confirmMoveState()
   end
-  local isFmcbEntry = (not isBoot) and (ctx.fileType == "freemcboot_cnf")
+  local isFmcbEntry = (not isBoot) and ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot"))
   local maxPathsPerEntry = (isFmcbEntry and ((_.config_options and _.config_options.FMCB_MAX_PATHS_PER_ENTRY) or 3)) or nil
   local canAddPathBase = (not isFmcbEntry) or (pathRows < maxPathsPerEntry)
   local canAddPath = canAddPathBase and (not hasFirstExclusivePath)
@@ -262,6 +262,7 @@ local function run(ctx)
     _.w - 2 * _.MARGIN_X)
 
   local function openPathPicker(editIdx)
+    local pickerContext = isBoot and "mbr" or (isFmcbEntry and "fmcb_entry" or "osdmenu")
     ctx.editKey = nil
     ctx.pathPickerForEntryIdx = isBoot and nil or ctx.entryIdx
     ctx.pathPickerBootKey = isBoot and ctx.bootKey or nil
@@ -275,10 +276,10 @@ local function run(ctx)
     ctx.pathPickerEditIdx = editIdx
     ctx.pathPickerInsertBelow = nil
     ctx.pathPickerSub = "device"
-    ctx.pathList = _.file_selector.getDevices(isBoot and "mbr" or "osdmenu") or {}
+    ctx.pathList = _.file_selector.getDevices(pickerContext) or {}
     ctx.pathPickerSel = ctx.pathPickerSel or 1
     ctx.pathPickerScroll = ctx.pathPickerScroll or 0
-    ctx.pathPickerContext = isBoot and "mbr" or "osdmenu"
+    ctx.pathPickerContext = pickerContext
     ctx.pathPickerReturnState = "entry_paths"
     ctx.state = "path_picker"
   end

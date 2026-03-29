@@ -873,8 +873,8 @@ function common.centeredListScroll(sel, total, maxVisible)
   return scroll
 end
 
--- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee:
--- hold at start, scroll right, hold at end, then reset to start and repeat.
+-- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee
+-- (hold at start, scroll right, hold at end, then repeat). Unselected rows are truncated.
 function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
   local raw = tostring(text or "")
   if maxPixels <= 0 or raw == "" then return raw end
@@ -942,8 +942,6 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
       scale = s,
       ticks = 0,
       visibleChars = nil,
-      stepDurations = nil,
-      travelSpan = nil,
       selected = true,
       truncated = nil,
     }
@@ -951,8 +949,6 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   elseif st.selected ~= true then
     st.ticks = 0
     st.visibleChars = nil
-    st.stepDurations = nil
-    st.travelSpan = nil
     st.selected = true
   end
 
@@ -970,45 +966,15 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local totalSteps = math.max(0, #raw - st.visibleChars)
   if totalSteps <= 0 then return raw end
 
-  local holdStart = (opts and tonumber(opts.holdStart)) or 36
-  local stepFrames = (opts and tonumber(opts.stepFrames)) or 5
-  local holdEnd = (opts and tonumber(opts.holdEnd)) or 52
-  local pingPong = false
-  if opts and opts.pingPong ~= nil then
-    pingPong = (opts.pingPong == true)
-  end
+  local holdStart = (opts and tonumber(opts.holdStart)) or 45
+  local stepFrames = (opts and tonumber(opts.stepFrames)) or 8
+  local holdEnd = (opts and tonumber(opts.holdEnd)) or 45
   if holdStart < 0 then holdStart = 0 end
   if holdEnd < 0 then holdEnd = 0 end
   if stepFrames < 1 then stepFrames = 1 end
 
-  -- Smoothness improvement: keep a near-constant pixel-rate across proportional glyph widths.
-  -- This avoids abrupt jumps on wide characters while preserving average speed.
-  local stepDurations = st.stepDurations
-  local travelSpan = st.travelSpan
-  if (not stepDurations) or (not travelSpan) or (#stepDurations ~= totalSteps) then
-    stepDurations = {}
-    travelSpan = 0
-    local baseCharW = math.max(1, math.floor(8 * s + 0.5))
-    local pxPerFrame = (opts and tonumber(opts.pixelsPerFrame)) or (baseCharW / stepFrames)
-    if pxPerFrame <= 0 then pxPerFrame = 1 end
-    for idx = 1, totalSteps do
-      local ch = raw:sub(idx, idx)
-      local cw = common.calcTextWidth(font, ch, s) or baseCharW
-      local dur = math.max(1, math.floor((cw / pxPerFrame) + 0.5))
-      stepDurations[idx] = dur
-      travelSpan = travelSpan + dur
-    end
-    st.stepDurations = stepDurations
-    st.travelSpan = travelSpan
-  end
-
   st.ticks = (st.ticks or 0) + 1
-  local cycleLen
-  if pingPong then
-    cycleLen = holdStart + travelSpan + holdEnd + travelSpan
-  else
-    cycleLen = holdStart + travelSpan + holdEnd
-  end
+  local cycleLen = holdStart + totalSteps * stepFrames + holdEnd
   local ticks = st.ticks
   if ticks >= cycleLen then
     st.ticks = 0
@@ -1018,30 +984,8 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local startIdx
   if ticks < holdStart then
     startIdx = 1
-  elseif ticks < holdStart + travelSpan then
-    local t = ticks - holdStart
-    local acc = 0
-    startIdx = totalSteps
-    for idx = 1, totalSteps do
-      acc = acc + (stepDurations[idx] or stepFrames)
-      if t < acc then
-        startIdx = idx
-        break
-      end
-    end
-  elseif ticks < holdStart + travelSpan + holdEnd then
-    startIdx = totalSteps + 1
-  elseif pingPong then
-    local backTicks = ticks - (holdStart + travelSpan + holdEnd)
-    local acc = 0
-    startIdx = 1
-    for rev = totalSteps, 1, -1 do
-      acc = acc + (stepDurations[rev] or stepFrames)
-      if backTicks < acc then
-        startIdx = rev
-        break
-      end
-    end
+  elseif ticks < holdStart + totalSteps * stepFrames then
+    startIdx = 1 + math.floor((ticks - holdStart) / stepFrames)
   else
     startIdx = totalSteps + 1
   end
@@ -1052,101 +996,11 @@ end
 -- Value-column marquee/truncation helper with slower defaults than list rows.
 function common.fitValueText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
   local cfg = {
-    holdStart = (opts and tonumber(opts.holdStart)) or 44,
-    stepFrames = (opts and tonumber(opts.stepFrames)) or 12,
-    holdEnd = (opts and tonumber(opts.holdEnd)) or 60,
-    pingPong = (opts and opts.pingPong),
+    holdStart = (opts and tonumber(opts.holdStart)) or 50,
+    stepFrames = (opts and tonumber(opts.stepFrames)) or 18,
+    holdEnd = (opts and tonumber(opts.holdEnd)) or 70,
   }
   return common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, cfg)
-end
-
--- Draw a smooth, clipped one-way ticker (hold start -> slide -> hold end -> reset).
--- Uses Font.ftPrintSlide when available; falls back to fitListRowText-based behavior otherwise.
-function common.drawTickerText(ctx, stateKey, font, drawMode, x, y, maxPixels, scale, text, color, opts, drawHeight)
-  local raw = tostring(text or "")
-  local maxW = tonumber(maxPixels) or 0
-  if raw == "" or maxW <= 0 then return end
-  local s = tonumber(scale) or 1
-  local col = color or common.WHITE
-  local textW = common.calcTextWidth(font, raw, s) or 0
-  if textW <= maxW then
-    common.drawText(font, drawMode, x, y, s, raw, col, drawHeight)
-    return
-  end
-
-  if not ctx or not stateKey then
-    local fallback = common.truncateTextToWidth(font, raw, maxW, s)
-    common.drawText(font, drawMode, x, y, s, fallback, col, drawHeight)
-    return
-  end
-
-  local holdStart = (opts and tonumber(opts.holdStart)) or 36
-  local holdEnd = (opts and tonumber(opts.holdEnd)) or 52
-  local stepFrames = (opts and tonumber(opts.stepFrames)) or 5
-  if holdStart < 0 then holdStart = 0 end
-  if holdEnd < 0 then holdEnd = 0 end
-  if stepFrames < 1 then stepFrames = 1 end
-
-  local store = ctx._tickerSlideStates
-  if not store then
-    store = {}
-    ctx._tickerSlideStates = store
-  end
-  local st = store[stateKey]
-  local baseCharW = math.max(1, math.floor((8 * s) + 0.5))
-  local pxPerFrame = (opts and tonumber(opts.pixelsPerFrame)) or (baseCharW / stepFrames)
-  if pxPerFrame <= 0 then pxPerFrame = 1 end
-  local totalPx = math.max(1, math.floor((textW - maxW) + 0.5))
-
-  if (not st) or st.text ~= raw or st.maxPixels ~= maxW or st.scale ~= s then
-    local travelTicks = math.max(1, math.ceil(totalPx / pxPerFrame))
-    st = {
-      text = raw,
-      maxPixels = maxW,
-      scale = s,
-      pxPerFrame = pxPerFrame,
-      totalPx = totalPx,
-      travelTicks = travelTicks,
-      ticks = 0,
-    }
-    store[stateKey] = st
-  end
-
-  st.ticks = (st.ticks or 0) + 1
-  local cycleLen = holdStart + st.travelTicks + holdEnd
-  local ticks = st.ticks
-  if ticks >= cycleLen then
-    st.ticks = 0
-    ticks = 0
-  end
-
-  local offsetPx = 0
-  if ticks < holdStart then
-    offsetPx = 0
-  elseif ticks < holdStart + st.travelTicks then
-    offsetPx = (ticks - holdStart) * st.pxPerFrame
-  else
-    offsetPx = st.totalPx
-  end
-  if offsetPx < 0 then offsetPx = 0 end
-  if offsetPx > st.totalPx then offsetPx = st.totalPx end
-
-  if drawMode == "ftPrint" and Font and Font.ftPrintSlide then
-    local ix = math.floor(tonumber(x) or 0)
-    local iy = math.floor(tonumber(y) or 0)
-    local iw = math.max(1, math.floor(maxW + 0.5))
-    local h = (drawHeight and drawHeight > 0) and drawHeight or
-        ((_G.CONFIG_UI and _G.CONFIG_UI.currentDrawHeight) or common.FT_DRAW_H)
-    Font.ftPrintSlide(font, ix, iy, ALIGN_NONE, iw, h, offsetPx, raw, col)
-  else
-    local fallback = common.fitListRowText(ctx, stateKey .. "_fallback", font, raw, maxW, s, true, {
-      holdStart = holdStart,
-      stepFrames = stepFrames,
-      holdEnd = holdEnd,
-      pingPong = false,
-    })
-    common.drawText(font, drawMode, x, y, s, fallback, col, drawHeight)
-  end
 end
 
 function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
