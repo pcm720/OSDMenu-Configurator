@@ -34,6 +34,12 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local function isE1LockedPath(pathVal)
+    local p = tostring(pathVal or "")
+    if p:lower() == "cdrom" then return true end
+    local up = p:upper()
+    return up == "OSDSYS" or up == "POWEROFF"
+  end
   local isBoot = not not (ctx.bootKey and (ctx.context == "mbr" or ctx.fileType == "osdmbr_cnf"))
   if not ctx.lines then
     ctx.state = isBoot and "editor" or "menu_entry_edit"; return
@@ -48,18 +54,21 @@ local function run(ctx)
   local paths = {}
   local hasArgsPaths = false
   local hasSpecialArgsPath = false
+  local hasFirstExclusivePath = false
   local function buildPathScan()
     local outPaths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
     local outHasArgs = false
     local outHasSpecialArgs = false
+    local outHasFirstExclusive = false
     for i, p in ipairs(outPaths) do
       local pv = type(p) == "table" and p.value or p
       local flags = _.file_selector.getPathFlags and _.file_selector.getPathFlags(pv) or {}
       if not flags.noargs then outHasArgs = true end
       if flags.specialargs then outHasSpecialArgs = true end
+      if i == 1 and isE1LockedPath(pv) then outHasFirstExclusive = true end
     end
-    return outPaths, outHasArgs, outHasSpecialArgs
+    return outPaths, outHasArgs, outHasSpecialArgs, outHasFirstExclusive
   end
   local function getPathScanCache()
     local cache = ctx.entryPathsScanCache
@@ -67,7 +76,7 @@ local function run(ctx)
         cache.isBoot == isBoot and cache.entryIdx == (ctx.entryIdx or 0) and cache.bootKey == (ctx.bootKey or "") then
       return cache
     end
-    local outPaths, outHasArgs, outHasSpecialArgs = buildPathScan()
+    local outPaths, outHasArgs, outHasSpecialArgs, outHasFirstExclusive = buildPathScan()
     cache = {
       sceneEpoch = sceneEpoch,
       linesRef = ctx.lines,
@@ -77,6 +86,7 @@ local function run(ctx)
       paths = outPaths,
       hasArgsPaths = outHasArgs,
       hasSpecialArgsPath = outHasSpecialArgs,
+      hasFirstExclusivePath = outHasFirstExclusive,
     }
     ctx.entryPathsScanCache = cache
     return cache
@@ -88,6 +98,7 @@ local function run(ctx)
     paths = cache.paths or {}
     hasArgsPaths = cache.hasArgsPaths and true or false
     hasSpecialArgsPath = cache.hasSpecialArgsPath and true or false
+    hasFirstExclusivePath = cache.hasFirstExclusivePath and true or false
   end
   applyPathScan(getPathScanCache())
   local function refreshPaths()
@@ -135,7 +146,8 @@ local function run(ctx)
   end
   local isFmcbEntry = (not isBoot) and (ctx.fileType == "freemcboot_cnf")
   local maxPathsPerEntry = (isFmcbEntry and ((_.config_options and _.config_options.FMCB_MAX_PATHS_PER_ENTRY) or 3)) or nil
-  local canAddPath = (not isFmcbEntry) or (pathRows < maxPathsPerEntry)
+  local canAddPathBase = (not isFmcbEntry) or (pathRows < maxPathsPerEntry)
+  local canAddPath = canAddPathBase and (not hasFirstExclusivePath)
   local total = pathRows
   if isBoot and (hasArgsPaths or hasSpecialArgsPath) then total = total + 1 end -- Arguments or Launch Disc options row
   if ctx.entryPathSel < 1 then ctx.entryPathSel = 1 end

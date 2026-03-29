@@ -873,9 +873,8 @@ function common.centeredListScroll(sel, total, maxVisible)
   return scroll
 end
 
--- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee.
--- Default behavior is ping-pong (hold at start, scroll right, hold at end, scroll left, repeat)
--- which avoids abrupt snap-backs and feels smoother.
+-- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee:
+-- hold at start, scroll right, hold at end, then reset to start and repeat.
 function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
   local raw = tostring(text or "")
   if maxPixels <= 0 or raw == "" then return raw end
@@ -967,10 +966,10 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local totalSteps = math.max(0, #raw - st.visibleChars)
   if totalSteps <= 0 then return raw end
 
-  local holdStart = (opts and tonumber(opts.holdStart)) or 28
-  local stepFrames = (opts and tonumber(opts.stepFrames)) or 4
-  local holdEnd = (opts and tonumber(opts.holdEnd)) or 28
-  local pingPong = true
+  local holdStart = (opts and tonumber(opts.holdStart)) or 36
+  local stepFrames = (opts and tonumber(opts.stepFrames)) or 5
+  local holdEnd = (opts and tonumber(opts.holdEnd)) or 36
+  local pingPong = false
   if opts and opts.pingPong ~= nil then
     pingPong = (opts.pingPong == true)
   end
@@ -1012,9 +1011,9 @@ end
 -- Value-column marquee/truncation helper with slower defaults than list rows.
 function common.fitValueText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
   local cfg = {
-    holdStart = (opts and tonumber(opts.holdStart)) or 36,
-    stepFrames = (opts and tonumber(opts.stepFrames)) or 10,
-    holdEnd = (opts and tonumber(opts.holdEnd)) or 50,
+    holdStart = (opts and tonumber(opts.holdStart)) or 44,
+    stepFrames = (opts and tonumber(opts.stepFrames)) or 12,
+    holdEnd = (opts and tonumber(opts.holdEnd)) or 60,
     pingPong = (opts and opts.pingPong),
   }
   return common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, cfg)

@@ -141,37 +141,60 @@ local function clearConfigOpenPickerState(ctx)
   ctx.pathPickerLockedDeviceStarted = nil
 end
 
-local function countOtherTargetPaths(ctx)
+local function getPathFlagsCaseAware(fileSelector, pathVal)
+  local getPathFlags = fileSelector and fileSelector.getPathFlags
+  if not getPathFlags then return {} end
+  local flags = getPathFlags(pathVal) or {}
+  if (not flags.exclusive) and type(pathVal) == "string" then
+    local lower = pathVal:lower()
+    if lower ~= pathVal then
+      local lowerFlags = getPathFlags(lower) or {}
+      if lowerFlags.exclusive then
+        flags = lowerFlags
+      end
+    end
+  end
+  return flags
+end
+
+local function isE1LockedPath(pathVal)
+  local p = tostring(pathVal or "")
+  if p:lower() == "cdrom" then return true end
+  local up = p:upper()
+  return up == "OSDSYS" or up == "POWEROFF"
+end
+
+local function getOtherTargetPathStats(ctx)
   local _ = ctx._
   local editIdx = tonumber(ctx.pathPickerEditIdx)
-  local count = 0
+  local out = { count = 0, firstExclusive = false, firstCdrom = false }
+  local paths = nil
   if ctx.pathPickerForEntryIdx and ctx.lines then
-    local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
-    for i = 1, #paths do
-      if not editIdx or i ~= editIdx then
-        local item = paths[i]
-        local pv = type(item) == "table" and item.value or item
-        if pv and pv ~= "" then
-          count = count + 1
-        end
+    paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+  elseif ctx.pathPickerBootKey and ctx.lines then
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+  end
+  if not paths then return out end
+
+  -- E1-only rule: only the first path controls whether additional paths are blocked.
+  if (not editIdx or editIdx ~= 1) and paths[1] then
+    local firstPv = type(paths[1]) == "table" and paths[1].value or paths[1]
+    if firstPv and firstPv ~= "" then
+      out.firstExclusive = isE1LockedPath(firstPv) and true or false
+      out.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
+    end
+  end
+
+  for i = 1, #paths do
+    if not editIdx or i ~= editIdx then
+      local item = paths[i]
+      local pv = type(item) == "table" and item.value or item
+      if pv and pv ~= "" then
+        out.count = out.count + 1
       end
     end
-    return count
   end
-  if ctx.pathPickerBootKey and ctx.lines then
-    local paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
-    for i = 1, #paths do
-      if not editIdx or i ~= editIdx then
-        local item = paths[i]
-        local pv = type(item) == "table" and item.value or item
-        if pv and pv ~= "" then
-          count = count + 1
-        end
-      end
-    end
-    return count
-  end
-  return 0
+  return out
 end
 
 local function showExclusivePathWarning(ctx, pathVal)
@@ -195,23 +218,20 @@ local function showExclusivePathWarning(ctx, pathVal)
   }
 end
 
-local function canUseExclusivePath(ctx, pathVal)
+local function canUsePathSelection(ctx, pathVal)
   local _ = ctx._
-  local getPathFlags = _.file_selector and _.file_selector.getPathFlags
-  local flags = (getPathFlags and getPathFlags(pathVal)) or {}
-  if (not flags.exclusive) and getPathFlags and type(pathVal) == "string" then
-    local lower = pathVal:lower()
-    if lower ~= pathVal then
-      local lowerFlags = getPathFlags(lower) or {}
-      if lowerFlags.exclusive then
-        flags = lowerFlags
-      end
-    end
+  local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
+  local stats = getOtherTargetPathStats(ctx)
+  if flags.exclusive then
+    if stats.count == 0 then return true end
+    showExclusivePathWarning(ctx, pathVal)
+    return false
   end
-  if not flags.exclusive then return true end
-  if countOtherTargetPaths(ctx) == 0 then return true end
-  showExclusivePathWarning(ctx, pathVal)
-  return false
+  if stats.firstExclusive then
+    showExclusivePathWarning(ctx, stats.firstCdrom and "cdrom" or pathVal)
+    return false
+  end
+  return true
 end
 
 local function leaveLockedConfigBrowse(ctx)
@@ -301,7 +321,7 @@ local function applyManualPath(ctx, val)
     end
     val = normalizedVal
   end
-  if not canUseExclusivePath(ctx, val) then
+  if not canUsePathSelection(ctx, val) then
     ctx.state = "path_picker"
     ctx.pathPickerSub = "device"
     ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
@@ -651,10 +671,12 @@ local function run(ctx)
           if devIdx < 1 or devIdx > #ctx.pathList then return nil end
           return ctx.pathList[devIdx]
         end
-        local hasOtherPaths = countOtherTargetPaths(ctx) > 0
+        local otherStats = getOtherTargetPathStats(ctx)
         local function isGreyed(e)
           if not e then return true end
-          return (e.exclusive and hasOtherPaths) or false
+          if e.exclusive then return otherStats.count > 0 end
+          if otherStats.firstExclusive then return true end
+          return false
         end
         local function isSelectable(listIdx)
           if includeManualEntry and listIdx == 1 then return true end
@@ -739,7 +761,7 @@ local function run(ctx)
               showExclusivePathWarning(ctx, e and e.name)
             elseif e.special then
               local pathVal = e.name or ""
-              if canUseExclusivePath(ctx, pathVal) then
+              if canUsePathSelection(ctx, pathVal) then
                 if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
                 if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
                 ctx.pathList = nil
@@ -897,6 +919,9 @@ local function run(ctx)
       if not p then p = {} end
       local partFull = p.full or ("hdd0:" .. (p.name or ""))
       local val = partFull .. ":PATINFO"
+      if not canUsePathSelection(ctx, val) then
+        return
+      end
       if applyBootPathAndReturn(ctx, val) then
       elseif applyBblHotkeyPathAndReturn(ctx, val) then
       elseif applyBblIrxPathAndReturn(ctx, val) then
@@ -1104,6 +1129,9 @@ local function run(ctx)
               local rest = rawPath:sub(#mp + 1):gsub("^/", "")
               val = ctx.pathPickerBdmPrefix .. ":" .. (rest ~= "" and "/" .. rest or "")
             end
+          end
+          if not canUsePathSelection(ctx, val) then
+            return
           end
           local openedConfig = false
           if applyConfigOpenPathAndReturn(ctx, val) then

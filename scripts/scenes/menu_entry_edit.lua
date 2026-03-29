@@ -44,11 +44,7 @@ local function run(ctx)
         "Launch disc with override must be the only path for this entry."
     if _.common.fitListRowText then
       warn = _.common.fitListRowText(ctx, "menu_entry_edit_cdrom_warning", _.font, warn,
-        (_.w or 640) - 2 * _.MARGIN_X, 0.6, true, {
-          holdStart = 35,
-          stepFrames = 3,
-          holdEnd = 25,
-        })
+        (_.w or 640) - 2 * _.MARGIN_X, 0.6, true)
     elseif _.common.truncateTextToWidth then
       warn = _.common.truncateTextToWidth(_.font, warn, (_.w or 640) - 2 * _.MARGIN_X, 0.6)
     end
