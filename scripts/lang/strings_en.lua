@@ -101,7 +101,7 @@ strings.menu_entries = {
   paths_hint_items_with_disable = { { pad = "cross", label = "Edit", row = 1 }, { pad = "triangle", label = "Disable", layoutLabel = "Disable", row = 1 }, { pad = "square", label = "Remove", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "L1", label = "Up", row = 2 }, { pad = "select", label = "Add", row = 2 }, { pad = "R1", label = "Down", row = 2 } },
   args_for_entry_title = "Arguments for %s (entry %s)",
   cdrom_hint = "Launch disc entry: use Launch disc options for flags",
-  cdrom_exclusive_warning = "Launch disc with override must be the first and only path for this entry.",
+  cdrom_exclusive_warning = "Launch disc with override must be the only path for this entry.",
   invalid_selection_title = "Invalid selection",
   cdrom_toggle_hint_items = { { pad = "cross", label = "Toggle", row = 1 }, { pad = "circle", label = "Back", row = 1 }, { pad = "left", label = "Previous", row = 2 }, { pad = "right", label = "Next", row = 2 } },
   new_argument_prompt = "New argument",

@@ -101,7 +101,7 @@ strings.menu_entries = {
   paths_hint_items_with_disable = { { pad = "cross", label = "Bearbeiten", row = 1 }, { pad = "triangle", label = "Deaktivieren", layoutLabel = "Deaktivieren", row = 1 }, { pad = "square", label = "Entfernen", row = 1 }, { pad = "circle", label = "Zurueck", row = 1 }, { pad = "L1", label = "Hoch", row = 2 }, { pad = "select", label = "Hinzufuegen", row = 2 }, { pad = "R1", label = "Runter", row = 2 } },
   args_for_entry_title = "Argumente fuer %s (Eintrag %s)",
   cdrom_hint = "Disc-Starteintrag: Verwende die Optionen zum Disc-Start fuer Flags",
-  cdrom_exclusive_warning = "Disc mit Ueberschreibung muss der erste und einzige Pfad fuer diesen Eintrag sein.",
+  cdrom_exclusive_warning = "Disc mit Ueberschreibung muss der einzige Pfad fuer diesen Eintrag sein.",
   invalid_selection_title = "Ungueltige Auswahl",
   cdrom_toggle_hint_items = { { pad = "cross", label = "Umschalten", row = 1 }, { pad = "circle", label = "Zurueck", row = 1 }, { pad = "left", label = "Vorher", row = 2 }, { pad = "right", label = "Weiter", row = 2 } },
   new_argument_prompt = "Neues Argument",

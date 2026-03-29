@@ -873,8 +873,9 @@ function common.centeredListScroll(sel, total, maxVisible)
   return scroll
 end
 
--- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee
--- (hold at start, scroll right, hold at end, then repeat). Unselected rows are truncated.
+-- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee.
+-- Default behavior is ping-pong (hold at start, scroll right, hold at end, scroll left, repeat)
+-- which avoids abrupt snap-backs and feels smoother.
 function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
   local raw = tostring(text or "")
   if maxPixels <= 0 or raw == "" then return raw end
@@ -966,15 +967,25 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local totalSteps = math.max(0, #raw - st.visibleChars)
   if totalSteps <= 0 then return raw end
 
-  local holdStart = (opts and tonumber(opts.holdStart)) or 45
-  local stepFrames = (opts and tonumber(opts.stepFrames)) or 8
-  local holdEnd = (opts and tonumber(opts.holdEnd)) or 45
+  local holdStart = (opts and tonumber(opts.holdStart)) or 28
+  local stepFrames = (opts and tonumber(opts.stepFrames)) or 4
+  local holdEnd = (opts and tonumber(opts.holdEnd)) or 28
+  local pingPong = true
+  if opts and opts.pingPong ~= nil then
+    pingPong = (opts.pingPong == true)
+  end
   if holdStart < 0 then holdStart = 0 end
   if holdEnd < 0 then holdEnd = 0 end
   if stepFrames < 1 then stepFrames = 1 end
 
   st.ticks = (st.ticks or 0) + 1
-  local cycleLen = holdStart + totalSteps * stepFrames + holdEnd
+  local travelSpan = totalSteps * stepFrames
+  local cycleLen
+  if pingPong then
+    cycleLen = holdStart + travelSpan + holdEnd + travelSpan
+  else
+    cycleLen = holdStart + travelSpan + holdEnd
+  end
   local ticks = st.ticks
   if ticks >= cycleLen then
     st.ticks = 0
@@ -984,8 +995,13 @@ function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, sele
   local startIdx
   if ticks < holdStart then
     startIdx = 1
-  elseif ticks < holdStart + totalSteps * stepFrames then
+  elseif ticks < holdStart + travelSpan then
     startIdx = 1 + math.floor((ticks - holdStart) / stepFrames)
+  elseif ticks < holdStart + travelSpan + holdEnd then
+    startIdx = totalSteps + 1
+  elseif pingPong then
+    local backTicks = ticks - (holdStart + travelSpan + holdEnd)
+    startIdx = (totalSteps + 1) - math.floor(backTicks / stepFrames)
   else
     startIdx = totalSteps + 1
   end
@@ -996,9 +1012,10 @@ end
 -- Value-column marquee/truncation helper with slower defaults than list rows.
 function common.fitValueText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
   local cfg = {
-    holdStart = (opts and tonumber(opts.holdStart)) or 50,
-    stepFrames = (opts and tonumber(opts.stepFrames)) or 18,
-    holdEnd = (opts and tonumber(opts.holdEnd)) or 70,
+    holdStart = (opts and tonumber(opts.holdStart)) or 36,
+    stepFrames = (opts and tonumber(opts.stepFrames)) or 10,
+    holdEnd = (opts and tonumber(opts.holdEnd)) or 50,
+    pingPong = (opts and opts.pingPong),
   }
   return common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, cfg)
 end

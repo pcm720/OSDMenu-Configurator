@@ -101,7 +101,7 @@ strings.menu_entries = {
   paths_hint_items_with_disable = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Desactiver", layoutLabel = "Desactiver", row = 1 }, { pad = "square", label = "Supprimer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "L1", label = "Haut", row = 2 }, { pad = "select", label = "Ajouter", row = 2 }, { pad = "R1", label = "Bas", row = 2 } },
   args_for_entry_title = "Arguments pour %s (entree %s)",
   cdrom_hint = "Entree de lancement du disque : utilisez les options de lancement du disque pour les drapeaux",
-  cdrom_exclusive_warning = "Le lancement du disque avec remplacement doit etre le premier et l'unique chemin de cette entree.",
+  cdrom_exclusive_warning = "Le lancement du disque avec remplacement doit etre l'unique chemin de cette entree.",
   invalid_selection_title = "Selection invalide",
   cdrom_toggle_hint_items = { { pad = "cross", label = "Basculer", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "Precedent", row = 2 }, { pad = "right", label = "Suivant", row = 2 } },
   new_argument_prompt = "Nouvel argument",

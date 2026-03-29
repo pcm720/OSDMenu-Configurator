@@ -41,8 +41,15 @@ local function run(ctx)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
   if allowArgs and hasCdromPathConflict then
     local warn = _.menu_str.cdrom_exclusive_warning or
-        "Launch disc with override must be the first and only path for this entry."
-    if _.common.truncateTextToWidth then
+        "Launch disc with override must be the only path for this entry."
+    if _.common.fitListRowText then
+      warn = _.common.fitListRowText(ctx, "menu_entry_edit_cdrom_warning", _.font, warn,
+        (_.w or 640) - 2 * _.MARGIN_X, 0.6, true, {
+          holdStart = 35,
+          stepFrames = 3,
+          holdEnd = 25,
+        })
+    elseif _.common.truncateTextToWidth then
       warn = _.common.truncateTextToWidth(_.font, warn, (_.w or 640) - 2 * _.MARGIN_X, 0.6)
     end
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warn, _.HIGHLIGHT or _.DIM)
@@ -99,7 +106,7 @@ local function run(ctx)
           kind = "failed",
           title = _.menu_str.invalid_selection_title or "Invalid selection",
           detail = _.menu_str.cdrom_exclusive_warning or
-              "Launch disc with override must be the first and only path for this entry.",
+              "Launch disc with override must be the only path for this entry.",
           framesLeft = 120
         }
       else
