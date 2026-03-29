@@ -272,7 +272,7 @@ strings.options_osdmbr = {
   prefer_bbn = { label = "BBN bevorzugen", desc = "PSBBN beim Neustart laden" },
   app_gameid = { label = "Application visual game ID", desc = "Display visual Game ID for ELF files" },
   osd_screentype = { label = "OSD-Bildschirmtyp", desc = "OSD-Bildschirmtyp erzwingen (4:3, 16:9, Vollbild)" },
-  osd_language = { label = "OSD-Sprache", desc = "OSD-Sprache erzwingen (abhaengig vom Konsolenmodell). Konsole muss die gewaehlte Sprache unterstuetzen." },
+  osd_language = { label = "OSD-Sprache", desc = "OSD-Sprache erzwingen. Nicht unterstuetzte Auswahl faellt auf den Standard der Konsole zurueck." },
 }
 
 strings.options_bbl = {
