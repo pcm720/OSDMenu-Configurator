@@ -1060,6 +1060,95 @@ function common.fitValueText(ctx, stateKey, font, text, maxPixels, scale, select
   return common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, cfg)
 end
 
+-- Draw a smooth, clipped one-way ticker (hold start -> slide -> hold end -> reset).
+-- Uses Font.ftPrintSlide when available; falls back to fitListRowText-based behavior otherwise.
+function common.drawTickerText(ctx, stateKey, font, drawMode, x, y, maxPixels, scale, text, color, opts, drawHeight)
+  local raw = tostring(text or "")
+  local maxW = tonumber(maxPixels) or 0
+  if raw == "" or maxW <= 0 then return end
+  local s = tonumber(scale) or 1
+  local col = color or common.WHITE
+  local textW = common.calcTextWidth(font, raw, s) or 0
+  if textW <= maxW then
+    common.drawText(font, drawMode, x, y, s, raw, col, drawHeight)
+    return
+  end
+
+  if not ctx or not stateKey then
+    local fallback = common.truncateTextToWidth(font, raw, maxW, s)
+    common.drawText(font, drawMode, x, y, s, fallback, col, drawHeight)
+    return
+  end
+
+  local holdStart = (opts and tonumber(opts.holdStart)) or 36
+  local holdEnd = (opts and tonumber(opts.holdEnd)) or 52
+  local stepFrames = (opts and tonumber(opts.stepFrames)) or 5
+  if holdStart < 0 then holdStart = 0 end
+  if holdEnd < 0 then holdEnd = 0 end
+  if stepFrames < 1 then stepFrames = 1 end
+
+  local store = ctx._tickerSlideStates
+  if not store then
+    store = {}
+    ctx._tickerSlideStates = store
+  end
+  local st = store[stateKey]
+  local baseCharW = math.max(1, math.floor((8 * s) + 0.5))
+  local pxPerFrame = (opts and tonumber(opts.pixelsPerFrame)) or (baseCharW / stepFrames)
+  if pxPerFrame <= 0 then pxPerFrame = 1 end
+  local totalPx = math.max(1, math.floor((textW - maxW) + 0.5))
+
+  if (not st) or st.text ~= raw or st.maxPixels ~= maxW or st.scale ~= s then
+    local travelTicks = math.max(1, math.ceil(totalPx / pxPerFrame))
+    st = {
+      text = raw,
+      maxPixels = maxW,
+      scale = s,
+      pxPerFrame = pxPerFrame,
+      totalPx = totalPx,
+      travelTicks = travelTicks,
+      ticks = 0,
+    }
+    store[stateKey] = st
+  end
+
+  st.ticks = (st.ticks or 0) + 1
+  local cycleLen = holdStart + st.travelTicks + holdEnd
+  local ticks = st.ticks
+  if ticks >= cycleLen then
+    st.ticks = 0
+    ticks = 0
+  end
+
+  local offsetPx = 0
+  if ticks < holdStart then
+    offsetPx = 0
+  elseif ticks < holdStart + st.travelTicks then
+    offsetPx = (ticks - holdStart) * st.pxPerFrame
+  else
+    offsetPx = st.totalPx
+  end
+  if offsetPx < 0 then offsetPx = 0 end
+  if offsetPx > st.totalPx then offsetPx = st.totalPx end
+
+  if drawMode == "ftPrint" and Font and Font.ftPrintSlide then
+    local ix = math.floor(tonumber(x) or 0)
+    local iy = math.floor(tonumber(y) or 0)
+    local iw = math.max(1, math.floor(maxW + 0.5))
+    local h = (drawHeight and drawHeight > 0) and drawHeight or
+        ((_G.CONFIG_UI and _G.CONFIG_UI.currentDrawHeight) or common.FT_DRAW_H)
+    Font.ftPrintSlide(font, ix, iy, ALIGN_NONE, iw, h, offsetPx, raw, col)
+  else
+    local fallback = common.fitListRowText(ctx, stateKey .. "_fallback", font, raw, maxW, s, true, {
+      holdStart = holdStart,
+      stepFrames = stepFrames,
+      holdEnd = holdEnd,
+      pingPong = false,
+    })
+    common.drawText(font, drawMode, x, y, s, fallback, col, drawHeight)
+  end
+end
+
 function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   local c = color or common.WHITE
   local ix, iy = math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0)

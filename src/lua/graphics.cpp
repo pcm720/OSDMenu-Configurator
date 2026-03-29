@@ -170,6 +170,25 @@ static int lua_ftprint(lua_State *L) {
   return 0;
 }
 
+static int lua_ftprint_slide(lua_State *L) {
+  int argc = lua_gettop(L);
+  if (argc != 8 && argc != 9)
+    return luaL_error(L, "wrong number of arguments");
+  int fontid = luaL_checkinteger(L, 1);
+  int x = luaL_checkinteger(L, 2);
+  int y = luaL_checkinteger(L, 3);
+  int alignment = luaL_checkinteger(L, 4);
+  int width = luaL_checkinteger(L, 5);
+  int height = luaL_checkinteger(L, 6);
+  float offset = luaL_checknumber(L, 7);
+  const char *text = luaL_checkstring(L, 8);
+  Color color = 0x80808080;
+  if (argc == 9)
+    color = luaL_checkinteger(L, 9);
+  fntRenderStringSliding(fontid, x, y, alignment, width, height, offset, text, color);
+  return 0;
+}
+
 static int lua_ftCalcDimensions(lua_State *L) {
   if (lua_gettop(L) != 2)
     return luaL_error(L, "wrong number of arguments");
@@ -205,6 +224,7 @@ static const luaL_Reg Font_functions[] = {
     {"ftSetPixelSize", lua_ftSetPixelSize},
     {"ftSetCharSize", lua_ftSetCharSize},
     {"ftPrint", lua_ftprint},
+    {"ftPrintSlide", lua_ftprint_slide},
     {"ftCalcDimensions", lua_ftCalcDimensions},
     {"ftUnload", lua_ftunload},
     {"ftEnd", lua_ftend},

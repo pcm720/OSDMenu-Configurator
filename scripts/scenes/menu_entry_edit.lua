@@ -42,13 +42,19 @@ local function run(ctx)
   if allowArgs and hasCdromPathConflict then
     local warn = _.menu_str.cdrom_exclusive_warning or
         "Launch disc with override must be the only path for this entry."
-    if _.common.fitListRowText then
-      warn = _.common.fitListRowText(ctx, "menu_entry_edit_cdrom_warning", _.font, warn,
+    if _.common.drawTickerText then
+      _.common.drawTickerText(ctx, "menu_entry_edit_cdrom_warning", _.font, _.drawMode,
+        _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), (_.w or 640) - 2 * _.MARGIN_X, 0.6, warn, _.HIGHLIGHT or _.DIM)
+    elseif _.common.fitListRowText then
+      local warnFit = _.common.fitListRowText(ctx, "menu_entry_edit_cdrom_warning", _.font, warn,
         (_.w or 640) - 2 * _.MARGIN_X, 0.6, true)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.HIGHLIGHT or _.DIM)
     elseif _.common.truncateTextToWidth then
-      warn = _.common.truncateTextToWidth(_.font, warn, (_.w or 640) - 2 * _.MARGIN_X, 0.6)
+      local warnFit = _.common.truncateTextToWidth(_.font, warn, (_.w or 640) - 2 * _.MARGIN_X, 0.6)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.HIGHLIGHT or _.DIM)
+    else
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warn, _.HIGHLIGHT or _.DIM)
     end
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warn, _.HIGHLIGHT or _.DIM)
   end
   if ctx.entryEditSub < 1 then ctx.entryEditSub = 1 end
   if ctx.entryEditSub > #subOpts then ctx.entryEditSub = #subOpts end
