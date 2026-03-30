@@ -32,6 +32,10 @@ common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80)
 common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0)
 common.OPTION_HINT_COLOR           = Color.new(246, 231, 173) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
+common.PAD_LABEL_CROSS             = Color.new(86, 165, 255)  -- Blue (Cross)
+common.PAD_LABEL_SQUARE            = Color.new(255, 130, 196) -- Pink (Square)
+common.PAD_LABEL_TRIANGLE          = Color.new(115, 220, 130) -- Green (Triangle)
+common.PAD_LABEL_CIRCLE            = Color.new(255, 110, 110) -- Red (Circle)
 
 -- Layout
 common.FONT_SCALE                  = 0.9
@@ -182,6 +186,15 @@ end
 -- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
+  local function getPadLabelColor(padName, fallbackColor)
+    local key = tostring(padName or ""):lower()
+    if key == "cross" then return common.PAD_LABEL_CROSS end
+    if key == "square" then return common.PAD_LABEL_SQUARE end
+    if key == "triangle" then return common.PAD_LABEL_TRIANGLE end
+    if key == "circle" then return common.PAD_LABEL_CIRCLE end
+    if key == "start" or key == "l1" or key == "r1" then return common.WHITE end
+    return fallbackColor
+  end
   if hintItems and #hintItems > 0 then
     local iconScale = 0.6
     local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
@@ -299,7 +312,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             else
               textX = math.floor(slotCenter - textW / 2)
             end
-            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, color, textH)
+            local labelColor = getPadLabelColor(padName, color)
+            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
           end
         end
       end
