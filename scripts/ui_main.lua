@@ -85,8 +85,8 @@ local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
 
-local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE = common.PAD_UP, common.PAD_DOWN,
-    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE
+local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE, PAD_TRIANGLE = common.PAD_UP, common.PAD_DOWN,
+    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE, common.PAD_TRIANGLE
 
 local function openDbg(...)
   if _G and _G.CONFIG_UI_OPEN_DEBUG == false then return end
@@ -136,10 +136,31 @@ local function getLanguageHintLabel(main_str)
   return cleaned
 end
 
+local function getCreditsHintLabel(main_str)
+  local baseHint = main_str.main_hint_items or {}
+  local raw = main_str.main_credits or findHintLabel(baseHint, "triangle", "Credits")
+  local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if cleaned == "" then cleaned = "Credits" end
+  return cleaned
+end
+
+local MAIN_CREDITS_LINES = {
+  "Built Using:",
+  "-Enceladus",
+  "Thanks to:",
+  "-pcm720",
+  "-R3Z3N",
+  "-Berion",
+  "Translators:",
+  "-VizoR: Spanish",
+  "-nuno: Portugese",
+}
+
 local function buildMainBaseHintItems(main_str)
   local baseHint = main_str.main_hint_items or {}
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
   local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
+  local creditsLabel = getCreditsHintLabel(main_str)
   local out = {
     { pad = "cross", label = enterLabel, row = 1 },
     { pad = "circle", label = exitLabel, row = 1 },
@@ -147,6 +168,7 @@ local function buildMainBaseHintItems(main_str)
   if hasLanguageChoices() then
     table.insert(out, 2, { pad = "square", label = getLanguageHintLabel(main_str), row = 1 })
   end
+  table.insert(out, #out, { pad = "triangle", label = creditsLabel, row = 1 })
   return out
 end
 
@@ -159,6 +181,17 @@ local function buildMainLanguageOverlayHintItems(main_str)
   return {
     { pad = "cross", label = selectLabel, row = 1 },
     { pad = "square", label = languageLabel, row = 1 },
+    { pad = "circle", label = cancelLabel, row = 1 },
+  }
+end
+
+local function buildMainCreditsOverlayHintItems(main_str)
+  local base = main_str.cross_select_circle_back_items or {}
+  local cancelLabel = (strings and strings.menu_entries and strings.menu_entries.cancel_label) or
+      findHintLabel(base, "circle", "Back")
+  local creditsLabel = getCreditsHintLabel(main_str)
+  return {
+    { pad = "triangle", label = creditsLabel, row = 1 },
     { pad = "circle", label = cancelLabel, row = 1 },
   }
 end
@@ -750,6 +783,144 @@ local function runMain(s, pad)
       s.mainLangPromptAnim = nil
       s.mainLangPromptClosing = nil
     end
+    return
+  end
+
+  if s.mainCreditsPrompt then
+    local closing = s.mainCreditsPromptClosing == true
+    local anim = tonumber(s.mainCreditsPromptAnim)
+    if type(anim) ~= "number" then
+      anim = closing and 1 or 0
+    end
+    if closing then
+      anim = math.max(0, anim - (1 / 6))
+    else
+      anim = math.min(1, anim + (1 / 6))
+    end
+    s.mainCreditsPromptAnim = anim
+    drawMainBaseUi()
+
+    local lines = MAIN_CREDITS_LINES
+    local total = #lines
+    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
+    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+    local rowScale = titleScale
+    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
+    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
+        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local function textWidth(text, scale)
+      local useScale = scale or rowScale
+      if common.calcTextWidth then
+        return common.calcTextWidth(hintFont, tostring(text or ""), useScale)
+      end
+      local str = tostring(text or "")
+      return math.floor((8 * useScale) * #str)
+    end
+
+    local maxLabelWIntrinsic = 0
+    for i = 1, total do
+      local lw = textWidth(lines[i], rowScale)
+      if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+    end
+
+    local padX = math.floor((sc(8) or 8) + 0.5)
+    local padTop = math.floor((sc(6) or 6) + 0.5)
+    local padBottom = math.floor((sc(6) or 6) + 0.5)
+    local rowStep = textH + math.max(2, math.floor((sc(3) or 3) + 0.5))
+
+    local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
+    local hintGridXShift = common.PAD_HINT_GRID_X_SHIFT or 0
+    local hintGridExtraW = common.PAD_HINT_GRID_EXTRA_W or 0
+    local hintTotalW = ((s.w or 640) - (2 * M)) + hintGridExtraW
+    local hintXEff = M + sideMargin + hintGridXShift
+    local hintWidthEff = hintTotalW - (2 * sideMargin)
+    local slotW = hintWidthEff / 5
+    local triangleSlotLeft = hintXEff + (3 * slotW)
+    local triangleSlotCenter = triangleSlotLeft + (slotW / 2)
+    local circleSlotLeft = hintXEff + (4 * slotW)
+    local circleSlotCenter = circleSlotLeft + (slotW / 2)
+    local hintIconScale = 0.6
+    local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
+    local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
+    local triangleButtonLeft = math.floor(triangleSlotCenter - (hintIconW / 2))
+    local circleButtonLeft = math.floor(circleSlotCenter - (hintIconW / 2))
+    local desiredBoxX = triangleButtonLeft
+    local desiredRowLabelX = triangleButtonLeft + hintIconW + hintGap
+    local rowLabelOffset = desiredRowLabelX - desiredBoxX
+    if rowLabelOffset < padX then rowLabelOffset = padX end
+    local rightGap = math.max(3, math.floor((sc(4) or 4) + 0.5))
+    local targetRightX = circleButtonLeft - rightGap
+    local desiredToCircleW = math.floor(targetRightX - desiredBoxX + 0.5)
+    if desiredToCircleW < 90 then desiredToCircleW = 90 end
+    local contentW = math.max(90, math.floor((rowLabelOffset + maxLabelWIntrinsic + padX) + 0.5))
+    local boxW = math.max(desiredToCircleW, contentW)
+    local maxBoxW = (s.w or 640) - (2 * M)
+    if boxW > maxBoxW then boxW = maxBoxW end
+    local boxH = padTop + (total * rowStep) + padBottom
+
+    local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
+    local hintRowTop = math.floor(H) - hintRowH
+    local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((sc(2) or 2) + 0.5))
+    local slideDist = math.max(10, math.floor((sc(14) or 14) + 0.5))
+    local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
+    local boxX = desiredBoxX
+    local minX = M
+    local maxX = (s.w or 640) - boxW - M
+    if boxX < minX then boxX = minX end
+    if boxX > maxX then boxX = maxX end
+
+    if Graphics and Graphics.drawRect then
+      local alpha = math.floor(120 * anim + 0.5)
+      if alpha < 0 then alpha = 0 end
+      if alpha > 120 then alpha = 120 end
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, alpha))
+    end
+
+    local rowStartY = boxY + padTop
+    local rowLabelX = boxX + rowLabelOffset
+    local maxLabelW = (boxX + boxW) - padX - rowLabelX
+    if maxLabelW < 1 then maxLabelW = 1 end
+    for i = 1, total do
+      local y = rowStartY + (i - 1) * rowStep
+      local label = lines[i]
+      if common.fitListRowText then
+        label = common.fitListRowText(s, "main_credits_row_" .. tostring(i), hintFont, label, maxLabelW, rowScale, false)
+      elseif common.truncateTextToWidth then
+        label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+      end
+      dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, common.WHITE)
+    end
+
+    local hintItems = buildMainCreditsOverlayHintItems(main_str)
+    if Graphics and Graphics.drawRect then
+      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 255)
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowTop = math.floor(H) - hintRowH
+      local hintW = (s.w or 640) - (2 * M)
+      Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
+    end
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
+
+    if not closing then
+      if (pad & PAD_TRIANGLE) ~= 0 or (pad & PAD_CIRCLE) ~= 0 then
+        s.mainCreditsPromptClosing = true
+        if s.mainCreditsPromptAnim < 0.001 then
+          s.mainCreditsPromptAnim = 1
+        end
+      end
+    elseif anim <= 0.001 then
+      s.mainCreditsPrompt = nil
+      s.mainCreditsPromptAnim = nil
+      s.mainCreditsPromptClosing = nil
+    end
+    return
+  end
+
+  if (pad & PAD_TRIANGLE) ~= 0 then
+    s.mainCreditsPrompt = true
+    s.mainCreditsPromptAnim = 0
+    s.mainCreditsPromptClosing = nil
+    drawMainBaseUi()
     return
   end
 

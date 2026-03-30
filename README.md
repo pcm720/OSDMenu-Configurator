@@ -4,7 +4,8 @@ A PlayStation 2 GUI application for editing FMCB, FHDB, OSDMenu, OSDMenu MBR, HO
 
 **This application is based on [Enceladus](https://github.com/DanielSant0s/Enceladus)** by Daniel Santos.  
 Enceladus provides the Lua bindings, graphics, system, and I/O APIs.  
-See the [Enceladus repository](https://github.com/DanielSant0s/Enceladus) for the full project, documentation, and thanks.
+See the [Enceladus repository](https://github.com/DanielSant0s/Enceladus) for the full project, documentation, and thanks.  
+Forked from [OSDMenu Configurator](https://github.com/pcm720/OSDMenu-Configurator) by @pcm720 to add the other configurators and simpler UX
 
 ## Usage
 
@@ -215,3 +216,5 @@ Distributed under the GNU GPL-3.0 License. See `LICENSE` for details.
 
 - Spanish
   - VizoR
+- Portuguese
+  - nuno
