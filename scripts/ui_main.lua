@@ -144,17 +144,19 @@ local function getCreditsHintLabel(main_str)
   return cleaned
 end
 
-local MAIN_CREDITS_LINES = {
-  "Built Using:",
-  "-Enceladus",
-  "Thanks to:",
-  "-pcm720",
-  "-R3Z3N",
-  "-Berion",
-  "Translators:",
-  "-VizoR: Spanish",
-  "-nuno: Portugese",
-}
+local function buildMainCreditsLines(main_str)
+  return {
+    main_str.main_credits_built_using or "Built Using:",
+    "-Enceladus",
+    main_str.main_credits_thanks_to or "Thanks to:",
+    "-pcm720",
+    "-R3Z3N",
+    "-Berion",
+    main_str.main_credits_translators or "Translators:",
+    "-VizoR: Spanish",
+    "-nuno: Portugese",
+  }
+end
 
 local function buildMainBaseHintItems(main_str)
   local baseHint = main_str.main_hint_items or {}
@@ -800,7 +802,7 @@ local function runMain(s, pad)
     s.mainCreditsPromptAnim = anim
     drawMainBaseUi()
 
-    local lines = MAIN_CREDITS_LINES
+    local lines = buildMainCreditsLines(main_str)
     local total = #lines
     local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
     local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
