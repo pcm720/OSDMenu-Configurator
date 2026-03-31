@@ -202,8 +202,8 @@ end
 local function getVideoModeSpecForKey(modeKey)
   local key = trimString(modeKey):lower()
   local specs = {
-    -- 16:9 canvas for 720p to avoid stretched UI while keeping performance reasonable.
-    ["720p"] = { mode = _720p, width = 960, height = 540, interlace = NONINTERLACED, field = FRAME },
+    -- Use full 720p surface for best compatibility with GS timing/scalers.
+    ["720p"] = { mode = _720p, width = 1280, height = 720, interlace = NONINTERLACED, field = FRAME },
     ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
     ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
     ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },

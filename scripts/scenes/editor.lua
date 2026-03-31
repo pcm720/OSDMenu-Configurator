@@ -205,7 +205,7 @@ local function applyR3ConfiguratorVideoModeLive(value)
   end
   if not selected or type(selected.mode) ~= "number" then
     local modeMap = {
-      ["720p"] = { mode = _720p, width = 960, height = 540, interlace = NONINTERLACED, field = FRAME },
+      ["720p"] = { mode = _720p, width = 1280, height = 720, interlace = NONINTERLACED, field = FRAME },
       ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
       ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
       ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },
