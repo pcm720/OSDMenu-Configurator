@@ -1193,46 +1193,16 @@ local function appendUniquePath(paths, path)
   paths[#paths + 1] = path
 end
 
+local function isPrefixAvailable(prefix)
+  if not prefix or prefix == "" then return false end
+  local probe = tostring(prefix)
+  if probe:sub(-1) == ":" then probe = probe .. "/" end
+  return common.tryOpen(probe)
+end
+
 local function normalizeMountpoint(mp)
   if type(mp) ~= "string" or mp == "" then return nil end
   return (mp:sub(-1) == ":") and mp or (mp .. ":")
-end
-
-local function normalizeLaunchFamily(value)
-  local fam = tostring(value or ""):lower()
-  if fam == "mass" then fam = "usb" end
-  if fam == "usb" or fam == "mmce" or fam == "mx4sio" or fam == "ata" or fam == "hdd" or fam == "mc" or fam == "bdm" then
-    return fam
-  end
-  return nil
-end
-
-local function inferLaunchFamilyFromPath(path)
-  if type(path) ~= "string" or path == "" then return nil end
-  local p = path:lower()
-  if p:match("^mmce%d*:") then return "mmce" end
-  if p:match("^mass%d*:") then return "usb" end
-  if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end
-  if p:match("^mc%d:") then return "mc" end
-  return nil
-end
-
-local function getLaunchSourceFamily(s)
-  if type(s.launchSourceFamily) == "string" and s.launchSourceFamily ~= "" then
-    return s.launchSourceFamily
-  end
-  local family = nil
-  if System and System.getLaunchDeviceFamily then
-    local ok, val = pcall(System.getLaunchDeviceFamily)
-    if ok then family = normalizeLaunchFamily(val) end
-  end
-  if not family and System and System.currentDirectory then
-    local ok, cwd = pcall(System.currentDirectory)
-    if ok then family = inferLaunchFamilyFromPath(cwd) end
-  end
-  if not family then family = "unknown" end
-  s.launchSourceFamily = family
-  return family
 end
 
 local function getDeviceMountpoint(deviceId)
@@ -1248,54 +1218,40 @@ local function getDeviceMountpoint(deviceId)
   return nil
 end
 
-local function isPrefixAvailable(prefix)
-  if not prefix or prefix == "" then return false end
-  local probe = tostring(prefix)
-  if probe:sub(-1) == ":" then probe = probe .. "/" end
-  return common.tryOpen(probe)
+local function detectUsbSlotPresence(slotIdx)
+  if slotIdx == 0 then
+    local mp0 = getDeviceMountpoint("usb0")
+    return (mp0 and isPrefixAvailable(mp0)) or isPrefixAvailable("mass:") or isPrefixAvailable("mass0:")
+  end
+  local mp1 = getDeviceMountpoint("usb1")
+  return (mp1 and isPrefixAvailable(mp1)) or isPrefixAvailable("mass1:")
 end
 
-local function hasMountedUsbSlot(deviceId, fallbackPrefix)
-  local mountpoint = getDeviceMountpoint(deviceId)
-  if mountpoint and isPrefixAvailable(mountpoint) then
-    return true
-  end
-  return isPrefixAvailable(fallbackPrefix)
+local function detectMmceSlotPresence(slotIdx)
+  if slotIdx == 0 then return isPrefixAvailable("mmce0:") end
+  return isPrefixAvailable("mmce1:")
 end
 
-local function getSelectConfigDevicePresence(s)
-  local sceneEpoch = s._sceneEpoch or 0
-  local inputEpoch = s._inputEpoch or 0
-  local cache = s.selectConfigDevicePresenceCache
-  if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
-    return cache
+local function getSelectConfigDevicePresence(_s)
+  local usb0 = detectUsbSlotPresence(0) and true or false
+  local usb1 = detectUsbSlotPresence(1) and true or false
+  local mmce0 = detectMmceSlotPresence(0) and true or false
+  local mmce1 = detectMmceSlotPresence(1) and true or false
+
+  -- If probing cannot determine slots, fail open so users can still pick them.
+  if not usb0 and not usb1 then
+    usb0, usb1 = true, true
   end
-  local launchFamily = getLaunchSourceFamily(s)
-  local restrictToExistingRemovables = (launchFamily == "mmce" or launchFamily == "usb")
-  local mmce0Visible, mmce1Visible, usb0Visible, usb1Visible
-  if restrictToExistingRemovables then
-    mmce0Visible = isPrefixAvailable("mmce0:")
-    mmce1Visible = isPrefixAvailable("mmce1:")
-    usb0Visible = hasMountedUsbSlot("usb0", "mass:")
-    usb1Visible = hasMountedUsbSlot("usb1", "mass1:")
-  else
-    -- For non-USB/MMCE launch sources, keep legacy behavior: show these rows in fixed order.
-    mmce0Visible = true
-    mmce1Visible = true
-    usb0Visible = true
-    usb1Visible = true
+  if not mmce0 and not mmce1 then
+    mmce0, mmce1 = true, true
   end
-  cache = {
-    sceneEpoch = sceneEpoch,
-    inputEpoch = inputEpoch,
-    launchFamily = launchFamily,
-    mmce0 = mmce0Visible,
-    mmce1 = mmce1Visible,
-    usb0 = usb0Visible,
-    usb1 = usb1Visible,
+
+  return {
+    mmce0 = mmce0,
+    mmce1 = mmce1,
+    usb0 = usb0,
+    usb1 = usb1,
   }
-  s.selectConfigDevicePresenceCache = cache
-  return cache
 end
 
 local function buildBblSourceOptions(s, iniFileType)
@@ -1332,6 +1288,7 @@ local function buildBblSourceOptions(s, iniFileType)
       browseDeviceType = browseDeviceType,
     }
   end
+
   if presentMc[0] then
     addDevice("mc", dev_str.memory_card_1 or "Memory Card 1", { "mc0:/SYS-CONF/" .. iniName }, "mc0:")
   end
