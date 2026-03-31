@@ -1087,11 +1087,11 @@ local function runMain(s, pad)
     end
   end
 
-  if (pad & PAD_UP) ~= 0 and s.mainSel > 1 then
-    s.mainSel = s.mainSel - 1
+  if (pad & PAD_UP) ~= 0 then
+    s.mainSel = common.wrapListSelection(s.mainSel, #s.main, -1)
   end
-  if (pad & PAD_DOWN) ~= 0 and s.mainSel < #s.main then
-    s.mainSel = s.mainSel + 1
+  if (pad & PAD_DOWN) ~= 0 then
+    s.mainSel = common.wrapListSelection(s.mainSel, #s.main, 1)
   end
   s.mainOverlayLogoKey = getMainOverlayLogoKey(s.mainSel)
   local openedExitPrompt = false

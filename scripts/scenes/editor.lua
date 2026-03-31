@@ -321,6 +321,27 @@ local function applyOsdVisualPreset(ctx, _, preset)
   end
 end
 
+local R3_PRESET_COLOR_KEYS = {
+  "cross", "square", "triangle", "circle",
+  "selected", "selected_dim", "unselected", "dim", "background"
+}
+
+local function applyR3ColorPreset(ctx, _, preset)
+  if not (ctx and _ and ctx.lines and preset) then return end
+  for i = 1, #R3_PRESET_COLOR_KEYS do
+    local key = R3_PRESET_COLOR_KEYS[i]
+    local value = preset[key]
+    if value ~= nil then
+      setConfigValue(ctx, _, key, tostring(value))
+    end
+  end
+  if _.common and _.common.refreshConfigModified then
+    _.common.refreshConfigModified(ctx)
+  else
+    ctx.configModified = true
+  end
+end
+
 local function valuesEquivalent(a, b)
   local sa = tostring(a or "")
   local sb = tostring(b or "")
@@ -1795,10 +1816,6 @@ local function run(ctx)
     end
 
     if ctx.editorR3ColorPresetOpen and selOpt and selOpt.optType == "color" and isR3ConfiguratorColorKey(ctx, selOpt.key) then
-      local targetKey = tostring(ctx.editorR3ColorPresetKey or selOpt.key or "")
-      if targetKey == "" then
-        targetKey = tostring(selOpt.key or "")
-      end
       if actions_menu.run(ctx, {
             openKey = "editorR3ColorPresetOpen",
             selKey = "editorR3ColorPresetSel",
@@ -1813,58 +1830,9 @@ local function run(ctx)
             onSelect = function(row)
               if not row then return end
               if row.id == "default" then
-                if isR3ButtonColorKey(targetKey) then
-                  for i = 1, #R3_BUTTON_COLOR_KEYS do
-                    local key = R3_BUTTON_COLOR_KEYS[i]
-                    local presetVal = R3_DEFAULT_COLOR_PRESET[key]
-                    if presetVal ~= nil then
-                      setConfigValue(ctx, _, key, tostring(presetVal))
-                    else
-                      local def = resetDefaultFn and resetDefaultFn(key)
-                      if def ~= nil then
-                        setConfigValue(ctx, _, key, tostring(def))
-                      end
-                    end
-                  end
-                  local selectedPresetVal = R3_DEFAULT_COLOR_PRESET.selected
-                  if selectedPresetVal ~= nil then
-                    setConfigValue(ctx, _, "selected", tostring(selectedPresetVal))
-                  end
-                else
-                  local presetVal = R3_DEFAULT_COLOR_PRESET[targetKey]
-                  if presetVal ~= nil then
-                    setConfigValue(ctx, _, targetKey, tostring(presetVal))
-                  else
-                    local def = resetDefaultFn and resetDefaultFn(targetKey)
-                    if def ~= nil then
-                      setConfigValue(ctx, _, targetKey, tostring(def))
-                    end
-                  end
-                end
+                applyR3ColorPreset(ctx, _, R3_DEFAULT_COLOR_PRESET)
               elseif row.id == "button_colors" then
-                if isR3ButtonColorKey(targetKey) then
-                  for i = 1, #R3_BUTTON_COLOR_KEYS do
-                    local key = R3_BUTTON_COLOR_KEYS[i]
-                    local presetVal = R3_BUTTON_COLOR_PRESET[key]
-                    if presetVal ~= nil then
-                      setConfigValue(ctx, _, key, tostring(presetVal))
-                    end
-                  end
-                  local selectedPresetVal = R3_BUTTON_COLOR_PRESET.selected
-                  if selectedPresetVal ~= nil then
-                    setConfigValue(ctx, _, "selected", tostring(selectedPresetVal))
-                  end
-                else
-                  local presetVal = R3_BUTTON_COLOR_PRESET[targetKey]
-                  if presetVal ~= nil then
-                    setConfigValue(ctx, _, targetKey, tostring(presetVal))
-                  end
-                end
-              end
-              if _.common and _.common.refreshConfigModified then
-                _.common.refreshConfigModified(ctx)
-              else
-                ctx.configModified = true
+                applyR3ColorPreset(ctx, _, R3_BUTTON_COLOR_PRESET)
               end
             end,
           }) then
