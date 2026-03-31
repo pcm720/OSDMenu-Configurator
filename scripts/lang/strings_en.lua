@@ -299,6 +299,28 @@ strings.options_bbl = {
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
 }
 
+strings.options_r3configurator = {
+  video_mode = { label = "Video mode", desc = "Startup video mode (auto keeps native PS2 mode)." },
+  swap_buttons = { label = "Swap buttons", desc = "Swap confirm/cancel (Cross <-> Circle)." },
+  default_language = { label = "Default language", desc = "Default UI language." },
+  show_freemcboot = { label = "Show FreeMCBoot", desc = "Show FreeMCBoot on main page." },
+  show_freehddboot = { label = "Show FreeHDBoot", desc = "Show FreeHDBoot on main page." },
+  show_osdmenu = { label = "Show OSDMenu", desc = "Show OSDMenu on main page." },
+  show_osdmenu_mbr = { label = "Show OSDMenu MBR", desc = "Show OSDMenu MBR on main page." },
+  show_hosdmenu = { label = "Show HOSDMenu", desc = "Show HOSDMenu on main page." },
+  show_ps2bbl = { label = "Show PS2BBL", desc = "Show PS2BBL on main page." },
+  show_psxbbl = { label = "Show PSXBBL", desc = "Show PSXBBL on main page." },
+  cross = { label = "Cross color", desc = "Cross helper text color." },
+  square = { label = "Square color", desc = "Square helper text color." },
+  triangle = { label = "Triangle color", desc = "Triangle helper text color." },
+  circle = { label = "Circle color", desc = "Circle helper text color." },
+  selected = { label = "Selected color", desc = "Selected row color." },
+  selected_dim = { label = "Selected dim color", desc = "Dim selected row color." },
+  unselected = { label = "Unselected color", desc = "Unselected row color." },
+  dim = { label = "Dim color", desc = "Dim text color." },
+  background = { label = "Background color", desc = "Background color." },
+}
+
 -- eGSM editor (single screen: default + title overrides)
 strings.egsm = {
   default_label = "Default",
@@ -329,6 +351,7 @@ for k, v in pairs(strings.options_osdmenu or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdmbr or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_bbl or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_r3configurator or {}) do strings.options[k] = v end
 
 -- CDROM option labels/descs (Launch disc options sub-screen). Keys are symbolic (no raw args).
 strings.cdrom_options = {

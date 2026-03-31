@@ -299,6 +299,28 @@ strings.options_bbl = {
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
 }
 
+strings.options_r3configurator = {
+  video_mode = { label = "Mode video", desc = "Mode video au demarrage (auto garde le mode natif PS2)." },
+  swap_buttons = { label = "Inverser les boutons", desc = "Inverser confirmer/annuler (Cross <-> Circle)." },
+  default_language = { label = "Langue par defaut", desc = "Langue par defaut de l'interface." },
+  show_freemcboot = { label = "Afficher FreeMCBoot", desc = "Afficher FreeMCBoot sur la page principale." },
+  show_freehddboot = { label = "Afficher FreeHDBoot", desc = "Afficher FreeHDBoot sur la page principale." },
+  show_osdmenu = { label = "Afficher OSDMenu", desc = "Afficher OSDMenu sur la page principale." },
+  show_osdmenu_mbr = { label = "Afficher OSDMenu MBR", desc = "Afficher OSDMenu MBR sur la page principale." },
+  show_hosdmenu = { label = "Afficher HOSDMenu", desc = "Afficher HOSDMenu sur la page principale." },
+  show_ps2bbl = { label = "Afficher PS2BBL", desc = "Afficher PS2BBL sur la page principale." },
+  show_psxbbl = { label = "Afficher PSXBBL", desc = "Afficher PSXBBL sur la page principale." },
+  cross = { label = "Couleur Cross", desc = "Couleur du texte d'aide Cross." },
+  square = { label = "Couleur Square", desc = "Couleur du texte d'aide Square." },
+  triangle = { label = "Couleur Triangle", desc = "Couleur du texte d'aide Triangle." },
+  circle = { label = "Couleur Circle", desc = "Couleur du texte d'aide Circle." },
+  selected = { label = "Couleur selectionnee", desc = "Couleur de la ligne selectionnee." },
+  selected_dim = { label = "Couleur selectionnee assombrie", desc = "Couleur assombrie de la ligne selectionnee." },
+  unselected = { label = "Couleur non selectionnee", desc = "Couleur de la ligne non selectionnee." },
+  dim = { label = "Couleur assombrie", desc = "Couleur du texte assombri." },
+  background = { label = "Couleur de fond", desc = "Couleur de fond." },
+}
+
 -- Editeur eGSM (ecran unique : valeurs par defaut + remplacements par titre)
 strings.egsm = {
   default_label = "Par defaut",
@@ -328,6 +350,7 @@ for k, v in pairs(strings.options_osdmenu or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdmbr or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_bbl or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_r3configurator or {}) do strings.options[k] = v end
 
 -- Libelles / descriptions des options CDROM
 strings.cdrom_options = {

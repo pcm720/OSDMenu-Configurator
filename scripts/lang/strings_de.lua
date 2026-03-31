@@ -299,6 +299,28 @@ strings.options_bbl = {
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
 }
 
+strings.options_r3configurator = {
+  video_mode = { label = "Videomodus", desc = "Videomodus beim Start (Auto behaelt den nativen PS2-Modus)." },
+  swap_buttons = { label = "Tasten tauschen", desc = "Bestaetigen/Abbrechen tauschen (Cross <-> Circle)." },
+  default_language = { label = "Standardsprache", desc = "Standard-UI-Sprache." },
+  show_freemcboot = { label = "Zeige FreeMCBoot", desc = "FreeMCBoot auf der Hauptseite anzeigen." },
+  show_freehddboot = { label = "Zeige FreeHDBoot", desc = "FreeHDBoot auf der Hauptseite anzeigen." },
+  show_osdmenu = { label = "Zeige OSDMenu", desc = "OSDMenu auf der Hauptseite anzeigen." },
+  show_osdmenu_mbr = { label = "Zeige OSDMenu MBR", desc = "OSDMenu MBR auf der Hauptseite anzeigen." },
+  show_hosdmenu = { label = "Zeige HOSDMenu", desc = "HOSDMenu auf der Hauptseite anzeigen." },
+  show_ps2bbl = { label = "Zeige PS2BBL", desc = "PS2BBL auf der Hauptseite anzeigen." },
+  show_psxbbl = { label = "Zeige PSXBBL", desc = "PSXBBL auf der Hauptseite anzeigen." },
+  cross = { label = "Farbe Cross", desc = "Farbe des Cross-Hinweistexts." },
+  square = { label = "Farbe Square", desc = "Farbe des Square-Hinweistexts." },
+  triangle = { label = "Farbe Triangle", desc = "Farbe des Triangle-Hinweistexts." },
+  circle = { label = "Farbe Circle", desc = "Farbe des Circle-Hinweistexts." },
+  selected = { label = "Ausgewaehlte Farbe", desc = "Farbe der ausgewaehlten Zeile." },
+  selected_dim = { label = "Abgedunkelte Auswahlfarbe", desc = "Abgedunkelte Farbe der ausgewaehlten Zeile." },
+  unselected = { label = "Nicht ausgewaehlte Farbe", desc = "Farbe der nicht ausgewaehlten Zeile." },
+  dim = { label = "Abgedunkelte Farbe", desc = "Abgedunkelte Textfarbe." },
+  background = { label = "Hintergrundfarbe", desc = "Hintergrundfarbe." },
+}
+
 -- eGSM-Editor
 strings.egsm = {
   default_label = "Standard",
@@ -328,6 +350,7 @@ for k, v in pairs(strings.options_osdmenu or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdmbr or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_bbl or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_r3configurator or {}) do strings.options[k] = v end
 
 -- CDROM-Optionen
 strings.cdrom_options = {

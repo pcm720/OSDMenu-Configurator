@@ -299,6 +299,28 @@ strings.options_bbl = {
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
 }
 
+strings.options_r3configurator = {
+  video_mode = { label = "Modo de video", desc = "Modo de video de arranque (auto mantiene el modo nativo de PS2)." },
+  swap_buttons = { label = "Intercambiar botones", desc = "Intercambiar confirmar/cancelar (Cruz <-> Circulo)." },
+  default_language = { label = "Idioma predeterminado", desc = "Idioma predeterminado de la interfaz." },
+  show_freemcboot = { label = "Mostrar FreeMCBoot", desc = "Mostrar FreeMCBoot en la pagina principal." },
+  show_freehddboot = { label = "Mostrar FreeHDBoot", desc = "Mostrar FreeHDBoot en la pagina principal." },
+  show_osdmenu = { label = "Mostrar OSDMenu", desc = "Mostrar OSDMenu en la pagina principal." },
+  show_osdmenu_mbr = { label = "Mostrar OSDMenu MBR", desc = "Mostrar OSDMenu MBR en la pagina principal." },
+  show_hosdmenu = { label = "Mostrar HOSDMenu", desc = "Mostrar HOSDMenu en la pagina principal." },
+  show_ps2bbl = { label = "Mostrar PS2BBL", desc = "Mostrar PS2BBL en la pagina principal." },
+  show_psxbbl = { label = "Mostrar PSXBBL", desc = "Mostrar PSXBBL en la pagina principal." },
+  cross = { label = "Color de Cruz", desc = "Color del texto de ayuda de Cruz." },
+  square = { label = "Color de Cuadrado", desc = "Color del texto de ayuda de Cuadrado." },
+  triangle = { label = "Color de Triangulo", desc = "Color del texto de ayuda de Triangulo." },
+  circle = { label = "Color de Circulo", desc = "Color del texto de ayuda de Circulo." },
+  selected = { label = "Color seleccionado", desc = "Color de la fila seleccionada." },
+  selected_dim = { label = "Color seleccionado tenue", desc = "Color tenue de la fila seleccionada." },
+  unselected = { label = "Color no seleccionado", desc = "Color de la fila no seleccionada." },
+  dim = { label = "Color tenue", desc = "Color de texto tenue." },
+  background = { label = "Color de fondo", desc = "Color de fondo." },
+}
+
 -- Editor eGSM (pantalla única: valores predeterminados + anulaciones de título)
 strings.egsm = {
   default_label = "Predeterminado",
@@ -329,6 +351,7 @@ for k, v in pairs(strings.options_osdmenu or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdmbr or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_bbl or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_r3configurator or {}) do strings.options[k] = v end
 
 -- Etiquetas/descripciones de opciones de CDROM (subpantalla de opciones de lanzamiento de disco). Las claves son simbólicas (sin argumentos brutos).
 strings.cdrom_options = {

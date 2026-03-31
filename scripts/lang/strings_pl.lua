@@ -299,6 +299,28 @@ strings.options_bbl = {
   cdrom_disable_gameid = { label = "Wyłącz wizualne ID gry dysku", desc = "Wyłącz wizualne ID gry dysku" },
 }
 
+strings.options_r3configurator = {
+  video_mode = { label = "Tryb wideo", desc = "Tryb wideo przy starcie (auto zachowuje natywny tryb PS2)." },
+  swap_buttons = { label = "Zamień przyciski", desc = "Zamień potwierdź/anuluj (Cross <-> Circle)." },
+  default_language = { label = "Domyślny język", desc = "Domyślny język interfejsu." },
+  show_freemcboot = { label = "Pokaż FreeMCBoot", desc = "Pokaż FreeMCBoot na stronie głównej." },
+  show_freehddboot = { label = "Pokaż FreeHDBoot", desc = "Pokaż FreeHDBoot na stronie głównej." },
+  show_osdmenu = { label = "Pokaż OSDMenu", desc = "Pokaż OSDMenu na stronie głównej." },
+  show_osdmenu_mbr = { label = "Pokaż OSDMenu MBR", desc = "Pokaż OSDMenu MBR na stronie głównej." },
+  show_hosdmenu = { label = "Pokaż HOSDMenu", desc = "Pokaż HOSDMenu na stronie głównej." },
+  show_ps2bbl = { label = "Pokaż PS2BBL", desc = "Pokaż PS2BBL na stronie głównej." },
+  show_psxbbl = { label = "Pokaż PSXBBL", desc = "Pokaż PSXBBL na stronie głównej." },
+  cross = { label = "Kolor KRZYŻYK", desc = "Kolor tekstu pomocy KRZYŻYK." },
+  square = { label = "Kolor KWADRAT", desc = "Kolor tekstu pomocy KWADRAT." },
+  triangle = { label = "Kolor TRÓJKĄT", desc = "Kolor tekstu pomocy TRÓJKĄT." },
+  circle = { label = "Kolor KOŁO", desc = "Kolor tekstu pomocy KOŁO." },
+  selected = { label = "Kolor zaznaczony", desc = "Kolor zaznaczonego wiersza." },
+  selected_dim = { label = "Kolor przyciemnionego zaznaczenia", desc = "Przyciemniony kolor zaznaczonego wiersza." },
+  unselected = { label = "Kolor niezaznaczony", desc = "Kolor niezaznaczonego wiersza." },
+  dim = { label = "Kolor przyciemniony", desc = "Kolor przyciemnionego tekstu." },
+  background = { label = "Kolor tła", desc = "Kolor tła." },
+}
+
 -- Edytor eGSM (jeden ekran: domyślne + nadpisania per tytuł)
 strings.egsm = {
   default_label = "Domyślny",
@@ -329,6 +351,7 @@ for k, v in pairs(strings.options_osdmenu or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdmbr or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_bbl or {}) do strings.options[k] = v end
 for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_r3configurator or {}) do strings.options[k] = v end
 
 -- Etykiety/opisy opcji CDROM (podekran opcji uruchamiania dysku). Klucze są symboliczne (bez surowych argumentów).
 strings.cdrom_options = {
