@@ -188,6 +188,8 @@ local function buildMainCreditsLines(main_str)
   }
 end
 
+local CREDITS_HEADING_BLUE = Color.new(0x36, 0x51, 0x72, 0x80)
+
 local function buildMainBaseHintItems(main_str)
   local baseHint = main_str.main_hint_items or {}
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
@@ -425,22 +427,52 @@ local function buildMainChoices(main_str)
   return out, entries
 end
 
-local function applyLanguageIndex(s, idx)
-  if not hasLanguageChoices() then return false end
-  local total = #C.langFiles
-  local target = common.clampListSelection(idx or (C.langIndex or 1), total)
-  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[target])
+local function applyLanguageFileIndex(s, idx)
+  local files = C.langFiles
+  if not files or #files < 1 then return false end
+  local target = common.clampListSelection(idx or (C.langIndex or 1), #files)
+  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. files[target])
   if okLoad and newStrings and type(newStrings) == "table" then
     C.strings = newStrings
     C.langIndex = target
-    local labels, entries = buildMainChoices(newStrings.main or {})
-    s.main = labels
-    s.mainEntries = entries
-    s.mainBuildKey = nil
+    if _G.CONFIG_UI then
+      _G.CONFIG_UI.strings = newStrings
+      local code = getLanguageCodeFromFile(files[target])
+      if type(code) == "string" and code ~= "" then
+        _G.CONFIG_UI.startupDefaultLanguage = code
+      end
+    end
+    if s then
+      local labels, entries = buildMainChoices(newStrings.main or {})
+      s.main = labels
+      s.mainEntries = entries
+      s.mainBuildKey = nil
+    end
     return true
   end
   return false
 end
+
+local function applyLanguageIndex(s, idx)
+  if not hasLanguageChoices() then return false end
+  return applyLanguageFileIndex(s, idx)
+end
+
+local function applyLanguageCode(s, code)
+  local targetCode = tostring(code or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  if targetCode == "" then return false end
+  local files = C.langFiles
+  if not files or #files < 1 then return false end
+  for i = 1, #files do
+    local fileCode = getLanguageCodeFromFile(files[i])
+    if type(fileCode) == "string" and fileCode:lower() == targetCode then
+      return applyLanguageFileIndex(s, i)
+    end
+  end
+  return false
+end
+
+C.applyLanguageCode = applyLanguageCode
 
 local function isBblContext(context)
   return context == "ps2bbl" or context == "psxbbl"
@@ -995,6 +1027,7 @@ local function runMain(s, pad)
     local rowLabelX = boxX + rowLabelOffset
     local maxLabelW = (boxX + boxW) - padX - rowLabelX
     if maxLabelW < 1 then maxLabelW = 1 end
+    local creditsHeadingColor = CREDITS_HEADING_BLUE
     for i = 1, total do
       local y = rowStartY + (i - 1) * rowStep
       local label = lines[i]
@@ -1003,7 +1036,9 @@ local function runMain(s, pad)
       elseif common.truncateTextToWidth then
         label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
       end
-      dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, common.WHITE)
+      local isHeading = (i == 1 or i == 3 or i == 7)
+      local rowColor = isHeading and creditsHeadingColor or common.WHITE
+      dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, rowColor)
     end
 
     local hintItems = buildMainCreditsOverlayHintItems(main_str)

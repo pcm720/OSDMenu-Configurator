@@ -232,6 +232,13 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
     applyR3ConfiguratorVideoModeLive(value)
     return
   end
+  if rawKey == "default_language" then
+    local runtime = _G.CONFIG_UI
+    if runtime and runtime.applyLanguageCode then
+      pcall(runtime.applyLanguageCode, ctx, tostring(value or ""))
+    end
+    return
+  end
   if _G.CONFIG_UI and _G.CONFIG_UI.setMainFilterFromShowKey then
     if _G.CONFIG_UI.setMainFilterFromShowKey(rawKey, value) then
       return
@@ -1813,6 +1820,10 @@ local function run(ctx)
                       end
                     end
                   end
+                  local selectedPresetVal = R3_DEFAULT_COLOR_PRESET.selected
+                  if selectedPresetVal ~= nil then
+                    setConfigValue(ctx, _, "selected", tostring(selectedPresetVal))
+                  end
                 else
                   local presetVal = R3_DEFAULT_COLOR_PRESET[targetKey]
                   if presetVal ~= nil then
@@ -1832,6 +1843,10 @@ local function run(ctx)
                     if presetVal ~= nil then
                       setConfigValue(ctx, _, key, tostring(presetVal))
                     end
+                  end
+                  local selectedPresetVal = R3_BUTTON_COLOR_PRESET.selected
+                  if selectedPresetVal ~= nil then
+                    setConfigValue(ctx, _, "selected", tostring(selectedPresetVal))
                   end
                 else
                   local presetVal = R3_BUTTON_COLOR_PRESET[targetKey]
