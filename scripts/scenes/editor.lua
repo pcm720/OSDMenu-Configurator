@@ -148,7 +148,7 @@ local function parseR3HexColor(raw)
   local r = tonumber(trimmed:sub(1, 2), 16) or 0
   local g = tonumber(trimmed:sub(3, 4), 16) or 0
   local b = tonumber(trimmed:sub(5, 6), 16) or 0
-  return r, g, b, 255
+  return r, g, b, 0x80
 end
 
 local function formatR3HexColor(r, g, b)
@@ -176,7 +176,7 @@ local function parseOptionColorValue(ctx, _, key, raw, defaultValue)
     if r then return r, g, b, a end
     local dr, dg, db, da = parseR3HexColor(defaultValue)
     if dr then return dr, dg, db, da end
-    return 0, 0, 0, 255
+    return 0, 0, 0, 0x80
   end
   return _.parseColor(raw or defaultValue)
 end
@@ -242,7 +242,7 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
   if not field then return end
   local r, g, b = parseR3HexColor(value)
   if not r then return end
-  local color = _.Color.new(r, g, b, 255)
+  local color = _.Color.new(r, g, b, 0x80)
   _.common[field] = color
   if field == "SELECTED_ENTRY" then
     _.SELECTED_ENTRY = color
@@ -663,7 +663,7 @@ local function startInlineColorEdit(ctx, _, opt)
   if not (ctx and _ and opt and opt.key) then return end
   local isR3 = isR3ConfiguratorColorKey(ctx, opt.key)
   local r, g, b, a = parseOptionColorValue(ctx, _, opt.key, _.config_parse.get(ctx.lines, opt.key) or opt.default, opt.default)
-  if isR3 then a = 255 end
+  if isR3 then a = 0x80 end
   ctx.colorInlineEdit = {
     key = opt.key,
     values = { r, g, b, a },
@@ -740,7 +740,7 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
     elseif ch == 3 then
       prefixCol = _.Color.new(60, 80, 170, 128)
     elseif ch == 4 then
-      prefixCol = _.Color.new(210, 210, 210, 255)
+      prefixCol = _.Color.new(210, 210, 210, 0x80)
     end
     _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
     cursorX = cursorX + textWidth(prefix)

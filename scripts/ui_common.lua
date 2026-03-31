@@ -21,7 +21,7 @@ common.PAD_L2, common.PAD_R2       = 0x0100, 0x0200
 common.SWAP_CROSS_CIRCLE           = false
 
 -- Colors
-local FULL_ALPHA                   = 255
+local FULL_ALPHA                   = 0x80
 common.WHITE                       = Color.new(255, 255, 255, FULL_ALPHA)
 common.GRAY                        = Color.new(160, 160, 160, FULL_ALPHA)
 common.DIM                         = Color.new(96, 96, 96, FULL_ALPHA)
@@ -719,7 +719,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end
-    -- Present on vblank to avoid whole-frame shimmer/tearing on animated transitions.
+    -- Present on vblank to avoid tearing/shimmer on animated transitions.
     Screen.waitVblankStart()
     Screen.flip()
   end

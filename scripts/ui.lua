@@ -317,7 +317,7 @@ local function parseStartupColorValue(raw)
   if trimmed == "" then return nil end
 
   if trimmed:match("^[%x][%x][%x][%x][%x][%x]$") then
-    return tonumber(trimmed:sub(1, 2), 16), tonumber(trimmed:sub(3, 4), 16), tonumber(trimmed:sub(5, 6), 16), 255
+    return tonumber(trimmed:sub(1, 2), 16), tonumber(trimmed:sub(3, 4), 16), tonumber(trimmed:sub(5, 6), 16), 0x80
   end
 
   return nil
@@ -842,7 +842,7 @@ local function mainLoop()
 
     prevPad = c.prevPad or prevPad
     syncToS(c)
-    -- Present on vblank to reduce full-screen flicker during motion/overlay animation.
+    -- Present on vblank to reduce full-screen shimmer/tearing.
     Screen.waitVblankStart()
     Screen.flip()
     return c.state, c
