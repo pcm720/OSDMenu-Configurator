@@ -1128,6 +1128,8 @@ local function runMain(s, pad)
   end
 end
 
+local getPresentMcSlotsCached
+
 local function runChooseMc(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
@@ -1137,7 +1139,7 @@ local function runChooseMc(s, pad)
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
   local SE = common.SELECTED_ENTRY
-  local slots = common.getPresentMcSlots()
+  local slots = getPresentMcSlotsCached(s)
   if #slots == 0 then
     if s.context == "freemcboot" and s.fileType == "freemcboot_cnf" then
       -- FreeMCBoot can still be loaded/created on mass:/ even when no MC is inserted.
@@ -1193,65 +1195,102 @@ local function appendUniquePath(paths, path)
   paths[#paths + 1] = path
 end
 
-local function isPrefixAvailable(prefix)
-  if not prefix or prefix == "" then return false end
-  local probe = tostring(prefix)
-  if probe:sub(-1) == ":" then probe = probe .. "/" end
-  return common.tryOpen(probe)
+getPresentMcSlotsCached = function(s)
+  local sceneEpoch = (s and s._sceneEpoch) or 0
+  local cache = s and s.presentMcSlotsCache or nil
+  if cache and cache.sceneEpoch == sceneEpoch and type(cache.slots) == "table" then
+    return cache.slots
+  end
+  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  if s then
+    s.presentMcSlotsCache = {
+      sceneEpoch = sceneEpoch,
+      slots = slots,
+    }
+  end
+  return slots
 end
 
-local function normalizeMountpoint(mp)
-  if type(mp) ~= "string" or mp == "" then return nil end
-  return (mp:sub(-1) == ":") and mp or (mp .. ":")
+local function getLaunchSlotInfo(s)
+  if s and s.launchSlotInfo and s.launchSlotInfo.sceneEpoch == (s._sceneEpoch or 0) then
+    return s.launchSlotInfo
+  end
+
+  local info = {
+    sceneEpoch = (s and s._sceneEpoch) or 0,
+    family = "unknown",
+    slot = nil,
+  }
+
+  if System and System.currentDirectory then
+    local ok, cwd = pcall(System.currentDirectory)
+    local p = ok and tostring(cwd or ""):lower() or ""
+    if p:match("^mc0:") then
+      info.family, info.slot = "mc", 0
+    elseif p:match("^mc1:") then
+      info.family, info.slot = "mc", 1
+    elseif p:match("^mmce0:") then
+      info.family, info.slot = "mmce", 0
+    elseif p:match("^mmce1:") then
+      info.family, info.slot = "mmce", 1
+    elseif p:match("^mass1:") then
+      info.family, info.slot = "usb", 1
+    elseif p:match("^mass0:") or p:match("^mass:") then
+      info.family, info.slot = "usb", 0
+    elseif p:match("^massx:") then
+      info.family = "mx4sio"
+    elseif p:match("^hdd%d:") or p:match("^pfs%d:") then
+      info.family = "hdd"
+    end
+  end
+
+  if info.family == "unknown" and System and System.getLaunchDeviceFamily then
+    local okFam, fam = pcall(System.getLaunchDeviceFamily)
+    local f = okFam and tostring(fam or ""):lower() or ""
+    if f == "mass" then f = "usb" end
+    if f == "usb" or f == "mmce" or f == "mx4sio" or f == "hdd" or f == "mc" then
+      info.family = f
+    end
+  end
+
+  if s then
+    s.launchSlotInfo = info
+  end
+  return info
 end
 
-local function getDeviceMountpoint(deviceId)
-  if not deviceId or deviceId == "" then return nil end
-  if C.file_selector and C.file_selector.getDeviceMountpoint then
-    local ok, mp = pcall(C.file_selector.getDeviceMountpoint, deviceId)
-    if ok then return normalizeMountpoint(mp) end
-  end
-  if System and System.getDeviceMountpoint then
-    local ok, mp = pcall(System.getDeviceMountpoint, deviceId)
-    if ok then return normalizeMountpoint(mp) end
-  end
-  return nil
-end
-
-local function detectUsbSlotPresence(slotIdx)
-  if slotIdx == 0 then
-    local mp0 = getDeviceMountpoint("usb0")
-    return (mp0 and isPrefixAvailable(mp0)) or isPrefixAvailable("mass:") or isPrefixAvailable("mass0:")
-  end
-  local mp1 = getDeviceMountpoint("usb1")
-  return (mp1 and isPrefixAvailable(mp1)) or isPrefixAvailable("mass1:")
-end
-
-local function detectMmceSlotPresence(slotIdx)
-  if slotIdx == 0 then return isPrefixAvailable("mmce0:") end
-  return isPrefixAvailable("mmce1:")
-end
-
-local function getSelectConfigDevicePresence(_s)
-  local usb0 = detectUsbSlotPresence(0) and true or false
-  local usb1 = detectUsbSlotPresence(1) and true or false
-  local mmce0 = detectMmceSlotPresence(0) and true or false
-  local mmce1 = detectMmceSlotPresence(1) and true or false
-
-  -- If probing cannot determine slots, fail open so users can still pick them.
-  if not usb0 and not usb1 then
-    usb0, usb1 = true, true
-  end
-  if not mmce0 and not mmce1 then
-    mmce0, mmce1 = true, true
+local function getSelectConfigDevicePresence(s)
+  local sceneEpoch = (s and s._sceneEpoch) or 0
+  local cache = s and s.selectConfigDevicePresenceCache or nil
+  if cache and cache.sceneEpoch == sceneEpoch then
+    return cache
   end
 
-  return {
+  local launch = getLaunchSlotInfo(s)
+  local usb0, usb1 = true, true
+  local mmce0, mmce1 = true, true
+
+  -- We only know slot-level state for the currently booted removable family.
+  -- Other families stay visible and are lazy-loaded only after user confirms.
+  if launch.family == "usb" and (launch.slot == 0 or launch.slot == 1) then
+    usb0 = (launch.slot == 0)
+    usb1 = (launch.slot == 1)
+  elseif launch.family == "mmce" and (launch.slot == 0 or launch.slot == 1) then
+    mmce0 = (launch.slot == 0)
+    mmce1 = (launch.slot == 1)
+  end
+
+  local out = {
+    sceneEpoch = sceneEpoch,
     mmce0 = mmce0,
     mmce1 = mmce1,
     usb0 = usb0,
     usb1 = usb1,
   }
+  if s then
+    s.selectConfigDevicePresenceCache = out
+  end
+  return out
 end
 
 local function buildBblSourceOptions(s, iniFileType)
@@ -1261,7 +1300,7 @@ local function buildBblSourceOptions(s, iniFileType)
   local iniName = (iniFileType == "psxbbl_ini") and "PSXBBL.INI" or "PS2BBL.INI"
   local presence = getSelectConfigDevicePresence(s)
   local presentMc = {}
-  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  local slots = getPresentMcSlotsCached(s)
   for i = 1, #slots do
     if slots[i] == 0 or slots[i] == 1 then
       presentMc[slots[i]] = true
@@ -1316,7 +1355,7 @@ local function buildFreemcbootSourceOptions(s, context)
   local dev_str = (C.strings and C.strings.devices) or {}
   local presence = getSelectConfigDevicePresence(s)
   local presentMc = {}
-  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  local slots = getPresentMcSlotsCached(s)
   for i = 1, #slots do
     if slots[i] == 0 or slots[i] == 1 then
       presentMc[slots[i]] = true
@@ -1444,7 +1483,7 @@ local function runSelectConfig(s, pad)
       end
     end
     if (pad & PAD_CIRCLE) ~= 0 then
-      local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+      local slots = getPresentMcSlotsCached(s)
       if type(slots) == "table" and #slots > 1 then
         s.state = "choose_mc"
       else
