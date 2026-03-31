@@ -685,7 +685,7 @@ end
 local function runMain(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
@@ -1131,7 +1131,7 @@ end
 local function runChooseMc(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
@@ -1441,7 +1441,7 @@ local function runSelectConfig(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local path_str = (C.strings and C.strings.path_picker) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
@@ -1611,7 +1611,7 @@ local INIT_HDD_TIMEOUT_FRAMES = 180 -- 3s at 60fps
 local function runInitHdd(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt = common.drawText
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local H = s.HINT_Y or common.HINT_Y
   local sc = s.scaleY or function(y) return y end
@@ -1707,7 +1707,7 @@ local function runOpen(s, pad)
     return
   end
   local dt = common.drawText
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
@@ -1839,7 +1839,7 @@ local function runChooseLoad(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dev_str = (C.strings and C.strings.devices) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y

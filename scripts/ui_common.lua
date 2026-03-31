@@ -142,10 +142,19 @@ function common.remapCrossCircleMask(mask)
   return out
 end
 
+local function getRuntimeFtPixelBase()
+  local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
+  if runtimePx > 0 then
+    return runtimePx
+  end
+  return tonumber(common.FT_PIXEL_H) or 18
+end
+
 local function getHintFtFont(scaleFactor)
   local sf = tonumber(scaleFactor) or 1
   if sf <= 0 then sf = 1 end
-  local key = string.format("%.3f", sf)
+  local basePx = getRuntimeFtPixelBase()
+  local key = string.format("%d@%.3f", math.floor(basePx + 0.5), sf)
   if hintFtFontCache[key] then return hintFtFontCache[key] end
   if not (Font and Font.ftLoad) then return nil end
   local f = Font.ftLoad("font.ttf")
@@ -154,7 +163,7 @@ local function getHintFtFont(scaleFactor)
   end
   if f and f >= 0 then
     if Font.ftSetPixelSize then
-      local px = math.max(8, math.floor(((common.FT_PIXEL_H or 18) * sf) + 0.5))
+      local px = math.max(8, math.floor((basePx * sf) + 0.5))
       pcall(Font.ftSetPixelSize, f, 0, px)
     end
     hintFtFontCache[key] = f
@@ -180,7 +189,8 @@ end
 
 function common.getHintLabelTextHeight()
   local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
-  return math.max(10, math.floor((common.FT_PIXEL_H or 18) * ts + 0.5))
+  local basePx = getRuntimeFtPixelBase()
+  return math.max(10, math.floor(basePx * ts + 0.5))
 end
 
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
@@ -204,9 +214,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
-    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-    local approxCharW = math.floor(8 * drawScale)
     local textH = common.getHintLabelTextHeight()
+    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
+    local approxCharW = math.floor(8 * drawScale)
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
@@ -706,18 +716,42 @@ function common.runLayout(ctx)
   local vmode = Screen.getMode()
   local w = (vmode and vmode.width) or common.DEFAULT_W
   local h = (vmode and vmode.height) or common.DEFAULT_H
+  local sx = w / common.DEFAULT_W
   local sy = h / common.DEFAULT_H
+  local uiScale = math.min(sx, sy)
+  if uiScale <= 0 then
+    uiScale = 1
+  end
+  local uiW = math.max(1, math.floor(common.DEFAULT_W * uiScale + 0.5))
+  local uiH = math.max(1, math.floor(common.DEFAULT_H * uiScale + 0.5))
+  local originX = math.floor((w - uiW) / 2)
+  local originY = math.floor((h - uiH) / 2)
   if ctx then
     ctx.w = w
     ctx.h = h
+    ctx.sx = sx
     ctx.sy = sy
-    ctx.MARGIN_X = common.MARGIN_X
-    ctx.MARGIN_Y = math.floor(common.MARGIN_Y * sy)
-    ctx.LINE_H = common.LINE_H
-    ctx.ROW_H = common.ROW_H
-    ctx.HINT_Y = h - math.floor(24 * sy)
-    ctx.DESC_Y_BOTTOM = ctx.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
-    ctx.scaleY = function(y) return math.floor((y or 0) * sy) end
+    ctx.uiScale = uiScale
+    ctx.uiOriginX = originX
+    ctx.uiOriginY = originY
+    ctx.uiW = uiW
+    ctx.uiH = uiH
+    ctx.scaleX = function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
+    ctx.scaleY = function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
+    ctx.MARGIN_X = originX + ctx.scaleX(common.MARGIN_X)
+    ctx.MARGIN_Y = originY + ctx.scaleY(common.MARGIN_Y)
+    ctx.LINE_H = math.max(1, ctx.scaleY(common.LINE_H))
+    ctx.ROW_H = math.max(1, ctx.scaleY(common.ROW_H))
+    ctx.VALUE_X = originX + ctx.scaleX(common.VALUE_X)
+    ctx.KEYBOARD_CENTER_X = originX + ctx.scaleX(common.KEYBOARD_CENTER_X)
+    ctx.KEYBOARD_CENTER_Y = originY + ctx.scaleY(common.KEYBOARD_CENTER_Y)
+    ctx.KEY_WIDTH = math.max(1, ctx.scaleX(common.KEY_WIDTH))
+    ctx.KEY_HEIGHT = math.max(1, ctx.scaleY(common.KEY_HEIGHT))
+    ctx.KEY_GAP = math.max(1, ctx.scaleX(common.KEY_GAP))
+    ctx.KEY_CHAR_W = math.max(1, ctx.scaleX(common.KEY_CHAR_W))
+    ctx.KEY_LINE_H = math.max(1, ctx.scaleY(common.KEY_LINE_H))
+    ctx.HINT_Y = originY + uiH - ctx.scaleY(24)
+    ctx.DESC_Y_BOTTOM = ctx.HINT_Y - common.PAD_HINT_TOTAL_H - ctx.scaleY(common.DESC_TO_HINT_MARGIN)
     local startYList = ctx.MARGIN_Y + ctx.scaleY(50)
     local startYRows = ctx.MARGIN_Y + ctx.scaleY(58)
     ctx.MAX_VISIBLE_LIST = common.computeVisibleRows(ctx, startYList, ctx.LINE_H, common.MAX_VISIBLE_LIST)
@@ -730,6 +764,26 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
     Screen.clear(common.BGCOLOR)
     common.runLayout(ctx)
+    local uiScale = (ctx and tonumber(ctx.uiScale)) or 1
+    local scaleX = (ctx and ctx.scaleX) or function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
+    local scaleY = (ctx and ctx.scaleY) or function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
+    if _G.CONFIG_UI then
+      _G.CONFIG_UI.currentUiScale = uiScale
+      _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
+      _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
+    end
+    if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
+      if ctx._ftPixelSizeApplied ~= wantPx then
+        pcall(Font.ftSetPixelSize, ctx.font, 0, wantPx)
+        ctx._ftPixelSizeApplied = wantPx
+      end
+      if _G.CONFIG_UI then
+        _G.CONFIG_UI.currentFtPixelH = wantPx
+      end
+    elseif _G.CONFIG_UI then
+      _G.CONFIG_UI.currentFtPixelH = nil
+    end
     if ctx and ctx.drawBackgroundLayer then
       ctx.drawBackgroundLayer(ctx)
     end

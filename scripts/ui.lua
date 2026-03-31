@@ -624,29 +624,42 @@ local function mainLoop()
     common.runLayout(c)
     local w = c.w or common.DEFAULT_W
     local h = c.h or common.DEFAULT_H
-    -- Keep font at NTSC size on both modes so text fits; only layout (positions, row heights) scales on PAL
+    local uiScale = c.uiScale or 1
+    local scaleX = c.scaleX or function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
+    local scaleY = c.scaleY or function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
     if _G.CONFIG_UI then
-      _G.CONFIG_UI.currentDrawHeight = nil
-      _G.CONFIG_UI.currentDrawWidth = nil
+      _G.CONFIG_UI.currentUiScale = uiScale
+      _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
+      _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
     if c.drawBackgroundLayer then
       c.drawBackgroundLayer(c)
     end
     local HINT_Y = c.HINT_Y
     local DESC_Y_BOTTOM = c.DESC_Y_BOTTOM
-    local KEYBOARD_CENTER_Y = math.floor(h * 220 / 448)
+    local MARGIN_X = c.MARGIN_X or common.MARGIN_X
     local MARGIN_Y, LINE_H, ROW_H = c.MARGIN_Y, c.LINE_H, c.ROW_H
-    local scaleY = c.scaleY
+    local VALUE_X = c.VALUE_X or common.VALUE_X
+    local KEYBOARD_CENTER_X = c.KEYBOARD_CENTER_X or ((c.uiOriginX or 0) + scaleX(common.KEYBOARD_CENTER_X))
+    local KEYBOARD_CENTER_Y = c.KEYBOARD_CENTER_Y or ((c.uiOriginY or 0) + scaleY(common.KEYBOARD_CENTER_Y))
     local maxVisible = c.MAX_VISIBLE or common.MAX_VISIBLE
     local maxVisibleList = c.MAX_VISIBLE_LIST or common.MAX_VISIBLE_LIST
-    local KEY_H = scaleY(common.KEY_HEIGHT)
-    local KEY_LH = scaleY(common.KEY_LINE_H)
+    local KEY_W = c.KEY_WIDTH or math.max(1, scaleX(common.KEY_WIDTH))
+    local KEY_H = c.KEY_HEIGHT or math.max(1, scaleY(common.KEY_HEIGHT))
+    local KEY_G = c.KEY_GAP or math.max(1, scaleX(common.KEY_GAP))
+    local KEY_CW = c.KEY_CHAR_W or math.max(1, scaleX(common.KEY_CHAR_W))
+    local KEY_LH = c.KEY_LINE_H or math.max(1, scaleY(common.KEY_LINE_H))
     if drawMode == "ftPrint" and font then
-      local wantPx = common.FT_PIXEL_H or 18
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
       if c._ftPixelSizeApplied ~= wantPx then
         Font.ftSetPixelSize(font, 0, wantPx)
         c._ftPixelSizeApplied = wantPx
       end
+      if _G.CONFIG_UI then
+        _G.CONFIG_UI.currentFtPixelH = wantPx
+      end
+    elseif _G.CONFIG_UI then
+      _G.CONFIG_UI.currentFtPixelH = nil
     end
     c.prevPad = prevPad
     c.holdFrameCount = holdFrameCount
@@ -681,6 +694,7 @@ local function mainLoop()
       h = h,
       padEffective = padEffective,
       drawListRow = drawListRow,
+      scaleX = scaleX,
       scaleY = scaleY,
       MARGIN_X = MARGIN_X,
       MARGIN_Y = MARGIN_Y,
@@ -723,16 +737,16 @@ local function mainLoop()
       Color = Color,
       KEYBOARD_CENTER_X = KEYBOARD_CENTER_X,
       KEYBOARD_CENTER_Y = KEYBOARD_CENTER_Y,
-      KEY_WIDTH = KEY_WIDTH,
-      KEY_HEIGHT = KEY_HEIGHT,
-      KEY_GAP = KEY_GAP,
+      KEY_WIDTH = KEY_W,
+      KEY_HEIGHT = KEY_H,
+      KEY_GAP = KEY_G,
       KEY_H = KEY_H,
       KEY_LH = KEY_LH,
+      KEY_CHAR_W = KEY_CW,
       KEY_BG = KEY_BG,
       KEY_BG_SEL = KEY_BG_SEL,
       KEY_BORDER = KEY_BORDER,
       KEY_BORDER_SEL = KEY_BORDER_SEL,
-      KEY_CHAR_W = KEY_CHAR_W,
       KEYBOARD_ROWS = KEYBOARD_ROWS,
       KEYBOARD_ROWS_SHIFTED = KEYBOARD_ROWS_SHIFTED,
       KEYBOARD_ROWS_TITLE_ID = KEYBOARD_ROWS_TITLE_ID,
