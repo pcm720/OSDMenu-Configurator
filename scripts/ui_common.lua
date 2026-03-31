@@ -76,6 +76,17 @@ common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+local function canOpenPath(path)
+  if not (System and System.openFile and System.closeFile) then
+    return true
+  end
+  local h = System.openFile(path, 0)
+  if h and h >= 0 then
+    System.closeFile(h)
+    return true
+  end
+  return false
+end
 local padIconNames                 = {
   up = "up",
   down = "down",
@@ -172,9 +183,14 @@ local function getHintFtFont(scaleFactor)
   local key = string.format("%d@%.3f", math.floor(basePx + 0.5), sf)
   if hintFtFontCache[key] then return hintFtFontCache[key] end
   if not (Font and Font.ftLoad) then return nil end
-  local f = Font.ftLoad("font.ttf")
+  local f = nil
+  if canOpenPath("font.ttf") then
+    f = Font.ftLoad("font.ttf")
+  end
   if not (f and f >= 0) then
-    f = Font.ftLoad("scripts/font/font.ttf")
+    if canOpenPath("scripts/font/font.ttf") then
+      f = Font.ftLoad("scripts/font/font.ttf")
+    end
   end
   if f and f >= 0 then
     if Font.ftSetPixelSize then
@@ -770,7 +786,8 @@ function common.runLayout(ctx)
     local startYList = ctx.MARGIN_Y + ctx.scaleY(50)
     local startYRows = ctx.MARGIN_Y + ctx.scaleY(58)
     ctx.MAX_VISIBLE_LIST = common.computeVisibleRows(ctx, startYList, ctx.LINE_H, common.MAX_VISIBLE_LIST)
-    ctx.MAX_VISIBLE = common.computeVisibleRows(ctx, startYRows, ctx.ROW_H, common.MAX_VISIBLE)
+    ctx.MAX_VISIBLE = math.max(common.MAX_VISIBLE,
+      common.computeVisibleRows(ctx, startYRows, ctx.ROW_H, common.MAX_VISIBLE))
   end
 end
 
@@ -856,13 +873,20 @@ end
 function common.loadCustomFont()
   Font.ftInit()
   -- CWD first (user override)
-  local f = Font.ftLoad("font.ttf")
+  local f = nil
+  if canOpenPath("font.ttf") then
+    f = Font.ftLoad("font.ttf")
+  end
   if f and f >= 0 then
     Font.ftSetPixelSize(f, 0, common.FT_PIXEL_H)
     return f, "ftPrint"
   end
   -- Try known font path inside the scripts directory (including VFS)
-  f = Font.ftLoad("scripts/font/font.ttf")
+  if canOpenPath("scripts/font/font.ttf") then
+    f = Font.ftLoad("scripts/font/font.ttf")
+  else
+    f = nil
+  end
   if f and f >= 0 then
     Font.ftSetPixelSize(f, 0, common.FT_PIXEL_H)
     return f, "ftPrint"
