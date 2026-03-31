@@ -176,22 +176,33 @@ local function getRuntimeFtPixelBase()
   return tonumber(common.FT_PIXEL_H) or 18
 end
 
+local function loadFtFontWithFallback()
+  if not (Font and Font.ftLoad) then return nil end
+  local cwdCandidates = { "font.ttf" }
+  for i = 1, #cwdCandidates do
+    local path = cwdCandidates[i]
+    if canOpenPath(path) then
+      local f = Font.ftLoad(path)
+      if f and f >= 0 then
+        return f
+      end
+    end
+  end
+  -- Always try bundled font directly; VFS paths may resolve even when System.openFile probe does not.
+  local bundled = Font.ftLoad("scripts/font/font.ttf")
+  if bundled and bundled >= 0 then
+    return bundled
+  end
+  return nil
+end
+
 local function getHintFtFont(scaleFactor)
   local sf = tonumber(scaleFactor) or 1
   if sf <= 0 then sf = 1 end
   local basePx = getRuntimeFtPixelBase()
   local key = string.format("%d@%.3f", math.floor(basePx + 0.5), sf)
   if hintFtFontCache[key] then return hintFtFontCache[key] end
-  if not (Font and Font.ftLoad) then return nil end
-  local f = nil
-  if canOpenPath("font.ttf") then
-    f = Font.ftLoad("font.ttf")
-  end
-  if not (f and f >= 0) then
-    if canOpenPath("scripts/font/font.ttf") then
-      f = Font.ftLoad("scripts/font/font.ttf")
-    end
-  end
+  local f = loadFtFontWithFallback()
   if f and f >= 0 then
     if Font.ftSetPixelSize then
       local px = math.max(8, math.floor((basePx * sf) + 0.5))
@@ -872,21 +883,7 @@ end
 
 function common.loadCustomFont()
   Font.ftInit()
-  -- CWD first (user override)
-  local f = nil
-  if canOpenPath("font.ttf") then
-    f = Font.ftLoad("font.ttf")
-  end
-  if f and f >= 0 then
-    Font.ftSetPixelSize(f, 0, common.FT_PIXEL_H)
-    return f, "ftPrint"
-  end
-  -- Try known font path inside the scripts directory (including VFS)
-  if canOpenPath("scripts/font/font.ttf") then
-    f = Font.ftLoad("scripts/font/font.ttf")
-  else
-    f = nil
-  end
+  local f = loadFtFontWithFallback()
   if f and f >= 0 then
     Font.ftSetPixelSize(f, 0, common.FT_PIXEL_H)
     return f, "ftPrint"
