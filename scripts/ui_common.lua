@@ -21,21 +21,22 @@ common.PAD_L2, common.PAD_R2       = 0x0100, 0x0200
 common.SWAP_CROSS_CIRCLE           = false
 
 -- Colors
-common.WHITE                       = Color.new(255, 255, 255, 255)
-common.GRAY                        = Color.new(160, 160, 160, 255)
-common.DIM                         = Color.new(96, 96, 96, 255)
-common.ERROR                       = Color.new(255, 64, 64, 255)
-common.BGCOLOR                     = Color.new(20, 20, 20, 255)
-common.HIGHLIGHT                   = Color.new(255, 220, 100, 255)
-common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0, 255)
-common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80, 255)
-common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0, 255)
-common.OPTION_HINT_COLOR           = Color.new(246, 231, 173, 255) -- Manila yellow for option descriptions/hints.
+local FULL_ALPHA                   = 255
+common.WHITE                       = Color.new(255, 255, 255, FULL_ALPHA)
+common.GRAY                        = Color.new(160, 160, 160, FULL_ALPHA)
+common.DIM                         = Color.new(96, 96, 96, FULL_ALPHA)
+common.ERROR                       = Color.new(255, 64, 64, FULL_ALPHA)
+common.BGCOLOR                     = Color.new(20, 20, 20, FULL_ALPHA)
+common.HIGHLIGHT                   = Color.new(255, 220, 100, FULL_ALPHA)
+common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
+common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80, FULL_ALPHA)
+common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
+common.OPTION_HINT_COLOR           = Color.new(246, 231, 173, FULL_ALPHA) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
-common.PAD_LABEL_CROSS             = Color.new(96, 96, 96, 255) -- pre-button-color-test default
-common.PAD_LABEL_SQUARE            = Color.new(96, 96, 96, 255) -- pre-button-color-test default
-common.PAD_LABEL_TRIANGLE          = Color.new(96, 96, 96, 255) -- pre-button-color-test default
-common.PAD_LABEL_CIRCLE            = Color.new(96, 96, 96, 255) -- pre-button-color-test default
+common.PAD_LABEL_CROSS             = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
+common.PAD_LABEL_SQUARE            = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
+common.PAD_LABEL_TRIANGLE          = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
+common.PAD_LABEL_CIRCLE            = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
 
 -- Layout
 common.FONT_SCALE                  = 0.9
@@ -45,7 +46,7 @@ common.MARGIN_X, common.MARGIN_Y   = 40, 28
 common.DEFAULT_W, common.DEFAULT_H = 640, 448
 common.MAX_VISIBLE                 = 10
 common.MAX_VISIBLE_LIST            = 12                    -- menu entries, path picker, entry paths, entry args, eGSM editor
-common.DIM_ENTRY                   = Color.new(56, 56, 56, 255) -- darker than DIM for disabled list rows
+common.DIM_ENTRY                   = Color.new(56, 56, 56, FULL_ALPHA) -- darker than DIM for disabled list rows
 common.VALUE_X                     = 360
 common.VALUE_MAX_LEN               = 38
 common.VALUE_MAX_LEN_LONG          = 22
@@ -263,7 +264,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
-      local activeIconColor = Color.new(255, 255, 255, 255)
+      local activeIconColor = Color.new(255, 255, 255, FULL_ALPHA)
       local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
       local function drawActiveIcon(icon, px)
         if Graphics.drawScaleImage then
@@ -369,10 +370,10 @@ common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCV
 common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y = 320, 220
 common.KEY_WIDTH, common.KEY_HEIGHT = 34, 26
 common.KEY_GAP = 2
-common.KEY_BG = Color.new(56, 56, 56, 255)
-common.KEY_BG_SEL = Color.new(80, 80, 80, 255)
-common.KEY_BORDER = Color.new(100, 100, 100, 255)
-common.KEY_BORDER_SEL = Color.new(180, 160, 100, 255)
+common.KEY_BG = Color.new(56, 56, 56, FULL_ALPHA)
+common.KEY_BG_SEL = Color.new(80, 80, 80, FULL_ALPHA)
+common.KEY_BORDER = Color.new(100, 100, 100, FULL_ALPHA)
+common.KEY_BORDER_SEL = Color.new(180, 160, 100, FULL_ALPHA)
 common.KEY_CHAR_W = 10
 common.KEY_LINE_H = 14
 

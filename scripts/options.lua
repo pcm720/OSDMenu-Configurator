@@ -536,6 +536,13 @@ config_options.r3configurator_cnf = {
     optType = "enum",
     default = "auto",
     enumVals = { "auto", "ntsc", "pal", "480p", "720p" },
+    enumDisplayMap = {
+      auto = "AUTO",
+      ntsc = "NTSC",
+      pal = "PAL",
+      ["480p"] = "480p",
+      ["720p"] = "720p",
+    },
     label = "Video mode",
     desc = "Startup video mode (auto keeps native PS2 mode).",
   },

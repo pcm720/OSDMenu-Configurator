@@ -265,6 +265,70 @@ end
 
 local MAIN_CNF_FILTER = detectMainCnfFilter()
 
+local MAIN_SHOW_KEY_TO_ID = {
+  show_freemcboot = "freemcboot",
+  show_freehddboot = "freehddboot",
+  show_osdmenu = "osdmenu",
+  show_osdmenu_mbr = "mbr",
+  show_hosdmenu = "hosdmenu",
+  show_ps2bbl = "ps2bbl",
+  show_psxbbl = "psxbbl",
+}
+
+local MAIN_FILTER_KEY_ORDER = {
+  "freemcboot",
+  "freehddboot",
+  "osdmenu",
+  "mbr",
+  "hosdmenu",
+  "ps2bbl",
+  "psxbbl",
+}
+
+local function parseMainFilterEnabled(value)
+  if value == true then return true end
+  if value == false then return false end
+  local s = tostring(value or ""):lower()
+  if s == "1" or s == "true" or s == "yes" or s == "on" then return true end
+  if s == "0" or s == "false" or s == "no" or s == "off" then return false end
+  return nil
+end
+
+local function getMainFilterBuildKey()
+  if type(MAIN_CNF_FILTER) ~= "table" then
+    return "all"
+  end
+  local parts = {}
+  for i = 1, #MAIN_FILTER_KEY_ORDER do
+    local id = MAIN_FILTER_KEY_ORDER[i]
+    local enabled = MAIN_CNF_FILTER[id]
+    if enabled == true then
+      parts[#parts + 1] = id .. "=1"
+    elseif enabled == false then
+      parts[#parts + 1] = id .. "=0"
+    end
+  end
+  if #parts == 0 then
+    return "all"
+  end
+  return table.concat(parts, ";")
+end
+
+local function setMainFilterFromShowKey(rawKey, value)
+  local showKey = tostring(rawKey or ""):lower()
+  local id = MAIN_SHOW_KEY_TO_ID[showKey]
+  if not id then return false end
+  local enabled = parseMainFilterEnabled(value)
+  if enabled == nil then return false end
+  if type(MAIN_CNF_FILTER) ~= "table" then
+    MAIN_CNF_FILTER = {}
+  end
+  MAIN_CNF_FILTER[id] = enabled
+  return true
+end
+
+C.setMainFilterFromShowKey = setMainFilterFromShowKey
+
 local function includeMainEntry(id)
   if MAIN_CNF_FILTER == nil then return true end
   local enabled = MAIN_CNF_FILTER[id]
@@ -569,6 +633,23 @@ local function setStateAfterLoad(s)
   if s.fileType ~= "osdmbr_cnf" then clearPathPickerState(s) end
 end
 
+local function markNewInMemoryConfigState(s)
+  if s and s.fileType == "r3configurator_cnf" then
+    if common.setCleanConfigSnapshot then
+      common.setCleanConfigSnapshot(s, { needsInitialSave = false })
+    else
+      s.configModified = false
+      s.configNeedsInitialSave = false
+    end
+  else
+    if common.markNewUnsavedConfig then
+      common.markNewUnsavedConfig(s)
+    else
+      s.configModified = true
+    end
+  end
+end
+
 local function runMain(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
@@ -581,7 +662,7 @@ local function runMain(s, pad)
 
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
-  local filterKey = (MAIN_CNF_FILTER and "filtered") or "all"
+  local filterKey = getMainFilterBuildKey()
   local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey
   if type(s.main) ~= "table" or type(s.mainEntries) ~= "table" or s.mainBuildKey ~= expectedBuildKey then
     local labels, entries = buildMainChoices(main_str)
@@ -785,7 +866,7 @@ local function runMain(s, pad)
     end
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
-      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 255)
+      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
       local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
@@ -927,7 +1008,7 @@ local function runMain(s, pad)
 
     local hintItems = buildMainCreditsOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
-      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 255)
+      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
       local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
@@ -1602,7 +1683,7 @@ local function runOpen(s, pad)
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
       setStateAfterLoad(s)
-      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      markNewInMemoryConfigState(s)
       openDbg("mark modified", "reason=new file in memory (explicit path missing)")
       return
     end
@@ -1676,7 +1757,7 @@ local function runOpen(s, pad)
       openDbg("no existing file; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "no existing path")
       setStateAfterLoad(s)
-      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      markNewInMemoryConfigState(s)
       openDbg("mark modified", "reason=new file in memory (no existing path)")
     end
   elseif #existing == 1 then
@@ -1832,7 +1913,7 @@ local function runChooseLoad(s, pad)
       openDbg("selected missing path; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "choose_load create missing")
       setStateAfterLoad(s)
-      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      markNewInMemoryConfigState(s)
       openDbg("mark modified", "reason=new file in memory (choose_load missing path)")
       clearLoadChoiceState(s)
     else

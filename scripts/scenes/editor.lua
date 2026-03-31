@@ -116,11 +116,11 @@ local R3_BUTTON_COLOR_PRESET = {
 }
 
 local R3_DEFAULT_COLOR_PRESET = {
-  cross = "365172",
-  square = "AF4B6D",
-  triangle = "358D4E",
-  circle = "933624",
-  selected = "365172",
+  cross = "606060",
+  square = "606060",
+  triangle = "606060",
+  circle = "606060",
+  selected = "0072A0",
   selected_dim = "003250",
   unselected = "A0A0A0",
   dim = "606060",
@@ -188,6 +188,34 @@ local function formatOptionColorValue(ctx, _, key, r, g, b, a)
   return _.formatColor(r, g, b, a)
 end
 
+local function applyR3ConfiguratorVideoModeLive(value)
+  local modeKey = tostring(value or ""):lower()
+  if modeKey == "" or modeKey == "auto" then
+    local runtime = _G.CONFIG_UI
+    if runtime and runtime.nativeVideoMode and runtime.applyVideoModeSpec then
+      pcall(runtime.applyVideoModeSpec, runtime.nativeVideoMode)
+    end
+    return
+  end
+
+  local modeMap = {
+    ["720p"] = { mode = _720p, interlace = NONINTERLACED, field = FRAME },
+    ["480p"] = { mode = _480p, interlace = NONINTERLACED, field = FRAME },
+    ["pal"] = { mode = PAL, interlace = INTERLACED, field = FIELD },
+    ["ntsc"] = { mode = NTSC, interlace = INTERLACED, field = FIELD },
+  }
+  local selected = modeMap[modeKey]
+  if not selected or type(selected.mode) ~= "number" then
+    return
+  end
+  local runtime = _G.CONFIG_UI
+  if runtime and runtime.applyVideoModeSpec then
+    pcall(runtime.applyVideoModeSpec, selected)
+  elseif Screen and Screen.setMode then
+    pcall(Screen.setMode, selected.mode, 640, 448, CT24, selected.interlace, selected.field)
+  end
+end
+
 local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
   if not isR3ConfiguratorFile(ctx) then return end
   local rawKey = tostring(key or "")
@@ -199,6 +227,15 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
       _.common.SWAP_CROSS_CIRCLE = enabled
     end
     return
+  end
+  if rawKey == "video_mode" then
+    applyR3ConfiguratorVideoModeLive(value)
+    return
+  end
+  if _G.CONFIG_UI and _G.CONFIG_UI.setMainFilterFromShowKey then
+    if _G.CONFIG_UI.setMainFilterFromShowKey(rawKey, value) then
+      return
+    end
   end
 
   local field = R3_COLOR_KEY_TO_FIELD[rawKey]

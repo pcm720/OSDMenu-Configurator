@@ -130,7 +130,77 @@ local function loadStartupConfig()
   return cfg
 end
 
+local function normalizeVideoModeSpec(spec)
+  if type(spec) ~= "table" then return nil end
+
+  local mode = tonumber(spec.mode or spec.vmode)
+  local width = tonumber(spec.width) or 640
+  local height = tonumber(spec.height) or 448
+  local interlace = tonumber(spec.interlace)
+  local field = tonumber(spec.field)
+
+  if type(mode) ~= "number" then
+    if height >= 700 and type(_720p) == "number" then
+      mode = _720p
+    elseif interlace == NONINTERLACED and type(_480p) == "number" then
+      mode = _480p
+    elseif height >= 500 and type(PAL) == "number" then
+      mode = PAL
+    elseif type(NTSC) == "number" then
+      mode = NTSC
+    end
+  end
+  if type(mode) ~= "number" then return nil end
+
+  if type(interlace) ~= "number" then
+    if mode == _720p or mode == _480p then
+      interlace = NONINTERLACED
+    else
+      interlace = INTERLACED
+    end
+  end
+  if type(field) ~= "number" then
+    field = (interlace == NONINTERLACED) and FRAME or FIELD
+  end
+
+  local outW = math.max(1, math.floor(width + 0.5))
+  local outH = math.max(1, math.floor(height + 0.5))
+  return {
+    mode = mode,
+    width = outW,
+    height = outH,
+    interlace = interlace,
+    field = field,
+  }
+end
+
+local function captureCurrentVideoModeSpec()
+  if not (Screen and Screen.getMode) then return nil end
+  local ok, spec = pcall(Screen.getMode)
+  if not ok or type(spec) ~= "table" then
+    return nil
+  end
+  return normalizeVideoModeSpec(spec)
+end
+
+local function applyVideoModeSpec(spec)
+  local normalized = normalizeVideoModeSpec(spec)
+  if not normalized then
+    return false, "invalid mode specification"
+  end
+  if not (Screen and Screen.setMode) then
+    return false, "Screen.setMode unavailable"
+  end
+  local ok, err = pcall(Screen.setMode, normalized.mode, normalized.width, normalized.height, CT24, normalized.interlace,
+    normalized.field)
+  if not ok then
+    return false, err
+  end
+  return true
+end
+
 local STARTUP_CFG = loadStartupConfig()
+local NATIVE_VIDEO_MODE_SPEC = captureCurrentVideoModeSpec()
 
 _G.CONFIG_UI = {
   common = common,
@@ -138,6 +208,8 @@ _G.CONFIG_UI = {
   startupConfig = STARTUP_CFG,
   startupMainFilter = STARTUP_CFG.main_filter,
   startupDefaultLanguage = STARTUP_CFG.default_language,
+  nativeVideoMode = NATIVE_VIDEO_MODE_SPEC,
+  applyVideoModeSpec = applyVideoModeSpec,
 }
 local main = dofile("scripts/ui_main.lua")
 local file_selector = dofile("scripts/file_selector.lua")
@@ -218,9 +290,7 @@ local function applyStartupVideoModeCnf()
   local selected = modeMap[modeKey]
   if not selected or type(selected.mode) ~= "number" then return end
 
-  local ok, err = pcall(function()
-    Screen.setMode(selected.mode, selected.width, selected.height, CT24, selected.interlace, selected.field)
-  end)
+  local ok, err = applyVideoModeSpec(selected)
   if ok then
     print("ui: startup video mode override from r3configurator.cnf (video_mode=" .. tostring(modeKey) .. ")")
   else
@@ -335,15 +405,38 @@ local function getSelectionOverlayLogoTexture(key)
   if cached ~= nil then
     return (cached ~= false) and cached or nil
   end
-  local path = (key == OVERLAY_LOGO_R3_TITLE_KEY) and "res/title.png" or ("res/logo_" .. tostring(key) .. ".png")
-  local ok, img = pcall(Graphics.loadImage, path)
-  if ok and isValidImageHandle(img) then
-    if Graphics.setImageFilters and LINEAR then
-      pcall(Graphics.setImageFilters, img, LINEAR)
-    end
-    overlayLogoCache[key] = img
-    return img
+
+  local candidatePaths
+  if key == OVERLAY_LOGO_R3_TITLE_KEY then
+    candidatePaths = { "res/title.png", "res/logo_r3configurat3r.png" }
+  else
+    candidatePaths = { "res/logo_" .. tostring(key) .. ".png" }
   end
+
+  for i = 1, #candidatePaths do
+    local rawPath = candidatePaths[i]
+    local resolvedPath = resolveStartupPath(rawPath)
+    local tried = {}
+    local loadPaths = {}
+    if resolvedPath and resolvedPath ~= "" then
+      loadPaths[#loadPaths + 1] = resolvedPath
+      tried[resolvedPath] = true
+    end
+    if rawPath and rawPath ~= "" and not tried[rawPath] then
+      loadPaths[#loadPaths + 1] = rawPath
+    end
+    for j = 1, #loadPaths do
+      local ok, img = pcall(Graphics.loadImage, loadPaths[j])
+      if ok and isValidImageHandle(img) then
+        if Graphics.setImageFilters and LINEAR then
+          pcall(Graphics.setImageFilters, img, LINEAR)
+        end
+        overlayLogoCache[key] = img
+        return img
+      end
+    end
+  end
+
   overlayLogoCache[key] = false
   return nil
 end
