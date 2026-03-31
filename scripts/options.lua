@@ -88,8 +88,12 @@ local function buildOsdMcLocations(chosenMcSlot, fileName)
   return out
 end
 
--- Config file locations by context and file type (ps2bbl_ini, psxbbl_ini, osdmenu_cnf, osdmbr_cnf, osdgsm_cnf).
+-- Config file locations by context and file type
+-- (ps2bbl_ini, psxbbl_ini, osdmenu_cnf, osdmbr_cnf, osdgsm_cnf, r3configurator_cnf).
 function config_options.getLocations(context, fileType, chosenMcSlot)
+  if fileType == "r3configurator_cnf" then
+    return { "r3configurator.cnf" }
+  end
   if fileType == "ps2bbl_ini" then
     return buildPs2BblIniLocations()
   end
@@ -481,6 +485,50 @@ config_options.freemcboot_cnf_categories = {
   },
 }
 
+config_options.r3configurator_cnf = {
+  {
+    key = "video_mode",
+    optType = "enum",
+    default = "auto",
+    enumVals = { "auto", "ntsc", "pal", "480p", "720p" },
+    label = "Video mode",
+    desc = "Startup video mode (auto keeps native PS2 mode).",
+  },
+  {
+    key = "swap_buttons",
+    optType = "bool",
+    default = "0",
+    label = "Swap buttons",
+    desc = "Swap confirm/cancel (Cross <-> Circle).",
+  },
+  {
+    key = "default_language",
+    optType = "text",
+    default = "en",
+    maxLen = 16,
+    label = "Default language",
+    desc = "Language code (scripts/lang/strings_<code>.lua).",
+  },
+  { key = "_r3_main_visibility_header", optType = "header", label = "Main page visibility" },
+  { key = "show_freemcboot", optType = "bool", default = "1", label = "Show FreeMCBoot" },
+  { key = "show_freehddboot", optType = "bool", default = "1", label = "Show FreeHDBoot" },
+  { key = "show_osdmenu", optType = "bool", default = "1", label = "Show OSDMenu" },
+  { key = "show_osdmenu_mbr", optType = "bool", default = "1", label = "Show OSDMenu MBR" },
+  { key = "show_hosdmenu", optType = "bool", default = "1", label = "Show HOSDMenu" },
+  { key = "show_ps2bbl", optType = "bool", default = "1", label = "Show PS2BBL" },
+  { key = "show_psxbbl", optType = "bool", default = "1", label = "Show PSXBBL" },
+  { key = "_r3_colors_header", optType = "header", label = "Colors (RRGGBB)" },
+  { key = "cross", optType = "color", default = "606060", label = "Cross color" },
+  { key = "square", optType = "color", default = "606060", label = "Square color" },
+  { key = "triangle", optType = "color", default = "606060", label = "Triangle color" },
+  { key = "circle", optType = "color", default = "606060", label = "Circle color" },
+  { key = "selected", optType = "color", default = "0072A0", label = "Selected color" },
+  { key = "selected_dim", optType = "color", default = "003250", label = "Selected dim color" },
+  { key = "unselected", optType = "color", default = "A0A0A0", label = "Unselected color" },
+  { key = "dim", optType = "color", default = "606060", label = "Dim color" },
+  { key = "background", optType = "color", default = "141414", label = "Background color" },
+}
+
 -- Get default value for a single key from osdmenu_cnf_categories (nil if no default).
 function config_options.getOsdmenuDefault(key)
   for _, cat in ipairs(config_options.osdmenu_cnf_categories) do
@@ -522,6 +570,25 @@ function config_options.getFreemcbootDefaults()
       if o.key and o.default ~= nil and o.key:sub(1, 1) ~= "_" then
         out[o.key] = o.default
       end
+    end
+  end
+  return out
+end
+
+function config_options.getR3ConfiguratorDefault(key)
+  for _, o in ipairs(config_options.r3configurator_cnf or {}) do
+    if o.key == key and o.default ~= nil then
+      return o.default
+    end
+  end
+  return nil
+end
+
+function config_options.getR3ConfiguratorDefaults()
+  local out = {}
+  for _, o in ipairs(config_options.r3configurator_cnf or {}) do
+    if o.key and o.default ~= nil and o.key:sub(1, 1) ~= "_" then
+      out[o.key] = o.default
     end
   end
   return out

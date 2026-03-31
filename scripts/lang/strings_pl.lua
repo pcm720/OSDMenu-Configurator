@@ -1,0 +1,349 @@
+--[[
+  Polskie ciągi interfejsu dla konfiguratora.
+  Skopiuj do strings_XX.lua (np. strings_fr.lua) i przetłumacz wartości; klucze pozostaw bez zmian.
+  Hint _items: każdy wpis to { pad = "cross", label = "Otwórz" }. Opcjonalne row = 1 (dół) lub 2 (góra); jeśli element ma row=2, przypisanie wiersza pochodzi z pliku języka, inaczej pierwsze 4 idą na dół, reszta na górę.
+]]
+
+local strings = {}
+strings.language_name = "Polski"
+
+-- Główny przepływ (main, choose_mc, select_config, initHdd, open, choose_load)
+strings.main = {
+  main_title = "R3CONFIGURATOR",
+  main_sub = "Wybierz jedną z poniższych opcji",
+  version_unknown = "nieznana",
+  main_hint_items = { { pad = "up", label = "Góra" }, { pad = "cross", label = "Otwórz" }, { pad = "down", label = "Dół" }, { pad = "start", label = "Wyjście", row = 2 } },
+  main_hint_items_with_lang = { { pad = "up", label = "Góra", layoutLabel = "Język -", row = 1 }, { pad = "cross", label = "Otwórz", layoutLabel = "Otwórz", row = 1 }, { pad = "down", label = "Dół", layoutLabel = "Język +", row = 1 }, { pad = "L1", label = "Język -", layoutLabel = "Język -", row = 2 }, { pad = "start", label = "Wyjście", layoutLabel = "Otwórz", row = 2 }, { pad = "R1", label = "Język +", layoutLabel = "Język +", row = 2 } },
+  main_ps2bbl_mc = "PS2BBL",
+  main_psxbbl_mc = "PSXBBL",
+  main_osdmenu = "OSDMenu",
+  main_osdmenu_mbr = "OSDMenu MBR",
+  main_hosdmenu = "HOSDMenu",
+  main_egsm = "eGSM",
+  main_freemcboot = "FreeMCBoot",
+  main_freehddboot = "FreeHDBoot",
+  main_r3configurator = "R3Configurator",
+  main_exit = "Wyjdź do przeglądarki",
+  main_exit_prompt = "Wyjść do przeglądarki?",
+  main_select_language = "Wybierz język",
+  main_settings = "Ustawienia",
+  main_select_language_title = "Wybierz język:",
+  main_credits = "Twórcy",
+  main_credits_built_using = "Zbudowano przy użyciu:",
+  main_credits_thanks_to = "Podziękowania:",
+  main_credits_translators = "Tłumacze:",
+  main_exit_hint_items = { { pad = "cross", label = "Tak" }, { pad = "circle", label = "Nie" } },
+  no_memory_card = "Nie znaleziono karty pamięci",
+  insert_mc = "Włóż kartę pamięci i spróbuj ponownie",
+  circle_back_items = { { pad = "circle", label = "Wstecz" } },
+  select_memory_card = "Wybierz kartę pamięci do wczytania konfiguracji",
+  config_card_hint = "Plik konfiguracyjny zostanie utworzony, jeśli nie istnieje",
+  cross_select_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "circle", label = "Wstecz" } },
+  memory_card_1_slot = "Karta pamięci 1",
+  memory_card_2_slot = "Karta pamięci 2",
+  which_file = "Który plik?",
+  init_hdd_title = "Inicjowanie modułów HDD...",
+  init_hdd_sub = "Ładowanie sterowników HDD i montowanie __sysconf",
+  no_location = "Brak lokalizacji dla tego typu pliku",
+  hdd_not_found = "Upewnij się, że dysk HDD jest podłączony i sformatowany",
+  cross_back_items = { { pad = "cross", label = "Wstecz" } },
+  failed_to_load = "Błąd ładowania: ",
+  cross_load_circle_back_items = { { pad = "cross", label = "Wczytaj" }, { pad = "circle", label = "Wstecz" } },
+  select_config_browse_ini = "Przeglądaj CONFIG.INI (CWD)",
+  select_config_osdmenu_cnf = "OSDMENU.CNF",
+  select_config_osdgsm_cnf = "OSDGSM.CNF",
+}
+
+-- Edytor
+strings.editor = {
+  saved = "Zapisano",
+  cross_open_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "start", label = "Zapisz" }, { pad = "circle", label = "Wstecz" } },
+  start_save_circle_back_items = { { pad = "start", label = "Zapisz" }, { pad = "circle", label = "Wstecz" } },
+  hint_edit_items = { { pad = "cross", label = "Edytuj", row = 1 }, { pad = "triangle", label = "Resetuj", row = 1 }, { pad = "start", label = "Zapisz", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "left", label = "-1", row = 2 }, { pad = "L1", label = "-10", row = 2 }, { pad = "L2", label = "-50", row = 2 }, { pad = "R2", label = "+50", row = 2 }, { pad = "R1", label = "+10", row = 2 }, { pad = "right", label = "+1", row = 2 } },
+  no_option_list = "Brak listy opcji dla tego typu pliku",
+  save_config_to = "Zapisz konfigurację do",
+  save_failed = "Błąd zapisu",
+  no_save_location = "Brak lokalizacji zapisu",
+  error_write_failed = "Błąd zapisu",
+  error_read_failed = "Błąd odczytu",
+  error_cannot_get_size = "Nie można pobrać rozmiaru pliku",
+  error_cannot_open = "Nie można otworzyć ",
+  error_cannot_open_for_write = "Nie można otworzyć do zapisu ",
+  cross_save_circle_cancel_items = { { pad = "cross", label = "Zapisz" }, { pad = "circle", label = "Anuluj" } },
+  leave_save_prompt = "Zapisać zmiany przed wyjściem?",
+  leave_save_hint_items = { { pad = "cross", label = "Zapisz" }, { pad = "triangle", label = "Odrzuć" }, { pad = "circle", label = "Anuluj" } },
+}
+
+-- Wpisy menu
+strings.menu_entries = {
+  edit_menu_entries = "Edytuj wpisy menu",
+  edit_irx_entries = "Edytuj wpisy IRX",
+  irx_order_hint = "Kolejność wpisów IRX ma znaczenie!",
+  item = "Element ",
+  hint_items = { { pad = "cross", label = "Otwórz", row = 1 }, { pad = "select", label = "Wstaw", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "left", label = "Poprzedni", row = 2 }, { pad = "L1", label = "Góra", row = 2 }, { pad = "start", label = "Zapisz", row = 2 }, { pad = "R1", label = "Dół", row = 2 }, { pad = "right", label = "Następny", row = 2 } },
+  hint_items_with_enable = { { pad = "cross", label = "Otwórz", row = 1 }, { pad = "triangle", label = "Włącz", layoutLabel = "Wyłącz", row = 1 }, { pad = "select", label = "Wstaw", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "left", label = "Poprzedni", row = 2 }, { pad = "L1", label = "Góra", row = 2 }, { pad = "start", label = "Zapisz", row = 2 }, { pad = "R1", label = "Dół", row = 2 }, { pad = "right", label = "Następny", row = 2 } },
+  hint_items_with_disable = { { pad = "cross", label = "Otwórz", row = 1 }, { pad = "triangle", label = "Wyłącz", layoutLabel = "Wyłącz", row = 1 }, { pad = "select", label = "Wstaw", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "left", label = "Poprzedni", row = 2 }, { pad = "L1", label = "Góra", row = 2 }, { pad = "start", label = "Zapisz", row = 2 }, { pad = "R1", label = "Dół", row = 2 }, { pad = "right", label = "Następny", row = 2 } },
+  entry_index = "Wpis ",
+  name = "Nazwa: ",
+  paths = "Ścieżki: ",
+  args = "args: ",
+  none = "brak",
+  path_s = " ścieżka(i)",
+  arg_s = " arg(y)",
+  cross_select_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "circle", label = "Wstecz" } },
+  edit_name = "Edytuj nazwę",
+  paths_label = "Ścieżki",
+  launch_disc_options = "Opcje uruchamiania dysku",
+  arguments = "Argumenty",
+  launch_key_label = "Klawisz uruchamiania",
+  channel_label = "Kanał",
+  entry_name_prompt = "Nazwa wpisu",
+  add_entry_label = "Nowy wpis",
+  launch_disc_options_title = "Opcje uruchamiania dysku",
+  launch_disc_options_sub = "Te opcje zastępują domyślne zachowanie uruchamiania dysku",
+  paths_for_entry_title = "Ścieżki dla %s (wpis %s)",
+  paths_hint_items = { { pad = "cross", label = "Edytuj", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "L1", label = "Góra", row = 2 }, { pad = "select", label = "Dodaj", row = 2 }, { pad = "R1", label = "Dół", row = 2 } },
+  paths_hint_items_with_enable = { { pad = "cross", label = "Edytuj", row = 1 }, { pad = "triangle", label = "Włącz", layoutLabel = "Wyłącz", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "L1", label = "Góra", row = 2 }, { pad = "select", label = "Dodaj", row = 2 }, { pad = "R1", label = "Dół", row = 2 } },
+  paths_hint_items_with_disable = { { pad = "cross", label = "Edytuj", row = 1 }, { pad = "triangle", label = "Wyłącz", layoutLabel = "Wyłącz", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "L1", label = "Góra", row = 2 }, { pad = "select", label = "Dodaj", row = 2 }, { pad = "R1", label = "Dół", row = 2 } },
+  args_for_entry_title = "Argumenty dla %s (wpis %s)",
+  cdrom_hint = "Wpis uruchamiania dysku: użyj opcji uruchamiania dysku dla flag",
+  cdrom_exclusive_warning = "Uruchamianie dysku z nadpisaniem musi być jedyną ścieżką dla tego wpisu.",
+  invalid_selection_title = "Nieprawidłowy wybór",
+  cdrom_toggle_hint_items = { { pad = "cross", label = "Przełącz", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "left", label = "Poprzedni", row = 2 }, { pad = "right", label = "Następny", row = 2 } },
+  new_argument_prompt = "Nowy argument",
+  edit_argument_prompt = "Edytuj argument",
+  actions_label = "Akcje",
+  actions_title = "Wybierz akcję:",
+  back_label = "Wstecz",
+  cancel_label = "Anuluj",
+  preset_label = "Predef.",
+  default_label = "Domyślny",
+  button_colors_label = "Kolory przycisków",
+  cancel_move_label = "Anuluj przenoszenie",
+  confirm_label = "Potwierdź",
+  disable_label = "Wyłącz",
+  edit_label = "Edytuj",
+  enable_label = "Włącz",
+  enter_label = "Otwórz",
+  grab_label = "Przenieś",
+  grabbed_tag = "Przenieś",
+  insert_label = "Wstaw",
+  remove_label = "Usuń",
+  save_config_label = "Zapisz",
+}
+
+-- Selektor ścieżek
+strings.path_picker = {
+  choose_device = "Wybierz urządzenie",
+  add_path_choose_device = "Dodaj ścieżkę: wybierz urządzenie",
+  bbl_build_device_hint = "Wybierz tylko urządzenia obsługiwane przez Twój build PS?BBL.",
+  enter_path_manually = "Wprowadź ścieżkę ręcznie",
+  bbl_cmd_cdvd = "$CDVD (Uruchom dysk)",
+  bbl_cmd_cdvd_no_logo = "$CDVD_NO_PS2LOGO (Uruchom dysk bez logo)",
+  bbl_cmd_osdsys = "$OSDSYS (Uruchom przeglądarkę)",
+  fmcb_cmd_osdsys = "OSDSYS",
+  fmcb_cmd_osdmenu = "OSDMENU",
+  fmcb_cmd_fastboot = "FASTBOOT",
+  fmcb_cmd_poweroff = "POWEROFF",
+  bbl_cmd_credits = "$CREDITS",
+  bbl_cmd_hddchecker = "$HDDCHECKER (build HDD)",
+  enter_path_prompt = "Wprowadź ścieżkę",
+  exclusive_path_warning = "Ta ścieżka musi być pierwszą i jedyną ścieżką dla tego wpisu.",
+  invalid_selection_title = "Nieprawidłowy wybór",
+  cross_select_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "circle", label = "Wstecz" } },
+  select_hdd_partition = "Wybierz partycję HDD",
+  no_partitions = "Brak partycji (czy HDD jest podłączony?)",
+  cross_open_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "circle", label = "Wstecz" } },
+  cross_open_square_patinfo_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "square", label = "PATINFO" }, { pad = "circle", label = "Wstecz" } },
+  no_elf_files = "Brak plików ELF ani folderów",
+  no_ini_files = "Brak plików INI ani folderów",
+  no_irx_files = "Brak plików IRX ani folderów",
+  cross_select_file_items = { { pad = "cross", label = "Wybierz" }, { pad = "circle", label = "Wstecz" } },
+  cross_select_create_circle_back_items = { { pad = "cross", label = "Wybierz" }, { pad = "square", label = "Utwórz CONFIG.INI" }, { pad = "circle", label = "Wstecz" } },
+  no_devices = "Brak urządzeń",
+  waiting_for_device_drivers = "Oczekiwanie na urządzenie...",
+  circle_back_items = { { pad = "circle", label = "Wstecz" } },
+  device_timeout = "Nie znaleziono %DEVICE%",
+  irx_extension_required = "Ścieżka musi kończyć się na .irx",
+  wildcard_confirm_title = "Użyć ścieżki jako symbolu wieloznacznego?",
+  wildcard_confirm_hint = { { pad = "cross", label = "Tak" }, { pad = "circle", label = "Nie" } },
+}
+
+-- Nazwy urządzeń i wpisów specjalnych. Używane przez OSDMenu oraz selektor plików / selektor ścieżek MBR (wspólne ciągi).
+strings.devices = {
+  memory_card_1 = "Karta pamięci 1",
+  memory_card_2 = "Karta pamięci 2",
+  launch_disc = "Uruchom dysk z nadpisaniem",
+  dvd_player = "Odtwarzacz DVD",
+  osd = "OSDSYS",
+  osdmenu = "OSDMENU",
+  fastboot = "FASTBOOT",
+  shutdown = "WYLĄCZ",
+  hosdsys = "Przeglądarka 2.0 / HOSDMenu",
+  psbbn = "PlayStation Broadband Navigator",
+  usb_storage_0 = "Pamięć USB 1",
+  usb_storage_1 = "Pamięć USB 2",
+  mmce_0 = "MMCE w gnieździe 1",
+  mmce_1 = "MMCE w gnieździe 2",
+  mx4sio_sd = "MX4SIO",
+  exfat_hdd_mass0 = "HDD sformatowany w exFAT",
+  hdd = "HDD sformatowany w APA",
+}
+
+-- Wspólne tokeny
+strings.common = {
+  on = "Włączone",
+  off = "Wyłączone",
+  not_set = "(nie ustawiono)",
+  empty = "(puste)",
+  second = "sekunda",
+  seconds = "sekundy",
+  enter_text = "Wprowadź tekst",
+  hint_prev = "Poprzedni",
+  hint_next = "Następny",
+}
+
+-- Nazwy kategorii (dla edytora OSDMENU, indeks od 1)
+strings.categories = {
+  [1] = "Modyfikatory zachowania OSD",
+  [2] = "Opcje niestandardowego menu OSD",
+  [3] = "Modyfikatory uruchamiania dysku i aplikacji",
+  [4] = "Edytuj wpisy menu",
+}
+
+strings.categories_freemcboot = {
+  [1] = "Modyfikatory zachowania OSD",
+  [2] = "Opcje niestandardowego menu OSD",
+  [3] = "Opcje dysku",
+  [4] = "AUTOBOOT",
+  [5] = "KLAWISZE URUCHAMIANIA",
+  [6] = "Edytuj wpisy menu",
+}
+
+-- Etykiety i opisy opcji OSDMENU.CNF (według klucza opcji)
+strings.options_osdmenu = {
+  OSDSYS_video_mode = { label = "Wymuś tryb wideo", desc = "Wymuś tryb wideo OSD" },
+  OSDSYS_region = { label = "Wymuś region", desc = "Wymuś region OSD" },
+  OSDSYS_Skip_Disc = { label = "Pomiń dysk", desc = "Pomiń automatyczne uruchamianie dysku" },
+  OSDSYS_Skip_Logo = { label = "Pomiń intro", desc = "Pomiń animację intro SCE" },
+  OSDSYS_Inner_Browser = { label = "Wewnętrzna przeglądarka", desc = "Uruchom w przeglądarce kart pamięci" },
+  OSDSYS_Skip_MC = { label = "Pomiń MC", desc = "Pomiń sprawdzanie karty pamięci w przeglądarce" },
+  OSDSYS_Skip_HDD = { label = "Pomiń HDD", desc = "Pomiń sprawdzanie HDD w przeglądarce" },
+  Debug_Screen = { label = "Ekran debugowania", desc = "Włącz wyjście ekranu debugowania" },
+  hacked_OSDSYS = { label = "Zmodyfikowany OSD", desc = "Włącz tryb menu OSD z łatką FHDB" },
+  OSDSYS_custom_menu = { label = "Niestandardowe menu", desc = "Włącz niestandardowe menu" },
+  OSDSYS_scroll_menu = { label = "Nieskończone przewijanie", desc = "Włącz nieskończone przewijanie" },
+  OSDSYS_menu_x = { label = "Menu X", desc = "Pozycja X niestandardowego menu" },
+  OSDSYS_menu_y = { label = "Menu Y", desc = "Pozycja Y niestandardowego menu" },
+  OSDSYS_enter_x = { label = "Enter X", desc = "Pozycja X przycisku Enter" },
+  OSDSYS_enter_y = { label = "Enter Y", desc = "Pozycja Y przycisku Enter" },
+  OSDSYS_version_x = { label = "Wersja X", desc = "Pozycja X przycisku wersji" },
+  OSDSYS_version_y = { label = "Wersja Y", desc = "Pozycja Y przycisku wersji" },
+  OSDSYS_cursor_max_velocity = { label = "Prędkość kursora", desc = "Maksymalna prędkość kursora" },
+  OSDSYS_cursor_acceleration = { label = "Przyspieszenie kursora", desc = "Przyspieszenie kursora" },
+  OSDSYS_left_cursor = { label = "Tekst lewego kursora", desc = "Maks. 19 znaków" },
+  OSDSYS_right_cursor = { label = "Tekst prawego kursora", desc = "Maks. 19 znaków" },
+  OSDSYS_menu_top_delimiter = { label = "Górny ogranicznik menu", desc = "Maks. 79 znaków" },
+  OSDSYS_menu_bottom_delimiter = { label = "Dolny ogranicznik menu", desc = "Maks. 79 znaków" },
+  OSDSYS_num_displayed_items = { label = "Wyświetlane pozycje", desc = "Liczba widocznych pozycji menu" },
+  OSDSYS_selected_color = { label = "Kolor zaznaczenia", desc = "Kolor podświetlenia wpisu menu" },
+  OSDSYS_unselected_color = { label = "Kolor niezaznaczony", desc = "Kolor wpisu menu" },
+  cdrom_skip_ps2logo = { label = "Pomiń PS2LOGO", desc = "Pomiń logo PlayStation 2 przy uruchamianiu dysku" },
+  cdrom_disable_gameid = { label = "Wyłącz wizualne ID gry dysku", desc = "Wyłącz wizualne ID gry dysku" },
+  cdrom_use_dkwdrv = { label = "Użyj DKWDRV", desc = "Użyj DKWDRV dla dysków PS1" },
+  ps1drv_enable_fast = { label = "Szybkie ładowanie PS1", desc = "Wymuś szybką prędkość dysku PS1" },
+  ps1drv_enable_smooth = { label = "Wygładzanie tekstur PS1", desc = "Wymuś wygładzanie tekstur PS1" },
+  ps1drv_use_ps1vn = { label = "Użyj PS1VN", desc = "Użyj negatora trybu wideo PS1" },
+  app_gameid = { label = "Wizualne ID gry aplikacji", desc = "Włącz wizualne ID gry dla plików ELF" },
+  path_DKWDRV_ELF = { label = "Ścieżka DKWDRV", desc = "Niestandardowa ścieżka do DKWDRV.ELF" },
+  pad_delay = { label = "Timer", desc = "Opóźnienie przed wyborem klawisza uruchamiania AUTOBOOT" },
+  FastBoot = { label = "Szybki start", desc = "Włącz szybkie uruchamianie dysku" },
+  ESR_Path_E1 = { label = "Ścieżka ESR E1", desc = "Główna ścieżka ESR" },
+  ESR_Path_E2 = { label = "Ścieżka ESR E2", desc = "Wtórna ścieżka ESR" },
+  ESR_Path_E3 = { label = "Ścieżka ESR E3", desc = "Trzeciorzędna ścieżka ESR" },
+  _menu_entries = { label = "Edytuj wpisy menu", desc = "Edytuj niestandardowe wpisy menu: nazwa, ścieżki, argumenty" },
+}
+
+-- Etykiety i opisy opcji OSDMBR.CNF (według klucza opcji)
+strings.options_osdmbr = {
+  boot_auto = { label = "Boot automatyczny", desc = "Domyślne ścieżki i argumenty" },
+  boot_start = { label = "Boot START", desc = "Ścieżki i argumenty dla przycisku START" },
+  boot_triangle = { label = "Boot TRÓJKĄT", desc = "Ścieżki i argumenty dla przycisku TRÓJKĄT" },
+  boot_circle = { label = "Boot KOŁO", desc = "Ścieżki i argumenty dla przycisku KOŁO" },
+  boot_cross = { label = "Boot KRZYŻYK", desc = "Ścieżki i argumenty dla przycisku KRZYŻYK" },
+  boot_square = { label = "Boot KWADRAT", desc = "Ścieżki i argumenty dla przycisku KWADRAT" },
+  cdrom_skip_ps2logo = { label = "Pomiń PS2LOGO", desc = "Pomiń logo PlayStation 2 przy uruchamianiu dysku" },
+  cdrom_disable_gameid = { label = "Wyłącz wizualne ID gry dysku", desc = "Wyłącz wizualne ID gry dysku" },
+  cdrom_use_dkwdrv = { label = "Użyj DKWDRV", desc = "Użyj DKWDRV dla dysków PS1" },
+  ps1drv_enable_fast = { label = "Szybkie ładowanie PS1", desc = "Wymuś szybką prędkość dysku PS1" },
+  ps1drv_enable_smooth = { label = "Wygładzanie tekstur PS1", desc = "Wymuś wygładzanie tekstur PS1" },
+  ps1drv_use_ps1vn = { label = "Użyj PS1VN", desc = "Użyj negatora trybu wideo PS1" },
+  prefer_bbn = { label = "Preferuj BBN", desc = "Załaduj PSBBN przy ponownym uruchomieniu" },
+  app_gameid = { label = "Wizualne ID gry aplikacji", desc = "Wyświetl wizualne ID gry dla plików ELF" },
+  osd_screentype = { label = "Typ ekranu OSD", desc = "Wymuś typ ekranu OSD (4:3, 16:9, pełny)" },
+  osd_language = { label = "Język OSD", desc = "Wymuś język OSD. Nieobsługiwany wybór powróci do domyślnego ustawienia konsoli." },
+}
+
+strings.options_bbl = {
+  VIDEO_MODE = { label = "Wymuś tryb wideo", desc = "Tryb UI loadera" },
+  LOGO_DISPLAY = { label = "Wyświetlanie logo", desc = "Prędkość wyświetlania logo/tekstu informacyjnego" },
+  OSDHISTORY_READ = { label = "Odczyt historii OSD", desc = "Odczytaj poprzedni stan historii OSD" },
+  EJECT_TRAY = { label = "Wysuń tacę", desc = "Wysuń tackę przed uruchomieniem" },
+  PS1DRV_ENABLE_FAST = { label = "Szybkie ładowanie PS1", desc = "Wymuś szybką prędkość dysku PS1" },
+  PS1DRV_ENABLE_SMOOTH = { label = "Wygładzanie tekstur PS1", desc = "Wymuś wygładzanie tekstur PS1" },
+  PS1DRV_USE_PS1VN = { label = "Użyj PS1VN", desc = "Użyj negatora trybu wideo PS1" },
+  _bbl_irx_entries = { label = "Edytuj wpisy IRX", desc = "Edytuj ścieżki modułów LOAD_IRX_E#" },
+  APP_GAMEID = { label = "Wizualne ID gry aplikacji", desc = "Game ID for RetroGem" },
+  CDROM_DISABLE_GAMEID = { label = "Wyłącz wizualne ID gry dysku", desc = "Disable RetroGem Game ID for DISCS" },
+  app_gameid = { label = "Wizualne ID gry aplikacji", desc = "Wyświetl wizualne ID gry dla plików ELF" },
+  cdrom_disable_gameid = { label = "Wyłącz wizualne ID gry dysku", desc = "Wyłącz wizualne ID gry dysku" },
+}
+
+-- Edytor eGSM (jeden ekran: domyślne + nadpisania per tytuł)
+strings.egsm = {
+  default_label = "Domyślny",
+  title_id_prompt = "ID tytułu (np. SCES12345)",
+  hint_items = { { pad = "cross", label = "Edytuj", row = 1 }, { pad = "select", label = "Wstaw", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 }, { pad = "start", label = "Zapisz", row = 2 } },
+  hint_items_with_enable = { { pad = "left", label = "Poprzedni", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "start", label = "Zapisz", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "right", label = "Następny", row = 2 }, { pad = "cross", label = "Edytuj", row = 1 }, { pad = "triangle", label = "Włącz", layoutLabel = "Wyłącz", row = 1 }, { pad = "select", label = "Wstaw", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 } },
+  hint_items_with_disable = { { pad = "left", label = "Poprzedni", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "start", label = "Zapisz", row = 2 }, { pad = "", label = "", row = 2 }, { pad = "right", label = "Następny", row = 2 }, { pad = "cross", label = "Edytuj", row = 1 }, { pad = "triangle", label = "Wyłącz", layoutLabel = "Wyłącz", row = 1 }, { pad = "select", label = "Wstaw", row = 1 }, { pad = "square", label = "Usuń", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 } },
+  -- Ekran edycji wartości (wg README loadera: fp1/fp2/1080ix1..3, compat 1/2/3)
+  value_edit_title = "Wartość eGSM",
+  result_prefix = "Wartość: ",
+  video_header = "Tryb wideo",
+  video_240p = "Wymuś 240/288p",
+  video_480p = "Wymuś 480/576p",
+  video_1080i_1x = "Wymuś 1080i (skalowanie 1x)",
+  video_1080i_2x = "Wymuś 1080i (skalowanie 2x)",
+  video_1080i_3x = "Wymuś 1080i (skalowanie 3x)",
+  compat_header = "Kompatybilność",
+  compat_none = "Brak",
+  compat_1 = "Przełączanie pól typ 1 (jak OPL)",
+  compat_2 = "Przełączanie pól typ 2",
+  compat_3 = "Przełączanie pól typ 3",
+  value_edit_hint = { { pad = "cross", label = "Wybierz", row = 1 }, { pad = "circle", label = "Wstecz", row = 1 } },
+}
+
+-- Jedyna tabela przeglądania dla wszystkich typów konfiguracji (zbudowana z powyższych trzech)
+strings.options = {}
+for k, v in pairs(strings.options_osdmenu or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_osdmbr or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_bbl or {}) do strings.options[k] = v end
+for k, v in pairs(strings.options_osdgsm or {}) do strings.options[k] = v end
+
+-- Etykiety/opisy opcji CDROM (podekran opcji uruchamiania dysku). Klucze są symboliczne (bez surowych argumentów).
+strings.cdrom_options = {
+  nologo = { label = "Pomiń PS2LOGO", desc = "Pomiń logo PlayStation 2 przy uruchamianiu dysku" },
+  nogameid = { label = "Wyłącz wizualne ID gry dysku", desc = "Wyłącz wizualne ID gry dysku" },
+  dkwdrv = { label = "Użyj DKWDRV", desc = "Użyj DKWDRV dla dysków PS1" },
+  ps1fast = { label = "Szybkie ładowanie PS1", desc = "Wymuś szybką prędkość dysku PS1" },
+  ps1smooth = { label = "Wygładzanie tekstur PS1", desc = "Wymuś wygładzanie tekstur PS1" },
+  ps1vneg = { label = "Użyj PS1VN", desc = "Użyj negatora trybu wideo PS1" },
+}
+
+-- Podpowiedź wprowadzania tekstu (klawiatura). hint_items_title_id = to samo bez Caps (używane dla ID tytułu GSM).
+strings.text_input = {
+  hint_items = { { pad = "cross", label = "Zatwierdź", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Gotowe", row = 1 }, { pad = "triangle", label = "Caps", row = 1 }, { pad = "circle", label = "Anuluj", row = 1 }, { pad = "L1", label = "Lewo", row = 2 }, { pad = "R1", label = "Prawo", row = 2 } },
+  hint_items_title_id = { { pad = "cross", label = "Zatwierdź", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Gotowe", row = 1 }, { pad = "circle", label = "Anuluj", row = 1 }, { pad = "L1", label = "Lewo", row = 2 }, { pad = "R1", label = "Prawo", row = 2 } },
+}
+
+return strings

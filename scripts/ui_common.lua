@@ -32,10 +32,10 @@ common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80)
 common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0)
 common.OPTION_HINT_COLOR           = Color.new(246, 231, 173) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
-common.PAD_LABEL_CROSS             = Color.new(0x36, 0x51, 0x72) -- #365172
-common.PAD_LABEL_SQUARE            = Color.new(0xAF, 0x4B, 0x6D) -- #af4b6d
-common.PAD_LABEL_TRIANGLE          = Color.new(0x35, 0x8D, 0x4E) -- #358d4e
-common.PAD_LABEL_CIRCLE            = Color.new(0x93, 0x36, 0x24) -- #933624
+common.PAD_LABEL_CROSS             = Color.new(96, 96, 96) -- pre-button-color-test default
+common.PAD_LABEL_SQUARE            = Color.new(96, 96, 96) -- pre-button-color-test default
+common.PAD_LABEL_TRIANGLE          = Color.new(96, 96, 96) -- pre-button-color-test default
+common.PAD_LABEL_CIRCLE            = Color.new(96, 96, 96) -- pre-button-color-test default
 
 -- Layout
 common.FONT_SCALE                  = 0.9

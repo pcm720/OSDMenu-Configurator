@@ -1871,6 +1871,21 @@ function config_parse.regenerateForSave(lines, fileType, options)
   if fileType == "osdgsm_cnf" then
     return config_parse.regenerateLinesOsdgsm(lines)
   end
+  if fileType == "r3configurator_cnf" then
+    local out = {}
+    local list = opt.r3configurator_cnf or {}
+    for i = 1, #list do
+      local row = list[i]
+      local key = row and row.key or nil
+      if key and key ~= "" and key:sub(1, 1) ~= "_" then
+        local value = config_parse.get(lines, key)
+        if value ~= nil then
+          out[#out + 1] = { key = key, value = value }
+        end
+      end
+    end
+    return out
+  end
   return lines
 end
 

@@ -7,7 +7,138 @@ local common = dofile("scripts/ui_common.lua")
 local config_parse = dofile("scripts/parse.lua")
 local scene_module = dofile("scripts/ui_state.lua")
 
-_G.CONFIG_UI = { common = common, config_parse = config_parse }
+local function trimString(s)
+  return tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function getStartupCwd()
+  if System and System.currentDirectory then
+    local okCwd, cwdValue = pcall(System.currentDirectory)
+    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
+      return cwdValue
+    end
+  end
+  return nil
+end
+
+local function startupFileExists(path)
+  local ok, exists = pcall(doesFileExist, path)
+  return ok and exists == true
+end
+
+local function resolveStartupPath(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  if startupFileExists(path) then return path end
+  if startupFileExists("./" .. path) then return "./" .. path end
+  local cwd = getStartupCwd()
+  if cwd and cwd ~= "" then
+    local base = cwd
+    if base:sub(-1) ~= "/" then base = base .. "/" end
+    if startupFileExists(base .. path) then
+      return base .. path
+    end
+  end
+  return nil
+end
+
+local function parseStartupBool(v)
+  local s = trimString(v):lower()
+  if s == "1" or s == "true" or s == "yes" or s == "on" then return true end
+  if s == "0" or s == "false" or s == "no" or s == "off" then return false end
+  return nil
+end
+
+local function loadStartupConfig()
+  local cfg = {
+    path = nil,
+    video_mode = nil,
+    swap_buttons = nil,
+    default_language = nil,
+    main_filter = nil,
+    colors = {},
+  }
+
+  local cfgPath = resolveStartupPath("r3configurator.cnf")
+  if not cfgPath then
+    return cfg
+  end
+
+  local lines, err = config_parse.load(cfgPath)
+  if not lines then
+    print("ui: failed loading startup config r3configurator.cnf: " .. tostring(err))
+    return cfg
+  end
+
+  cfg.path = cfgPath
+  local kv = {}
+  for i = 1, #(lines or {}) do
+    local e = lines[i]
+    if e and e.key and not e.comment then
+      kv[trimString(e.key):lower()] = trimString(e.value or "")
+    end
+  end
+
+  local vm = trimString(kv.video_mode):lower()
+  if vm == "720p" or vm == "480p" or vm == "pal" or vm == "ntsc" or vm == "auto" then
+    cfg.video_mode = vm
+  end
+
+  local swap = parseStartupBool(kv.swap_buttons)
+  if swap ~= nil then
+    cfg.swap_buttons = swap
+  end
+
+  local lang = trimString(kv.default_language):lower()
+  if lang ~= "" and lang:match("^[%a][%w_]*$") then
+    cfg.default_language = lang
+  end
+
+  local showKeyToId = {
+    show_freemcboot = "freemcboot",
+    show_freehddboot = "freehddboot",
+    show_osdmenu = "osdmenu",
+    show_osdmenu_mbr = "mbr",
+    show_hosdmenu = "hosdmenu",
+    show_ps2bbl = "ps2bbl",
+    show_psxbbl = "psxbbl",
+  }
+  local filter = {}
+  local hasFilter = false
+  for key, id in pairs(showKeyToId) do
+    local b = parseStartupBool(kv[key])
+    if b ~= nil then
+      hasFilter = true
+      filter[id] = b
+    end
+  end
+  if hasFilter then
+    cfg.main_filter = filter
+  end
+
+  local colorKeys = {
+    "cross", "square", "triangle", "circle",
+    "selected", "selected_dim", "unselected", "dim", "background"
+  }
+  for i = 1, #colorKeys do
+    local key = colorKeys[i]
+    local value = trimString(kv[key])
+    if value ~= "" then
+      cfg.colors[key] = value
+    end
+  end
+
+  return cfg
+end
+
+local STARTUP_CFG = loadStartupConfig()
+
+_G.CONFIG_UI = {
+  common = common,
+  config_parse = config_parse,
+  startupConfig = STARTUP_CFG,
+  startupMainFilter = STARTUP_CFG.main_filter,
+  startupDefaultLanguage = STARTUP_CFG.default_language,
+}
 local main = dofile("scripts/ui_main.lua")
 local file_selector = dofile("scripts/file_selector.lua")
 local config_options = dofile("scripts/options.lua")
@@ -63,96 +194,42 @@ local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY
     common.KEY_BORDER_SEL
 local KEY_CHAR_W, KEY_LINE_H = common.KEY_CHAR_W, common.KEY_LINE_H
 
-local function applyStartupVideoModeOpt()
+local function refreshRuntimeColorAliases()
+  WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
+  HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
+  SELECTED_ENTRY_DIM = common.SELECTED_ENTRY_DIM
+  TEXT_CURSOR_COLOR = common.TEXT_CURSOR_COLOR
+end
+
+local function applyStartupVideoModeCnf()
   -- Keep a fixed NTSC-style UI canvas across forced output modes so layout
   -- and placement remain consistent (scaled by GS output mode, not reflowed).
   local BASE_W, BASE_H = 640, 448
 
-  local cwd = nil
-  if System and System.currentDirectory then
-    local okCwd, cwdValue = pcall(System.currentDirectory)
-    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
-      cwd = cwdValue
-    end
-  end
+  local modeKey = STARTUP_CFG and STARTUP_CFG.video_mode or nil
+  if not modeKey or modeKey == "" or modeKey == "auto" then return end
 
-  local function checkExists(path)
-    local ok, exists = pcall(doesFileExist, path)
-    return ok and exists == true
-  end
-
-  local function optExists(path)
-    if type(path) ~= "string" or path == "" then return false end
-    if checkExists(path) or checkExists("./" .. path) then
-      return true
-    end
-    if cwd and cwd ~= "" then
-      local base = cwd
-      if base:sub(-1) ~= "/" then base = base .. "/" end
-      if checkExists(base .. path) then
-        return true
-      end
-    end
-    return false
-  end
-
-  local opts = {
-    { file = "720p.opt", mode = _720p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
-    { file = "480p.opt", mode = _480p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
-    { file = "pal.opt",  mode = PAL,   width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
-    { file = "ntsc.opt", mode = NTSC,  width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
+  local modeMap = {
+    ["720p"] = { mode = _720p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
+    ["480p"] = { mode = _480p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
+    ["pal"] = { mode = PAL, width = BASE_W, height = BASE_H, interlace = INTERLACED, field = FIELD },
+    ["ntsc"] = { mode = NTSC, width = BASE_W, height = BASE_H, interlace = INTERLACED, field = FIELD },
   }
-
-  local selected = nil
-  for i = 1, #opts do
-    local spec = opts[i]
-    if type(spec.mode) == "number" and optExists(spec.file) then
-      selected = spec
-      break
-    end
-  end
-  if not selected then return end
+  local selected = modeMap[modeKey]
+  if not selected or type(selected.mode) ~= "number" then return end
 
   local ok, err = pcall(function()
     Screen.setMode(selected.mode, selected.width, selected.height, CT24, selected.interlace, selected.field)
   end)
   if ok then
-    print("ui: startup video mode override from " .. tostring(selected.file))
+    print("ui: startup video mode override from r3configurator.cnf (video_mode=" .. tostring(modeKey) .. ")")
   else
-    print("ui: failed startup video mode override from " .. tostring(selected.file) .. ": " .. tostring(err))
+    print("ui: failed startup video mode override from r3configurator.cnf: " .. tostring(err))
   end
 end
 
-local function applyStartupSwapButtonsOpt()
-  local cwd = nil
-  if System and System.currentDirectory then
-    local okCwd, cwdValue = pcall(System.currentDirectory)
-    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
-      cwd = cwdValue
-    end
-  end
-
-  local function checkExists(path)
-    local ok, exists = pcall(doesFileExist, path)
-    return ok and exists == true
-  end
-
-  local function optExists(path)
-    if type(path) ~= "string" or path == "" then return false end
-    if checkExists(path) or checkExists("./" .. path) then
-      return true
-    end
-    if cwd and cwd ~= "" then
-      local base = cwd
-      if base:sub(-1) ~= "/" then base = base .. "/" end
-      if checkExists(base .. path) then
-        return true
-      end
-    end
-    return false
-  end
-
-  local enabled = optExists("swap_buttons.opt")
+local function applyStartupSwapButtonsCnf()
+  local enabled = (STARTUP_CFG and STARTUP_CFG.swap_buttons == true) and true or false
   if common.setSwapCrossCircle then
     common.setSwapCrossCircle(enabled)
   else
@@ -160,7 +237,59 @@ local function applyStartupSwapButtonsOpt()
   end
   _G.CONFIG_UI.swapCrossCircle = enabled == true
   if enabled then
-    print("ui: startup button swap override from swap_buttons.opt (circle confirm/cross cancel)")
+    print("ui: startup button swap override from r3configurator.cnf (swap_buttons=1)")
+  end
+end
+
+local function parseStartupColorValue(raw)
+  local value = tostring(raw or "")
+  local trimmed = value:gsub("^%s+", ""):gsub("%s+$", "")
+  if trimmed == "" then return nil end
+
+  if trimmed:match("^[%x][%x][%x][%x][%x][%x]$") then
+    return tonumber(trimmed:sub(1, 2), 16), tonumber(trimmed:sub(3, 4), 16), tonumber(trimmed:sub(5, 6), 16), 255
+  end
+
+  return nil
+end
+
+local function applyStartupColorsCnf()
+  if not (STARTUP_CFG and STARTUP_CFG.path) then return end
+  local kv = STARTUP_CFG.colors or {}
+
+  local applied = 0
+  local function applyColor(field, key)
+    local raw = kv[key]
+    local usedKey = key
+    if not raw then return end
+
+    local r, g, b, a = parseStartupColorValue(raw)
+    if not r then
+      print("ui: r3configurator.cnf invalid value for " .. tostring(usedKey) .. ": " .. tostring(raw))
+      return
+    end
+
+    common[field] = Color.new(r, g, b, a)
+    applied = applied + 1
+  end
+
+  applyColor("PAD_LABEL_CROSS", "cross")
+  applyColor("PAD_LABEL_SQUARE", "square")
+  applyColor("PAD_LABEL_TRIANGLE", "triangle")
+  applyColor("PAD_LABEL_CIRCLE", "circle")
+  applyColor("SELECTED_ENTRY", "selected")
+  applyColor("SELECTED_ENTRY_DIM", "selected_dim")
+  applyColor("GRAY", "unselected")
+  applyColor("DIM", "dim")
+  applyColor("BGCOLOR", "background")
+
+  refreshRuntimeColorAliases()
+
+  _G.CONFIG_UI.colorsCnfActive = true
+  if applied > 0 then
+    print("ui: startup colors override from r3configurator.cnf (" .. tostring(applied) .. " key(s) applied)")
+  else
+    print("ui: startup colors override from r3configurator.cnf (no valid keys found)")
   end
 end
 
@@ -380,6 +509,7 @@ local function mainLoop()
   -- One-frame dispatch for all states. Main-flow states use runSceneLoop; others use this.
   local function runOneFrame(c)
     syncFromS(c)
+    refreshRuntimeColorAliases()
     Screen.clear(BLACK)
     local vmode = Screen.getMode()
     local w = (vmode and vmode.width) or common.DEFAULT_W
@@ -651,6 +781,7 @@ local function mainLoop()
   end
 end
 
-applyStartupVideoModeOpt()
-applyStartupSwapButtonsOpt()
+applyStartupVideoModeCnf()
+applyStartupSwapButtonsCnf()
+applyStartupColorsCnf()
 return mainLoop()

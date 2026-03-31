@@ -12,10 +12,17 @@ local function tryLoadStrings(path)
   return (ok and type(t) == "table") and t or nil
 end
 
+local startupDefaultLanguage = (_G.CONFIG_UI and _G.CONFIG_UI.startupDefaultLanguage) or nil
+
 local strings = tryLoadStrings("strings.lua")
 local cwdOverride = (strings ~= nil)
 if not cwdOverride then
-  strings = dofile("scripts/lang/strings_en.lua")
+  if type(startupDefaultLanguage) == "string" and startupDefaultLanguage ~= "" then
+    strings = tryLoadStrings("scripts/lang/strings_" .. startupDefaultLanguage .. ".lua")
+  end
+  if not strings then
+    strings = dofile("scripts/lang/strings_en.lua")
+  end
 end
 strings = strings or {}
 _G.CONFIG_UI.strings = strings
@@ -69,9 +76,25 @@ if not cwdOverride and System and System.listDirectory then
   _G.CONFIG_UI.langFiles = list
   _G.CONFIG_UI.langDisplayNames = buildLanguageDisplayNames(list)
   local idx = 1
-  for i, f in ipairs(list) do
-    if f == "strings_en.lua" then
-      idx = i; break
+  local foundTarget = false
+  local targetFile = nil
+  if type(startupDefaultLanguage) == "string" and startupDefaultLanguage ~= "" then
+    targetFile = "strings_" .. startupDefaultLanguage .. ".lua"
+  end
+  if targetFile then
+    for i, f in ipairs(list) do
+      if f == targetFile then
+        idx = i
+        foundTarget = true
+        break
+      end
+    end
+  end
+  if not foundTarget then
+    for i, f in ipairs(list) do
+      if f == "strings_en.lua" then
+        idx = i; break
+      end
     end
   end
   _G.CONFIG_UI.langIndex = idx
@@ -136,6 +159,13 @@ local function getLanguageHintLabel(main_str)
   return cleaned
 end
 
+local function getSettingsHintLabel(main_str)
+  local raw = main_str.main_settings or "Settings"
+  local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if cleaned == "" then cleaned = "Settings" end
+  return cleaned
+end
+
 local function getCreditsHintLabel(main_str)
   local baseHint = main_str.main_hint_items or {}
   local raw = main_str.main_credits or findHintLabel(baseHint, "triangle", "Credits")
@@ -162,14 +192,13 @@ local function buildMainBaseHintItems(main_str)
   local baseHint = main_str.main_hint_items or {}
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
   local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
+  local settingsLabel = getSettingsHintLabel(main_str)
   local creditsLabel = getCreditsHintLabel(main_str)
   local out = {
     { pad = "cross", label = enterLabel, row = 1 },
+    { pad = "square", label = settingsLabel, row = 1 },
     { pad = "circle", label = exitLabel, row = 1 },
   }
-  if hasLanguageChoices() then
-    table.insert(out, 2, { pad = "square", label = getLanguageHintLabel(main_str), row = 1 })
-  end
   table.insert(out, #out, { pad = "triangle", label = creditsLabel, row = 1 })
   return out
 end
@@ -215,62 +244,34 @@ local function clearLoadChoiceState(s)
   s.loadReturnState = nil
 end
 
-local MAIN_FILTER_OPTS = {
-  { file = "fmcb.opt", id = "freemcboot" },
-  { file = "fhdb.opt", id = "freehddboot" },
-  { file = "osdmenu.opt", id = "osdmenu" },
-  { file = "osdmenumbr.opt", id = "mbr" },
-  { file = "hosdmenu.opt", id = "hosdmenu" },
-  { file = "ps2bbl.opt", id = "ps2bbl" },
-  { file = "psxbbl.opt", id = "psxbbl" },
-}
-
-local function detectMainOptWhitelist()
-  local cwd = nil
-  if System and System.currentDirectory then
-    local okCwd, cwdValue = pcall(System.currentDirectory)
-    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
-      cwd = cwdValue
+local function detectMainCnfFilter()
+  local configured = (_G.CONFIG_UI and _G.CONFIG_UI.startupMainFilter) or nil
+  if type(configured) == "table" then
+    local out = {}
+    local hasAny = false
+    for id, enabled in pairs(configured) do
+      if enabled == true or enabled == false then
+        out[id] = enabled
+        hasAny = true
+      end
     end
-  end
-
-  local function checkExists(path)
-    local ok, exists = pcall(doesFileExist, path)
-    return ok and exists == true
-  end
-
-  local function optExists(path)
-    if checkExists(path) or checkExists("./" .. path) then
-      return true
+    if hasAny then
+      return out
     end
-    if cwd and cwd ~= "" then
-      local base = cwd
-      if base:sub(-1) ~= "/" then base = base .. "/" end
-      return checkExists(base .. path)
-    end
-    return false
-  end
-
-  local out = {}
-  local any = false
-  for i = 1, #MAIN_FILTER_OPTS do
-    local item = MAIN_FILTER_OPTS[i]
-    if optExists(item.file) then
-      out[item.id] = true
-      any = true
-    end
-  end
-  if not any then
     return nil
   end
-  return out
+  return nil
 end
 
-local MAIN_OPT_WHITELIST = detectMainOptWhitelist()
+local MAIN_CNF_FILTER = detectMainCnfFilter()
 
 local function includeMainEntry(id)
-  if MAIN_OPT_WHITELIST == nil then return true end
-  return MAIN_OPT_WHITELIST[id] == true
+  if MAIN_CNF_FILTER == nil then return true end
+  local enabled = MAIN_CNF_FILTER[id]
+  if enabled == nil then
+    return true
+  end
+  return enabled == true
 end
 
 local function buildMainEntries(main_str)
@@ -446,6 +447,13 @@ local function initEmptyLinesForFileType(s, reason)
     for k, v in pairs(C.config_options.getFreemcbootDefaults()) do config_parse.set(s.lines, k, v) end
   elseif s.fileType == "osdmenu_cnf" and C.config_options.getOsdmenuDefaults then
     for k, v in pairs(C.config_options.getOsdmenuDefaults()) do config_parse.set(s.lines, k, v) end
+  elseif s.fileType == "r3configurator_cnf" and C.config_options.r3configurator_cnf then
+    for i = 1, #C.config_options.r3configurator_cnf do
+      local o = C.config_options.r3configurator_cnf[i]
+      if o and o.key and o.key:sub(1, 1) ~= "_" and o.default ~= nil then
+        config_parse.set(s.lines, o.key, tostring(o.default))
+      end
+    end
   end
   openDbg("init empty lines", "fileType=" .. tostring(s.fileType), "reason=" .. tostring(reason),
     "lineCount=" .. tostring(#(s.lines or {})))
@@ -573,7 +581,7 @@ local function runMain(s, pad)
 
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
-  local filterKey = (MAIN_OPT_WHITELIST and "filtered") or "all"
+  local filterKey = (MAIN_CNF_WHITELIST and "filtered") or "all"
   local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey
   if type(s.main) ~= "table" or type(s.mainEntries) ~= "table" or s.mainBuildKey ~= expectedBuildKey then
     local labels, entries = buildMainChoices(main_str)
@@ -599,6 +607,30 @@ local function runMain(s, pad)
   local function getMainOverlayLogoKey(sel)
     local entry = s.mainEntries and s.mainEntries[sel]
     return entry and entry.logoKey or nil
+  end
+
+  local function getMainEntryById(id)
+    local entryId = tostring(id or "")
+    if entryId == "" then return nil end
+    for i = 1, #(s.mainEntries or {}) do
+      local entry = s.mainEntries[i]
+      if entry and entry.id == entryId then
+        return entry
+      end
+    end
+    return nil
+  end
+
+  local function openMainEntry(entry)
+    if not entry then return false end
+    s.mainOverlayLogoKey = entry.logoKey
+    s.context = entry.context
+    s.fileType = entry.fileType
+    s.chosenMcSlot = nil
+    clearLoadChoiceState(s)
+    clearPathPickerState(s)
+    s.state = entry.state
+    return true
   end
 
   if s.mainSel < 1 then s.mainSel = 1 end
@@ -926,14 +958,17 @@ local function runMain(s, pad)
     return
   end
 
-  if hasLanguageChoices() and (pad & PAD_SQUARE) ~= 0 then
-    s.mainLangPrompt = true
-    s.mainLangSel = C.langIndex or 1
-    s.mainLangPromptAnim = 0
-    s.mainLangPromptClosing = nil
-    -- Avoid a one-frame background-only flash on prompt open.
-    drawMainBaseUi()
-    return
+  if (pad & PAD_SQUARE) ~= 0 then
+    local settingsEntry = getMainEntryById("r3configurator") or {
+      id = "r3configurator",
+      logoKey = nil,
+      context = "r3configurator",
+      fileType = "r3configurator_cnf",
+      state = "open",
+    }
+    if openMainEntry(settingsEntry) then
+      return
+    end
   end
 
   if (pad & PAD_UP) ~= 0 and s.mainSel > 1 then
@@ -973,15 +1008,7 @@ local function runMain(s, pad)
   drawMainBaseUi()
   if (pad & PAD_CROSS) ~= 0 then
     local entry = s.mainEntries and s.mainEntries[s.mainSel]
-    if entry then
-      s.mainOverlayLogoKey = entry.logoKey
-      s.context = entry.context
-      s.fileType = entry.fileType
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = entry.state
-    end
+    openMainEntry(entry)
   end
 end
 
