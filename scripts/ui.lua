@@ -317,6 +317,8 @@ end
 local overlayLogoCache = {}
 local OVERLAY_LOGO_OPACITY = 0.25 -- 75% transparent
 local OVERLAY_LOGO_OPACITY_R3 = 1.0 -- keep splash/title logo fully visible if selected
+local OVERLAY_LOGO_R3_TITLE_KEY = "__r3_title__"
+local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
@@ -333,7 +335,7 @@ local function getSelectionOverlayLogoTexture(key)
   if cached ~= nil then
     return (cached ~= false) and cached or nil
   end
-  local path = "res/logo_" .. tostring(key) .. ".png"
+  local path = (key == OVERLAY_LOGO_R3_TITLE_KEY) and "res/title.png" or ("res/logo_" .. tostring(key) .. ".png")
   local ok, img = pcall(Graphics.loadImage, path)
   if ok and isValidImageHandle(img) then
     if Graphics.setImageFilters and LINEAR then
@@ -348,7 +350,8 @@ end
 
 local function drawSelectionOverlayLogo(ctx)
   if not ctx then return end
-  local key = ctx.mainOverlayLogoKey
+  local isR3SettingsScene = (ctx.state ~= "main") and (ctx.context == "r3configurator")
+  local key = isR3SettingsScene and OVERLAY_LOGO_R3_TITLE_KEY or ctx.mainOverlayLogoKey
   if not key or key == "" then return end
   local tex = getSelectionOverlayLogoTexture(key)
   if not tex then return end
@@ -362,6 +365,9 @@ local function drawSelectionOverlayLogo(ctx)
   local maxW = math.floor(sw * 0.90)
   local maxH = math.floor(sh * 0.72)
   local scale = math.min(1.0, maxW / iw, maxH / ih)
+  if isR3SettingsScene then
+    scale = math.min(scale, OVERLAY_LOGO_R3_TITLE_SCALE)
+  end
   local dw = math.max(1, math.floor(iw * scale + 0.5))
   local dh = math.max(1, math.floor(ih * scale + 0.5))
   local x = math.floor((sw - dw) / 2)

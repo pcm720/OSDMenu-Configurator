@@ -581,7 +581,7 @@ local function runMain(s, pad)
 
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
-  local filterKey = (MAIN_CNF_WHITELIST and "filtered") or "all"
+  local filterKey = (MAIN_CNF_FILTER and "filtered") or "all"
   local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey
   if type(s.main) ~= "table" or type(s.mainEntries) ~= "table" or s.mainBuildKey ~= expectedBuildKey then
     local labels, entries = buildMainChoices(main_str)

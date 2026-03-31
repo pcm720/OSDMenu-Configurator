@@ -485,6 +485,51 @@ config_options.freemcboot_cnf_categories = {
   },
 }
 
+local function getLanguageCodeFromFile(file)
+  return type(file) == "string" and file:match("^strings_(%w+)%.lua$") or nil
+end
+
+local function buildR3DefaultLanguageSpec()
+  local enumVals = {}
+  local enumDisplayMap = {}
+  local seen = {}
+  local files = (_G.CONFIG_UI and _G.CONFIG_UI.langFiles) or {}
+  local names = (_G.CONFIG_UI and _G.CONFIG_UI.langDisplayNames) or {}
+
+  for i, file in ipairs(files) do
+    local code = tostring(getLanguageCodeFromFile(file) or ""):lower()
+    if code ~= "" and not seen[code] then
+      seen[code] = true
+      enumVals[#enumVals + 1] = code
+      local display = names[i]
+      if type(display) == "string" and display ~= "" then
+        enumDisplayMap[code] = display
+      end
+    end
+  end
+
+  if #enumVals == 0 then
+    enumVals = { "en" }
+    enumDisplayMap.en = "English"
+  end
+
+  local defaultCode = "en"
+  local hasEnglish = false
+  for i = 1, #enumVals do
+    if enumVals[i] == "en" then
+      hasEnglish = true
+      break
+    end
+  end
+  if not hasEnglish then
+    defaultCode = enumVals[1]
+  end
+
+  return defaultCode, enumVals, enumDisplayMap
+end
+
+local R3_DEFAULT_LANGUAGE_DEFAULT, R3_DEFAULT_LANGUAGE_ENUM_VALS, R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP = buildR3DefaultLanguageSpec()
+
 config_options.r3configurator_cnf = {
   {
     key = "video_mode",
@@ -503,13 +548,13 @@ config_options.r3configurator_cnf = {
   },
   {
     key = "default_language",
-    optType = "text",
-    default = "en",
-    maxLen = 16,
+    optType = "enum",
+    default = R3_DEFAULT_LANGUAGE_DEFAULT,
+    enumVals = R3_DEFAULT_LANGUAGE_ENUM_VALS,
+    enumDisplayMap = R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP,
     label = "Default language",
-    desc = "Language code (scripts/lang/strings_<code>.lua).",
+    desc = "Default UI language.",
   },
-  { key = "_r3_main_visibility_header", optType = "header", label = "Main page visibility" },
   { key = "show_freemcboot", optType = "bool", default = "1", label = "Show FreeMCBoot" },
   { key = "show_freehddboot", optType = "bool", default = "1", label = "Show FreeHDBoot" },
   { key = "show_osdmenu", optType = "bool", default = "1", label = "Show OSDMenu" },
@@ -517,7 +562,6 @@ config_options.r3configurator_cnf = {
   { key = "show_hosdmenu", optType = "bool", default = "1", label = "Show HOSDMenu" },
   { key = "show_ps2bbl", optType = "bool", default = "1", label = "Show PS2BBL" },
   { key = "show_psxbbl", optType = "bool", default = "1", label = "Show PSXBBL" },
-  { key = "_r3_colors_header", optType = "header", label = "Colors (RRGGBB)" },
   { key = "cross", optType = "color", default = "606060", label = "Cross color" },
   { key = "square", optType = "color", default = "606060", label = "Square color" },
   { key = "triangle", optType = "color", default = "606060", label = "Triangle color" },

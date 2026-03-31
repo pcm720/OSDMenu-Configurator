@@ -115,6 +115,18 @@ local R3_BUTTON_COLOR_PRESET = {
   background = "141414",
 }
 
+local R3_DEFAULT_COLOR_PRESET = {
+  cross = "365172",
+  square = "AF4B6D",
+  triangle = "358D4E",
+  circle = "933624",
+  selected = "365172",
+  selected_dim = "003250",
+  unselected = "A0A0A0",
+  dim = "606060",
+  background = "141414",
+}
+
 local R3_BUTTON_COLOR_KEYS = { "cross", "square", "triangle", "circle" }
 
 local function isR3ButtonColorKey(key)
@@ -1289,7 +1301,7 @@ local function run(ctx)
       hintItems = removeHintPad(hintItems, "triangle")
     end
     if isR3ColorPresetRow then
-      local triangleLabel = (_.menu_str and _.menu_str.preset_label) or "Preset"
+      local triangleLabel = (_.menu_str and _.menu_str.reset_label) or "Reset"
       for i = 1, #hintItems do
         local item = hintItems[i]
         if tostring(item and item.pad or ""):lower() == "triangle" then
@@ -1742,7 +1754,7 @@ local function run(ctx)
             selKey = "editorR3ColorPresetSel",
             scrollKey = "editorR3ColorPresetScroll",
             anchorPad = "triangle",
-            anchorLabel = (_.menu_str and _.menu_str.preset_label) or "Preset",
+            anchorLabel = (_.menu_str and _.menu_str.reset_label) or "Reset",
             rows = {
               { id = "default", label = (_.menu_str and _.menu_str.default_label) or "Default" },
               { id = "button_colors", label = (_.menu_str and _.menu_str.button_colors_label) or "Button colors" },
@@ -1754,15 +1766,25 @@ local function run(ctx)
                 if isR3ButtonColorKey(targetKey) then
                   for i = 1, #R3_BUTTON_COLOR_KEYS do
                     local key = R3_BUTTON_COLOR_KEYS[i]
-                    local def = resetDefaultFn and resetDefaultFn(key)
-                    if def ~= nil then
-                      setConfigValue(ctx, _, key, tostring(def))
+                    local presetVal = R3_DEFAULT_COLOR_PRESET[key]
+                    if presetVal ~= nil then
+                      setConfigValue(ctx, _, key, tostring(presetVal))
+                    else
+                      local def = resetDefaultFn and resetDefaultFn(key)
+                      if def ~= nil then
+                        setConfigValue(ctx, _, key, tostring(def))
+                      end
                     end
                   end
                 else
-                  local def = resetDefaultFn and resetDefaultFn(targetKey)
-                  if def ~= nil then
-                    setConfigValue(ctx, _, targetKey, tostring(def))
+                  local presetVal = R3_DEFAULT_COLOR_PRESET[targetKey]
+                  if presetVal ~= nil then
+                    setConfigValue(ctx, _, targetKey, tostring(presetVal))
+                  else
+                    local def = resetDefaultFn and resetDefaultFn(targetKey)
+                    if def ~= nil then
+                      setConfigValue(ctx, _, targetKey, tostring(def))
+                    end
                   end
                 end
               elseif row.id == "button_colors" then
@@ -2012,7 +2034,8 @@ local function run(ctx)
           (((ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and
             (o.key == "VIDEO_MODE" or o.key == "LOGO_DISPLAY")) or
             (ctx.fileType == "osdmenu_cnf" and (o.key == "OSDSYS_video_mode" or o.key == "OSDSYS_region")) or
-            (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language"))) then
+            (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language")) or
+            (ctx.fileType == "r3configurator_cnf")) then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         local idx = 0
         for ei, v in ipairs(o.enumVals) do
