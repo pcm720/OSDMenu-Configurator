@@ -79,7 +79,7 @@ local function loadStartupConfig()
   end
 
   local vm = trimString(kv.video_mode):lower()
-  if vm == "720p" or vm == "480p" or vm == "pal" or vm == "ntsc" or vm == "auto" then
+  if vm == "480p" or vm == "pal" or vm == "ntsc" or vm == "auto" then
     cfg.video_mode = vm
   end
 
@@ -140,9 +140,7 @@ local function normalizeVideoModeSpec(spec)
   local field = tonumber(spec.field)
 
   if type(mode) ~= "number" then
-    if height >= 700 and type(_720p) == "number" then
-      mode = _720p
-    elseif interlace == NONINTERLACED and type(_480p) == "number" then
+    if interlace == NONINTERLACED and type(_480p) == "number" then
       mode = _480p
     elseif height >= 500 and type(PAL) == "number" then
       mode = PAL
@@ -153,7 +151,7 @@ local function normalizeVideoModeSpec(spec)
   if type(mode) ~= "number" then return nil end
 
   if type(interlace) ~= "number" then
-    if mode == _720p or mode == _480p then
+    if mode == _480p then
       interlace = NONINTERLACED
     else
       interlace = INTERLACED
@@ -183,6 +181,8 @@ local function captureCurrentVideoModeSpec()
   return normalizeVideoModeSpec(spec)
 end
 
+local flushOverlayLogoCache = nil
+
 local function applyVideoModeSpec(spec)
   local normalized = normalizeVideoModeSpec(spec)
   if not normalized then
@@ -190,6 +190,12 @@ local function applyVideoModeSpec(spec)
   end
   if not (Screen and Screen.setMode) then
     return false, "Screen.setMode unavailable"
+  end
+  if common.flushPadIconCache then
+    pcall(common.flushPadIconCache)
+  end
+  if flushOverlayLogoCache then
+    pcall(flushOverlayLogoCache)
   end
   local ok, err = pcall(Screen.setMode, normalized.mode, normalized.width, normalized.height, CT24, normalized.interlace,
     normalized.field)
@@ -202,8 +208,6 @@ end
 local function getVideoModeSpecForKey(modeKey)
   local key = trimString(modeKey):lower()
   local specs = {
-    -- Use full 720p surface for best compatibility with GS timing/scalers.
-    ["720p"] = { mode = _720p, width = 1280, height = 720, interlace = NONINTERLACED, field = FRAME },
     ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
     ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
     ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },
@@ -273,19 +277,12 @@ local WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM
 local HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
 local SELECTED_ENTRY_DIM = common.SELECTED_ENTRY_DIM
 local TEXT_CURSOR_COLOR = common.TEXT_CURSOR_COLOR
-local FONT_SCALE, LINE_H, ROW_H = common.FONT_SCALE, common.LINE_H, common.ROW_H
-local MARGIN_X, MARGIN_Y = common.MARGIN_X, common.MARGIN_Y
-local MAX_VISIBLE = common.MAX_VISIBLE
-local MAX_VISIBLE_LIST = common.MAX_VISIBLE_LIST
-local VALUE_X, VALUE_MAX_LEN, VALUE_MAX_LEN_LONG = common.VALUE_X, common.VALUE_MAX_LEN, common.VALUE_MAX_LEN_LONG
-local DESC_Y_BOTTOM, HINT_Y = common.DESC_Y_BOTTOM, common.HINT_Y
+local FONT_SCALE = common.FONT_SCALE
+local VALUE_MAX_LEN, VALUE_MAX_LEN_LONG = common.VALUE_MAX_LEN, common.VALUE_MAX_LEN_LONG
 local KEYBOARD_ROWS, KEYBOARD_ROWS_SHIFTED, KEYBOARD_ROWS_TITLE_ID = common.KEYBOARD_ROWS, common.KEYBOARD_ROWS_SHIFTED,
     common.KEYBOARD_ROWS_TITLE_ID
-local KEYBOARD_CENTER_X, KEYBOARD_CENTER_Y = common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y
-local KEY_WIDTH, KEY_HEIGHT, KEY_GAP = common.KEY_WIDTH, common.KEY_HEIGHT, common.KEY_GAP
 local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY_BG_SEL, common.KEY_BORDER,
     common.KEY_BORDER_SEL
-local KEY_CHAR_W, KEY_LINE_H = common.KEY_CHAR_W, common.KEY_LINE_H
 
 local function refreshRuntimeColorAliases()
   WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
@@ -403,6 +400,21 @@ local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
+end
+
+flushOverlayLogoCache = function()
+  if Graphics and Graphics.freeImage then
+    for key, tex in pairs(overlayLogoCache) do
+      if isValidImageHandle(tex) then
+        pcall(Graphics.freeImage, tex)
+      end
+      overlayLogoCache[key] = nil
+    end
+  else
+    for key in pairs(overlayLogoCache) do
+      overlayLogoCache[key] = nil
+    end
+  end
 end
 
 local function getOverlayLogoColor(key)

@@ -115,7 +115,7 @@ The release output includes a default `r3configurator.cnf` next to the ELF, so u
 ### Supported keys
 
 - `video_mode`:
-  - `auto`, `ntsc`, `pal`, `480p`, `720p`
+  - `auto`, `ntsc`, `pal`, `480p`
 - `swap_buttons`:
   - `0`/`1` (also accepts `false`/`true`, `no`/`yes`, `off`/`on`)
 - `default_language`:
@@ -142,7 +142,7 @@ Its editor is a single page and color changes preview live while adjusting.
 ### Example `r3configurator.cnf`
 
 ```ini
-# Video mode: auto | ntsc | pal | 480p | 720p
+# Video mode: auto | ntsc | pal | 480p
 # (auto keeps native PS2 startup mode; no override applied)
 video_mode = auto
 

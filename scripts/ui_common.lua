@@ -114,6 +114,21 @@ function common.getPadIcon(name)
   return (padIconCache[file] ~= false) and padIconCache[file] or nil
 end
 
+function common.flushPadIconCache()
+  if Graphics and Graphics.freeImage then
+    for key, img in pairs(padIconCache) do
+      if type(img) == "number" and img ~= 0 then
+        pcall(Graphics.freeImage, img)
+      end
+      padIconCache[key] = nil
+    end
+  else
+    for key in pairs(padIconCache) do
+      padIconCache[key] = nil
+    end
+  end
+end
+
 function common.setSwapCrossCircle(enabled)
   common.SWAP_CROSS_CIRCLE = (enabled == true)
 end

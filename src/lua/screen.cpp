@@ -222,9 +222,6 @@ void luaScreen_init(lua_State *L) {
   lua_pushinteger(L, GS_MODE_DTV_576P);
   lua_setglobal(L, "_576p");
 
-  lua_pushinteger(L, GS_MODE_DTV_720P);
-  lua_setglobal(L, "_720p");
-
   lua_pushinteger(L, GS_MODE_DTV_1080I);
   lua_setglobal(L, "_1080i");
 
