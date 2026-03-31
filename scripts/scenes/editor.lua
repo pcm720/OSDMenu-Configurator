@@ -198,21 +198,28 @@ local function applyR3ConfiguratorVideoModeLive(value)
     return
   end
 
-  local modeMap = {
-    ["720p"] = { mode = _720p, interlace = NONINTERLACED, field = FRAME },
-    ["480p"] = { mode = _480p, interlace = NONINTERLACED, field = FRAME },
-    ["pal"] = { mode = PAL, interlace = INTERLACED, field = FIELD },
-    ["ntsc"] = { mode = NTSC, interlace = INTERLACED, field = FIELD },
-  }
-  local selected = modeMap[modeKey]
+  local runtime = _G.CONFIG_UI
+  local selected = nil
+  if runtime and runtime.getVideoModeSpecForKey then
+    selected = runtime.getVideoModeSpecForKey(modeKey)
+  end
+  if not selected or type(selected.mode) ~= "number" then
+    local modeMap = {
+      ["720p"] = { mode = _720p, width = 960, height = 540, interlace = NONINTERLACED, field = FRAME },
+      ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
+      ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
+      ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },
+    }
+    selected = modeMap[modeKey]
+  end
   if not selected or type(selected.mode) ~= "number" then
     return
   end
-  local runtime = _G.CONFIG_UI
   if runtime and runtime.applyVideoModeSpec then
     pcall(runtime.applyVideoModeSpec, selected)
   elseif Screen and Screen.setMode then
-    pcall(Screen.setMode, selected.mode, 640, 448, CT24, selected.interlace, selected.field)
+    pcall(Screen.setMode, selected.mode, selected.width or 640, selected.height or 448, CT24, selected.interlace,
+      selected.field)
   end
 end
 

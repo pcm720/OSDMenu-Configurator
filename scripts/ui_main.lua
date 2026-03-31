@@ -1849,7 +1849,7 @@ local function runChooseLoad(s, pad)
   local allowCreate = (s.loadAllowCreate == true)
   if s.loadSel < 1 then s.loadSel = 1 end
   if s.loadSel > #choices then s.loadSel = #choices end
-  local maxVis = common.MAX_VISIBLE
+  local maxVis = s.MAX_VISIBLE_LIST or s.MAX_VISIBLE or common.MAX_VISIBLE
   local total = #choices
   local maxLabelW = (s.w or 640) - (M + 24) - M
   local scroll = 0

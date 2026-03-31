@@ -199,6 +199,26 @@ local function applyVideoModeSpec(spec)
   return true
 end
 
+local function getVideoModeSpecForKey(modeKey)
+  local key = trimString(modeKey):lower()
+  local specs = {
+    -- 16:9 canvas for 720p to avoid stretched UI while keeping performance reasonable.
+    ["720p"] = { mode = _720p, width = 960, height = 540, interlace = NONINTERLACED, field = FRAME },
+    ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
+    ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
+    ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },
+  }
+  local spec = specs[key]
+  if not spec then return nil end
+  return {
+    mode = spec.mode,
+    width = spec.width,
+    height = spec.height,
+    interlace = spec.interlace,
+    field = spec.field,
+  }
+end
+
 local STARTUP_CFG = loadStartupConfig()
 local NATIVE_VIDEO_MODE_SPEC = captureCurrentVideoModeSpec()
 
@@ -210,6 +230,7 @@ _G.CONFIG_UI = {
   startupDefaultLanguage = STARTUP_CFG.default_language,
   nativeVideoMode = NATIVE_VIDEO_MODE_SPEC,
   applyVideoModeSpec = applyVideoModeSpec,
+  getVideoModeSpecForKey = getVideoModeSpecForKey,
 }
 local main = dofile("scripts/ui_main.lua")
 local file_selector = dofile("scripts/file_selector.lua")
@@ -274,20 +295,10 @@ local function refreshRuntimeColorAliases()
 end
 
 local function applyStartupVideoModeCnf()
-  -- Keep a fixed NTSC-style UI canvas across forced output modes so layout
-  -- and placement remain consistent (scaled by GS output mode, not reflowed).
-  local BASE_W, BASE_H = 640, 448
-
   local modeKey = STARTUP_CFG and STARTUP_CFG.video_mode or nil
   if not modeKey or modeKey == "" or modeKey == "auto" then return end
 
-  local modeMap = {
-    ["720p"] = { mode = _720p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
-    ["480p"] = { mode = _480p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
-    ["pal"] = { mode = PAL, width = BASE_W, height = BASE_H, interlace = INTERLACED, field = FIELD },
-    ["ntsc"] = { mode = NTSC, width = BASE_W, height = BASE_H, interlace = INTERLACED, field = FIELD },
-  }
-  local selected = modeMap[modeKey]
+  local selected = getVideoModeSpecForKey(modeKey)
   if not selected or type(selected.mode) ~= "number" then return end
 
   local ok, err = applyVideoModeSpec(selected)
@@ -610,25 +621,14 @@ local function mainLoop()
     syncFromS(c)
     refreshRuntimeColorAliases()
     Screen.clear(BLACK)
-    local vmode = Screen.getMode()
-    local w = (vmode and vmode.width) or common.DEFAULT_W
-    local h = (vmode and vmode.height) or common.DEFAULT_H
-    c.w = w
-    c.h = h
-    local sy = h / common.DEFAULT_H -- vertical scale for PAL (512) vs NTSC (448); keeps proportions
-    c.sy = sy
+    common.runLayout(c)
+    local w = c.w or common.DEFAULT_W
+    local h = c.h or common.DEFAULT_H
     -- Keep font at NTSC size on both modes so text fits; only layout (positions, row heights) scales on PAL
     if _G.CONFIG_UI then
       _G.CONFIG_UI.currentDrawHeight = nil
       _G.CONFIG_UI.currentDrawWidth = nil
     end
-    c.MARGIN_Y = math.floor(common.MARGIN_Y * sy)
-    -- Keep line/row height at NTSC size so spacing matches unscaled text
-    c.LINE_H = common.LINE_H
-    c.ROW_H = common.ROW_H
-    c.HINT_Y = h - math.floor(24 * sy)
-    c.DESC_Y_BOTTOM = c.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
-    c.scaleY = function(y) return math.floor((y or 0) * sy) end
     if c.drawBackgroundLayer then
       c.drawBackgroundLayer(c)
     end
@@ -637,6 +637,8 @@ local function mainLoop()
     local KEYBOARD_CENTER_Y = math.floor(h * 220 / 448)
     local MARGIN_Y, LINE_H, ROW_H = c.MARGIN_Y, c.LINE_H, c.ROW_H
     local scaleY = c.scaleY
+    local maxVisible = c.MAX_VISIBLE or common.MAX_VISIBLE
+    local maxVisibleList = c.MAX_VISIBLE_LIST or common.MAX_VISIBLE_LIST
     local KEY_H = scaleY(common.KEY_HEIGHT)
     local KEY_LH = scaleY(common.KEY_LINE_H)
     if drawMode == "ftPrint" and font then
@@ -684,8 +686,8 @@ local function mainLoop()
       MARGIN_Y = MARGIN_Y,
       LINE_H = LINE_H,
       ROW_H = ROW_H,
-      MAX_VISIBLE = MAX_VISIBLE,
-      MAX_VISIBLE_LIST = MAX_VISIBLE_LIST,
+      MAX_VISIBLE = maxVisible,
+      MAX_VISIBLE_LIST = maxVisibleList,
       VALUE_X = VALUE_X,
       FONT_SCALE = FONT_SCALE,
       VALUE_MAX_LEN = VALUE_MAX_LEN,
