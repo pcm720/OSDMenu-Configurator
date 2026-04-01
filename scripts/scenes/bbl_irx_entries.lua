@@ -162,6 +162,12 @@ local function run(ctx)
 
   local startY = _.MARGIN_Y + _.scaleY(50)
   local maxVis = _.MAX_VISIBLE_LIST
+  if _.common and _.common.computeVisibleRows then
+    maxVis = _.common.computeVisibleRows(_, startY, _.LINE_H, maxVis, {
+      reserveRows = 1,
+      reserveDescription = true,
+    })
+  end
   if total > maxVis then
     ctx.bblIrxScroll = ctx.bblIrxSel - math.floor(maxVis / 2)
     ctx.bblIrxScroll = math.max(0, math.min(ctx.bblIrxScroll, total - maxVis))

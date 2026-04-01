@@ -165,6 +165,48 @@ local function isR3ConfiguratorFile(ctx)
   return ctx and ctx.fileType == "r3configurator_cnf"
 end
 
+local function isDeviceAbsolutePath(path)
+  local p = tostring(path or "")
+  if p == "" then return false end
+  if p:match("^[%w_]+:") then return true end
+  if p:sub(1, 1) == "/" then return true end
+  return false
+end
+
+local function getEditorDisplayPath(ctx, rawPath)
+  local path = tostring(rawPath or "")
+  local cache = ctx and ctx.editorDisplayPathCache or nil
+  if cache and cache.rawPath == path then
+    return cache.value or path
+  end
+
+  local out = path
+  if path ~= "" and not isDeviceAbsolutePath(path) then
+    local rel = path
+    if rel:sub(1, 2) == "./" then
+      rel = rel:sub(3)
+    end
+    if System and System.currentDirectory then
+      local ok, cwd = pcall(System.currentDirectory)
+      local base = ok and tostring(cwd or "") or ""
+      if base ~= "" then
+        if base:sub(-1) ~= "/" then
+          base = base .. "/"
+        end
+        out = base .. rel
+      end
+    end
+  end
+
+  if ctx then
+    ctx.editorDisplayPathCache = {
+      rawPath = path,
+      value = out,
+    }
+  end
+  return out
+end
+
 local function isR3ConfiguratorColorKey(ctx, key)
   if not isR3ConfiguratorFile(ctx) then return false end
   return R3_COLOR_KEY_TO_FIELD[tostring(key or "")] ~= nil
@@ -943,8 +985,19 @@ local function run(ctx)
     return
   end
 
-  local pathStr = ctx.currentPath or ""
-  if #pathStr > 56 then
+  local pathStr = getEditorDisplayPath(ctx, ctx.currentPath or "")
+  if isR3ConfiguratorFile(ctx) then
+    local pathScale = 0.8
+    local maxPathW = (_.w or 640) - (_.MARGIN_X * 2)
+    local drawPath = pathStr
+    if _.common and _.common.fitListRowText then
+      drawPath = _.common.fitListRowText(ctx, "editor_header_path", _.font, pathStr, maxPathW, pathScale, true,
+        { holdStart = 55, stepFrames = 14, holdEnd = 85 })
+    elseif _.common and _.common.truncateTextToWidth then
+      drawPath = _.common.truncateTextToWidth(_.font, pathStr, maxPathW, pathScale)
+    end
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, pathScale, drawPath, _.DIM)
+  elseif #pathStr > 56 then
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr:sub(1, 56), _.DIM)
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(18), 0.8, pathStr:sub(57), _.DIM)
   else
@@ -1047,8 +1100,16 @@ local function run(ctx)
       end
     end
   elseif ctx.optList and #ctx.optList > 0 then
-    local startY = _.MARGIN_Y + _.scaleY(58)
-    local maxVis = _.MAX_VISIBLE
+    local listOffsetY = isR3ConfiguratorFile(ctx) and 50 or 58
+    local startY = _.MARGIN_Y + _.scaleY(listOffsetY)
+    local maxVisFallback = isR3ConfiguratorFile(ctx) and math.max(_.MAX_VISIBLE or 0, 12) or _.MAX_VISIBLE
+    local maxVis = maxVisFallback
+    if _.common and _.common.computeVisibleRows then
+      maxVis = _.common.computeVisibleRows(_, startY, _.ROW_H, maxVisFallback, {
+        reserveRows = 1,
+        reserveDescription = true,
+      })
+    end
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #ctx.optList)
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #ctx.optList, maxVis)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #ctx.optList) do

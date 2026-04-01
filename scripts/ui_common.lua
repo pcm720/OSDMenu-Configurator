@@ -64,7 +64,7 @@ common.PAD_HINT_BASE_SCALE         = 0.7
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
-common.LIST_BOTTOM_CLEAR_ROWS      = 3 -- keep selectable rows clear above bottom hints/description area
+common.LIST_BOTTOM_CLEAR_ROWS      = 1 -- keep at least one full blank selectable row above bottom hints/description area
 
 -- Hint-row geometry tuning (single-row 5-slot layout).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
@@ -739,14 +739,27 @@ function common.getRepeatIntervalFrames(fps, heldFrames)
 end
 
 -- Update ctx with layout values from current screen mode (for scene runner).
-function common.computeVisibleRows(ctx, startY, rowH, fallback)
+function common.computeVisibleRows(ctx, startY, rowH, fallback, opts)
   local safeStartY = math.floor(tonumber(startY) or 0)
   local safeRowH = math.max(1, math.floor(tonumber(rowH) or 1))
   local hintY = math.floor(tonumber(ctx and ctx.HINT_Y) or common.HINT_Y or common.DEFAULT_H)
   local hintTop = hintY - (common.PAD_HINT_TOTAL_H or 0)
-  local reserveRows = math.max(0, math.floor(tonumber(common.LIST_BOTTOM_CLEAR_ROWS) or 3))
-  -- Reserve N full rows between the last selectable row and hint bar.
-  local maxRowTop = hintTop - ((reserveRows + 1) * safeRowH)
+  local reserveRows = math.max(1, math.floor(tonumber((opts and opts.reserveRows) or common.LIST_BOTTOM_CLEAR_ROWS) or 1))
+  local boundaryTop = hintTop
+  if opts and opts.reserveDescription then
+    local descTop = math.floor(tonumber(ctx and ctx.DESC_Y_BOTTOM) or 0)
+    if descTop > 0 then
+      boundaryTop = math.min(boundaryTop, descTop)
+    end
+  end
+  if opts and opts.bottomY then
+    local forcedTop = math.floor(tonumber(opts.bottomY) or 0)
+    if forcedTop > 0 then
+      boundaryTop = math.min(boundaryTop, forcedTop)
+    end
+  end
+  -- Reserve N full rows between the last selectable row and bottom boundary.
+  local maxRowTop = boundaryTop - ((reserveRows + 1) * safeRowH)
   local rows = math.floor((maxRowTop - safeStartY) / safeRowH) + 1
   if rows >= 1 then
     return rows
@@ -796,9 +809,13 @@ function common.runLayout(ctx)
     ctx.DESC_Y_BOTTOM = ctx.HINT_Y - common.PAD_HINT_TOTAL_H - ctx.scaleY(common.DESC_TO_HINT_MARGIN)
     local startYList = ctx.MARGIN_Y + ctx.scaleY(50)
     local startYRows = ctx.MARGIN_Y + ctx.scaleY(58)
-    ctx.MAX_VISIBLE_LIST = common.computeVisibleRows(ctx, startYList, ctx.LINE_H, common.MAX_VISIBLE_LIST)
-    ctx.MAX_VISIBLE = math.max(common.MAX_VISIBLE,
-      common.computeVisibleRows(ctx, startYRows, ctx.ROW_H, common.MAX_VISIBLE))
+    local reserveRows = common.LIST_BOTTOM_CLEAR_ROWS
+    ctx.MAX_VISIBLE_LIST = common.computeVisibleRows(ctx, startYList, ctx.LINE_H, common.MAX_VISIBLE_LIST, {
+      reserveRows = reserveRows
+    })
+    ctx.MAX_VISIBLE = common.computeVisibleRows(ctx, startYRows, ctx.ROW_H, common.MAX_VISIBLE, {
+      reserveRows = reserveRows
+    })
   end
 end
 
