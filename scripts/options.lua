@@ -451,7 +451,7 @@ config_options.freemcboot_cnf_categories = {
       { key = "OSDSYS_version_x",           optType = "int",   default = "-1" },
       { key = "OSDSYS_version_y",           optType = "int",   default = "-1" },
       { key = "OSDSYS_cursor_max_velocity", optType = "int",   default = "1000" },
-      { key = "OSDSYS_cursor_acceleration", optType = "int",   default = "100" },
+      { key = "OSDSYS_cursor_acceleration", optType = "int",   default = "150" },
       { key = "OSDSYS_left_cursor",         optType = "text",  default = "",                   maxLen = 19 },
       { key = "OSDSYS_right_cursor",        optType = "text",  default = "",                   maxLen = 19 },
       { key = "OSDSYS_menu_top_delimiter",  optType = "text",  default = "",                   maxLen = 79 },

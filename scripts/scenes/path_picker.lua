@@ -383,10 +383,14 @@ local function ensureBblCommandRows(ctx)
   local cmdRows
   if ctx.fileType == "freemcboot_cnf" then
     cmdRows = {
-      { name = "OSDSYS", desc = p.fmcb_cmd_osdsys or "OSDSYS", special = "bbl_cmd" },
-      { name = "OSDMENU", desc = p.fmcb_cmd_osdmenu or "OSDMENU", special = "bbl_cmd" },
-      { name = "FASTBOOT", desc = p.fmcb_cmd_fastboot or "FASTBOOT", special = "bbl_cmd" },
-      { name = "POWEROFF", desc = p.fmcb_cmd_poweroff or "POWEROFF", special = "bbl_cmd" },
+      { name = "OSDSYS", desc = p.fmcb_cmd_osdsys or "Boot hacked OSDSYS", special = "bbl_cmd" },
+      { name = "OSDMENU", desc = p.fmcb_cmd_osdmenu or "Boot hacked OSDSYS, enforce skip disc boot", special = "bbl_cmd" },
+      { name = "FASTBOOT", desc = p.fmcb_cmd_fastboot or "Boot PS2 Disc without logo", special = "bbl_cmd" },
+      {
+        name = "POWEROFF",
+        desc = p.fmcb_cmd_poweroff or "Shutdown the console: FMCB 1.966 only, else use POWEROFF.ELF",
+        special = "bbl_cmd"
+      },
     }
   else
     cmdRows = {
@@ -713,7 +717,11 @@ local function run(ctx)
             displayName = _.path_str.enter_path_manually
           else
             e = deviceFromListIndex(listIdx)
-            displayName = e and (e.desc or e.name or _.common_str.empty) or _.common_str.empty
+            if e and e.special == "bbl_cmd" and ctx.fileType == "freemcboot_cnf" then
+              displayName = e.name or e.desc or _.common_str.empty
+            else
+              displayName = e and (e.desc or e.name or _.common_str.empty) or _.common_str.empty
+            end
             greyed = isGreyed(e)
           end
           local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
@@ -725,6 +733,33 @@ local function run(ctx)
             displayName = _.common.truncateTextToWidth(_.font, displayName or "", maxLabelW, _.FONT_SCALE)
           end
           _.drawListRow(_.MARGIN_X + 20, y, listIdx == ctx.pathPickerSel, displayName, col)
+        end
+        do
+          local selectedHelper = nil
+          if not (includeManualEntry and ctx.pathPickerSel == 1) then
+            local selectedEntry = deviceFromListIndex(ctx.pathPickerSel)
+            if selectedEntry and selectedEntry.special == "bbl_cmd" and ctx.fileType == "freemcboot_cnf" then
+              selectedHelper = tostring(selectedEntry.desc or "")
+            end
+          end
+          if selectedHelper and selectedHelper ~= "" then
+            local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
+            local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or
+                (0.7 * hintTextScale)
+            local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
+            local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or nil
+            local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+            if _.common.fitListRowText then
+              selectedHelper = _.common.fitListRowText(ctx, "path_picker_device_helper", hintFont, selectedHelper,
+                descMaxW, hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+            elseif _.common.truncateTextToWidth then
+              selectedHelper = _.common.truncateTextToWidth(hintFont, selectedHelper, descMaxW, hintDrawScale)
+            end
+            local tw = _.common.calcTextWidth(hintFont, selectedHelper, hintDrawScale)
+            local x = _.common.centerX(_, tw)
+            local hintColor = (_.common.OPTION_HINT_COLOR or _.DIM)
+            _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selectedHelper, hintColor, hintTextH)
+          end
         end
         if (_.padEffective & _.PAD_UP) ~= 0 then
           local idx = ctx.pathPickerSel

@@ -1111,6 +1111,20 @@ local function run(ctx)
       })
     end
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #ctx.optList)
+    if #ctx.optList > 0 then
+      local currentOpt = ctx.optList[ctx.optSel]
+      if currentOpt and currentOpt.optType == "header" then
+        local idx = ctx.optSel
+        for _scan = 1, #ctx.optList do
+          idx = _.common.wrapListSelection(idx, #ctx.optList, 1)
+          local candidate = ctx.optList[idx]
+          if candidate and candidate.optType ~= "header" then
+            ctx.optSel = idx
+            break
+          end
+        end
+      end
+    end
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #ctx.optList, maxVis)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #ctx.optList) do
       local o = ctx.optList[i]
@@ -1993,13 +2007,27 @@ local function run(ctx)
       end
     end
 
+    local function moveOptionSelection(step)
+      local count = #(ctx.optList or {})
+      if count <= 0 then return end
+      local idx = _.common.clampListSelection(ctx.optSel or 1, count)
+      for _scan = 1, count do
+        idx = _.common.wrapListSelection(idx, count, step)
+        local candidate = ctx.optList[idx]
+        if not (candidate and candidate.optType == "header") then
+          ctx.optSel = idx
+          return
+        end
+      end
+    end
+
     if (_.padEffective & _.PAD_UP) ~= 0 then
       if isAutoSlotRow and ctx.editorAutoSlotGrab then
         moveAutoSlot(-1)
       elseif isEsrPathRow and ctx.editorEsrPathGrab then
         moveEsrSlot(-1)
       else
-        ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
+        moveOptionSelection(-1)
       end
     end
     if (_.padEffective & _.PAD_DOWN) ~= 0 then
@@ -2008,7 +2036,7 @@ local function run(ctx)
       elseif isEsrPathRow and ctx.editorEsrPathGrab then
         moveEsrSlot(1)
       else
-        ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, 1)
+        moveOptionSelection(1)
       end
     end
     if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT)) ~= 0 then
