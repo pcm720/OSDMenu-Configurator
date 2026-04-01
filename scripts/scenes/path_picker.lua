@@ -157,11 +157,26 @@ local function getPathFlagsCaseAware(fileSelector, pathVal)
   return flags
 end
 
-local function isE1LockedPath(pathVal)
-  local p = tostring(pathVal or "")
-  if p:lower() == "cdrom" then return true end
-  local up = p:upper()
-  return up == "OSDSYS" or up == "POWEROFF" or up == "FASTBOOT"
+local function isFmcbAutoBootPickerContext(ctx)
+  if not ctx or not ctx.pathPickerBblHotkeyKey then return false end
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  if not isFmcb then return false end
+  return tostring(ctx.pathPickerBblHotkeyKey or ""):upper() == "AUTO"
+end
+
+local function isE1LockedPath(ctx, pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if up == "CDROM" then return true end
+  if up == "POWEROFF" then return true end
+  if up == "FASTBOOT" then
+    -- Free*BOOT AUTO special-case: FASTBOOT can coexist with other paths.
+    return not isFmcbAutoBootPickerContext(ctx)
+  end
+  if up == "OSDSYS" then
+    -- Free*BOOT Auto boot is special: OSDSYS may coexist with regular device paths.
+    return not isFmcbAutoBootPickerContext(ctx)
+  end
+  return false
 end
 
 local function isBblE1ExclusivePath(pathVal)
@@ -169,16 +184,40 @@ local function isBblE1ExclusivePath(pathVal)
   return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
 end
 
-local function getFmcbSingleUseCommand(pathVal)
+local function isPathExclusiveInContext(ctx, pathVal, flags)
+  if not (flags and flags.exclusive) then return false end
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
-  -- Free*BOOT conflict set:
-  -- OSDMENU, OSDSYS, and FASTBOOT are mutually exclusive in the same target
-  -- (menu entry/autoboot/launch key). POWEROFF remains single-use by itself.
-  if up == "OSDSYS" or up == "OSDMENU" or up == "FASTBOOT" then
-    return "__FMCB_OSD_FASTBOOT_GROUP__"
+  if isFmcbAutoBootPickerContext(ctx) then
+    -- Free*BOOT AUTO special-case: OSDSYS and FASTBOOT are not exclusive
+    -- against normal device paths (single-use rules are enforced separately).
+    if up == "OSDSYS" or up == "FASTBOOT" then
+      return false
+    end
   end
+  return true
+end
+
+local function getFmcbSingleUseCommand(ctx, pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
   if up == "POWEROFF" then
     return up
+  end
+  if isFmcbAutoBootPickerContext(ctx) then
+    -- Free*BOOT Auto boot special-case:
+    -- allow OSDSYS/OSDMENU alongside regular device paths,
+    -- but keep OSDSYS and OSDMENU mutually exclusive with each other.
+    if up == "OSDSYS" or up == "OSDMENU" then
+      return "__FMCB_AUTO_OSD_GROUP__"
+    end
+    if up == "FASTBOOT" then
+      return up
+    end
+    return nil
+  end
+  -- Free*BOOT conflict set:
+  -- OSDMENU, OSDSYS, and FASTBOOT are mutually exclusive in menu entries / launch keys.
+  if up == "OSDSYS" or up == "OSDMENU" or up == "FASTBOOT" then
+    return "__FMCB_OSD_FASTBOOT_GROUP__"
   end
   return nil
 end
@@ -237,7 +276,7 @@ local function getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
     local first = slots[1]
     local firstPv = first and first.path or nil
     if first and first.hasValue then
-      stats.firstExclusive = (isE1LockedPath(firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
+      stats.firstExclusive = (isE1LockedPath(ctx, firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
       stats.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
     end
   end
@@ -247,7 +286,7 @@ local function getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
       local s = slots[i]
       if s and s.hasValue then
         stats.count = stats.count + 1
-        local cmd = getFmcbSingleUseCommand(s.path)
+        local cmd = getFmcbSingleUseCommand(ctx, s.path)
         if cmd then taken[cmd] = true end
       end
     end
@@ -289,7 +328,7 @@ local function buildFmcbSingleUseTakenMap(ctx, targetIndex)
     if not targetIndex or i ~= targetIndex then
       local item = paths[i]
       local pv = type(item) == "table" and item.value or item
-      local cmd = getFmcbSingleUseCommand(pv)
+      local cmd = getFmcbSingleUseCommand(ctx, pv)
       if cmd then taken[cmd] = true end
     end
   end
@@ -307,6 +346,9 @@ local function isFmcbLaunchE1LockedPath(ctx, pathVal)
   local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
   if not isFmcb then return false end
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if isFmcbAutoBootPickerContext(ctx) then
+    return up == "POWEROFF"
+  end
   return up == "FASTBOOT" or up == "POWEROFF"
 end
 
@@ -361,7 +403,7 @@ end
 
 local function hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex, takenMap)
   if not isFmcbSingleUseContext(ctx) then return false end
-  local cmd = getFmcbSingleUseCommand(pathVal)
+  local cmd = getFmcbSingleUseCommand(ctx, pathVal)
   if not cmd then return false end
   local map = takenMap or buildFmcbSingleUseTakenMap(ctx, targetIndex)
   return map[cmd] and true or false
@@ -403,7 +445,7 @@ local function getOtherTargetPathStats(ctx)
   if (not editIdx or editIdx ~= 1) and paths[1] then
     local firstPv = type(paths[1]) == "table" and paths[1].value or paths[1]
     if hasUsablePathValue(firstPv) then
-      out.firstExclusive = isE1LockedPath(firstPv) and true or false
+      out.firstExclusive = isE1LockedPath(ctx, firstPv) and true or false
       out.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
     end
   end
@@ -444,6 +486,7 @@ end
 local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
   local _ = ctx._
   local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
+  local pathIsExclusive = isPathExclusiveInContext(ctx, pathVal, flags)
   local stats = getOtherTargetPathStats(ctx)
   local targetIndex = tonumber(stats.targetIndex)
   if hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex, singleUseTakenMap) then
@@ -459,7 +502,7 @@ local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
     showExclusivePathWarning(ctx, pathVal)
     return false
   end
-  if flags.exclusive then
+  if pathIsExclusive then
     if stats.count == 0 then return true end
     showExclusivePathWarning(ctx, pathVal)
     return false
@@ -963,7 +1006,7 @@ local function run(ctx)
           if targetIndex and targetIndex ~= 1 and isE1RestrictedPathForContext(ctx, e.name) then
             return true
           end
-          if e.exclusive then return otherStats.count > 0 end
+          if isPathExclusiveInContext(ctx, e.name, { exclusive = e.exclusive }) then return otherStats.count > 0 end
           if otherStats.firstExclusive then return true end
           return false
         end
