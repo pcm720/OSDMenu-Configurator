@@ -132,48 +132,6 @@ The release output includes a default `r3configurator.cnf` next to the ELF, so u
   - `cross`, `square`, `triangle`, `circle`
   - `selected`, `selected_dim`, `unselected`, `dim`, `background`
 
-On the main page, `R3Configurator` opens this same CWD `r3configurator.cnf` directly for self-configuration.
-Its editor is a single page and color changes preview live while adjusting.
-
-### Color value format
-
-- `RRGGBB` only (example: `365172`)
-
-### Example `r3configurator.cnf`
-
-```ini
-# Video mode: auto | ntsc | pal | 480p
-# (auto keeps native PS2 startup mode; no override applied)
-video_mode = auto
-
-# Swap confirm/cancel buttons: 0/1 (or false/true)
-swap_buttons = 0
-
-# Default UI language code (used when CWD strings.lua override is not present)
-default_language = en
-
-# Main page visibility: set to 1 to show, 0 to hide.
-show_freemcboot = 1
-show_freehddboot = 1
-show_osdmenu = 1
-show_osdmenu_mbr = 1
-show_hosdmenu = 1
-show_ps2bbl = 1
-show_psxbbl = 1
-
-# UI colors (RRGGBB format only)
-cross = 606060
-square = 606060
-triangle = 606060
-circle = 606060
-
-selected = 0072A0
-selected_dim = 003250
-unselected = A0A0A0
-dim = 606060
-background = 141414
-```
-
 ## Language and font overrides
 
 You can override the built-in strings and font by placing files in the **current working directory** (the directory from which the ELF is run).
