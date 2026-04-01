@@ -27,6 +27,14 @@ function arg_add_menu.run(ctx, opts)
   local scrollKey = opts.scrollKey or "argAddScroll"
   local rows = opts.rows or {}
   local maxVisible = math.max(1, math.floor(tonumber(opts.maxVisible) or (_.MAX_VISIBLE_LIST or 12)))
+  if _.common and _.common.computeVisibleRows then
+    local startY = _.MARGIN_Y + _.scaleY(50)
+    local fitVisible = _.common.computeVisibleRows(_, startY, _.LINE_H, maxVisible, {
+      reserveRows = 1,
+      reserveDescription = true,
+    })
+    maxVisible = math.max(1, math.min(maxVisible, fitVisible))
+  end
   local rowStateKeyPrefix = opts.rowStateKeyPrefix or "arg_add_row_"
   local rowDisabledReason = opts.rowDisabledReason or function()
     return false, nil

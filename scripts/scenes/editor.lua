@@ -19,6 +19,22 @@ local function formatArgCount(n)
   return "(" .. tostring(count) .. " args)"
 end
 
+local function trimPathValue(pathVal)
+  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function formatDisplayPath(_, pathVal)
+  local raw = tostring(pathVal or "")
+  local up = trimPathValue(raw):upper()
+  local p = _.path_str or {}
+  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
+  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
+  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
+  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
+  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  return raw
+end
+
 local function getOsdmbrHotkeyPadName(key)
   if key == "boot_start" then return "start" end
   if key == "boot_triangle" then return "triangle" end
@@ -26,6 +42,26 @@ local function getOsdmbrHotkeyPadName(key)
   if key == "boot_cross" then return "cross" end
   if key == "boot_square" then return "square" end
   return nil
+end
+
+local function isOsdmbrToggleableBootKey(key)
+  return key == "boot_start" or key == "boot_triangle" or key == "boot_circle" or key == "boot_cross" or
+      key == "boot_square"
+end
+
+local function osdmbrBootKeyHasEntries(ctx, _, key)
+  if not (ctx and _ and key) then return false end
+  local getBootPathEntries = _.config_parse and _.config_parse.getBootPathEntries
+  if getBootPathEntries then
+    local paths = getBootPathEntries(ctx.lines, key) or {}
+    if #paths > 0 then return true end
+  end
+  local getBootArgEntries = _.config_parse and _.config_parse.getBootArgEntries
+  if getBootArgEntries then
+    local args = getBootArgEntries(ctx.lines, key) or {}
+    if #args > 0 then return true end
+  end
+  return false
 end
 
 local function getCategoryOptSel(ctx, categoryIdx)
@@ -71,6 +107,232 @@ local function getEditorBackState(ctx)
   return "main"
 end
 
+local R3_COLOR_KEY_TO_FIELD = {
+  cross = "PAD_LABEL_CROSS",
+  square = "PAD_LABEL_SQUARE",
+  triangle = "PAD_LABEL_TRIANGLE",
+  circle = "PAD_LABEL_CIRCLE",
+  selected = "SELECTED_ENTRY",
+  selected_dim = "SELECTED_ENTRY_DIM",
+  unselected = "GRAY",
+  dim = "DIM",
+  background = "BGCOLOR",
+}
+
+local R3_BUTTON_COLOR_PRESET = {
+  cross = "365172",
+  square = "AF4B6D",
+  triangle = "358D4E",
+  circle = "933624",
+  selected = "365172",
+  selected_dim = "003250",
+  unselected = "A0A0A0",
+  dim = "606060",
+  background = "141414",
+}
+
+local R3_DEFAULT_COLOR_PRESET = {
+  cross = "606060",
+  square = "606060",
+  triangle = "606060",
+  circle = "606060",
+  selected = "0072A0",
+  selected_dim = "003250",
+  unselected = "A0A0A0",
+  dim = "606060",
+  background = "141414",
+}
+
+local R3_BUTTON_COLOR_KEYS = { "cross", "square", "triangle", "circle" }
+
+local function isR3ButtonColorKey(key)
+  local k = tostring(key or "")
+  for i = 1, #R3_BUTTON_COLOR_KEYS do
+    if R3_BUTTON_COLOR_KEYS[i] == k then
+      return true
+    end
+  end
+  return false
+end
+
+local function parseR3HexColor(raw)
+  local value = tostring(raw or "")
+  local trimmed = value:gsub("^%s+", ""):gsub("%s+$", "")
+  if not trimmed:match("^[%x][%x][%x][%x][%x][%x]$") then
+    return nil
+  end
+  local r = tonumber(trimmed:sub(1, 2), 16) or 0
+  local g = tonumber(trimmed:sub(3, 4), 16) or 0
+  local b = tonumber(trimmed:sub(5, 6), 16) or 0
+  return r, g, b, 0x80
+end
+
+local function formatR3HexColor(r, g, b)
+  local function toByte(v)
+    local n = tonumber(v) or 0
+    if n < 0 then n = 0 end
+    if n > 255 then n = 255 end
+    return math.floor(n + 0.5)
+  end
+  return string.format("%02X%02X%02X", toByte(r), toByte(g), toByte(b))
+end
+
+local function isR3ConfiguratorFile(ctx)
+  return ctx and ctx.fileType == "r3configurator_cnf"
+end
+
+local function isDeviceAbsolutePath(path)
+  local p = tostring(path or "")
+  if p == "" then return false end
+  if p:match("^[%w_]+:") then return true end
+  if p:sub(1, 1) == "/" then return true end
+  return false
+end
+
+local function getEditorDisplayPath(ctx, rawPath)
+  local path = tostring(rawPath or "")
+  local cache = ctx and ctx.editorDisplayPathCache or nil
+  if cache and cache.rawPath == path then
+    return cache.value or path
+  end
+
+  local out = path
+  if path ~= "" and not isDeviceAbsolutePath(path) then
+    local rel = path
+    if rel:sub(1, 2) == "./" then
+      rel = rel:sub(3)
+    end
+    if System and System.currentDirectory then
+      local ok, cwd = pcall(System.currentDirectory)
+      local base = ok and tostring(cwd or "") or ""
+      if base ~= "" then
+        if base:sub(-1) ~= "/" then
+          base = base .. "/"
+        end
+        out = base .. rel
+      end
+    end
+  end
+
+  if ctx then
+    ctx.editorDisplayPathCache = {
+      rawPath = path,
+      value = out,
+    }
+  end
+  return out
+end
+
+local function isR3ConfiguratorColorKey(ctx, key)
+  if not isR3ConfiguratorFile(ctx) then return false end
+  return R3_COLOR_KEY_TO_FIELD[tostring(key or "")] ~= nil
+end
+
+local function parseOptionColorValue(ctx, _, key, raw, defaultValue)
+  if isR3ConfiguratorColorKey(ctx, key) then
+    local r, g, b, a = parseR3HexColor(raw)
+    if r then return r, g, b, a end
+    local dr, dg, db, da = parseR3HexColor(defaultValue)
+    if dr then return dr, dg, db, da end
+    return 0, 0, 0, 0x80
+  end
+  return _.parseColor(raw or defaultValue)
+end
+
+local function formatOptionColorValue(ctx, _, key, r, g, b, a)
+  if isR3ConfiguratorColorKey(ctx, key) then
+    return formatR3HexColor(r, g, b)
+  end
+  return _.formatColor(r, g, b, a)
+end
+
+local function applyR3ConfiguratorVideoModeLive(value)
+  local modeKey = tostring(value or ""):lower()
+  if modeKey == "" or modeKey == "auto" then
+    local runtime = _G.CONFIG_UI
+    if runtime and runtime.nativeVideoMode and runtime.applyVideoModeSpec then
+      pcall(runtime.applyVideoModeSpec, runtime.nativeVideoMode)
+    end
+    return
+  end
+
+  local runtime = _G.CONFIG_UI
+  local selected = nil
+  if runtime and runtime.getVideoModeSpecForKey then
+    selected = runtime.getVideoModeSpecForKey(modeKey)
+  end
+  if not selected or type(selected.mode) ~= "number" then
+    local modeMap = {
+      ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
+      ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
+      ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },
+    }
+    selected = modeMap[modeKey]
+  end
+  if not selected or type(selected.mode) ~= "number" then
+    return
+  end
+  if runtime and runtime.applyVideoModeSpec then
+    pcall(runtime.applyVideoModeSpec, selected)
+  elseif Screen and Screen.setMode then
+    pcall(Screen.setMode, selected.mode, selected.width or 640, selected.height or 448, CT24, selected.interlace,
+      selected.field)
+  end
+end
+
+local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
+  if not isR3ConfiguratorFile(ctx) then return end
+  local rawKey = tostring(key or "")
+  if rawKey == "swap_buttons" then
+    local enabled = (tostring(value or "") == "1")
+    if _.common.setSwapCrossCircle then
+      _.common.setSwapCrossCircle(enabled)
+    else
+      _.common.SWAP_CROSS_CIRCLE = enabled
+    end
+    return
+  end
+  if rawKey == "video_mode" then
+    applyR3ConfiguratorVideoModeLive(value)
+    return
+  end
+  if rawKey == "default_language" then
+    local runtime = _G.CONFIG_UI
+    if runtime and runtime.applyLanguageCode then
+      pcall(runtime.applyLanguageCode, ctx, tostring(value or ""))
+    end
+    return
+  end
+  if _G.CONFIG_UI and _G.CONFIG_UI.setMainFilterFromShowKey then
+    if _G.CONFIG_UI.setMainFilterFromShowKey(rawKey, value) then
+      return
+    end
+  end
+
+  local field = R3_COLOR_KEY_TO_FIELD[rawKey]
+  if not field then return end
+  local r, g, b = parseR3HexColor(value)
+  if not r then return end
+  local color = _.Color.new(r, g, b, 0x80)
+  _.common[field] = color
+  if field == "SELECTED_ENTRY" then
+    _.SELECTED_ENTRY = color
+    _.common.TEXT_CURSOR_COLOR = color
+    _.TEXT_CURSOR_COLOR = color
+  elseif field == "SELECTED_ENTRY_DIM" then
+    _.SELECTED_ENTRY_DIM = color
+  elseif field == "GRAY" then
+    _.GRAY = color
+  elseif field == "DIM" then
+    _.DIM = color
+  end
+end
+
+local function setConfigValue(ctx, _, key, value)
+  _.config_parse.set(ctx.lines, key, tostring(value or ""))
+  applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
+end
+
 local OSD_VISUAL_COORD_KEYS = {
   OSDSYS_menu_x = true,
   OSDSYS_menu_y = true,
@@ -108,8 +370,37 @@ end
 local function applyOsdVisualPreset(ctx, _, preset)
   if not (ctx and _ and ctx.lines and preset) then return end
   for key, value in pairs(preset) do
-    _.config_parse.set(ctx.lines, key, tostring(value or ""))
+    setConfigValue(ctx, _, key, tostring(value or ""))
   end
+  -- Preset apply mutates many keys at once; clear frame caches so preview rows
+  -- and dirty-state are recomputed immediately on the next frame.
+  ctx.editorFrameParseCache = nil
+  ctx._configModifiedCache = nil
+  if _.common and _.common.refreshConfigModified then
+    _.common.refreshConfigModified(ctx)
+  else
+    ctx.configModified = true
+  end
+end
+
+local R3_PRESET_COLOR_KEYS = {
+  "cross", "square", "triangle", "circle",
+  "selected", "selected_dim", "unselected", "dim", "background"
+}
+
+local function applyR3ColorPreset(ctx, _, preset)
+  if not (ctx and _ and ctx.lines and preset) then return end
+  for i = 1, #R3_PRESET_COLOR_KEYS do
+    local key = R3_PRESET_COLOR_KEYS[i]
+    local value = preset[key]
+    if value ~= nil then
+      setConfigValue(ctx, _, key, tostring(value))
+    end
+  end
+  -- Preset apply mutates many keys at once; clear frame caches so color rows
+  -- and dirty-state are recomputed immediately on the next frame.
+  ctx.editorFrameParseCache = nil
+  ctx._configModifiedCache = nil
   if _.common and _.common.refreshConfigModified then
     _.common.refreshConfigModified(ctx)
   else
@@ -215,14 +506,22 @@ end
 local function getEditorParseCache(ctx, _)
   local sceneEpoch = ctx._sceneEpoch or 0
   local inputEpoch = ctx._inputEpoch or 0
+  local isDirty = ctx.configModified == true
   local cache = ctx.editorFrameParseCache
-  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
+  local cacheHit = cache and
+      cache.linesRef == ctx.lines and
+      cache.sceneEpoch == sceneEpoch and
+      cache.isDirty == isDirty
+  -- While dirty, retain inputEpoch as conservative invalidation so in-place edits
+  -- are reflected immediately without requiring state transitions.
+  if cacheHit and ((not isDirty) or cache.inputEpoch == inputEpoch) then
     return cache
   end
   cache = makeFrameParseCache(_, ctx.lines or {})
   cache.linesRef = ctx.lines
   cache.sceneEpoch = sceneEpoch
   cache.inputEpoch = inputEpoch
+  cache.isDirty = isDirty
   ctx.editorFrameParseCache = cache
   return cache
 end
@@ -261,6 +560,13 @@ local function withStartHintVisibility(items, showStart)
     end
   end
   return out
+end
+
+local function drawColorSwatch(_, x, y, w, h, fillColor)
+  if not (_ and _.Graphics and _.Graphics.drawRect and fillColor) then return end
+  -- 1px white perimeter around the swatch.
+  _.Graphics.drawRect(x - 1, y - 1, w + 2, h + 2, _.WHITE)
+  _.Graphics.drawRect(x, y, w, h, fillColor)
 end
 
 local function isTimerDigitEditKey(key)
@@ -338,7 +644,7 @@ local function runTimerDigitInlineInput(ctx, _)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    _.config_parse.set(ctx.lines, edit.key, tostring(edit.value))
+    setConfigValue(ctx, _, edit.key, tostring(edit.value))
     ctx.configModified = true
     ctx.timerDigitEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -458,7 +764,7 @@ local function runIntDigitInlineInput(ctx, _)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    _.config_parse.set(ctx.lines, edit.key, tostring(math.floor(tonumber(edit.value) or 0)))
+    setConfigValue(ctx, _, edit.key, tostring(math.floor(tonumber(edit.value) or 0)))
     ctx.configModified = true
     ctx.intDigitEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -470,11 +776,14 @@ end
 
 local function startInlineColorEdit(ctx, _, opt)
   if not (ctx and _ and opt and opt.key) then return end
-  local r, g, b, a = _.parseColor(_.config_parse.get(ctx.lines, opt.key) or opt.default)
+  local isR3 = isR3ConfiguratorColorKey(ctx, opt.key)
+  local r, g, b, a = parseOptionColorValue(ctx, _, opt.key, _.config_parse.get(ctx.lines, opt.key) or opt.default, opt.default)
+  if isR3 then a = 0x80 end
   ctx.colorInlineEdit = {
     key = opt.key,
     values = { r, g, b, a },
     orig = { r, g, b, a },
+    channelCount = isR3 and 3 or 4,
     channel = 1,
     digit = 1, -- 1=hundreds, 2=tens, 3=ones
     highlightX = nil,
@@ -485,6 +794,7 @@ end
 local function drawInlineColorEditValue(_, edit, x, y, scale)
   if not edit then return end
   local labels = { "R", "G", "B", "A" }
+  local channelCount = tonumber(edit.channelCount) or 4
   local calcTextWidth = _.common and _.common.calcTextWidth
   local function textWidth(s)
     if calcTextWidth then
@@ -497,14 +807,14 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
   local channelBlocks = {}
   local cursorX = x
 
-  for ch = 1, 4 do
+  for ch = 1, channelCount do
     local val = clampNumber(tonumber(edit.values[ch]) or 0, 0, 255)
     local valStr = string.format("%03d", val)
     local blockText = labels[ch] .. valStr
     local blockW = textWidth(blockText)
     channelBlocks[ch] = { x = cursorX, w = blockW, valStr = valStr }
     cursorX = cursorX + blockW
-    if ch < 4 then
+    if ch < channelCount then
       cursorX = cursorX + blockGap
     end
   end
@@ -535,7 +845,7 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
   end
 
   cursorX = x
-  for ch = 1, 4 do
+  for ch = 1, channelCount do
     local prefix = labels[ch]
     local prefixCol = _.WHITE
     if ch == 1 then
@@ -545,7 +855,7 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
     elseif ch == 3 then
       prefixCol = _.Color.new(60, 80, 170, 128)
     elseif ch == 4 then
-      prefixCol = _.Color.new(210, 210, 210, 255)
+      prefixCol = _.Color.new(210, 210, 210, 0x80)
     end
     _.drawText(_.font, _.drawMode, cursorX, y, scale, prefix, prefixCol)
     cursorX = cursorX + textWidth(prefix)
@@ -557,7 +867,7 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
       _.drawText(_.font, _.drawMode, cursorX, y, scale, digit, col)
       cursorX = cursorX + textWidth(digit)
     end
-    if ch < 4 then
+    if ch < channelCount then
       _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.WHITE)
       cursorX = cursorX + blockGap
     end
@@ -567,6 +877,9 @@ end
 local function runInlineColorEditInput(ctx, _)
   local edit = ctx.colorInlineEdit
   if not edit then return false end
+  local channelCount = tonumber(edit.channelCount) or 4
+  local maxLinear = channelCount * 3
+  local isR3 = isR3ConfiguratorColorKey(ctx, edit.key)
 
   local function toLinear(ch, digit)
     return ((ch - 1) * 3) + digit
@@ -575,7 +888,7 @@ local function runInlineColorEditInput(ctx, _)
   local function fromLinear(idx)
     local safe = idx
     if safe < 1 then safe = 1 end
-    if safe > 12 then safe = 12 end
+    if safe > maxLinear then safe = maxLinear end
     local ch = math.floor((safe - 1) / 3) + 1
     local digit = ((safe - 1) % 3) + 1
     return ch, digit
@@ -583,33 +896,44 @@ local function runInlineColorEditInput(ctx, _)
 
   if (_.padEffective & _.PAD_LEFT) ~= 0 then
     local idx = toLinear(edit.channel, edit.digit) - 1
-    if idx < 1 then idx = 12 end
+    if idx < 1 then idx = maxLinear end
     edit.channel, edit.digit = fromLinear(idx)
   end
   if (_.padEffective & _.PAD_RIGHT) ~= 0 then
     local idx = toLinear(edit.channel, edit.digit) + 1
-    if idx > 12 then idx = 1 end
+    if idx > maxLinear then idx = 1 end
     edit.channel, edit.digit = fromLinear(idx)
   end
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
     edit.channel = edit.channel + 1
-    if edit.channel > 4 then edit.channel = 1 end
+    if edit.channel > channelCount then edit.channel = 1 end
   end
 
   local weightByDigit = { 100, 10, 1 }
   local weight = weightByDigit[edit.digit] or 1
+  local changed = false
   if (_.padEffective & _.PAD_UP) ~= 0 then
     edit.values[edit.channel] = clampNumber((tonumber(edit.values[edit.channel]) or 0) + weight, 0, 255)
+    changed = true
   end
   if (_.padEffective & _.PAD_DOWN) ~= 0 then
     edit.values[edit.channel] = clampNumber((tonumber(edit.values[edit.channel]) or 0) - weight, 0, 255)
+    changed = true
+  end
+  if changed and isR3 then
+    setConfigValue(ctx, _, edit.key, formatR3HexColor(edit.values[1], edit.values[2], edit.values[3]))
+    ctx.configModified = true
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    _.config_parse.set(ctx.lines, edit.key, _.formatColor(edit.values[1], edit.values[2], edit.values[3], edit.values[4]))
+    setConfigValue(ctx, _, edit.key,
+      formatOptionColorValue(ctx, _, edit.key, edit.values[1], edit.values[2], edit.values[3], edit.values[4]))
     ctx.configModified = true
     ctx.colorInlineEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    if isR3 and edit.orig then
+      setConfigValue(ctx, _, edit.key, formatR3HexColor(edit.orig[1], edit.orig[2], edit.orig[3]))
+    end
     ctx.colorInlineEdit = nil
   end
 
@@ -700,8 +1024,19 @@ local function run(ctx)
     return
   end
 
-  local pathStr = ctx.currentPath or ""
-  if #pathStr > 56 then
+  local pathStr = getEditorDisplayPath(ctx, ctx.currentPath or "")
+  if isR3ConfiguratorFile(ctx) then
+    local pathScale = 0.8
+    local maxPathW = (_.w or 640) - (_.MARGIN_X * 2)
+    local drawPath = pathStr
+    if _.common and _.common.fitListRowText then
+      drawPath = _.common.fitListRowText(ctx, "editor_header_path", _.font, pathStr, maxPathW, pathScale, true,
+        { holdStart = 55, stepFrames = 14, holdEnd = 85 })
+    elseif _.common and _.common.truncateTextToWidth then
+      drawPath = _.common.truncateTextToWidth(_.font, pathStr, maxPathW, pathScale)
+    end
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, pathScale, drawPath, _.DIM)
+  elseif #pathStr > 56 then
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr:sub(1, 56), _.DIM)
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(18), 0.8, pathStr:sub(57), _.DIM)
   else
@@ -804,9 +1139,31 @@ local function run(ctx)
       end
     end
   elseif ctx.optList and #ctx.optList > 0 then
-    local startY = _.MARGIN_Y + _.scaleY(58)
-    local maxVis = _.MAX_VISIBLE
+    local listOffsetY = isR3ConfiguratorFile(ctx) and 50 or 58
+    local startY = _.MARGIN_Y + _.scaleY(listOffsetY)
+    local maxVisFallback = isR3ConfiguratorFile(ctx) and math.max(_.MAX_VISIBLE or 0, 12) or _.MAX_VISIBLE
+    local maxVis = maxVisFallback
+    if _.common and _.common.computeVisibleRows then
+      maxVis = _.common.computeVisibleRows(_, startY, _.ROW_H, maxVisFallback, {
+        reserveRows = 1,
+        reserveDescription = true,
+      })
+    end
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #ctx.optList)
+    if #ctx.optList > 0 then
+      local currentOpt = ctx.optList[ctx.optSel]
+      if currentOpt and currentOpt.optType == "header" then
+        local idx = ctx.optSel
+        for _scan = 1, #ctx.optList do
+          idx = _.common.wrapListSelection(idx, #ctx.optList, 1)
+          local candidate = ctx.optList[idx]
+          if candidate and candidate.optType ~= "header" then
+            ctx.optSel = idx
+            break
+          end
+        end
+      end
+    end
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #ctx.optList, maxVis)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #ctx.optList) do
       local o = ctx.optList[i]
@@ -850,7 +1207,7 @@ local function run(ctx)
         if slot and (slot.used or slot.pathExists) then
           local p = _.common_str.not_set
           if slot.path ~= "" then
-            p = slot.path
+            p = formatDisplayPath(_, slot.path)
           elseif slot.pathExists then
             p = _.common_str.empty
           end
@@ -907,7 +1264,7 @@ local function run(ctx)
       if o.key == "NAME_AUTO" then
         inlineAutoRow = true
         local nameVal = cachedGet(ctx.lines, o.key) or o.default or ""
-        local nameDisp = (nameVal ~= "" and nameVal) or _.common_str.empty
+        local nameDisp = (nameVal ~= "" and nameVal) or (_.common_str.name_not_defined or _.common_str.empty)
         lab = (_.menu_str.name or "Name: ") .. nameDisp
         valDisplay = ""
       elseif ctx.fileType == "freemcboot_cnf" and o.key and o.key:match("^ESR_Path_E%d+$") then
@@ -934,7 +1291,7 @@ local function run(ctx)
         local slot = _.config_parse.getBblHotkeySlot and cachedGetBblHotkeySlot(ctx.lines, "AUTO", slotIdx) or nil
         local pathDisp = _.common_str.not_set
         if slot and slot.path and slot.path ~= "" then
-          pathDisp = slot.path
+          pathDisp = formatDisplayPath(_, slot.path)
         elseif slot and slot.pathExists then
           pathDisp = _.common_str.empty
         end
@@ -1011,7 +1368,7 @@ local function run(ctx)
       elseif colorInlineEdit then
         local edit = ctx.colorInlineEdit
         local swatchColor = _.Color.new(edit.values[1], edit.values[2], edit.values[3], edit.values[4])
-        _.Graphics.drawRect(_.VALUE_X, y, 28, _.scaleY(18), swatchColor)
+        drawColorSwatch(_, _.VALUE_X, y, 28, _.scaleY(18), swatchColor)
         drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
       elseif valDisplay then
         if valDisplay ~= "" then
@@ -1034,9 +1391,10 @@ local function run(ctx)
           _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, drawVal, valCol)
         end
       elseif o.optType == "color" then
-        local r, g, b, a = _.parseColor(cachedGet(ctx.lines, o.key) or o.default)
+        local raw = cachedGet(ctx.lines, o.key) or o.default
+        local r, g, b, a = parseOptionColorValue(ctx, _, o.key, raw, o.default)
         local swatchColor = _.Color.new(r, g, b, a)
-        _.Graphics.drawRect(_.VALUE_X, y, 28, _.scaleY(18), swatchColor)
+        drawColorSwatch(_, _.VALUE_X, y, 28, _.scaleY(18), swatchColor)
       end
     end
     local selOpt = ctx.optList[ctx.optSel]
@@ -1095,6 +1453,11 @@ local function run(ctx)
           local v = _.config_options.getOsdmenuDefault(keyStr)
           if v ~= nil then return v end
         end
+      elseif ctx.fileType == "r3configurator_cnf" then
+        if _.config_options and _.config_options.getR3ConfiguratorDefault then
+          local v = _.config_options.getR3ConfiguratorDefault(keyStr)
+          if v ~= nil then return v end
+        end
       end
       if selOpt and selOpt.key == keyStr and selOpt.default ~= nil then
         return selOpt.default
@@ -1105,6 +1468,7 @@ local function run(ctx)
       resetDefaultFn,
       { left = _.common_str.hint_prev, right = _.common_str.hint_next })
     local canResetFromTriangle = false
+    local isR3ColorPresetRow = selOpt and selOpt.optType == "color" and isR3ConfiguratorColorKey(ctx, selOpt.key)
     if selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" then
       if isOsdVisualCoordRow then
         canResetFromTriangle = not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet)
@@ -1115,11 +1479,42 @@ local function run(ctx)
         end
       end
     end
+    if isR3ColorPresetRow then
+      canResetFromTriangle = true
+    end
     if not canResetFromTriangle then
       hintItems = removeHintPad(hintItems, "triangle")
     end
+    if isR3ColorPresetRow then
+      local triangleLabel = (_.menu_str and _.menu_str.reset_label) or "Reset"
+      for i = 1, #hintItems do
+        local item = hintItems[i]
+        if tostring(item and item.pad or ""):lower() == "triangle" then
+          item.label = triangleLabel
+        end
+      end
+    end
     if selOpt and selOpt.optType == "header" then
       hintItems = removeHintPad(hintItems, "cross")
+    end
+    if selOpt and selOpt.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" then
+      local canToggle = selOpt.key and isOsdmbrToggleableBootKey(selOpt.key) and osdmbrBootKeyHasEntries(ctx, _, selOpt.key)
+      local keyDisabled = canToggle and cachedIsBootKeyDisabled(ctx.lines, selOpt.key) or false
+      hintItems = {
+        { pad = "cross", label = (_.menu_str.edit_label or "Edit"), row = 1 },
+        {
+          pad = canToggle and "triangle" or "",
+          label = canToggle and
+              ((keyDisabled and (_.menu_str.enable_label or "Enable")) or (_.menu_str.disable_label or "Disable")) or "",
+          row = 1
+        },
+        {
+          pad = ctx.configModified and "start" or "",
+          label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+          row = 1
+        },
+        { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
+      }
     end
     local isFmcbAuto = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
     local maxAutoSlots = isFmcbAuto and ((_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3) or
@@ -1534,6 +1929,31 @@ local function run(ctx)
       end
     end
 
+    if ctx.editorR3ColorPresetOpen and selOpt and selOpt.optType == "color" and isR3ConfiguratorColorKey(ctx, selOpt.key) then
+      if actions_menu.run(ctx, {
+            openKey = "editorR3ColorPresetOpen",
+            selKey = "editorR3ColorPresetSel",
+            scrollKey = "editorR3ColorPresetScroll",
+            anchorPad = "triangle",
+            anchorLabel = (_.menu_str and _.menu_str.reset_label) or "Reset",
+            rows = {
+              { id = "default", label = (_.menu_str and _.menu_str.default_label) or "Default" },
+              { id = "button_colors", label = (_.menu_str and _.menu_str.button_colors_label) or "Button colors" },
+            },
+            rowStateKeyPrefix = "editor_r3_color_preset_row_",
+            onSelect = function(row)
+              if not row then return end
+              if row.id == "default" then
+                applyR3ColorPreset(ctx, _, R3_DEFAULT_COLOR_PRESET)
+              elseif row.id == "button_colors" then
+                applyR3ColorPreset(ctx, _, R3_BUTTON_COLOR_PRESET)
+              end
+            end,
+          }) then
+        return
+      end
+    end
+
     if ctx.editorAutoSlotActionsOpen and isAutoSlotRow then
       local actionRows = {}
       local usedAutoSlots = countUsedAutoSlots()
@@ -1626,13 +2046,27 @@ local function run(ctx)
       end
     end
 
+    local function moveOptionSelection(step)
+      local count = #(ctx.optList or {})
+      if count <= 0 then return end
+      local idx = _.common.clampListSelection(ctx.optSel or 1, count)
+      for _scan = 1, count do
+        idx = _.common.wrapListSelection(idx, count, step)
+        local candidate = ctx.optList[idx]
+        if not (candidate and candidate.optType == "header") then
+          ctx.optSel = idx
+          return
+        end
+      end
+    end
+
     if (_.padEffective & _.PAD_UP) ~= 0 then
       if isAutoSlotRow and ctx.editorAutoSlotGrab then
         moveAutoSlot(-1)
       elseif isEsrPathRow and ctx.editorEsrPathGrab then
         moveEsrSlot(-1)
       else
-        ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, -1)
+        moveOptionSelection(-1)
       end
     end
     if (_.padEffective & _.PAD_DOWN) ~= 0 then
@@ -1641,7 +2075,7 @@ local function run(ctx)
       elseif isEsrPathRow and ctx.editorEsrPathGrab then
         moveEsrSlot(1)
       else
-        ctx.optSel = _.common.wrapListSelection(ctx.optSel, #ctx.optList, 1)
+        moveOptionSelection(1)
       end
     end
     if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT)) ~= 0 then
@@ -1669,11 +2103,11 @@ local function run(ctx)
           idx = idx + 1
           if idx > #o.enumVals then idx = (allowUnset and 0 or 1) end
         end
-        _.config_parse.set(ctx.lines, o.key, (idx == 0) and "" or o.enumVals[idx])
+        setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
         ctx.configModified = true
       elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
-        _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
+        setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
       elseif o.optType == "int" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
@@ -1701,7 +2135,7 @@ local function run(ctx)
         end
         if delta ~= 0 then
           num = clampNumber(num + delta, minV, maxV)
-          _.config_parse.set(ctx.lines, o.key, tostring(math.floor(num)))
+          setConfigValue(ctx, _, o.key, tostring(math.floor(num)))
           ctx.configModified = true
         end
       elseif o.optType == "string" then
@@ -1734,7 +2168,7 @@ local function run(ctx)
             num = num + delta
             if num < minV then num = minV end
             if num > maxV then num = maxV end
-            _.config_parse.set(ctx.lines, o.key, tostring(num))
+            setConfigValue(ctx, _, o.key, tostring(num))
             ctx.configModified = true
           end
         end
@@ -1754,7 +2188,8 @@ local function run(ctx)
           (((ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and
             (o.key == "VIDEO_MODE" or o.key == "LOGO_DISPLAY")) or
             (ctx.fileType == "osdmenu_cnf" and (o.key == "OSDSYS_video_mode" or o.key == "OSDSYS_region")) or
-            (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language"))) then
+            (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language")) or
+            (ctx.fileType == "r3configurator_cnf")) then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         local idx = 0
         for ei, v in ipairs(o.enumVals) do
@@ -1765,11 +2200,11 @@ local function run(ctx)
         end
         idx = idx + 1
         if idx > #o.enumVals then idx = 1 end
-        _.config_parse.set(ctx.lines, o.key, o.enumVals[idx])
+        setConfigValue(ctx, _, o.key, o.enumVals[idx])
         ctx.configModified = true
       elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
-        _.config_parse.set(ctx.lines, o.key, (cur == "1") and "0" or "1")
+        setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
         ctx.configModified = true
       elseif o.optType == "int" then
         if isTimerDigitEditKey(o.key) then
@@ -1786,7 +2221,7 @@ local function run(ctx)
         ctx.textInputValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         ctx.textInputMaxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
         ctx.textInputCallback = function(val)
-          _.config_parse.set(ctx.lines, o.key, val or "")
+          setConfigValue(ctx, _, o.key, val or "")
           ctx.configModified = true
           ctx.state = "editor"
         end
@@ -1931,7 +2366,7 @@ local function run(ctx)
           ctx.editKey = nil
           ctx.isAddPath = false
           ctx.addPathKey = nil
-          ctx.bootKey = nil
+          ctx.bootKey = o.key
           ctx.pathPickerTarget = nil
           ctx.pathPickerFileExts = nil
           ctx.pathPickerForEntryIdx = nil
@@ -1948,7 +2383,7 @@ local function run(ctx)
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerInsertBelow = 0
           end
-          ctx.pathPickerReturnState = "editor"
+          ctx.pathPickerReturnState = "entry_paths"
           ctx.pathPickerContext = "mbr"
           ctx.pathPickerSub = "device"
           ctx.pathList = _.file_selector.getDevices("mbr") or {}
@@ -1969,6 +2404,8 @@ local function run(ctx)
         ctx.addPathKey = nil
         local isBblLoadIrx = (ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and o.key and
             o.key:match("^LOAD_IRX_E%d+$")
+        local isEsrPathPicker = ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) and o.key and
+            o.key:match("^ESR_Path_E%d+$")
         ctx.pathPickerTarget = nil
         ctx.pathPickerFileExts = isBblLoadIrx and { ".irx" } or nil
         ctx.pathPickerBootKey = nil
@@ -1980,7 +2417,8 @@ local function run(ctx)
         ctx.pathPickerBblIrxDisabled = nil
         ctx.pathPickerReturnState = nil
         ctx.pathPickerContext = isBblLoadIrx and "path_only" or
-            ((o.key == "path_DKWDRV_ELF") and "mc_only" or ((ctx.context == "mbr") and "mbr" or "osdmenu"))
+            (isEsrPathPicker and "path_only" or
+              ((o.key == "path_DKWDRV_ELF") and "mc_only" or ((ctx.context == "mbr") and "mbr" or "osdmenu")))
         ctx.pathPickerSub = "device"
         ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
         ctx.pathPickerSel = ctx.pathPickerSel or 1
@@ -2001,7 +2439,8 @@ local function run(ctx)
     end
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 then
       local o = ctx.optList[ctx.optSel]
-      if o and o.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" and o.key then
+      if o and o.optType == "boot_paths" and ctx.fileType == "osdmbr_cnf" and o.key and
+          isOsdmbrToggleableBootKey(o.key) and osdmbrBootKeyHasEntries(ctx, _, o.key) then
         local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
         _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
         ctx.configModified = true
@@ -2023,10 +2462,15 @@ local function run(ctx)
             ctx.configModified = true
           end
         end
+      elseif o and o.optType == "color" and o.key and isR3ConfiguratorColorKey(ctx, o.key) then
+        ctx.editorR3ColorPresetOpen = true
+        ctx.editorR3ColorPresetSel = ctx.editorR3ColorPresetSel or 1
+        ctx.editorR3ColorPresetScroll = ctx.editorR3ColorPresetScroll or 0
+        ctx.editorR3ColorPresetKey = o.key
       elseif o and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
         local def = resetDefaultFn and resetDefaultFn(o.key)
         if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def, cachedGet) then
-          _.config_parse.set(ctx.lines, o.key, def)
+          setConfigValue(ctx, _, o.key, def)
           if _.common and _.common.refreshConfigModified then
             _.common.refreshConfigModified(ctx)
           else
@@ -2110,6 +2554,10 @@ local function run(ctx)
       ctx.editorEsrPathMoveSel = nil
       return
     end
+    ctx.editorR3ColorPresetOpen = nil
+    ctx.editorR3ColorPresetSel = nil
+    ctx.editorR3ColorPresetScroll = nil
+    ctx.editorR3ColorPresetKey = nil
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
       setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx

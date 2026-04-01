@@ -7,7 +7,235 @@ local common = dofile("scripts/ui_common.lua")
 local config_parse = dofile("scripts/parse.lua")
 local scene_module = dofile("scripts/ui_state.lua")
 
-_G.CONFIG_UI = { common = common, config_parse = config_parse }
+local function trimString(s)
+  return tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function getStartupCwd()
+  if System and System.currentDirectory then
+    local okCwd, cwdValue = pcall(System.currentDirectory)
+    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
+      return cwdValue
+    end
+  end
+  return nil
+end
+
+local function startupFileExists(path)
+  local ok, exists = pcall(doesFileExist, path)
+  return ok and exists == true
+end
+
+local function resolveStartupPath(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  if startupFileExists(path) then return path end
+  if startupFileExists("./" .. path) then return "./" .. path end
+  local cwd = getStartupCwd()
+  if cwd and cwd ~= "" then
+    local base = cwd
+    if base:sub(-1) ~= "/" then base = base .. "/" end
+    if startupFileExists(base .. path) then
+      return base .. path
+    end
+  end
+  return nil
+end
+
+local function parseStartupBool(v)
+  local s = trimString(v):lower()
+  if s == "1" or s == "true" or s == "yes" or s == "on" then return true end
+  if s == "0" or s == "false" or s == "no" or s == "off" then return false end
+  return nil
+end
+
+local function loadStartupConfig()
+  local cfg = {
+    path = nil,
+    video_mode = nil,
+    swap_buttons = nil,
+    default_language = nil,
+    main_filter = nil,
+    colors = {},
+  }
+
+  local cfgPath = resolveStartupPath("r3configurator.cnf")
+  if not cfgPath then
+    return cfg
+  end
+
+  local lines, err = config_parse.load(cfgPath)
+  if not lines then
+    print("ui: failed loading startup config r3configurator.cnf: " .. tostring(err))
+    return cfg
+  end
+
+  cfg.path = cfgPath
+  local kv = {}
+  for i = 1, #(lines or {}) do
+    local e = lines[i]
+    if e and e.key and not e.comment then
+      kv[trimString(e.key):lower()] = trimString(e.value or "")
+    end
+  end
+
+  local vm = trimString(kv.video_mode):lower()
+  if vm == "480p" or vm == "pal" or vm == "ntsc" or vm == "auto" then
+    cfg.video_mode = vm
+  end
+
+  local swap = parseStartupBool(kv.swap_buttons)
+  if swap ~= nil then
+    cfg.swap_buttons = swap
+  end
+
+  local lang = trimString(kv.default_language):lower()
+  if lang ~= "" and lang:match("^[%a][%w_]*$") then
+    cfg.default_language = lang
+  end
+
+  local showKeyToId = {
+    show_freemcboot = "freemcboot",
+    show_freehddboot = "freehddboot",
+    show_osdmenu = "osdmenu",
+    show_osdmenu_mbr = "mbr",
+    show_hosdmenu = "hosdmenu",
+    show_ps2bbl = "ps2bbl",
+    show_psxbbl = "psxbbl",
+  }
+  local filter = {}
+  local hasFilter = false
+  for key, id in pairs(showKeyToId) do
+    local b = parseStartupBool(kv[key])
+    if b ~= nil then
+      hasFilter = true
+      filter[id] = b
+    end
+  end
+  if hasFilter then
+    cfg.main_filter = filter
+  end
+
+  local colorKeys = {
+    "cross", "square", "triangle", "circle",
+    "selected", "selected_dim", "unselected", "dim", "background"
+  }
+  for i = 1, #colorKeys do
+    local key = colorKeys[i]
+    local value = trimString(kv[key])
+    if value ~= "" then
+      cfg.colors[key] = value
+    end
+  end
+
+  return cfg
+end
+
+local function normalizeVideoModeSpec(spec)
+  if type(spec) ~= "table" then return nil end
+
+  local mode = tonumber(spec.mode or spec.vmode)
+  local width = tonumber(spec.width) or 640
+  local height = tonumber(spec.height) or 448
+  local interlace = tonumber(spec.interlace)
+  local field = tonumber(spec.field)
+
+  if type(mode) ~= "number" then
+    if interlace == NONINTERLACED and type(_480p) == "number" then
+      mode = _480p
+    elseif height >= 500 and type(PAL) == "number" then
+      mode = PAL
+    elseif type(NTSC) == "number" then
+      mode = NTSC
+    end
+  end
+  if type(mode) ~= "number" then return nil end
+
+  if type(interlace) ~= "number" then
+    if mode == _480p then
+      interlace = NONINTERLACED
+    else
+      interlace = INTERLACED
+    end
+  end
+  if type(field) ~= "number" then
+    field = (interlace == NONINTERLACED) and FRAME or FIELD
+  end
+
+  local outW = math.max(1, math.floor(width + 0.5))
+  local outH = math.max(1, math.floor(height + 0.5))
+  return {
+    mode = mode,
+    width = outW,
+    height = outH,
+    interlace = interlace,
+    field = field,
+  }
+end
+
+local function captureCurrentVideoModeSpec()
+  if not (Screen and Screen.getMode) then return nil end
+  local ok, spec = pcall(Screen.getMode)
+  if not ok or type(spec) ~= "table" then
+    return nil
+  end
+  return normalizeVideoModeSpec(spec)
+end
+
+local flushOverlayLogoCache = nil
+
+local function applyVideoModeSpec(spec)
+  local normalized = normalizeVideoModeSpec(spec)
+  if not normalized then
+    return false, "invalid mode specification"
+  end
+  if not (Screen and Screen.setMode) then
+    return false, "Screen.setMode unavailable"
+  end
+  if common.flushPadIconCache then
+    pcall(common.flushPadIconCache)
+  end
+  if flushOverlayLogoCache then
+    pcall(flushOverlayLogoCache)
+  end
+  local ok, err = pcall(Screen.setMode, normalized.mode, normalized.width, normalized.height, CT24, normalized.interlace,
+    normalized.field)
+  if not ok then
+    return false, err
+  end
+  return true
+end
+
+local function getVideoModeSpecForKey(modeKey)
+  local key = trimString(modeKey):lower()
+  local specs = {
+    ["480p"] = { mode = _480p, width = 640, height = 480, interlace = NONINTERLACED, field = FRAME },
+    ["pal"] = { mode = PAL, width = 640, height = 512, interlace = INTERLACED, field = FIELD },
+    ["ntsc"] = { mode = NTSC, width = 640, height = 448, interlace = INTERLACED, field = FIELD },
+  }
+  local spec = specs[key]
+  if not spec then return nil end
+  return {
+    mode = spec.mode,
+    width = spec.width,
+    height = spec.height,
+    interlace = spec.interlace,
+    field = spec.field,
+  }
+end
+
+local STARTUP_CFG = loadStartupConfig()
+local NATIVE_VIDEO_MODE_SPEC = captureCurrentVideoModeSpec()
+
+_G.CONFIG_UI = {
+  common = common,
+  config_parse = config_parse,
+  startupConfig = STARTUP_CFG,
+  startupMainFilter = STARTUP_CFG.main_filter,
+  startupDefaultLanguage = STARTUP_CFG.default_language,
+  nativeVideoMode = NATIVE_VIDEO_MODE_SPEC,
+  applyVideoModeSpec = applyVideoModeSpec,
+  getVideoModeSpecForKey = getVideoModeSpecForKey,
+}
 local main = dofile("scripts/ui_main.lua")
 local file_selector = dofile("scripts/file_selector.lua")
 local config_options = dofile("scripts/options.lua")
@@ -49,110 +277,37 @@ local WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM
 local HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
 local SELECTED_ENTRY_DIM = common.SELECTED_ENTRY_DIM
 local TEXT_CURSOR_COLOR = common.TEXT_CURSOR_COLOR
-local FONT_SCALE, LINE_H, ROW_H = common.FONT_SCALE, common.LINE_H, common.ROW_H
-local MARGIN_X, MARGIN_Y = common.MARGIN_X, common.MARGIN_Y
-local MAX_VISIBLE = common.MAX_VISIBLE
-local MAX_VISIBLE_LIST = common.MAX_VISIBLE_LIST
-local VALUE_X, VALUE_MAX_LEN, VALUE_MAX_LEN_LONG = common.VALUE_X, common.VALUE_MAX_LEN, common.VALUE_MAX_LEN_LONG
-local DESC_Y_BOTTOM, HINT_Y = common.DESC_Y_BOTTOM, common.HINT_Y
+local FONT_SCALE = common.FONT_SCALE
+local VALUE_MAX_LEN, VALUE_MAX_LEN_LONG = common.VALUE_MAX_LEN, common.VALUE_MAX_LEN_LONG
 local KEYBOARD_ROWS, KEYBOARD_ROWS_SHIFTED, KEYBOARD_ROWS_TITLE_ID = common.KEYBOARD_ROWS, common.KEYBOARD_ROWS_SHIFTED,
     common.KEYBOARD_ROWS_TITLE_ID
-local KEYBOARD_CENTER_X, KEYBOARD_CENTER_Y = common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y
-local KEY_WIDTH, KEY_HEIGHT, KEY_GAP = common.KEY_WIDTH, common.KEY_HEIGHT, common.KEY_GAP
 local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY_BG_SEL, common.KEY_BORDER,
     common.KEY_BORDER_SEL
-local KEY_CHAR_W, KEY_LINE_H = common.KEY_CHAR_W, common.KEY_LINE_H
 
-local function applyStartupVideoModeOpt()
-  -- Keep a fixed NTSC-style UI canvas across forced output modes so layout
-  -- and placement remain consistent (scaled by GS output mode, not reflowed).
-  local BASE_W, BASE_H = 640, 448
+local function refreshRuntimeColorAliases()
+  WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
+  HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
+  SELECTED_ENTRY_DIM = common.SELECTED_ENTRY_DIM
+  TEXT_CURSOR_COLOR = common.TEXT_CURSOR_COLOR
+end
 
-  local cwd = nil
-  if System and System.currentDirectory then
-    local okCwd, cwdValue = pcall(System.currentDirectory)
-    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
-      cwd = cwdValue
-    end
-  end
+local function applyStartupVideoModeCnf()
+  local modeKey = STARTUP_CFG and STARTUP_CFG.video_mode or nil
+  if not modeKey or modeKey == "" or modeKey == "auto" then return end
 
-  local function checkExists(path)
-    local ok, exists = pcall(doesFileExist, path)
-    return ok and exists == true
-  end
+  local selected = getVideoModeSpecForKey(modeKey)
+  if not selected or type(selected.mode) ~= "number" then return end
 
-  local function optExists(path)
-    if type(path) ~= "string" or path == "" then return false end
-    if checkExists(path) or checkExists("./" .. path) then
-      return true
-    end
-    if cwd and cwd ~= "" then
-      local base = cwd
-      if base:sub(-1) ~= "/" then base = base .. "/" end
-      if checkExists(base .. path) then
-        return true
-      end
-    end
-    return false
-  end
-
-  local opts = {
-    { file = "720p.opt", mode = _720p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
-    { file = "480p.opt", mode = _480p, width = BASE_W, height = BASE_H, interlace = NONINTERLACED, field = FRAME },
-    { file = "pal.opt",  mode = PAL,   width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
-    { file = "ntsc.opt", mode = NTSC,  width = BASE_W, height = BASE_H, interlace = INTERLACED,    field = FIELD },
-  }
-
-  local selected = nil
-  for i = 1, #opts do
-    local spec = opts[i]
-    if type(spec.mode) == "number" and optExists(spec.file) then
-      selected = spec
-      break
-    end
-  end
-  if not selected then return end
-
-  local ok, err = pcall(function()
-    Screen.setMode(selected.mode, selected.width, selected.height, CT24, selected.interlace, selected.field)
-  end)
+  local ok, err = applyVideoModeSpec(selected)
   if ok then
-    print("ui: startup video mode override from " .. tostring(selected.file))
+    print("ui: startup video mode override from r3configurator.cnf (video_mode=" .. tostring(modeKey) .. ")")
   else
-    print("ui: failed startup video mode override from " .. tostring(selected.file) .. ": " .. tostring(err))
+    print("ui: failed startup video mode override from r3configurator.cnf: " .. tostring(err))
   end
 end
 
-local function applyStartupSwapButtonsOpt()
-  local cwd = nil
-  if System and System.currentDirectory then
-    local okCwd, cwdValue = pcall(System.currentDirectory)
-    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
-      cwd = cwdValue
-    end
-  end
-
-  local function checkExists(path)
-    local ok, exists = pcall(doesFileExist, path)
-    return ok and exists == true
-  end
-
-  local function optExists(path)
-    if type(path) ~= "string" or path == "" then return false end
-    if checkExists(path) or checkExists("./" .. path) then
-      return true
-    end
-    if cwd and cwd ~= "" then
-      local base = cwd
-      if base:sub(-1) ~= "/" then base = base .. "/" end
-      if checkExists(base .. path) then
-        return true
-      end
-    end
-    return false
-  end
-
-  local enabled = optExists("swap_buttons.opt")
+local function applyStartupSwapButtonsCnf()
+  local enabled = (STARTUP_CFG and STARTUP_CFG.swap_buttons == true) and true or false
   if common.setSwapCrossCircle then
     common.setSwapCrossCircle(enabled)
   else
@@ -160,7 +315,59 @@ local function applyStartupSwapButtonsOpt()
   end
   _G.CONFIG_UI.swapCrossCircle = enabled == true
   if enabled then
-    print("ui: startup button swap override from swap_buttons.opt (circle confirm/cross cancel)")
+    print("ui: startup button swap override from r3configurator.cnf (swap_buttons=1)")
+  end
+end
+
+local function parseStartupColorValue(raw)
+  local value = tostring(raw or "")
+  local trimmed = value:gsub("^%s+", ""):gsub("%s+$", "")
+  if trimmed == "" then return nil end
+
+  if trimmed:match("^[%x][%x][%x][%x][%x][%x]$") then
+    return tonumber(trimmed:sub(1, 2), 16), tonumber(trimmed:sub(3, 4), 16), tonumber(trimmed:sub(5, 6), 16), 0x80
+  end
+
+  return nil
+end
+
+local function applyStartupColorsCnf()
+  if not (STARTUP_CFG and STARTUP_CFG.path) then return end
+  local kv = STARTUP_CFG.colors or {}
+
+  local applied = 0
+  local function applyColor(field, key)
+    local raw = kv[key]
+    local usedKey = key
+    if not raw then return end
+
+    local r, g, b, a = parseStartupColorValue(raw)
+    if not r then
+      print("ui: r3configurator.cnf invalid value for " .. tostring(usedKey) .. ": " .. tostring(raw))
+      return
+    end
+
+    common[field] = Color.new(r, g, b, a)
+    applied = applied + 1
+  end
+
+  applyColor("PAD_LABEL_CROSS", "cross")
+  applyColor("PAD_LABEL_SQUARE", "square")
+  applyColor("PAD_LABEL_TRIANGLE", "triangle")
+  applyColor("PAD_LABEL_CIRCLE", "circle")
+  applyColor("SELECTED_ENTRY", "selected")
+  applyColor("SELECTED_ENTRY_DIM", "selected_dim")
+  applyColor("GRAY", "unselected")
+  applyColor("DIM", "dim")
+  applyColor("BGCOLOR", "background")
+
+  refreshRuntimeColorAliases()
+
+  _G.CONFIG_UI.colorsCnfActive = true
+  if applied > 0 then
+    print("ui: startup colors override from r3configurator.cnf (" .. tostring(applied) .. " key(s) applied)")
+  else
+    print("ui: startup colors override from r3configurator.cnf (no valid keys found)")
   end
 end
 
@@ -188,9 +395,26 @@ end
 local overlayLogoCache = {}
 local OVERLAY_LOGO_OPACITY = 0.25 -- 75% transparent
 local OVERLAY_LOGO_OPACITY_R3 = 1.0 -- keep splash/title logo fully visible if selected
+local OVERLAY_LOGO_R3_TITLE_KEY = "__r3_title__"
+local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
+end
+
+flushOverlayLogoCache = function()
+  if Graphics and Graphics.freeImage then
+    for key, tex in pairs(overlayLogoCache) do
+      if isValidImageHandle(tex) then
+        pcall(Graphics.freeImage, tex)
+      end
+      overlayLogoCache[key] = nil
+    end
+  else
+    for key in pairs(overlayLogoCache) do
+      overlayLogoCache[key] = nil
+    end
+  end
 end
 
 local function getOverlayLogoColor(key)
@@ -204,22 +428,46 @@ local function getSelectionOverlayLogoTexture(key)
   if cached ~= nil then
     return (cached ~= false) and cached or nil
   end
-  local path = "res/logo_" .. tostring(key) .. ".png"
-  local ok, img = pcall(Graphics.loadImage, path)
-  if ok and isValidImageHandle(img) then
-    if Graphics.setImageFilters and LINEAR then
-      pcall(Graphics.setImageFilters, img, LINEAR)
-    end
-    overlayLogoCache[key] = img
-    return img
+
+  local candidatePaths
+  if key == OVERLAY_LOGO_R3_TITLE_KEY then
+    candidatePaths = { "res/title.png", "res/logo_r3configurat3r.png" }
+  else
+    candidatePaths = { "res/logo_" .. tostring(key) .. ".png" }
   end
+
+  for i = 1, #candidatePaths do
+    local rawPath = candidatePaths[i]
+    local resolvedPath = resolveStartupPath(rawPath)
+    local tried = {}
+    local loadPaths = {}
+    if resolvedPath and resolvedPath ~= "" then
+      loadPaths[#loadPaths + 1] = resolvedPath
+      tried[resolvedPath] = true
+    end
+    if rawPath and rawPath ~= "" and not tried[rawPath] then
+      loadPaths[#loadPaths + 1] = rawPath
+    end
+    for j = 1, #loadPaths do
+      local ok, img = pcall(Graphics.loadImage, loadPaths[j])
+      if ok and isValidImageHandle(img) then
+        if Graphics.setImageFilters and LINEAR then
+          pcall(Graphics.setImageFilters, img, LINEAR)
+        end
+        overlayLogoCache[key] = img
+        return img
+      end
+    end
+  end
+
   overlayLogoCache[key] = false
   return nil
 end
 
 local function drawSelectionOverlayLogo(ctx)
   if not ctx then return end
-  local key = ctx.mainOverlayLogoKey
+  local isR3SettingsScene = (ctx.state ~= "main") and (ctx.context == "r3configurator")
+  local key = isR3SettingsScene and OVERLAY_LOGO_R3_TITLE_KEY or ctx.mainOverlayLogoKey
   if not key or key == "" then return end
   local tex = getSelectionOverlayLogoTexture(key)
   if not tex then return end
@@ -233,6 +481,9 @@ local function drawSelectionOverlayLogo(ctx)
   local maxW = math.floor(sw * 0.90)
   local maxH = math.floor(sh * 0.72)
   local scale = math.min(1.0, maxW / iw, maxH / ih)
+  if isR3SettingsScene then
+    scale = math.min(scale, OVERLAY_LOGO_R3_TITLE_SCALE)
+  end
   local dw = math.max(1, math.floor(iw * scale + 0.5))
   local dh = math.max(1, math.floor(ih * scale + 0.5))
   local x = math.floor((sw - dw) / 2)
@@ -380,42 +631,47 @@ local function mainLoop()
   -- One-frame dispatch for all states. Main-flow states use runSceneLoop; others use this.
   local function runOneFrame(c)
     syncFromS(c)
+    refreshRuntimeColorAliases()
     Screen.clear(BLACK)
-    local vmode = Screen.getMode()
-    local w = (vmode and vmode.width) or common.DEFAULT_W
-    local h = (vmode and vmode.height) or common.DEFAULT_H
-    c.w = w
-    c.h = h
-    local sy = h / common.DEFAULT_H -- vertical scale for PAL (512) vs NTSC (448); keeps proportions
-    c.sy = sy
-    -- Keep font at NTSC size on both modes so text fits; only layout (positions, row heights) scales on PAL
+    common.runLayout(c)
+    local w = c.w or common.DEFAULT_W
+    local h = c.h or common.DEFAULT_H
+    local uiScale = c.uiScale or 1
+    local scaleX = c.scaleX or function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
+    local scaleY = c.scaleY or function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
     if _G.CONFIG_UI then
-      _G.CONFIG_UI.currentDrawHeight = nil
-      _G.CONFIG_UI.currentDrawWidth = nil
+      _G.CONFIG_UI.currentUiScale = uiScale
+      _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
+      _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
-    c.MARGIN_Y = math.floor(common.MARGIN_Y * sy)
-    -- Keep line/row height at NTSC size so spacing matches unscaled text
-    c.LINE_H = common.LINE_H
-    c.ROW_H = common.ROW_H
-    c.HINT_Y = h - math.floor(24 * sy)
-    c.DESC_Y_BOTTOM = c.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
-    c.scaleY = function(y) return math.floor((y or 0) * sy) end
     if c.drawBackgroundLayer then
       c.drawBackgroundLayer(c)
     end
     local HINT_Y = c.HINT_Y
     local DESC_Y_BOTTOM = c.DESC_Y_BOTTOM
-    local KEYBOARD_CENTER_Y = math.floor(h * 220 / 448)
+    local MARGIN_X = c.MARGIN_X or common.MARGIN_X
     local MARGIN_Y, LINE_H, ROW_H = c.MARGIN_Y, c.LINE_H, c.ROW_H
-    local scaleY = c.scaleY
-    local KEY_H = scaleY(common.KEY_HEIGHT)
-    local KEY_LH = scaleY(common.KEY_LINE_H)
+    local VALUE_X = c.VALUE_X or common.VALUE_X
+    local KEYBOARD_CENTER_X = c.KEYBOARD_CENTER_X or ((c.uiOriginX or 0) + scaleX(common.KEYBOARD_CENTER_X))
+    local KEYBOARD_CENTER_Y = c.KEYBOARD_CENTER_Y or ((c.uiOriginY or 0) + scaleY(common.KEYBOARD_CENTER_Y))
+    local maxVisible = c.MAX_VISIBLE or common.MAX_VISIBLE
+    local maxVisibleList = c.MAX_VISIBLE_LIST or common.MAX_VISIBLE_LIST
+    local KEY_W = c.KEY_WIDTH or math.max(1, scaleX(common.KEY_WIDTH))
+    local KEY_H = c.KEY_HEIGHT or math.max(1, scaleY(common.KEY_HEIGHT))
+    local KEY_G = c.KEY_GAP or math.max(1, scaleX(common.KEY_GAP))
+    local KEY_CW = c.KEY_CHAR_W or math.max(1, scaleX(common.KEY_CHAR_W))
+    local KEY_LH = c.KEY_LINE_H or math.max(1, scaleY(common.KEY_LINE_H))
     if drawMode == "ftPrint" and font then
-      local wantPx = common.FT_PIXEL_H or 18
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
       if c._ftPixelSizeApplied ~= wantPx then
         Font.ftSetPixelSize(font, 0, wantPx)
         c._ftPixelSizeApplied = wantPx
       end
+      if _G.CONFIG_UI then
+        _G.CONFIG_UI.currentFtPixelH = wantPx
+      end
+    elseif _G.CONFIG_UI then
+      _G.CONFIG_UI.currentFtPixelH = nil
     end
     c.prevPad = prevPad
     c.holdFrameCount = holdFrameCount
@@ -450,13 +706,14 @@ local function mainLoop()
       h = h,
       padEffective = padEffective,
       drawListRow = drawListRow,
+      scaleX = scaleX,
       scaleY = scaleY,
       MARGIN_X = MARGIN_X,
       MARGIN_Y = MARGIN_Y,
       LINE_H = LINE_H,
       ROW_H = ROW_H,
-      MAX_VISIBLE = MAX_VISIBLE,
-      MAX_VISIBLE_LIST = MAX_VISIBLE_LIST,
+      MAX_VISIBLE = maxVisible,
+      MAX_VISIBLE_LIST = maxVisibleList,
       VALUE_X = VALUE_X,
       FONT_SCALE = FONT_SCALE,
       VALUE_MAX_LEN = VALUE_MAX_LEN,
@@ -492,16 +749,16 @@ local function mainLoop()
       Color = Color,
       KEYBOARD_CENTER_X = KEYBOARD_CENTER_X,
       KEYBOARD_CENTER_Y = KEYBOARD_CENTER_Y,
-      KEY_WIDTH = KEY_WIDTH,
-      KEY_HEIGHT = KEY_HEIGHT,
-      KEY_GAP = KEY_GAP,
+      KEY_WIDTH = KEY_W,
+      KEY_HEIGHT = KEY_H,
+      KEY_GAP = KEY_G,
       KEY_H = KEY_H,
       KEY_LH = KEY_LH,
+      KEY_CHAR_W = KEY_CW,
       KEY_BG = KEY_BG,
       KEY_BG_SEL = KEY_BG_SEL,
       KEY_BORDER = KEY_BORDER,
       KEY_BORDER_SEL = KEY_BORDER_SEL,
-      KEY_CHAR_W = KEY_CHAR_W,
       KEYBOARD_ROWS = KEYBOARD_ROWS,
       KEYBOARD_ROWS_SHIFTED = KEYBOARD_ROWS_SHIFTED,
       KEYBOARD_ROWS_TITLE_ID = KEYBOARD_ROWS_TITLE_ID,
@@ -613,7 +870,7 @@ local function mainLoop()
 
     prevPad = c.prevPad or prevPad
     syncToS(c)
-    -- Present on vblank to reduce full-screen flicker during motion/overlay animation.
+    -- Present on vblank to reduce full-screen shimmer/tearing.
     Screen.waitVblankStart()
     Screen.flip()
     return c.state, c
@@ -651,6 +908,7 @@ local function mainLoop()
   end
 end
 
-applyStartupVideoModeOpt()
-applyStartupSwapButtonsOpt()
+applyStartupVideoModeCnf()
+applyStartupSwapButtonsCnf()
+applyStartupColorsCnf()
 return mainLoop()

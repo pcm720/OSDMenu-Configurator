@@ -21,17 +21,22 @@ common.PAD_L2, common.PAD_R2       = 0x0100, 0x0200
 common.SWAP_CROSS_CIRCLE           = false
 
 -- Colors
-common.WHITE                       = Color.new(255, 255, 255)
-common.GRAY                        = Color.new(160, 160, 160)
-common.DIM                         = Color.new(96, 96, 96)
-common.ERROR                       = Color.new(255, 64, 64)
-common.BGCOLOR                     = Color.new(20, 20, 20)
-common.HIGHLIGHT                   = Color.new(255, 220, 100)
-common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0)
-common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80)
-common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0)
-common.OPTION_HINT_COLOR           = Color.new(246, 231, 173) -- Manila yellow for option descriptions/hints.
+local FULL_ALPHA                   = 0x80
+common.WHITE                       = Color.new(255, 255, 255, FULL_ALPHA)
+common.GRAY                        = Color.new(160, 160, 160, FULL_ALPHA)
+common.DIM                         = Color.new(96, 96, 96, FULL_ALPHA)
+common.ERROR                       = Color.new(255, 64, 64, FULL_ALPHA)
+common.BGCOLOR                     = Color.new(20, 20, 20, FULL_ALPHA)
+common.HIGHLIGHT                   = Color.new(255, 220, 100, FULL_ALPHA)
+common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
+common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80, FULL_ALPHA)
+common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
+common.OPTION_HINT_COLOR           = Color.new(246, 231, 173, FULL_ALPHA) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
+common.PAD_LABEL_CROSS             = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
+common.PAD_LABEL_SQUARE            = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
+common.PAD_LABEL_TRIANGLE          = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
+common.PAD_LABEL_CIRCLE            = Color.new(96, 96, 96, FULL_ALPHA) -- pre-button-color-test default
 
 -- Layout
 common.FONT_SCALE                  = 0.9
@@ -41,7 +46,7 @@ common.MARGIN_X, common.MARGIN_Y   = 40, 28
 common.DEFAULT_W, common.DEFAULT_H = 640, 448
 common.MAX_VISIBLE                 = 10
 common.MAX_VISIBLE_LIST            = 12                    -- menu entries, path picker, entry paths, entry args, eGSM editor
-common.DIM_ENTRY                   = Color.new(56, 56, 56) -- darker than DIM for disabled list rows
+common.DIM_ENTRY                   = Color.new(56, 56, 56, FULL_ALPHA) -- darker than DIM for disabled list rows
 common.VALUE_X                     = 360
 common.VALUE_MAX_LEN               = 38
 common.VALUE_MAX_LEN_LONG          = 22
@@ -59,6 +64,7 @@ common.PAD_HINT_BASE_SCALE         = 0.7
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
+common.LIST_BOTTOM_CLEAR_ROWS      = 1 -- keep at least one full blank selectable row above bottom hints/description area
 
 -- Hint-row geometry tuning (single-row 5-slot layout).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
@@ -70,6 +76,17 @@ common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+local function canOpenPath(path)
+  if not (System and System.openFile and System.closeFile) then
+    return true
+  end
+  local h = System.openFile(path, 0)
+  if h and h >= 0 then
+    System.closeFile(h)
+    return true
+  end
+  return false
+end
 local padIconNames                 = {
   up = "up",
   down = "down",
@@ -108,6 +125,21 @@ function common.getPadIcon(name)
   return (padIconCache[file] ~= false) and padIconCache[file] or nil
 end
 
+function common.flushPadIconCache()
+  if Graphics and Graphics.freeImage then
+    for key, img in pairs(padIconCache) do
+      if type(img) == "number" and img ~= 0 then
+        pcall(Graphics.freeImage, img)
+      end
+      padIconCache[key] = nil
+    end
+  else
+    for key in pairs(padIconCache) do
+      padIconCache[key] = nil
+    end
+  end
+end
+
 function common.setSwapCrossCircle(enabled)
   common.SWAP_CROSS_CIRCLE = (enabled == true)
 end
@@ -136,19 +168,44 @@ function common.remapCrossCircleMask(mask)
   return out
 end
 
+local function getRuntimeFtPixelBase()
+  local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
+  if runtimePx > 0 then
+    return runtimePx
+  end
+  return tonumber(common.FT_PIXEL_H) or 18
+end
+
+local function loadFtFontWithFallback()
+  if not (Font and Font.ftLoad) then return nil end
+  local cwdCandidates = { "font.ttf" }
+  for i = 1, #cwdCandidates do
+    local path = cwdCandidates[i]
+    if canOpenPath(path) then
+      local f = Font.ftLoad(path)
+      if f and f >= 0 then
+        return f
+      end
+    end
+  end
+  -- Always try bundled font directly; VFS paths may resolve even when System.openFile probe does not.
+  local bundled = Font.ftLoad("scripts/font/font.ttf")
+  if bundled and bundled >= 0 then
+    return bundled
+  end
+  return nil
+end
+
 local function getHintFtFont(scaleFactor)
   local sf = tonumber(scaleFactor) or 1
   if sf <= 0 then sf = 1 end
-  local key = string.format("%.3f", sf)
+  local basePx = getRuntimeFtPixelBase()
+  local key = string.format("%d@%.3f", math.floor(basePx + 0.5), sf)
   if hintFtFontCache[key] then return hintFtFontCache[key] end
-  if not (Font and Font.ftLoad) then return nil end
-  local f = Font.ftLoad("font.ttf")
-  if not (f and f >= 0) then
-    f = Font.ftLoad("scripts/font/font.ttf")
-  end
+  local f = loadFtFontWithFallback()
   if f and f >= 0 then
     if Font.ftSetPixelSize then
-      local px = math.max(8, math.floor(((common.FT_PIXEL_H or 18) * sf) + 0.5))
+      local px = math.max(8, math.floor((basePx * sf) + 0.5))
       pcall(Font.ftSetPixelSize, f, 0, px)
     end
     hintFtFontCache[key] = f
@@ -174,7 +231,8 @@ end
 
 function common.getHintLabelTextHeight()
   local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
-  return math.max(10, math.floor((common.FT_PIXEL_H or 18) * ts + 0.5))
+  local basePx = getRuntimeFtPixelBase()
+  return math.max(10, math.floor(basePx * ts + 0.5))
 end
 
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
@@ -182,6 +240,15 @@ end
 -- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
+  local function getPadLabelColor(padName, fallbackColor)
+    local key = tostring(padName or ""):lower()
+    if key == "cross" then return common.PAD_LABEL_CROSS end
+    if key == "square" then return common.PAD_LABEL_SQUARE end
+    if key == "triangle" then return common.PAD_LABEL_TRIANGLE end
+    if key == "circle" then return common.PAD_LABEL_CIRCLE end
+    if key == "start" or key == "l1" or key == "r1" then return common.WHITE end
+    return fallbackColor
+  end
   if hintItems and #hintItems > 0 then
     local iconScale = 0.6
     local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
@@ -189,9 +256,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
-    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-    local approxCharW = math.floor(8 * drawScale)
     local textH = common.getHintLabelTextHeight()
+    local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
+    local approxCharW = math.floor(8 * drawScale)
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
@@ -250,7 +317,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
-      local activeIconColor = Color.new(255, 255, 255, 255)
+      local activeIconColor = Color.new(255, 255, 255, FULL_ALPHA)
       local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
       local function drawActiveIcon(icon, px)
         if Graphics.drawScaleImage then
@@ -299,7 +366,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             else
               textX = math.floor(slotCenter - textW / 2)
             end
-            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, color, textH)
+            local labelColor = getPadLabelColor(padName, color)
+            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
           end
         end
       end
@@ -355,10 +423,10 @@ common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCV
 common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y = 320, 220
 common.KEY_WIDTH, common.KEY_HEIGHT = 34, 26
 common.KEY_GAP = 2
-common.KEY_BG = Color.new(56, 56, 56)
-common.KEY_BG_SEL = Color.new(80, 80, 80)
-common.KEY_BORDER = Color.new(100, 100, 100)
-common.KEY_BORDER_SEL = Color.new(180, 160, 100)
+common.KEY_BG = Color.new(56, 56, 56, FULL_ALPHA)
+common.KEY_BG_SEL = Color.new(80, 80, 80, FULL_ALPHA)
+common.KEY_BORDER = Color.new(100, 100, 100, FULL_ALPHA)
+common.KEY_BORDER_SEL = Color.new(180, 160, 100, FULL_ALPHA)
 common.KEY_CHAR_W = 10
 common.KEY_LINE_H = 14
 
@@ -468,18 +536,23 @@ function common.refreshConfigModified(ctx)
   local cache = ctx._configModifiedCache
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
   local inputEpoch = tonumber(ctx._inputEpoch) or 0
-  local hadInputThisFrame = false
-  if ctx._ and type(ctx._) == "table" then
-    local pe = tonumber(ctx._.padEffective) or 0
-    hadInputThisFrame = (pe ~= 0)
-  end
-  if not hadInputThisFrame then
-    local loopPad = tonumber(ctx._lastPadEffective) or 0
-    hadInputThisFrame = (loopPad ~= 0)
-  end
+  -- Global performance rule:
+  -- avoid per-frame full semantic digest recomputation while navigating.
+  -- Input-only movement should hit cache; recompute when config state changes.
+  local isCurrentlyModified = ctx.configModified and true or false
+  local lineCount = #(ctx.lines or {})
   local cleanDigest = ctx.configCleanSemanticDigest
-  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and
-      cache.cleanDigest == cleanDigest and not hadInputThisFrame then
+  local needsInitialSave = (ctx.configNeedsInitialSave == true)
+  local cacheHit = cache and
+      cache.linesRef == ctx.lines and
+      cache.sceneEpoch == sceneEpoch and
+      cache.cleanDigest == cleanDigest and
+      cache.needsInitialSave == needsInitialSave and
+      cache.lineCount == lineCount and
+      cache.result == isCurrentlyModified
+  -- When already dirty, keep inputEpoch as a conservative invalidator so reverting
+  -- back to the clean semantic state is detected on edit input.
+  if cacheHit and ((not isCurrentlyModified) or cache.inputEpoch == inputEpoch) then
     ctx.configModified = cache.result and true or false
     return ctx.configModified
   end
@@ -491,13 +564,14 @@ function common.refreshConfigModified(ctx)
 
   local currentDigest = computeSemanticDigest(ctx, ctx.lines)
   local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
-  local needsInitialSave = (ctx.configNeedsInitialSave == true)
   ctx.configModified = semanticChanged or needsInitialSave
   ctx._configModifiedCache = {
     linesRef = ctx.lines,
     sceneEpoch = sceneEpoch,
     inputEpoch = inputEpoch,
     cleanDigest = ctx.configCleanSemanticDigest,
+    needsInitialSave = needsInitialSave,
+    lineCount = lineCount,
     result = ctx.configModified and true or false,
     digest = currentDigest
   }
@@ -671,21 +745,83 @@ function common.getRepeatIntervalFrames(fps, heldFrames)
 end
 
 -- Update ctx with layout values from current screen mode (for scene runner).
+function common.computeVisibleRows(ctx, startY, rowH, fallback, opts)
+  local safeStartY = math.floor(tonumber(startY) or 0)
+  local safeRowH = math.max(1, math.floor(tonumber(rowH) or 1))
+  local hintY = math.floor(tonumber(ctx and ctx.HINT_Y) or common.HINT_Y or common.DEFAULT_H)
+  local hintTop = hintY - (common.PAD_HINT_TOTAL_H or 0)
+  local reserveRows = math.max(1, math.floor(tonumber((opts and opts.reserveRows) or common.LIST_BOTTOM_CLEAR_ROWS) or 1))
+  local boundaryTop = hintTop
+  if opts and opts.reserveDescription then
+    local descTop = math.floor(tonumber(ctx and ctx.DESC_Y_BOTTOM) or 0)
+    if descTop > 0 then
+      boundaryTop = math.min(boundaryTop, descTop)
+    end
+  end
+  if opts and opts.bottomY then
+    local forcedTop = math.floor(tonumber(opts.bottomY) or 0)
+    if forcedTop > 0 then
+      boundaryTop = math.min(boundaryTop, forcedTop)
+    end
+  end
+  -- Reserve N full rows between the last selectable row and bottom boundary.
+  local maxRowTop = boundaryTop - ((reserveRows + 1) * safeRowH)
+  local rows = math.floor((maxRowTop - safeStartY) / safeRowH) + 1
+  if rows >= 1 then
+    return rows
+  end
+  return math.max(1, math.floor(tonumber(fallback) or 1))
+end
+
 function common.runLayout(ctx)
   local vmode = Screen.getMode()
   local w = (vmode and vmode.width) or common.DEFAULT_W
   local h = (vmode and vmode.height) or common.DEFAULT_H
+  local sx = w / common.DEFAULT_W
   local sy = h / common.DEFAULT_H
+  local uiScale = math.min(sx, sy)
+  if uiScale <= 0 then
+    uiScale = 1
+  end
+  local uiW = math.max(1, math.floor(common.DEFAULT_W * uiScale + 0.5))
+  local uiH = math.max(1, math.floor(common.DEFAULT_H * uiScale + 0.5))
+  local originX = math.floor((w - uiW) / 2)
+  local originY = math.floor((h - uiH) / 2)
   if ctx then
     ctx.w = w
     ctx.h = h
+    ctx.sx = sx
     ctx.sy = sy
-    ctx.MARGIN_Y = math.floor(common.MARGIN_Y * sy)
-    ctx.LINE_H = common.LINE_H
-    ctx.ROW_H = common.ROW_H
-    ctx.HINT_Y = h - math.floor(24 * sy)
-    ctx.DESC_Y_BOTTOM = ctx.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
-    ctx.scaleY = function(y) return math.floor((y or 0) * sy) end
+    ctx.uiScale = uiScale
+    ctx.uiOriginX = originX
+    ctx.uiOriginY = originY
+    ctx.uiW = uiW
+    ctx.uiH = uiH
+    ctx.scaleX = function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
+    ctx.scaleY = function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
+    ctx.MARGIN_X = originX + ctx.scaleX(common.MARGIN_X)
+    ctx.MARGIN_Y = originY + ctx.scaleY(common.MARGIN_Y)
+    ctx.LINE_H = math.max(1, ctx.scaleY(common.LINE_H))
+    ctx.ROW_H = math.max(1, ctx.scaleY(common.ROW_H))
+    ctx.VALUE_X = originX + ctx.scaleX(common.VALUE_X)
+    ctx.KEYBOARD_CENTER_X = originX + ctx.scaleX(common.KEYBOARD_CENTER_X)
+    ctx.KEYBOARD_CENTER_Y = originY + ctx.scaleY(common.KEYBOARD_CENTER_Y)
+    ctx.KEY_WIDTH = math.max(1, ctx.scaleX(common.KEY_WIDTH))
+    ctx.KEY_HEIGHT = math.max(1, ctx.scaleY(common.KEY_HEIGHT))
+    ctx.KEY_GAP = math.max(1, ctx.scaleX(common.KEY_GAP))
+    ctx.KEY_CHAR_W = math.max(1, ctx.scaleX(common.KEY_CHAR_W))
+    ctx.KEY_LINE_H = math.max(1, ctx.scaleY(common.KEY_LINE_H))
+    ctx.HINT_Y = originY + uiH - ctx.scaleY(24)
+    ctx.DESC_Y_BOTTOM = ctx.HINT_Y - common.PAD_HINT_TOTAL_H - ctx.scaleY(common.DESC_TO_HINT_MARGIN)
+    local startYList = ctx.MARGIN_Y + ctx.scaleY(50)
+    local startYRows = ctx.MARGIN_Y + ctx.scaleY(58)
+    local reserveRows = common.LIST_BOTTOM_CLEAR_ROWS
+    ctx.MAX_VISIBLE_LIST = common.computeVisibleRows(ctx, startYList, ctx.LINE_H, common.MAX_VISIBLE_LIST, {
+      reserveRows = reserveRows
+    })
+    ctx.MAX_VISIBLE = common.computeVisibleRows(ctx, startYRows, ctx.ROW_H, common.MAX_VISIBLE, {
+      reserveRows = reserveRows
+    })
   end
 end
 
@@ -694,6 +830,26 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
     Screen.clear(common.BGCOLOR)
     common.runLayout(ctx)
+    local uiScale = (ctx and tonumber(ctx.uiScale)) or 1
+    local scaleX = (ctx and ctx.scaleX) or function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
+    local scaleY = (ctx and ctx.scaleY) or function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
+    if _G.CONFIG_UI then
+      _G.CONFIG_UI.currentUiScale = uiScale
+      _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
+      _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
+    end
+    if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
+      if ctx._ftPixelSizeApplied ~= wantPx then
+        pcall(Font.ftSetPixelSize, ctx.font, 0, wantPx)
+        ctx._ftPixelSizeApplied = wantPx
+      end
+      if _G.CONFIG_UI then
+        _G.CONFIG_UI.currentFtPixelH = wantPx
+      end
+    elseif _G.CONFIG_UI then
+      _G.CONFIG_UI.currentFtPixelH = nil
+    end
     if ctx and ctx.drawBackgroundLayer then
       ctx.drawBackgroundLayer(ctx)
     end
@@ -704,7 +860,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end
-    -- Present on vblank to avoid whole-frame shimmer/tearing on animated transitions.
+    -- Present on vblank to avoid tearing/shimmer on animated transitions.
     Screen.waitVblankStart()
     Screen.flip()
   end
@@ -750,14 +906,7 @@ end
 
 function common.loadCustomFont()
   Font.ftInit()
-  -- CWD first (user override)
-  local f = Font.ftLoad("font.ttf")
-  if f and f >= 0 then
-    Font.ftSetPixelSize(f, 0, common.FT_PIXEL_H)
-    return f, "ftPrint"
-  end
-  -- Try known font path inside the scripts directory (including VFS)
-  f = Font.ftLoad("scripts/font/font.ttf")
+  local f = loadFtFontWithFallback()
   if f and f >= 0 then
     Font.ftSetPixelSize(f, 0, common.FT_PIXEL_H)
     return f, "ftPrint"

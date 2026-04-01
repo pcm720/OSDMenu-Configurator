@@ -186,6 +186,7 @@ if(EMBED_VFS)
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTDIR}/
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/README.md ${OUTDIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/r3configurator.cnf ${OUTDIR}/r3configurator.cnf
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${EE_BIN_PKD} ${OUTDIR}/${EE_BIN_PKD}
         COMMAND ${CMAKE_COMMAND} -DINPUT=${SAS_TITLE_SOURCE}
                                  -DOUTPUT=${SAS_TITLE_GENERATED}
@@ -205,6 +206,7 @@ else()
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTDIR}/
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/README.md ${OUTDIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/r3configurator.cnf ${OUTDIR}/r3configurator.cnf
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${EE_BIN_PKD} ${OUTDIR}/${EE_BIN_PKD}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/scripts ${OUTDIR}/scripts
         COMMAND ${CMAKE_COMMAND} -DINPUT=${SAS_TITLE_SOURCE}

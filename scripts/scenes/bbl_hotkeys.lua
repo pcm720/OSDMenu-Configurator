@@ -137,6 +137,8 @@ local function run(ctx)
   local iconH = math.min(baseIconH, textH)
   local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
   local iconGap = 8
+  local nameNotDefined = _.common_str.name_not_defined or _.common_str.empty
+  local pathNotDefined = _.common_str.path_not_defined or _.common_str.empty
   for i = ctx.bblHotkeyScroll + 1, math.min(ctx.bblHotkeyScroll + _.MAX_VISIBLE_LIST, #hotkeys) do
     local keyId = hotkeys[i]
     local info = hotkeySummary[keyId] or { disabled = false, name = "", pathCount = 0 }
@@ -144,14 +146,23 @@ local function run(ctx)
     local keyDisabled = info.disabled and true or false
     local nameVal = info.name or ""
     local pathCount = tonumber(info.pathCount) or 0
+    local hasName = (nameVal ~= "")
+    local hasPath = (pathCount > 0)
     local disp
-    if pathCount <= 0 then
+    if isFmcb then
+      if pathCount <= 0 then
+        disp = _.common_str.empty
+      else
+        disp = formatPathCount(pathCount)
+      end
+    elseif not hasName and not hasPath then
       disp = _.common_str.empty
-    elseif isFmcb then
-      disp = formatPathCount(pathCount)
+    elseif not hasName then
+      disp = nameNotDefined .. " (" .. formatPathCount(pathCount) .. ")"
+    elseif not hasPath then
+      disp = pathNotDefined
     else
-      local nameDisp = (nameVal ~= "" and nameVal) or _.common_str.empty
-      disp = nameDisp .. " (" .. formatPathCount(pathCount) .. ")"
+      disp = nameVal .. " (" .. formatPathCount(pathCount) .. ")"
     end
     local line = disp
     local lineMaxW = maxLabelW - iconW - iconGap

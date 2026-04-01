@@ -20,6 +20,26 @@ local function buildEntryNameMap(lines)
   return out
 end
 
+local function buildEntryPathPresenceMap(lines)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    local key = entry and entry.key
+    if key then
+      local idx = key:match("^path%d+_OSDSYS_ITEM_(%d+)$")
+      if idx then
+        local n = tonumber(idx)
+        local value = tostring((entry and entry.value) or "")
+        value = value:gsub("^%s+", ""):gsub("%s+$", "")
+        if n and value ~= "" then
+          out[n] = true
+        end
+      end
+    end
+  end
+  return out
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -36,6 +56,7 @@ local function run(ctx)
         sceneEpoch = sceneEpoch,
         entryList = _.config_parse.getMenuEntryIndices(ctx.lines),
         entryNameByIdx = buildEntryNameMap(ctx.lines),
+        entryHasPathByIdx = buildEntryPathPresenceMap(ctx.lines),
       }
       ctx.menuEntriesCache = cache
     end
@@ -131,6 +152,8 @@ local function run(ctx)
   local function openPathPickerForEntry(entryIdx)
     local idx = tonumber(entryIdx)
     if not idx then return end
+    local pickerContext = ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")) and "fmcb_entry" or
+        "osdmenu"
     ctx.editKey = nil
     ctx.pathPickerForEntryIdx = idx
     ctx.pathPickerBootKey = nil
@@ -144,10 +167,10 @@ local function run(ctx)
     ctx.pathPickerEditIdx = nil
     ctx.pathPickerInsertBelow = nil
     ctx.pathPickerSub = "device"
-    ctx.pathList = _.file_selector.getDevices("osdmenu") or {}
+    ctx.pathList = _.file_selector.getDevices(pickerContext) or {}
     ctx.pathPickerSel = 1
     ctx.pathPickerScroll = 0
-    ctx.pathPickerContext = "osdmenu"
+    ctx.pathPickerContext = pickerContext
     ctx.pathPickerReturnState = "menu_entry_edit"
     ctx.state = "path_picker"
   end
@@ -172,7 +195,9 @@ local function run(ctx)
   end
 
   refreshEntries()
-  local entryNameByIdx = (getMenuEntriesCache().entryNameByIdx) or {}
+  local cache = getMenuEntriesCache()
+  local entryNameByIdx = cache.entryNameByIdx or {}
+  local entryHasPathByIdx = cache.entryHasPathByIdx or {}
   local startY = _.MARGIN_Y + _.scaleY(50)
   local total = #ctx.entryList
   local canMoveEntries = total > 1
@@ -196,17 +221,34 @@ local function run(ctx)
   end
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
+  local missingNameLabel = _.common_str.name_not_defined or _.common_str.empty
+  local missingPathLabel = _.common_str.path_not_defined or _.common_str.empty
   for i = ctx.entryScroll + 1, math.min(ctx.entryScroll + maxVis, total) do
     local ent = ctx.entryList[i]
     local idx = ent.idx
     local name = entryNameByIdx[idx]
-    local label = (name == "" or not name) and _.common_str.empty or (name or (_.menu_str.item .. idx))
+    local hasName = (name ~= nil and name ~= "")
+    local hasPath = (entryHasPathByIdx[idx] == true)
+    local usesPlaceholder = false
+    local label
+    if not hasName and not hasPath then
+      label = _.common_str.empty
+      usesPlaceholder = true
+    elseif not hasName then
+      label = missingNameLabel
+      usesPlaceholder = true
+    elseif not hasPath then
+      label = missingPathLabel
+      usesPlaceholder = true
+    else
+      label = name or (_.menu_str.item .. idx)
+    end
     if canMoveEntries and ctx.menuEntryGrab and i == ctx.entrySel then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
     local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.WHITE
-    if label == _.common_str.empty then
+    if usesPlaceholder then
       col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.DIM
     end
     if ent.disabled then

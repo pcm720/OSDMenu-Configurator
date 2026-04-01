@@ -31,8 +31,6 @@ PAL=3;
 ---@type VideoMode
 _576p=0x53;
 ---@type VideoMode
-_720p=0x52;
----@type VideoMode
 _1080i=0x51;
 
 ---@type Interlace

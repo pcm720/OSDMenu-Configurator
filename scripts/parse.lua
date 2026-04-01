@@ -188,15 +188,21 @@ end
 -- Stable digest used by UI dirty tracking. Includes key order, values, and
 -- comment state for key lines; ignores non-key comments.
 function config_parse.semanticDigest(lines)
-  local signature = buildSemanticSignature(lines)
   local out = {}
-  for i = 1, #signature do
-    local item = signature[i]
-    local key = item.key or ""
-    local value = item.value or ""
-    local commentState = tostring(item.commentState or 0)
-    out[#out + 1] =
-        tostring(#key) .. ":" .. key .. "|" .. tostring(#value) .. ":" .. value .. "|" .. commentState
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    if entry and entry.key then
+      local key = tostring(entry.key)
+      local value = tostring(entry.value or "")
+      local commentState = 0
+      if entry.comment == 2 then
+        commentState = 2
+      elseif entry.comment then
+        commentState = 1
+      end
+      out[#out + 1] =
+          tostring(#key) .. ":" .. key .. "|" .. tostring(#value) .. ":" .. value .. "|" .. tostring(commentState)
+    end
   end
   return table.concat(out, "\n")
 end
@@ -1870,6 +1876,21 @@ function config_parse.regenerateForSave(lines, fileType, options)
   end
   if fileType == "osdgsm_cnf" then
     return config_parse.regenerateLinesOsdgsm(lines)
+  end
+  if fileType == "r3configurator_cnf" then
+    local out = {}
+    local list = opt.r3configurator_cnf or {}
+    for i = 1, #list do
+      local row = list[i]
+      local key = row and row.key or nil
+      if key and key ~= "" and key:sub(1, 1) ~= "_" then
+        local value = config_parse.get(lines, key)
+        if value ~= nil then
+          out[#out + 1] = { key = key, value = value }
+        end
+      end
+    end
+    return out
   end
   return lines
 end

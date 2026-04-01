@@ -1,6 +1,10 @@
 --[[
   File selector for configurator.
-  Context: "osdmenu" = full device list (OSDMENU.CNF); "mbr" = MBR-supported paths only (OSDMBR.CNF).
+  Context:
+    "osdmenu"     = full device list (OSDMENU.CNF)
+    "mbr"         = MBR-supported paths only (OSDMBR.CNF)
+    "fmcb_entry"  = FreeMCBoot/FreeHDBoot menu entry paths
+    "fmcb_launch" = FreeMCBoot/FreeHDBoot launch-key paths
   Returns selected path string (and optional cdrom args table if cdrom chosen).
   Special entries: cdrom (Launch Disc), dvd (MBR only, DVD Player).
   Option to convert mc/mmce path to wildcard (mc?, mmce?) at selection time.
@@ -33,13 +37,16 @@ local BDM_OPTIONS = {
   { deviceId = "mx4sio", bdmType = "mx4sio", bdmPathPrefix = "massX" },
 }
 
--- Special devices (instant-select, no browse). descKey = key in strings.devices. contexts = "osdmenu" | "mbr" | {"osdmenu","mbr"}.
+-- Special devices (instant-select, no browse). descKey = key in strings.devices.
+-- contexts = "osdmenu" | "mbr" | "fmcb_entry" | "fmcb_launch" | { ... }.
 -- Optional: noargs, exclusive, specialargs (specialargs is ignored unless exclusive is set).
 local SPECIAL = {
   { name = "$HOSDSYS", descKey = "hosdsys",     special = "hosdsys",  contexts = "mbr" },
   { name = "$PSBBN",   descKey = "psbbn",       special = "psbbn",    contexts = "mbr" },
-  { name = "OSDSYS",   descKey = "osd",         special = "osdsys",   contexts = "osdmenu",            noargs = true, exclusive = true },
-  { name = "POWEROFF", descKey = "shutdown",    special = "poweroff", contexts = "osdmenu",            noargs = true, exclusive = true },
+  { name = "OSDSYS",   descKey = "osd",         special = "osdsys",   contexts = { "osdmenu", "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
+  { name = "OSDMENU",  descKey = "osdmenu",     special = "osdmenu",  contexts = "fmcb_launch",         noargs = true },
+  { name = "FASTBOOT", descKey = "fastboot",    special = "fastboot", contexts = { "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
+  { name = "POWEROFF", descKey = "shutdown",    special = "poweroff", contexts = { "osdmenu", "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
   { name = "cdrom",    descKey = "launch_disc", special = "cdrom",    contexts = { "osdmenu", "mbr" }, noargs = true, exclusive = true, specialargs = true },
   { name = "dvd",      descKey = "dvd_player",  special = "dvd",      contexts = "mbr",                noargs = true, exclusive = true },
 }
@@ -48,6 +55,8 @@ local function getFlagsByName(name)
   if not name or name == "" then return nil end
   local p = name
   if p:upper() == "OSDSYS" then p = "OSDSYS" end
+  if p:upper() == "OSDMENU" then p = "OSDMENU" end
+  if p:upper() == "FASTBOOT" then p = "FASTBOOT" end
   if p:upper() == "POWEROFF" then p = "POWEROFF" end
   for _, s in ipairs(SPECIAL) do
     if s.name == p then return s end
@@ -188,6 +197,7 @@ end
 -- Every device gets withFlags(entry).
 function file_selector.getDevices(context)
   local dev = (_G.CONFIG_UI and _G.CONFIG_UI.strings and _G.CONFIG_UI.strings.devices) or dev
+  local isFmcbContext = (context == "fmcb_entry" or context == "fmcb_launch")
   if context == "mc_only" then
     local out = {}
     for i = 1, 2 do
@@ -250,6 +260,9 @@ function file_selector.getDevices(context)
   for _, s in ipairs(SPECIAL) do
     if inContext(s.contexts, context) then
       local desc = (s.descKey and dev[s.descKey]) or s.name
+      if isFmcbContext and s.name == "POWEROFF" then
+        desc = "POWEROFF"
+      end
       table.insert(out, withFlags({ name = s.name, desc = desc, special = s.special }))
     end
   end

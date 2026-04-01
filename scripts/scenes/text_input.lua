@@ -17,7 +17,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   if not (labels.l1 or labels.r1) then
     return
   end
-  local drawColor = color or _.DIM
+  local drawColor = _.WHITE or color or _.DIM
   local iconScale = 0.6
   local textScale = 0.75
   local drawScale = (scale or 0.7) * textScale

@@ -1,10 +1,14 @@
 ![logo](https://raw.githubusercontent.com/saildot4k/R3CONFIGURATOR/refs/heads/main/res/title.png)
 
-A PlayStation 2 GUI application for editing FMCB, FHDB, OSDMenu, OSDMenu MBR, HOSDMenu, PS2BBL Extended and PSXBBL Extended.
+A PlayStation 2 GUI application for editing:  
+- FMCB, FHDB 
+- OSDMenu, OSDMenu MBR, HOSDMenu  
+- PS2BBL Extended and PSXBBL Extended.
 
 **This application is based on [Enceladus](https://github.com/DanielSant0s/Enceladus)** by Daniel Santos.  
 Enceladus provides the Lua bindings, graphics, system, and I/O APIs.  
-See the [Enceladus repository](https://github.com/DanielSant0s/Enceladus) for the full project, documentation, and thanks.
+See the [Enceladus repository](https://github.com/DanielSant0s/Enceladus) for the full project, documentation, and thanks.  
+Forked from [OSDMenu Configurator](https://github.com/pcm720/OSDMenu-Configurator) by @pcm720 to add the other configurators and simpler UX
 
 ## Usage
 
@@ -102,55 +106,73 @@ The app’s working directory (CWD) is where the ELF is launched from (e.g. `mas
 
 The automated build comes with `EMBED_VFS` flag set, so all scripts are already embedded.
 
-## Startup `.opt` files (CWD)
+## Startup Configuration (CWD)
 
-You can place optional `.opt` marker files next to `r3configurator.elf` (in CWD) to change startup behavior.
+Place `r3configurator.cnf` next to `r3configurator.elf` (in CWD) to control startup behavior from one file.
 
-### Video mode override
+The release output includes a default `r3configurator.cnf` next to the ELF, so users can edit or delete it directly.
 
-Supported files:
+### Supported keys
 
-- `ntsc.opt`
-- `pal.opt`
-- `480p.opt`
-- `720p.opt`
+- `video_mode`:
+  - `auto`, `ntsc`, `pal`, `480p`
+- `swap_buttons`:
+  - `0`/`1` (also accepts `false`/`true`, `no`/`yes`, `off`/`on`)
+- `default_language`:
+  - language code loaded from `scripts/lang/strings_<code>.lua` (example: `en`, `pt`, `es`)
+- Main page visibility toggles (`0`/`1`):
+  - `show_freemcboot`
+  - `show_freehddboot`
+  - `show_osdmenu`
+  - `show_osdmenu_mbr`
+  - `show_hosdmenu`
+  - `show_ps2bbl`
+  - `show_psxbbl`
+- UI color keys (`RRGGBB` format only):
+  - `cross`, `square`, `triangle`, `circle`
+  - `selected`, `selected_dim`, `unselected`, `dim`, `background`
 
-Behavior:
+On the main page, `R3Configurator` opens this same CWD `r3configurator.cnf` directly for self-configuration.
+Its editor is a single page and color changes preview live while adjusting.
 
-- If one or more are present, the app forces video mode at startup using this priority:
-  `720p.opt` -> `480p.opt` -> `pal.opt` -> `ntsc.opt`
-- If none are present, the app keeps the default startup mode (console/ROM default behavior).
+### Color value format
 
-### Main menu app filtering
+- `RRGGBB` only (example: `365172`)
 
-Supported files:
+### Example `r3configurator.cnf`
 
-- `fmcb.opt` -> show `FreeMCBoot`
-- `fhdb.opt` -> show `FreeHDBoot`
-- `osdmenu.opt` -> show `OSDMenu`
-- `osdmenumbr.opt` -> show `OSDMenu MBR`
-- `hosdmenu.opt` -> show `HOSDMenu`
-- `ps2bbl.opt` -> show `PS2BBL`
-- `psxbbl.opt` -> show `PSXBBL`
+```ini
+# Video mode: auto | ntsc | pal | 480p
+# (auto keeps native PS2 startup mode; no override applied)
+video_mode = auto
 
-Behavior:
+# Swap confirm/cancel buttons: 0/1 (or false/true)
+swap_buttons = 0
 
-- If none are present, the full normal main menu is shown.
-- If one is present, only that associated app is shown.
-- If multiple are present, all associated apps are shown.
+# Default UI language code (used when CWD strings.lua override is not present)
+default_language = en
 
-### Confirm/Cancel button swap
+# Main page visibility: set to 1 to show, 0 to hide.
+show_freemcboot = 1
+show_freehddboot = 1
+show_osdmenu = 1
+show_osdmenu_mbr = 1
+show_hosdmenu = 1
+show_ps2bbl = 1
+show_psxbbl = 1
 
-Supported file:
+# UI colors (RRGGBB format only)
+cross = 606060
+square = 606060
+triangle = 606060
+circle = 606060
 
-- `swap_buttons.opt`
-
-Behavior:
-
-- If `swap_buttons.opt` is present at startup, `Circle` and `Cross` are swapped globally in the UI:
-  - `Circle` becomes confirm/accept.
-  - `Cross` becomes cancel/back.
-- If `swap_buttons.opt` is not present, default button behavior is used (`Cross` confirm/accept, `Circle` cancel/back).
+selected = 0072A0
+selected_dim = 003250
+unselected = A0A0A0
+dim = 606060
+background = 141414
+```
 
 ## Language and font overrides
 
@@ -215,3 +237,5 @@ Distributed under the GNU GPL-3.0 License. See `LICENSE` for details.
 
 - Spanish
   - VizoR
+- Portuguese
+  - nuno

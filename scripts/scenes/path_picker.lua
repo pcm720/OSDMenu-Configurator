@@ -141,6 +141,379 @@ local function clearConfigOpenPickerState(ctx)
   ctx.pathPickerLockedDeviceStarted = nil
 end
 
+local function getPathFlagsCaseAware(fileSelector, pathVal)
+  local getPathFlags = fileSelector and fileSelector.getPathFlags
+  if not getPathFlags then return {} end
+  local flags = getPathFlags(pathVal) or {}
+  if (not flags.exclusive) and type(pathVal) == "string" then
+    local lower = pathVal:lower()
+    if lower ~= pathVal then
+      local lowerFlags = getPathFlags(lower) or {}
+      if lowerFlags.exclusive then
+        flags = lowerFlags
+      end
+    end
+  end
+  return flags
+end
+
+local function isFmcbAutoBootPickerContext(ctx)
+  if not ctx or not ctx.pathPickerBblHotkeyKey then return false end
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  if not isFmcb then return false end
+  return tostring(ctx.pathPickerBblHotkeyKey or ""):upper() == "AUTO"
+end
+
+local function isE1LockedPath(ctx, pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if up == "CDROM" then return true end
+  if up == "POWEROFF" then return true end
+  if up == "FASTBOOT" then
+    -- Free*BOOT AUTO special-case: FASTBOOT can coexist with other paths.
+    return not isFmcbAutoBootPickerContext(ctx)
+  end
+  if up == "OSDSYS" then
+    -- Free*BOOT Auto boot is special: OSDSYS may coexist with regular device paths.
+    return not isFmcbAutoBootPickerContext(ctx)
+  end
+  return false
+end
+
+local function isBblE1ExclusivePath(pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
+end
+
+local function isPathExclusiveInContext(ctx, pathVal, flags)
+  if not (flags and flags.exclusive) then return false end
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if isFmcbAutoBootPickerContext(ctx) then
+    -- Free*BOOT AUTO special-case: OSDSYS and FASTBOOT are not exclusive
+    -- against normal device paths (single-use rules are enforced separately).
+    if up == "OSDSYS" or up == "FASTBOOT" then
+      return false
+    end
+  end
+  return true
+end
+
+local function getFmcbSingleUseCommand(ctx, pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if up == "POWEROFF" then
+    return up
+  end
+  if isFmcbAutoBootPickerContext(ctx) then
+    -- Free*BOOT Auto boot special-case:
+    -- allow OSDSYS/OSDMENU alongside regular device paths,
+    -- but keep OSDSYS and OSDMENU mutually exclusive with each other.
+    if up == "OSDSYS" or up == "OSDMENU" then
+      return "__FMCB_AUTO_OSD_GROUP__"
+    end
+    if up == "FASTBOOT" then
+      return up
+    end
+    return nil
+  end
+  -- Free*BOOT conflict set:
+  -- OSDMENU, OSDSYS, and FASTBOOT are mutually exclusive in menu entries / launch keys.
+  if up == "OSDSYS" or up == "OSDMENU" or up == "FASTBOOT" then
+    return "__FMCB_OSD_FASTBOOT_GROUP__"
+  end
+  return nil
+end
+
+local function isFmcbSingleUseContext(ctx)
+  if not ctx then return false end
+  if ctx.pathPickerContext == "fmcb_entry" or ctx.pathPickerContext == "fmcb_launch" then
+    return true
+  end
+  if ctx.pathPickerBblHotkeyKey then
+    return (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  end
+  return false
+end
+
+local function getBblMaxEntriesForContext(ctx)
+  local _ = ctx._
+  local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  if isFmcb then
+    local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
+    maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
+  end
+  return maxEntries
+end
+
+-- Performance note:
+-- Free*BOOT Auto boot / Launch Keys choose-device can drop to ~30 FPS if we
+-- repeatedly call getBblHotkeySlot() per frame. Keep these per-slot stats
+-- cached and shared by both getOtherTargetPathStats() and
+-- buildFmcbSingleUseTakenMap() so we only scan slots once per frame context.
+local function getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
+  if not (ctx and ctx.lines and keyId and slot and maxEntries) then return nil end
+  local cache = ctx.pathPickerBblSelectionCache
+  if cache and cache.linesRef == ctx.lines and cache.pathListRef == ctx.pathList and cache.keyId == keyId and
+      cache.slot == slot and cache.maxEntries == maxEntries then
+    return cache.stats, cache.taken
+  end
+
+  local _ = ctx._
+  local stats = { count = 0, firstExclusive = false, firstCdrom = false, targetIndex = slot }
+  local taken = {}
+  local slots = {}
+  for i = 1, maxEntries do
+    local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
+    local pv = s and s.path or nil
+    local hasValue = false
+    if s and s.pathExists then
+      local sv = tostring(pv or ""):gsub("^%s+", ""):gsub("%s+$", "")
+      hasValue = (sv ~= "")
+    end
+    slots[i] = { path = pv, hasValue = hasValue }
+  end
+
+  if slot ~= 1 then
+    local first = slots[1]
+    local firstPv = first and first.path or nil
+    if first and first.hasValue then
+      stats.firstExclusive = (isE1LockedPath(ctx, firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
+      stats.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
+    end
+  end
+
+  for i = 1, maxEntries do
+    if i ~= slot then
+      local s = slots[i]
+      if s and s.hasValue then
+        stats.count = stats.count + 1
+        local cmd = getFmcbSingleUseCommand(ctx, s.path)
+        if cmd then taken[cmd] = true end
+      end
+    end
+  end
+
+  ctx.pathPickerBblSelectionCache = {
+    linesRef = ctx.lines,
+    pathListRef = ctx.pathList,
+    keyId = keyId,
+    slot = slot,
+    maxEntries = maxEntries,
+    stats = stats,
+    taken = taken,
+  }
+  return stats, taken
+end
+
+local function buildFmcbSingleUseTakenMap(ctx, targetIndex)
+  local taken = {}
+  if not isFmcbSingleUseContext(ctx) then return taken end
+  local _ = ctx._
+  if ctx.pathPickerBblHotkeyKey and ctx.lines and _.config_parse.getBblHotkeySlot then
+    local keyId = ctx.pathPickerBblHotkeyKey
+    local slot = tonumber(targetIndex) or tonumber(ctx.pathPickerBblHotkeySlot) or 1
+    local maxEntries = getBblMaxEntriesForContext(ctx)
+    local _, cachedTaken = getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
+    if cachedTaken then return cachedTaken end
+    return taken
+  end
+
+  local paths = nil
+  if ctx.pathPickerForEntryIdx and ctx.lines then
+    paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+  elseif ctx.pathPickerBootKey and ctx.lines then
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+  end
+  if not paths then return taken end
+  for i = 1, #paths do
+    if not targetIndex or i ~= targetIndex then
+      local item = paths[i]
+      local pv = type(item) == "table" and item.value or item
+      local cmd = getFmcbSingleUseCommand(ctx, pv)
+      if cmd then taken[cmd] = true end
+    end
+  end
+  return taken
+end
+
+local function isFmcbEntryE1LockedPath(ctx, pathVal)
+  if not ctx or ctx.pathPickerContext ~= "fmcb_entry" then return false end
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  return up == "OSDSYS" or up == "POWEROFF" or up == "FASTBOOT"
+end
+
+local function isFmcbLaunchE1LockedPath(ctx, pathVal)
+  if not ctx or not ctx.pathPickerBblHotkeyKey then return false end
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  if not isFmcb then return false end
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if isFmcbAutoBootPickerContext(ctx) then
+    return up == "POWEROFF"
+  end
+  return up == "FASTBOOT" or up == "POWEROFF"
+end
+
+local function isE1RestrictedPathForContext(ctx, pathVal)
+  if isBblE1ExclusivePath(pathVal) then return true end
+  if isFmcbEntryE1LockedPath(ctx, pathVal) then return true end
+  if isFmcbLaunchE1LockedPath(ctx, pathVal) then return true end
+  return false
+end
+
+local function hasUsablePathValue(pathVal)
+  local s = tostring(pathVal or "")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  return s ~= ""
+end
+
+local function getFirstEmptyPathIndex(paths)
+  for i = 1, #(paths or {}) do
+    local item = paths[i]
+    local pv = type(item) == "table" and item.value or item
+    if not hasUsablePathValue(pv) then
+      return i
+    end
+  end
+  return nil
+end
+
+local function setMenuEntryPathValue(paths, editIdx, val)
+  if editIdx and editIdx >= 1 then
+    local item = paths[editIdx]
+    if type(item) == "table" then
+      item.value = val
+      item.disabled = false
+    else
+      paths[editIdx] = { value = val, disabled = false }
+    end
+    return
+  end
+  local firstEmptyIdx = getFirstEmptyPathIndex(paths)
+  if firstEmptyIdx then
+    local item = paths[firstEmptyIdx]
+    if type(item) == "table" then
+      item.value = val
+      item.disabled = false
+    else
+      paths[firstEmptyIdx] = { value = val, disabled = false }
+    end
+    return
+  end
+  table.insert(paths, { value = val, disabled = false })
+end
+
+local function hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex, takenMap)
+  if not isFmcbSingleUseContext(ctx) then return false end
+  local cmd = getFmcbSingleUseCommand(ctx, pathVal)
+  if not cmd then return false end
+  local map = takenMap or buildFmcbSingleUseTakenMap(ctx, targetIndex)
+  return map[cmd] and true or false
+end
+
+local function getOtherTargetPathStats(ctx)
+  local _ = ctx._
+  local editIdx = tonumber(ctx.pathPickerEditIdx)
+  local out = { count = 0, firstExclusive = false, firstCdrom = false, targetIndex = nil }
+  local paths = nil
+  if ctx.pathPickerBblHotkeyKey and ctx.pathPickerBblHotkeySlot and ctx.lines and _.config_parse.getBblHotkeySlot then
+    local keyId = ctx.pathPickerBblHotkeyKey
+    local slot = tonumber(ctx.pathPickerBblHotkeySlot) or 1
+    local maxEntries = getBblMaxEntriesForContext(ctx)
+    local cachedStats = getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
+    if cachedStats then return cachedStats end
+    return out
+  end
+
+  if ctx.pathPickerForEntryIdx and ctx.lines then
+    paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+  elseif ctx.pathPickerBootKey and ctx.lines then
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+  end
+  if not paths then return out end
+
+  if editIdx and editIdx >= 1 then
+    out.targetIndex = editIdx
+  else
+    local insertBelow = tonumber(ctx.pathPickerInsertBelow)
+    if insertBelow and insertBelow >= 1 then
+      out.targetIndex = math.max(1, math.min(#paths + 1, insertBelow + 1))
+    else
+      out.targetIndex = getFirstEmptyPathIndex(paths) or (#paths + 1)
+    end
+  end
+
+  -- E1-only rule: only the first path controls whether additional paths are blocked.
+  if (not editIdx or editIdx ~= 1) and paths[1] then
+    local firstPv = type(paths[1]) == "table" and paths[1].value or paths[1]
+    if hasUsablePathValue(firstPv) then
+      out.firstExclusive = isE1LockedPath(ctx, firstPv) and true or false
+      out.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
+    end
+  end
+
+  for i = 1, #paths do
+    if not editIdx or i ~= editIdx then
+      local item = paths[i]
+      local pv = type(item) == "table" and item.value or item
+      if hasUsablePathValue(pv) then
+        out.count = out.count + 1
+      end
+    end
+  end
+  return out
+end
+
+local function showExclusivePathWarning(ctx, pathVal)
+  local _ = ctx._
+  local p = tostring(pathVal or "")
+  local pLower = p:lower()
+  local detail
+  if pLower == "cdrom" then
+    detail = _.menu_str and _.menu_str.cdrom_exclusive_warning
+  end
+  if not detail or detail == "" then
+    detail = (_.path_str and _.path_str.exclusive_path_warning) or
+        "This path must be the first and only path for this entry."
+  end
+  ctx.saveSplash = {
+    kind = "failed",
+    title = (_.menu_str and _.menu_str.invalid_selection_title) or
+        (_.path_str and _.path_str.invalid_selection_title) or "Invalid selection",
+    detail = detail,
+    framesLeft = 120
+  }
+end
+
+local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
+  local _ = ctx._
+  local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
+  local pathIsExclusive = isPathExclusiveInContext(ctx, pathVal, flags)
+  local stats = getOtherTargetPathStats(ctx)
+  local targetIndex = tonumber(stats.targetIndex)
+  if hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex, singleUseTakenMap) then
+    showExclusivePathWarning(ctx, pathVal)
+    return false
+  end
+  if targetIndex and targetIndex ~= 1 and isE1RestrictedPathForContext(ctx, pathVal) then
+    showExclusivePathWarning(ctx, pathVal)
+    return false
+  end
+  if targetIndex and isBblE1ExclusivePath(pathVal) then
+    if stats.count == 0 then return true end
+    showExclusivePathWarning(ctx, pathVal)
+    return false
+  end
+  if pathIsExclusive then
+    if stats.count == 0 then return true end
+    showExclusivePathWarning(ctx, pathVal)
+    return false
+  end
+  if stats.firstExclusive then
+    showExclusivePathWarning(ctx, stats.firstCdrom and "cdrom" or pathVal)
+    return false
+  end
+  return true
+end
+
 local function leaveLockedConfigBrowse(ctx)
   if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
   if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
@@ -228,6 +601,13 @@ local function applyManualPath(ctx, val)
     end
     val = normalizedVal
   end
+  if not canUsePathSelection(ctx, val) then
+    ctx.state = "path_picker"
+    ctx.pathPickerSub = "device"
+    ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+    ctx.pathPickerScroll = 0
+    return
+  end
   if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
   if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
   ctx.pathList = nil
@@ -243,12 +623,7 @@ local function applyManualPath(ctx, val)
   elseif applyBblIrxPathAndReturn(ctx, val) then
   elseif ctx.pathPickerForEntryIdx then
     local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-    if ctx.pathPickerEditIdx then
-      local item = paths[ctx.pathPickerEditIdx]
-      if type(item) == "table" then item.value = val else paths[ctx.pathPickerEditIdx] = { value = val, disabled = false } end
-    else
-      table.insert(paths, { value = val, disabled = false })
-    end
+    setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, val)
     _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
     ctx.entryIdx = ctx.pathPickerForEntryIdx
     ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
@@ -283,19 +658,74 @@ local function ensureBblCommandRows(ctx)
   local cmdRows
   if ctx.fileType == "freemcboot_cnf" then
     cmdRows = {
-      { name = "OSDSYS", desc = p.fmcb_cmd_osdsys or "OSDSYS", special = "bbl_cmd" },
+      { name = "OSDSYS", desc = p.fmcb_cmd_osdsys or "Boot hacked OSDSYS", special = "bbl_cmd" },
+      { name = "OSDMENU", desc = p.fmcb_cmd_osdmenu or "Boot hacked OSDSYS, enforce skip disc boot", special = "bbl_cmd" },
+      { name = "FASTBOOT", desc = p.fmcb_cmd_fastboot or "Boot PS2 Disc without logo", special = "bbl_cmd" },
+      {
+        name = "POWEROFF",
+        desc = p.fmcb_cmd_poweroff or "Shutdown the console: FMCB 1.966 only, else use POWEROFF.ELF",
+        special = "bbl_cmd"
+      },
     }
   else
     cmdRows = {
-      { name = "$CDVD", desc = p.bbl_cmd_cdvd or "$CDVD", special = "bbl_cmd" },
-      { name = "$CDVD_NO_PS2LOGO", desc = p.bbl_cmd_cdvd_no_logo or "$CDVD_NO_PS2LOGO", special = "bbl_cmd" },
-      { name = "$OSDSYS", desc = p.bbl_cmd_osdsys or "$OSDSYS", special = "bbl_cmd" },
-      { name = "$CREDITS", desc = p.bbl_cmd_credits or "$CREDITS", special = "bbl_cmd" },
-      { name = "$HDDCHECKER", desc = p.bbl_cmd_hddchecker or "$HDDCHECKER (HDD build)", special = "bbl_cmd" },
+      { name = "$CDVD", desc = p.bbl_cmd_cdvd_label or "Launch disc", special = "bbl_cmd", exclusive = true },
+      {
+        name = "$CDVD_NO_PS2LOGO",
+        desc = p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo",
+        special = "bbl_cmd",
+        exclusive = true
+      },
+      { name = "$OSDSYS", desc = p.bbl_cmd_osdsys_label or "OSDSYS", special = "bbl_cmd" },
+      { name = "$CREDITS", desc = p.bbl_cmd_credits_label or "Credits", special = "bbl_cmd", exclusive = true },
+      { name = "$HDDCHECKER", desc = p.bbl_cmd_hddchecker_label or "Check HDD", special = "bbl_cmd", exclusive = true },
     }
   end
   for i = 1, #cmdRows do
     table.insert(ctx.pathList, cmdRows[i])
+  end
+end
+
+local function isFreeBootFileContext(ctx)
+  if not ctx then return false end
+  return (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+end
+
+local function filterFreeBootChooseDeviceList(ctx)
+  if not ctx or ctx.pathPickerSub ~= "device" or not ctx.pathList then return end
+  if ctx.pathPickerFreeBootFilterAppliedTo == ctx.pathList then return end
+  local isFreeBootChoose = isFreeBootFileContext(ctx) or
+      (ctx.pathPickerContext == "fmcb_entry") or
+      (ctx.pathPickerContext == "fmcb_launch")
+  if not isFreeBootChoose then return end
+  local out = {}
+  for i = 1, #ctx.pathList do
+    local e = ctx.pathList[i]
+    local keep = false
+    if e and e.special then
+      -- Keep command rows (OSDSYS/OSDMENU/FASTBOOT/POWEROFF and other special entries).
+      keep = true
+    else
+      local name = tostring(e and e.name or ""):lower()
+      local deviceId = tostring(e and e.deviceId or ""):lower()
+      -- Free*BOOT choose-device supports MC, USB, and APA HDD.
+      if name == "mc0:" or name == "mc1:" or name == "hdd0:" then
+        keep = true
+      elseif deviceId == "usb0" or deviceId == "usb1" then
+        keep = true
+      end
+    end
+    if keep then out[#out + 1] = e end
+  end
+  ctx.pathList = out
+  ctx.pathPickerFreeBootFilterAppliedTo = ctx.pathList
+  local count = #out
+  if count <= 0 then
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
+  else
+    if (ctx.pathPickerSel or 1) > count then ctx.pathPickerSel = count end
+    if (ctx.pathPickerSel or 1) < 1 then ctx.pathPickerSel = 1 end
   end
 end
 
@@ -319,6 +749,7 @@ end
 local function beginBrowseForDevice(ctx, e)
   if not e then return end
   local _ = ctx._
+  ctx.pathPickerFreeBootFilterAppliedTo = nil
   if e.deviceType == "hdd" and not e.deviceId then
     ctx.pathPickerDeviceSel = ctx.pathPickerSel
     ctx.pathPickerLoadedDeviceTypes = ctx.pathPickerLoadedDeviceTypes or {}
@@ -420,12 +851,7 @@ local function run(ctx)
         ctx.pathPickerFileExts = nil
       elseif mode == "entry" then
         local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-        if ctx.pathPickerEditIdx then
-          local item = paths[ctx.pathPickerEditIdx]
-          if type(item) == "table" then item.value = chosenVal else paths[ctx.pathPickerEditIdx] = { value = chosenVal, disabled = false } end
-        else
-          table.insert(paths, { value = chosenVal, disabled = false })
-        end
+        setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, chosenVal)
         _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
         ctx.entryIdx = ctx.pathPickerForEntryIdx
         ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
@@ -460,6 +886,7 @@ local function run(ctx)
   end
   if ctx.pathPickerSub == "device" then
     ensureBblCommandRows(ctx)
+    filterFreeBootChooseDeviceList(ctx)
     if isConfigOpenTarget(ctx) and ctx.pathPickerLockedDevice and not ctx.pathPickerLockedDeviceStarted then
       ctx.pathPickerLockedDeviceStarted = true
       beginBrowseForDevice(ctx, ctx.pathPickerLockedDevice)
@@ -549,7 +976,8 @@ local function run(ctx)
     if not ctx.pathPickerLoadingTimeoutMsg and not ctx.pathPickerLoading then
       _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1,
         ctx.isAddPath and _.path_str.add_path_choose_device or _.path_str.choose_device, _.WHITE)
-      if (ctx.pathPickerContext == "path_only" or ctx.pathPickerContext == "config_ini") and _.path_str.bbl_build_device_hint then
+      if (ctx.pathPickerContext == "path_only" or ctx.pathPickerContext == "config_ini") and
+          (not isFreeBootFileContext(ctx)) and _.path_str.bbl_build_device_hint then
         local hint = _.path_str.bbl_build_device_hint
         hint = hint:gsub("PS%?BBL", getSelectedBblName(ctx))
         if _.common.truncateTextToWidth then
@@ -561,63 +989,96 @@ local function run(ctx)
         local lockedConfigBrowse = isConfigOpenTarget(ctx) and ctx.pathPickerLockedDevice
         local includeManualEntry = not lockedConfigBrowse
         local manualOffset = includeManualEntry and 1 or 0
-        local totalCount = #ctx.pathList + manualOffset
-        if ctx.pathPickerSel < 1 then ctx.pathPickerSel = 1 end
-        if ctx.pathPickerSel > totalCount then ctx.pathPickerSel = totalCount end
-        _.drawText(_.font, _.drawMode, _.w - _.MARGIN_X - 56, _.MARGIN_Y, 0.9,
-          ctx.pathPickerSel .. " / " .. totalCount, _.DIM)
-        local exclusiveSet = {}
-        for _, dev in ipairs(ctx.pathList) do
-          if dev.exclusive and dev.name then exclusiveSet[dev.name] = true end
-        end
-        local function deviceFromListIndex(listIdx)
-          local devIdx = listIdx - manualOffset
+        local rawCount = #ctx.pathList + manualOffset
+        local function deviceFromRawIndex(rawIdx)
+          local devIdx = rawIdx - manualOffset
           if devIdx < 1 or devIdx > #ctx.pathList then return nil end
           return ctx.pathList[devIdx]
         end
-        local function pathIsExclusive(p)
-          if not p or p == "" then return false end
-          return exclusiveSet[p] or exclusiveSet[(p):upper()] == true
-        end
-        local entryHasOtherPaths = false
-        local bootHasOtherPaths = false
-        if ctx.pathPickerForEntryIdx and ctx.lines then
-          local entryPaths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-          for _, p in ipairs(entryPaths) do
-            local pv = type(p) == "table" and p.value or p
-            if not pathIsExclusive(pv) then
-              entryHasOtherPaths = true; break
-            end
-          end
-        end
-        if ctx.pathPickerBootKey and ctx.lines then
-          local bootPaths = _.config_parse.getBootPaths(ctx.lines, ctx.pathPickerBootKey) or {}
-          for _, p in ipairs(bootPaths) do
-            if not pathIsExclusive(p) then
-              bootHasOtherPaths = true; break
-            end
-          end
-        end
-        local hasOtherPaths = entryHasOtherPaths or bootHasOtherPaths
+        local otherStats = getOtherTargetPathStats(ctx)
+        local targetIndex = tonumber(otherStats.targetIndex)
+        local fmcbSingleUseTaken = buildFmcbSingleUseTakenMap(ctx, targetIndex)
         local function isGreyed(e)
           if not e then return true end
-          return (e.exclusive and hasOtherPaths) or false
+          if hasFmcbSingleUseDuplicateInTarget(ctx, e.name, targetIndex, fmcbSingleUseTaken) then
+            return true
+          end
+          if targetIndex and targetIndex ~= 1 and isE1RestrictedPathForContext(ctx, e.name) then
+            return true
+          end
+          if isPathExclusiveInContext(ctx, e.name, { exclusive = e.exclusive }) then return otherStats.count > 0 end
+          if otherStats.firstExclusive then return true end
+          return false
         end
-        local function isSelectable(listIdx)
-          if includeManualEntry and listIdx == 1 then return true end
-          local e = deviceFromListIndex(listIdx)
-          return e ~= nil and not isGreyed(e)
+        local rawGreyed = {}
+        local function isSelectableRaw(rawIdx)
+          if includeManualEntry and rawIdx == 1 then return true end
+          local e = deviceFromRawIndex(rawIdx)
+          local grey = (e == nil) or isGreyed(e)
+          rawGreyed[rawIdx] = grey
+          return (e ~= nil) and not grey
         end
-        if not isSelectable(ctx.pathPickerSel) then
+        local selectableRaw = {}
+        local inactiveRaw = {}
+        for rawIdx = 1, rawCount do
+          if isSelectableRaw(rawIdx) then
+            selectableRaw[#selectableRaw + 1] = rawIdx
+          else
+            inactiveRaw[#inactiveRaw + 1] = rawIdx
+          end
+        end
+        local displayRows = {}
+        for i = 1, #selectableRaw do
+          displayRows[#displayRows + 1] = { kind = "entry", rawIdx = selectableRaw[i], selectable = true }
+        end
+        local showInactiveDivider = (#inactiveRaw > 0)
+        if showInactiveDivider then
+          local dividerText = (_.path_str and _.path_str.inactive_items_separator) or
+              "-- Items below are already used or must be E1 --"
+          displayRows[#displayRows + 1] = { kind = "separator", selectable = false, text = dividerText }
+        end
+        for i = 1, #inactiveRaw do
+          displayRows[#displayRows + 1] = { kind = "entry", rawIdx = inactiveRaw[i], selectable = false }
+        end
+        local totalCount = #displayRows
+        if ctx.pathPickerSel < 1 then ctx.pathPickerSel = 1 end
+        if ctx.pathPickerSel > totalCount then ctx.pathPickerSel = totalCount end
+        local function rawIndexFromDisplay(displayIdx)
+          local row = displayRows[displayIdx]
+          if not row or row.kind ~= "entry" then return nil end
+          return row.rawIdx
+        end
+        local function isSelectableDisplay(displayIdx)
+          local row = displayRows[displayIdx]
+          return row and row.selectable == true
+        end
+        if not isSelectableDisplay(ctx.pathPickerSel) then
           local found = nil
           for idx = 1, totalCount do
-            if isSelectable(idx) then
+            if isSelectableDisplay(idx) then
               found = idx
               break
             end
           end
+          if not found then
+            for idx = 1, totalCount do
+              if rawIndexFromDisplay(idx) then
+                found = idx
+                break
+              end
+            end
+          end
           ctx.pathPickerSel = found or 1
         end
+        local selectedProgress = 0
+        for idx = 1, ctx.pathPickerSel do
+          if rawIndexFromDisplay(idx) then
+            selectedProgress = selectedProgress + 1
+          end
+        end
+        if selectedProgress < 1 then selectedProgress = 1 end
+        _.drawText(_.font, _.drawMode, _.w - _.MARGIN_X - 56, _.MARGIN_Y, 0.9,
+          selectedProgress .. " / " .. rawCount, _.DIM)
         local maxVis = _.MAX_VISIBLE_LIST
         if totalCount > maxVis then
           ctx.pathPickerScroll = ctx.pathPickerSel - math.floor(maxVis / 2)
@@ -627,32 +1088,95 @@ local function run(ctx)
         end
         local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
         for i = 1, math.min(maxVis, totalCount - ctx.pathPickerScroll) do
-          local listIdx = ctx.pathPickerScroll + i
+          local displayIdx = ctx.pathPickerScroll + i
+          local row = displayRows[displayIdx] or {}
+          local listIdx = rawIndexFromDisplay(displayIdx)
           local displayName
           local greyed = false
           local e = nil
-          if includeManualEntry and listIdx == 1 then
-            displayName = _.path_str.enter_path_manually
+          if row.kind == "separator" then
+            displayName = row.text or "-- Items below are already used or must be E1 --"
           else
-            e = deviceFromListIndex(listIdx)
-            displayName = e and (e.desc or e.name or _.common_str.empty) or _.common_str.empty
-            greyed = isGreyed(e)
+            if includeManualEntry and listIdx == 1 then
+              displayName = _.path_str.enter_path_manually
+            else
+              e = deviceFromRawIndex(listIdx)
+              if e and e.special == "bbl_cmd" and ctx.fileType == "freemcboot_cnf" then
+                displayName = e.name or e.desc or _.common_str.empty
+              else
+                displayName = e and (e.desc or e.name or _.common_str.empty) or _.common_str.empty
+              end
+              greyed = (rawGreyed[listIdx] == true)
+            end
           end
           local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
-          local col = greyed and _.DIM or ((listIdx == ctx.pathPickerSel) and _.SELECTED_ENTRY or _.GRAY)
+          local isSelectedEntryRow = (row.kind == "entry") and isSelectableDisplay(displayIdx) and
+              (displayIdx == ctx.pathPickerSel)
+          local col = _.DIM
+          if row.kind ~= "separator" then
+            col = greyed and _.DIM or (isSelectedEntryRow and _.SELECTED_ENTRY or _.GRAY)
+          end
           if _.common.fitListRowText then
-            displayName = _.common.fitListRowText(ctx, "path_picker_device_row_" .. tostring(listIdx), _.font,
-              displayName, maxLabelW, _.FONT_SCALE, listIdx == ctx.pathPickerSel)
+            local rowStateKey = (row.kind == "separator") and "path_picker_device_sep" or
+                ("path_picker_device_row_" .. tostring(listIdx))
+            displayName = _.common.fitListRowText(ctx, rowStateKey, _.font, displayName,
+              maxLabelW, _.FONT_SCALE, isSelectedEntryRow)
           elseif _.common.truncateTextToWidth then
             displayName = _.common.truncateTextToWidth(_.font, displayName or "", maxLabelW, _.FONT_SCALE)
           end
-          _.drawListRow(_.MARGIN_X + 20, y, listIdx == ctx.pathPickerSel, displayName, col)
+          _.drawListRow(_.MARGIN_X + 20, y, isSelectedEntryRow, displayName, col)
+        end
+        do
+          local function getFmcbCommandHelper(entry)
+            if not entry then return nil end
+            local isFmcbPicker = (ctx.pathPickerContext == "fmcb_entry" or ctx.pathPickerContext == "fmcb_launch")
+            local isFmcbPathOnly = (ctx.pathPickerContext == "path_only") and
+                ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot"))
+            if not (isFmcbPicker or isFmcbPathOnly) then return nil end
+            local key = tostring(entry.name or ""):upper()
+            local p = _.path_str or {}
+            if key == "OSDSYS" then
+              return p.fmcb_cmd_osdsys or "Boot hacked OSDSYS"
+            elseif key == "OSDMENU" then
+              return p.fmcb_cmd_osdmenu or "Boot hacked OSDSYS, enforce skip disc boot"
+            elseif key == "FASTBOOT" then
+              return p.fmcb_cmd_fastboot or "Boot PS2 Disc without logo"
+            elseif key == "POWEROFF" then
+              return p.fmcb_cmd_poweroff or "Shutdown the console: FMCB 1.966 only, else use POWEROFF.ELF"
+            end
+            return nil
+          end
+
+          local selectedHelper = nil
+          local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
+          if not (includeManualEntry and selectedRawIdx == 1) then
+            local selectedEntry = selectedRawIdx and deviceFromRawIndex(selectedRawIdx) or nil
+            selectedHelper = getFmcbCommandHelper(selectedEntry)
+          end
+          if selectedHelper and selectedHelper ~= "" then
+            local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
+            local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or
+                (0.7 * hintTextScale)
+            local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
+            local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or nil
+            local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+            if _.common.fitListRowText then
+              selectedHelper = _.common.fitListRowText(ctx, "path_picker_device_helper", hintFont, selectedHelper,
+                descMaxW, hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+            elseif _.common.truncateTextToWidth then
+              selectedHelper = _.common.truncateTextToWidth(hintFont, selectedHelper, descMaxW, hintDrawScale)
+            end
+            local tw = _.common.calcTextWidth(hintFont, selectedHelper, hintDrawScale)
+            local x = _.common.centerX(_, tw)
+            local hintColor = (_.common.OPTION_HINT_COLOR or _.DIM)
+            _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selectedHelper, hintColor, hintTextH)
+          end
         end
         if (_.padEffective & _.PAD_UP) ~= 0 then
           local idx = ctx.pathPickerSel
           for _ = 1, totalCount do
             idx = idx - 1; if idx < 1 then idx = totalCount end
-            if isSelectable(idx) then
+            if isSelectableDisplay(idx) then
               ctx.pathPickerSel = idx; break
             end
           end
@@ -661,13 +1185,14 @@ local function run(ctx)
           local idx = ctx.pathPickerSel
           for _ = 1, totalCount do
             idx = idx + 1; if idx > totalCount then idx = 1 end
-            if isSelectable(idx) then
+            if isSelectableDisplay(idx) then
               ctx.pathPickerSel = idx; break
             end
           end
         end
         if (_.padEffective & _.PAD_CROSS) ~= 0 then
-          if includeManualEntry and ctx.pathPickerSel == 1 then
+          local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
+          if includeManualEntry and selectedRawIdx == 1 then
             ctx.textInputTitleIdMode = nil
             ctx.textInputPrompt = _.path_str.enter_path_prompt
             ctx.textInputValue = ""
@@ -681,49 +1206,49 @@ local function run(ctx)
             ctx.textInputScroll = 1
             ctx.state = "text_input"
           else
-            local e = deviceFromListIndex(ctx.pathPickerSel)
-            if isGreyed(e) then
-              -- exclusive and other paths exist; ignore
-            elseif e.special then
-              local pathVal = e.name or ""
-	              if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
-	              if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
-	              ctx.pathList = nil
-	              ctx.pfs0Mounted = nil
-	              ctx.pfs1Mounted = nil
-                if ctx.pathPickerBootKey and ctx.lines then
-                  local bootKey = ctx.pathPickerBootKey
-                  applyBootPathAndReturn(ctx, pathVal)
-                  if e.noargs then _.config_parse.setBootArgs(ctx.lines, bootKey, {}) end
-	              elseif applyBblHotkeyPathAndReturn(ctx, pathVal) then
-	              elseif applyBblIrxPathAndReturn(ctx, pathVal) then
-	              elseif ctx.pathPickerForEntryIdx then
-                local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-                if ctx.pathPickerEditIdx then
-                  local item = paths[ctx.pathPickerEditIdx]
-                  if type(item) == "table" then item.value = pathVal else paths[ctx.pathPickerEditIdx] = { value =
-                    pathVal, disabled = false } end
-                else
-                  table.insert(paths, { value = pathVal, disabled = false })
-                end
-                _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
-                if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
-                ctx.entryIdx = ctx.pathPickerForEntryIdx
-                ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
-                ctx.pathPickerForEntryIdx = nil
-                ctx.pathPickerEditIdx = nil
-              elseif ctx.isAddPath then
-                local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
-                    ctx.addPathKey
-                _.config_parse.append(ctx.lines, key, pathVal)
-                ctx.state = "editor"
-              else
-                _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
-                ctx.state = "editor"
-              end
-              ctx.configModified = true
+            if not isSelectableDisplay(ctx.pathPickerSel) then
+              -- Unselectable helper/inactive rows ignore Cross.
             else
-              beginBrowseForDevice(ctx, e)
+              local e = selectedRawIdx and deviceFromRawIndex(selectedRawIdx) or nil
+              if isGreyed(e) then
+              showExclusivePathWarning(ctx, e and e.name)
+              elseif e.special then
+                local pathVal = e.name or ""
+                if canUsePathSelection(ctx, pathVal, fmcbSingleUseTaken) then
+                  if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
+                  if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
+                  ctx.pathList = nil
+                  ctx.pfs0Mounted = nil
+                  ctx.pfs1Mounted = nil
+                  if ctx.pathPickerBootKey and ctx.lines then
+                    local bootKey = ctx.pathPickerBootKey
+                    applyBootPathAndReturn(ctx, pathVal)
+                    if e.noargs then _.config_parse.setBootArgs(ctx.lines, bootKey, {}) end
+                  elseif applyBblHotkeyPathAndReturn(ctx, pathVal) then
+                  elseif applyBblIrxPathAndReturn(ctx, pathVal) then
+                  elseif ctx.pathPickerForEntryIdx then
+                    local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
+                    setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, pathVal)
+                    _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
+                    if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
+                    ctx.entryIdx = ctx.pathPickerForEntryIdx
+                    ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+                    ctx.pathPickerForEntryIdx = nil
+                    ctx.pathPickerEditIdx = nil
+                  elseif ctx.isAddPath then
+                    local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
+                        ctx.addPathKey
+                    _.config_parse.append(ctx.lines, key, pathVal)
+                    ctx.state = "editor"
+                  else
+                    _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
+                    ctx.state = "editor"
+                  end
+                  ctx.configModified = true
+                end
+              else
+                beginBrowseForDevice(ctx, e)
+              end
             end
           end
         end
@@ -842,17 +1367,15 @@ local function run(ctx)
       if not p then p = {} end
       local partFull = p.full or ("hdd0:" .. (p.name or ""))
       local val = partFull .. ":PATINFO"
+      if not canUsePathSelection(ctx, val) then
+        return
+      end
       if applyBootPathAndReturn(ctx, val) then
       elseif applyBblHotkeyPathAndReturn(ctx, val) then
       elseif applyBblIrxPathAndReturn(ctx, val) then
       elseif ctx.pathPickerForEntryIdx then
         local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-        if ctx.pathPickerEditIdx then
-          local item = paths[ctx.pathPickerEditIdx]
-          if type(item) == "table" then item.value = val else paths[ctx.pathPickerEditIdx] = { value = val, disabled = false } end
-        else
-          table.insert(paths, { value = val, disabled = false })
-        end
+        setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, val)
         _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
         ctx.entryIdx = ctx.pathPickerForEntryIdx
         ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
@@ -1050,6 +1573,9 @@ local function run(ctx)
               val = ctx.pathPickerBdmPrefix .. ":" .. (rest ~= "" and "/" .. rest or "")
             end
           end
+          if not canUsePathSelection(ctx, val) then
+            return
+          end
           local openedConfig = false
           if applyConfigOpenPathAndReturn(ctx, val) then
             openedConfig = true
@@ -1074,12 +1600,7 @@ local function run(ctx)
           elseif applyBblIrxPathAndReturn(ctx, val) then
           elseif ctx.pathPickerForEntryIdx then
             local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-            if ctx.pathPickerEditIdx then
-              local item = paths[ctx.pathPickerEditIdx]
-              if type(item) == "table" then item.value = val else paths[ctx.pathPickerEditIdx] = { value = val, disabled = false } end
-            else
-              table.insert(paths, { value = val, disabled = false })
-            end
+            setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, val)
             _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
             ctx.entryIdx = ctx.pathPickerForEntryIdx
             ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"

@@ -411,7 +411,7 @@ local function run(ctx)
         " - " .. _.menu_str.arguments
   else
     local name = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
-    name = name ~= "" and name or _.common_str.empty
+    name = name ~= "" and name or (_.common_str.name_not_defined or _.common_str.empty)
     local prefix = "Arguments for "
     local suffix = " (entry " .. tostring(ctx.entryIdx) .. ")"
     local prefixW = _.common.calcTextWidth(_.font, prefix, 1) or 0

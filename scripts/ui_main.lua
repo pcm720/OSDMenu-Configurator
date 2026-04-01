@@ -12,10 +12,17 @@ local function tryLoadStrings(path)
   return (ok and type(t) == "table") and t or nil
 end
 
+local startupDefaultLanguage = (_G.CONFIG_UI and _G.CONFIG_UI.startupDefaultLanguage) or nil
+
 local strings = tryLoadStrings("strings.lua")
 local cwdOverride = (strings ~= nil)
 if not cwdOverride then
-  strings = dofile("scripts/lang/strings_en.lua")
+  if type(startupDefaultLanguage) == "string" and startupDefaultLanguage ~= "" then
+    strings = tryLoadStrings("scripts/lang/strings_" .. startupDefaultLanguage .. ".lua")
+  end
+  if not strings then
+    strings = dofile("scripts/lang/strings_en.lua")
+  end
 end
 strings = strings or {}
 _G.CONFIG_UI.strings = strings
@@ -69,9 +76,25 @@ if not cwdOverride and System and System.listDirectory then
   _G.CONFIG_UI.langFiles = list
   _G.CONFIG_UI.langDisplayNames = buildLanguageDisplayNames(list)
   local idx = 1
-  for i, f in ipairs(list) do
-    if f == "strings_en.lua" then
-      idx = i; break
+  local foundTarget = false
+  local targetFile = nil
+  if type(startupDefaultLanguage) == "string" and startupDefaultLanguage ~= "" then
+    targetFile = "strings_" .. startupDefaultLanguage .. ".lua"
+  end
+  if targetFile then
+    for i, f in ipairs(list) do
+      if f == targetFile then
+        idx = i
+        foundTarget = true
+        break
+      end
+    end
+  end
+  if not foundTarget then
+    for i, f in ipairs(list) do
+      if f == "strings_en.lua" then
+        idx = i; break
+      end
     end
   end
   _G.CONFIG_UI.langIndex = idx
@@ -85,8 +108,8 @@ local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
 
-local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE = common.PAD_UP, common.PAD_DOWN,
-    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE
+local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE, PAD_TRIANGLE = common.PAD_UP, common.PAD_DOWN,
+    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE, common.PAD_TRIANGLE
 
 local function openDbg(...)
   if _G and _G.CONFIG_UI_OPEN_DEBUG == false then return end
@@ -136,17 +159,49 @@ local function getLanguageHintLabel(main_str)
   return cleaned
 end
 
+local function getSettingsHintLabel(main_str)
+  local raw = main_str.main_settings or "Settings"
+  local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if cleaned == "" then cleaned = "Settings" end
+  return cleaned
+end
+
+local function getCreditsHintLabel(main_str)
+  local baseHint = main_str.main_hint_items or {}
+  local raw = main_str.main_credits or findHintLabel(baseHint, "triangle", "Credits")
+  local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if cleaned == "" then cleaned = "Credits" end
+  return cleaned
+end
+
+local function buildMainCreditsLines(main_str)
+  return {
+    main_str.main_credits_built_using or "Built Using:",
+    "-Enceladus",
+    main_str.main_credits_thanks_to or "Thanks to:",
+    "-pcm720",
+    "-R3Z3N",
+    "-Berion",
+    main_str.main_credits_translators or "Translators:",
+    "-VizoR: Spanish",
+    "-nuno: Portugese",
+  }
+end
+
+local CREDITS_HEADING_BLUE = Color.new(0x36, 0x51, 0x72, 0x80)
+
 local function buildMainBaseHintItems(main_str)
   local baseHint = main_str.main_hint_items or {}
   local enterLabel = findHintLabel(baseHint, "cross", "Enter")
   local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
+  local settingsLabel = getSettingsHintLabel(main_str)
+  local creditsLabel = getCreditsHintLabel(main_str)
   local out = {
     { pad = "cross", label = enterLabel, row = 1 },
+    { pad = "square", label = settingsLabel, row = 1 },
     { pad = "circle", label = exitLabel, row = 1 },
   }
-  if hasLanguageChoices() then
-    table.insert(out, 2, { pad = "square", label = getLanguageHintLabel(main_str), row = 1 })
-  end
+  table.insert(out, #out, { pad = "triangle", label = creditsLabel, row = 1 })
   return out
 end
 
@@ -159,6 +214,17 @@ local function buildMainLanguageOverlayHintItems(main_str)
   return {
     { pad = "cross", label = selectLabel, row = 1 },
     { pad = "square", label = languageLabel, row = 1 },
+    { pad = "circle", label = cancelLabel, row = 1 },
+  }
+end
+
+local function buildMainCreditsOverlayHintItems(main_str)
+  local base = main_str.cross_select_circle_back_items or {}
+  local cancelLabel = (strings and strings.menu_entries and strings.menu_entries.cancel_label) or
+      findHintLabel(base, "circle", "Back")
+  local creditsLabel = getCreditsHintLabel(main_str)
+  return {
+    { pad = "triangle", label = creditsLabel, row = 1 },
     { pad = "circle", label = cancelLabel, row = 1 },
   }
 end
@@ -180,62 +246,98 @@ local function clearLoadChoiceState(s)
   s.loadReturnState = nil
 end
 
-local MAIN_FILTER_OPTS = {
-  { file = "fmcb.opt", id = "freemcboot" },
-  { file = "fhdb.opt", id = "freehddboot" },
-  { file = "osdmenu.opt", id = "osdmenu" },
-  { file = "osdmenumbr.opt", id = "mbr" },
-  { file = "hosdmenu.opt", id = "hosdmenu" },
-  { file = "ps2bbl.opt", id = "ps2bbl" },
-  { file = "psxbbl.opt", id = "psxbbl" },
-}
-
-local function detectMainOptWhitelist()
-  local cwd = nil
-  if System and System.currentDirectory then
-    local okCwd, cwdValue = pcall(System.currentDirectory)
-    if okCwd and type(cwdValue) == "string" and cwdValue ~= "" then
-      cwd = cwdValue
+local function detectMainCnfFilter()
+  local configured = (_G.CONFIG_UI and _G.CONFIG_UI.startupMainFilter) or nil
+  if type(configured) == "table" then
+    local out = {}
+    local hasAny = false
+    for id, enabled in pairs(configured) do
+      if enabled == true or enabled == false then
+        out[id] = enabled
+        hasAny = true
+      end
     end
-  end
-
-  local function checkExists(path)
-    local ok, exists = pcall(doesFileExist, path)
-    return ok and exists == true
-  end
-
-  local function optExists(path)
-    if checkExists(path) or checkExists("./" .. path) then
-      return true
+    if hasAny then
+      return out
     end
-    if cwd and cwd ~= "" then
-      local base = cwd
-      if base:sub(-1) ~= "/" then base = base .. "/" end
-      return checkExists(base .. path)
-    end
-    return false
-  end
-
-  local out = {}
-  local any = false
-  for i = 1, #MAIN_FILTER_OPTS do
-    local item = MAIN_FILTER_OPTS[i]
-    if optExists(item.file) then
-      out[item.id] = true
-      any = true
-    end
-  end
-  if not any then
     return nil
   end
-  return out
+  return nil
 end
 
-local MAIN_OPT_WHITELIST = detectMainOptWhitelist()
+local MAIN_CNF_FILTER = detectMainCnfFilter()
+
+local MAIN_SHOW_KEY_TO_ID = {
+  show_freemcboot = "freemcboot",
+  show_freehddboot = "freehddboot",
+  show_osdmenu = "osdmenu",
+  show_osdmenu_mbr = "mbr",
+  show_hosdmenu = "hosdmenu",
+  show_ps2bbl = "ps2bbl",
+  show_psxbbl = "psxbbl",
+}
+
+local MAIN_FILTER_KEY_ORDER = {
+  "freemcboot",
+  "freehddboot",
+  "osdmenu",
+  "mbr",
+  "hosdmenu",
+  "ps2bbl",
+  "psxbbl",
+}
+
+local function parseMainFilterEnabled(value)
+  if value == true then return true end
+  if value == false then return false end
+  local s = tostring(value or ""):lower()
+  if s == "1" or s == "true" or s == "yes" or s == "on" then return true end
+  if s == "0" or s == "false" or s == "no" or s == "off" then return false end
+  return nil
+end
+
+local function getMainFilterBuildKey()
+  if type(MAIN_CNF_FILTER) ~= "table" then
+    return "all"
+  end
+  local parts = {}
+  for i = 1, #MAIN_FILTER_KEY_ORDER do
+    local id = MAIN_FILTER_KEY_ORDER[i]
+    local enabled = MAIN_CNF_FILTER[id]
+    if enabled == true then
+      parts[#parts + 1] = id .. "=1"
+    elseif enabled == false then
+      parts[#parts + 1] = id .. "=0"
+    end
+  end
+  if #parts == 0 then
+    return "all"
+  end
+  return table.concat(parts, ";")
+end
+
+local function setMainFilterFromShowKey(rawKey, value)
+  local showKey = tostring(rawKey or ""):lower()
+  local id = MAIN_SHOW_KEY_TO_ID[showKey]
+  if not id then return false end
+  local enabled = parseMainFilterEnabled(value)
+  if enabled == nil then return false end
+  if type(MAIN_CNF_FILTER) ~= "table" then
+    MAIN_CNF_FILTER = {}
+  end
+  MAIN_CNF_FILTER[id] = enabled
+  return true
+end
+
+C.setMainFilterFromShowKey = setMainFilterFromShowKey
 
 local function includeMainEntry(id)
-  if MAIN_OPT_WHITELIST == nil then return true end
-  return MAIN_OPT_WHITELIST[id] == true
+  if MAIN_CNF_FILTER == nil then return true end
+  local enabled = MAIN_CNF_FILTER[id]
+  if enabled == nil then
+    return true
+  end
+  return enabled == true
 end
 
 local function buildMainEntries(main_str)
@@ -325,22 +427,52 @@ local function buildMainChoices(main_str)
   return out, entries
 end
 
-local function applyLanguageIndex(s, idx)
-  if not hasLanguageChoices() then return false end
-  local total = #C.langFiles
-  local target = common.clampListSelection(idx or (C.langIndex or 1), total)
-  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. C.langFiles[target])
+local function applyLanguageFileIndex(s, idx)
+  local files = C.langFiles
+  if not files or #files < 1 then return false end
+  local target = common.clampListSelection(idx or (C.langIndex or 1), #files)
+  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. files[target])
   if okLoad and newStrings and type(newStrings) == "table" then
     C.strings = newStrings
     C.langIndex = target
-    local labels, entries = buildMainChoices(newStrings.main or {})
-    s.main = labels
-    s.mainEntries = entries
-    s.mainBuildKey = nil
+    if _G.CONFIG_UI then
+      _G.CONFIG_UI.strings = newStrings
+      local code = getLanguageCodeFromFile(files[target])
+      if type(code) == "string" and code ~= "" then
+        _G.CONFIG_UI.startupDefaultLanguage = code
+      end
+    end
+    if s then
+      local labels, entries = buildMainChoices(newStrings.main or {})
+      s.main = labels
+      s.mainEntries = entries
+      s.mainBuildKey = nil
+    end
     return true
   end
   return false
 end
+
+local function applyLanguageIndex(s, idx)
+  if not hasLanguageChoices() then return false end
+  return applyLanguageFileIndex(s, idx)
+end
+
+local function applyLanguageCode(s, code)
+  local targetCode = tostring(code or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  if targetCode == "" then return false end
+  local files = C.langFiles
+  if not files or #files < 1 then return false end
+  for i = 1, #files do
+    local fileCode = getLanguageCodeFromFile(files[i])
+    if type(fileCode) == "string" and fileCode:lower() == targetCode then
+      return applyLanguageFileIndex(s, i)
+    end
+  end
+  return false
+end
+
+C.applyLanguageCode = applyLanguageCode
 
 local function isBblContext(context)
   return context == "ps2bbl" or context == "psxbbl"
@@ -411,6 +543,13 @@ local function initEmptyLinesForFileType(s, reason)
     for k, v in pairs(C.config_options.getFreemcbootDefaults()) do config_parse.set(s.lines, k, v) end
   elseif s.fileType == "osdmenu_cnf" and C.config_options.getOsdmenuDefaults then
     for k, v in pairs(C.config_options.getOsdmenuDefaults()) do config_parse.set(s.lines, k, v) end
+  elseif s.fileType == "r3configurator_cnf" and C.config_options.r3configurator_cnf then
+    for i = 1, #C.config_options.r3configurator_cnf do
+      local o = C.config_options.r3configurator_cnf[i]
+      if o and o.key and o.key:sub(1, 1) ~= "_" and o.default ~= nil then
+        config_parse.set(s.lines, o.key, tostring(o.default))
+      end
+    end
   end
   openDbg("init empty lines", "fileType=" .. tostring(s.fileType), "reason=" .. tostring(reason),
     "lineCount=" .. tostring(#(s.lines or {})))
@@ -526,10 +665,27 @@ local function setStateAfterLoad(s)
   if s.fileType ~= "osdmbr_cnf" then clearPathPickerState(s) end
 end
 
+local function markNewInMemoryConfigState(s)
+  if s and s.fileType == "r3configurator_cnf" then
+    if common.setCleanConfigSnapshot then
+      common.setCleanConfigSnapshot(s, { needsInitialSave = false })
+    else
+      s.configModified = false
+      s.configNeedsInitialSave = false
+    end
+  else
+    if common.markNewUnsavedConfig then
+      common.markNewUnsavedConfig(s)
+    else
+      s.configModified = true
+    end
+  end
+end
+
 local function runMain(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
@@ -538,7 +694,7 @@ local function runMain(s, pad)
 
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
-  local filterKey = (MAIN_OPT_WHITELIST and "filtered") or "all"
+  local filterKey = getMainFilterBuildKey()
   local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey
   if type(s.main) ~= "table" or type(s.mainEntries) ~= "table" or s.mainBuildKey ~= expectedBuildKey then
     local labels, entries = buildMainChoices(main_str)
@@ -564,6 +720,30 @@ local function runMain(s, pad)
   local function getMainOverlayLogoKey(sel)
     local entry = s.mainEntries and s.mainEntries[sel]
     return entry and entry.logoKey or nil
+  end
+
+  local function getMainEntryById(id)
+    local entryId = tostring(id or "")
+    if entryId == "" then return nil end
+    for i = 1, #(s.mainEntries or {}) do
+      local entry = s.mainEntries[i]
+      if entry and entry.id == entryId then
+        return entry
+      end
+    end
+    return nil
+  end
+
+  local function openMainEntry(entry)
+    if not entry then return false end
+    s.mainOverlayLogoKey = entry.logoKey
+    s.context = entry.context
+    s.fileType = entry.fileType
+    s.chosenMcSlot = nil
+    clearLoadChoiceState(s)
+    clearPathPickerState(s)
+    s.state = entry.state
+    return true
   end
 
   if s.mainSel < 1 then s.mainSel = 1 end
@@ -718,7 +898,7 @@ local function runMain(s, pad)
     end
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
-      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 255)
+      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
       local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
@@ -753,21 +933,165 @@ local function runMain(s, pad)
     return
   end
 
-  if hasLanguageChoices() and (pad & PAD_SQUARE) ~= 0 then
-    s.mainLangPrompt = true
-    s.mainLangSel = C.langIndex or 1
-    s.mainLangPromptAnim = 0
-    s.mainLangPromptClosing = nil
-    -- Avoid a one-frame background-only flash on prompt open.
+  if s.mainCreditsPrompt then
+    local closing = s.mainCreditsPromptClosing == true
+    local anim = tonumber(s.mainCreditsPromptAnim)
+    if type(anim) ~= "number" then
+      anim = closing and 1 or 0
+    end
+    if closing then
+      anim = math.max(0, anim - (1 / 6))
+    else
+      anim = math.min(1, anim + (1 / 6))
+    end
+    s.mainCreditsPromptAnim = anim
+    drawMainBaseUi()
+
+    local lines = buildMainCreditsLines(main_str)
+    local total = #lines
+    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
+    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+    local rowScale = titleScale
+    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
+    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
+        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local function textWidth(text, scale)
+      local useScale = scale or rowScale
+      if common.calcTextWidth then
+        return common.calcTextWidth(hintFont, tostring(text or ""), useScale)
+      end
+      local str = tostring(text or "")
+      return math.floor((8 * useScale) * #str)
+    end
+
+    local maxLabelWIntrinsic = 0
+    for i = 1, total do
+      local lw = textWidth(lines[i], rowScale)
+      if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+    end
+
+    local padX = math.floor((sc(8) or 8) + 0.5)
+    local padTop = math.floor((sc(6) or 6) + 0.5)
+    local padBottom = math.floor((sc(6) or 6) + 0.5)
+    local rowStep = textH + math.max(2, math.floor((sc(3) or 3) + 0.5))
+
+    local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
+    local hintGridXShift = common.PAD_HINT_GRID_X_SHIFT or 0
+    local hintGridExtraW = common.PAD_HINT_GRID_EXTRA_W or 0
+    local hintTotalW = ((s.w or 640) - (2 * M)) + hintGridExtraW
+    local hintXEff = M + sideMargin + hintGridXShift
+    local hintWidthEff = hintTotalW - (2 * sideMargin)
+    local slotW = hintWidthEff / 5
+    local triangleSlotLeft = hintXEff + (3 * slotW)
+    local triangleSlotCenter = triangleSlotLeft + (slotW / 2)
+    local circleSlotLeft = hintXEff + (4 * slotW)
+    local circleSlotCenter = circleSlotLeft + (slotW / 2)
+    local hintIconScale = 0.6
+    local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
+    local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
+    local triangleButtonLeft = math.floor(triangleSlotCenter - (hintIconW / 2))
+    local circleButtonLeft = math.floor(circleSlotCenter - (hintIconW / 2))
+    local desiredBoxX = triangleButtonLeft
+    local desiredRowLabelX = triangleButtonLeft + hintIconW + hintGap
+    local rowLabelOffset = desiredRowLabelX - desiredBoxX
+    if rowLabelOffset < padX then rowLabelOffset = padX end
+    local rightGap = math.max(3, math.floor((sc(4) or 4) + 0.5))
+    local targetRightX = circleButtonLeft - rightGap
+    local desiredToCircleW = math.floor(targetRightX - desiredBoxX + 0.5)
+    if desiredToCircleW < 90 then desiredToCircleW = 90 end
+    local contentW = math.max(90, math.floor((rowLabelOffset + maxLabelWIntrinsic + padX) + 0.5))
+    local boxW = math.max(desiredToCircleW, contentW)
+    local maxBoxW = (s.w or 640) - (2 * M)
+    if boxW > maxBoxW then boxW = maxBoxW end
+    local boxH = padTop + (total * rowStep) + padBottom
+
+    local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
+    local hintRowTop = math.floor(H) - hintRowH
+    local finalBoxY = hintRowTop - boxH - math.max(2, math.floor((sc(2) or 2) + 0.5))
+    local slideDist = math.max(10, math.floor((sc(14) or 14) + 0.5))
+    local boxY = finalBoxY + math.floor((1 - anim) * slideDist)
+    local boxX = desiredBoxX
+    local minX = M
+    local maxX = (s.w or 640) - boxW - M
+    if boxX < minX then boxX = minX end
+    if boxX > maxX then boxX = maxX end
+
+    if Graphics and Graphics.drawRect then
+      local alpha = math.floor(120 * anim + 0.5)
+      if alpha < 0 then alpha = 0 end
+      if alpha > 120 then alpha = 120 end
+      Graphics.drawRect(boxX, boxY, boxW, boxH, Color.new(40, 40, 48, alpha))
+    end
+
+    local rowStartY = boxY + padTop
+    local rowLabelX = boxX + rowLabelOffset
+    local maxLabelW = (boxX + boxW) - padX - rowLabelX
+    if maxLabelW < 1 then maxLabelW = 1 end
+    local creditsHeadingColor = CREDITS_HEADING_BLUE
+    for i = 1, total do
+      local y = rowStartY + (i - 1) * rowStep
+      local label = lines[i]
+      if common.fitListRowText then
+        label = common.fitListRowText(s, "main_credits_row_" .. tostring(i), hintFont, label, maxLabelW, rowScale, false)
+      elseif common.truncateTextToWidth then
+        label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+      end
+      local isHeading = (i == 1 or i == 3 or i == 7)
+      local rowColor = isHeading and creditsHeadingColor or common.WHITE
+      dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, rowColor)
+    end
+
+    local hintItems = buildMainCreditsOverlayHintItems(main_str)
+    if Graphics and Graphics.drawRect then
+      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowTop = math.floor(H) - hintRowH
+      local hintW = (s.w or 640) - (2 * M)
+      Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
+    end
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
+
+    if not closing then
+      if (pad & PAD_TRIANGLE) ~= 0 or (pad & PAD_CIRCLE) ~= 0 then
+        s.mainCreditsPromptClosing = true
+        if s.mainCreditsPromptAnim < 0.001 then
+          s.mainCreditsPromptAnim = 1
+        end
+      end
+    elseif anim <= 0.001 then
+      s.mainCreditsPrompt = nil
+      s.mainCreditsPromptAnim = nil
+      s.mainCreditsPromptClosing = nil
+    end
+    return
+  end
+
+  if (pad & PAD_TRIANGLE) ~= 0 then
+    s.mainCreditsPrompt = true
+    s.mainCreditsPromptAnim = 0
+    s.mainCreditsPromptClosing = nil
     drawMainBaseUi()
     return
   end
 
-  if (pad & PAD_UP) ~= 0 and s.mainSel > 1 then
-    s.mainSel = s.mainSel - 1
+  if (pad & PAD_SQUARE) ~= 0 then
+    local settingsEntry = getMainEntryById("r3configurator") or {
+      id = "r3configurator",
+      logoKey = nil,
+      context = "r3configurator",
+      fileType = "r3configurator_cnf",
+      state = "open",
+    }
+    if openMainEntry(settingsEntry) then
+      return
+    end
   end
-  if (pad & PAD_DOWN) ~= 0 and s.mainSel < #s.main then
-    s.mainSel = s.mainSel + 1
+
+  if (pad & PAD_UP) ~= 0 then
+    s.mainSel = common.wrapListSelection(s.mainSel, #s.main, -1)
+  end
+  if (pad & PAD_DOWN) ~= 0 then
+    s.mainSel = common.wrapListSelection(s.mainSel, #s.main, 1)
   end
   s.mainOverlayLogoKey = getMainOverlayLogoKey(s.mainSel)
   local openedExitPrompt = false
@@ -800,28 +1124,22 @@ local function runMain(s, pad)
   drawMainBaseUi()
   if (pad & PAD_CROSS) ~= 0 then
     local entry = s.mainEntries and s.mainEntries[s.mainSel]
-    if entry then
-      s.mainOverlayLogoKey = entry.logoKey
-      s.context = entry.context
-      s.fileType = entry.fileType
-      s.chosenMcSlot = nil
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.state = entry.state
-    end
+    openMainEntry(entry)
   end
 end
+
+local getPresentMcSlotsCached
 
 local function runChooseMc(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
   local SE = common.SELECTED_ENTRY
-  local slots = common.getPresentMcSlots()
+  local slots = getPresentMcSlotsCached(s)
   if #slots == 0 then
     if s.context == "freemcboot" and s.fileType == "freemcboot_cnf" then
       -- FreeMCBoot can still be loaded/created on mass:/ even when no MC is inserted.
@@ -877,109 +1195,102 @@ local function appendUniquePath(paths, path)
   paths[#paths + 1] = path
 end
 
-local function normalizeMountpoint(mp)
-  if type(mp) ~= "string" or mp == "" then return nil end
-  return (mp:sub(-1) == ":") and mp or (mp .. ":")
+getPresentMcSlotsCached = function(s)
+  local sceneEpoch = (s and s._sceneEpoch) or 0
+  local cache = s and s.presentMcSlotsCache or nil
+  if cache and cache.sceneEpoch == sceneEpoch and type(cache.slots) == "table" then
+    return cache.slots
+  end
+  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  if s then
+    s.presentMcSlotsCache = {
+      sceneEpoch = sceneEpoch,
+      slots = slots,
+    }
+  end
+  return slots
 end
 
-local function normalizeLaunchFamily(value)
-  local fam = tostring(value or ""):lower()
-  if fam == "mass" then fam = "usb" end
-  if fam == "usb" or fam == "mmce" or fam == "mx4sio" or fam == "ata" or fam == "hdd" or fam == "mc" or fam == "bdm" then
-    return fam
+local function getLaunchSlotInfo(s)
+  if s and s.launchSlotInfo and s.launchSlotInfo.sceneEpoch == (s._sceneEpoch or 0) then
+    return s.launchSlotInfo
   end
-  return nil
-end
 
-local function inferLaunchFamilyFromPath(path)
-  if type(path) ~= "string" or path == "" then return nil end
-  local p = path:lower()
-  if p:match("^mmce%d*:") then return "mmce" end
-  if p:match("^mass%d*:") then return "usb" end
-  if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end
-  if p:match("^mc%d:") then return "mc" end
-  return nil
-end
+  local info = {
+    sceneEpoch = (s and s._sceneEpoch) or 0,
+    family = "unknown",
+    slot = nil,
+  }
 
-local function getLaunchSourceFamily(s)
-  if type(s.launchSourceFamily) == "string" and s.launchSourceFamily ~= "" then
-    return s.launchSourceFamily
-  end
-  local family = nil
-  if System and System.getLaunchDeviceFamily then
-    local ok, val = pcall(System.getLaunchDeviceFamily)
-    if ok then family = normalizeLaunchFamily(val) end
-  end
-  if not family and System and System.currentDirectory then
+  if System and System.currentDirectory then
     local ok, cwd = pcall(System.currentDirectory)
-    if ok then family = inferLaunchFamilyFromPath(cwd) end
+    local p = ok and tostring(cwd or ""):lower() or ""
+    if p:match("^mc0:") then
+      info.family, info.slot = "mc", 0
+    elseif p:match("^mc1:") then
+      info.family, info.slot = "mc", 1
+    elseif p:match("^mmce0:") then
+      info.family, info.slot = "mmce", 0
+    elseif p:match("^mmce1:") then
+      info.family, info.slot = "mmce", 1
+    elseif p:match("^mass1:") then
+      info.family, info.slot = "usb", 1
+    elseif p:match("^mass0:") or p:match("^mass:") then
+      info.family, info.slot = "usb", 0
+    elseif p:match("^massx:") then
+      info.family = "mx4sio"
+    elseif p:match("^hdd%d:") or p:match("^pfs%d:") then
+      info.family = "hdd"
+    end
   end
-  if not family then family = "unknown" end
-  s.launchSourceFamily = family
-  return family
-end
 
-local function getDeviceMountpoint(deviceId)
-  if not deviceId or deviceId == "" then return nil end
-  if C.file_selector and C.file_selector.getDeviceMountpoint then
-    local ok, mp = pcall(C.file_selector.getDeviceMountpoint, deviceId)
-    if ok then return normalizeMountpoint(mp) end
+  if info.family == "unknown" and System and System.getLaunchDeviceFamily then
+    local okFam, fam = pcall(System.getLaunchDeviceFamily)
+    local f = okFam and tostring(fam or ""):lower() or ""
+    if f == "mass" then f = "usb" end
+    if f == "usb" or f == "mmce" or f == "mx4sio" or f == "hdd" or f == "mc" then
+      info.family = f
+    end
   end
-  if System and System.getDeviceMountpoint then
-    local ok, mp = pcall(System.getDeviceMountpoint, deviceId)
-    if ok then return normalizeMountpoint(mp) end
-  end
-  return nil
-end
 
-local function isPrefixAvailable(prefix)
-  if not prefix or prefix == "" then return false end
-  local probe = tostring(prefix)
-  if probe:sub(-1) == ":" then probe = probe .. "/" end
-  return common.tryOpen(probe)
-end
-
-local function hasMountedUsbSlot(deviceId, fallbackPrefix)
-  local mountpoint = getDeviceMountpoint(deviceId)
-  if mountpoint and isPrefixAvailable(mountpoint) then
-    return true
+  if s then
+    s.launchSlotInfo = info
   end
-  return isPrefixAvailable(fallbackPrefix)
+  return info
 end
 
 local function getSelectConfigDevicePresence(s)
-  local sceneEpoch = s._sceneEpoch or 0
-  local inputEpoch = s._inputEpoch or 0
-  local cache = s.selectConfigDevicePresenceCache
-  if cache and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
+  local sceneEpoch = (s and s._sceneEpoch) or 0
+  local cache = s and s.selectConfigDevicePresenceCache or nil
+  if cache and cache.sceneEpoch == sceneEpoch then
     return cache
   end
-  local launchFamily = getLaunchSourceFamily(s)
-  local restrictToExistingRemovables = (launchFamily == "mmce" or launchFamily == "usb")
-  local mmce0Visible, mmce1Visible, usb0Visible, usb1Visible
-  if restrictToExistingRemovables then
-    mmce0Visible = isPrefixAvailable("mmce0:")
-    mmce1Visible = isPrefixAvailable("mmce1:")
-    usb0Visible = hasMountedUsbSlot("usb0", "mass:")
-    usb1Visible = hasMountedUsbSlot("usb1", "mass1:")
-  else
-    -- For non-USB/MMCE launch sources, keep legacy behavior: show these rows in fixed order.
-    mmce0Visible = true
-    mmce1Visible = true
-    usb0Visible = true
-    usb1Visible = true
+
+  local launch = getLaunchSlotInfo(s)
+  local usb0, usb1 = true, true
+  local mmce0, mmce1 = true, true
+
+  -- We only know slot-level state for the currently booted removable family.
+  -- Other families stay visible and are lazy-loaded only after user confirms.
+  if launch.family == "usb" and (launch.slot == 0 or launch.slot == 1) then
+    usb0 = (launch.slot == 0)
+    usb1 = (launch.slot == 1)
+  elseif launch.family == "mmce" and (launch.slot == 0 or launch.slot == 1) then
+    mmce0 = (launch.slot == 0)
+    mmce1 = (launch.slot == 1)
   end
-  cache = {
+
+  local out = {
     sceneEpoch = sceneEpoch,
-    inputEpoch = inputEpoch,
-    launchFamily = launchFamily,
-    mmce0 = mmce0Visible,
-    mmce1 = mmce1Visible,
-    usb0 = usb0Visible,
-    usb1 = usb1Visible,
+    mmce0 = mmce0,
+    mmce1 = mmce1,
+    usb0 = usb0,
+    usb1 = usb1,
   }
-  s.selectConfigDevicePresenceCache = cache
-  return cache
+  if s then
+    s.selectConfigDevicePresenceCache = out
+  end
+  return out
 end
 
 local function buildBblSourceOptions(s, iniFileType)
@@ -989,7 +1300,7 @@ local function buildBblSourceOptions(s, iniFileType)
   local iniName = (iniFileType == "psxbbl_ini") and "PSXBBL.INI" or "PS2BBL.INI"
   local presence = getSelectConfigDevicePresence(s)
   local presentMc = {}
-  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  local slots = getPresentMcSlotsCached(s)
   for i = 1, #slots do
     if slots[i] == 0 or slots[i] == 1 then
       presentMc[slots[i]] = true
@@ -1016,6 +1327,7 @@ local function buildBblSourceOptions(s, iniFileType)
       browseDeviceType = browseDeviceType,
     }
   end
+
   if presentMc[0] then
     addDevice("mc", dev_str.memory_card_1 or "Memory Card 1", { "mc0:/SYS-CONF/" .. iniName }, "mc0:")
   end
@@ -1043,7 +1355,7 @@ local function buildFreemcbootSourceOptions(s, context)
   local dev_str = (C.strings and C.strings.devices) or {}
   local presence = getSelectConfigDevicePresence(s)
   local presentMc = {}
-  local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+  local slots = getPresentMcSlotsCached(s)
   for i = 1, #slots do
     if slots[i] == 0 or slots[i] == 1 then
       presentMc[slots[i]] = true
@@ -1125,7 +1437,7 @@ local function runSelectConfig(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local path_str = (C.strings and C.strings.path_picker) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
@@ -1171,7 +1483,7 @@ local function runSelectConfig(s, pad)
       end
     end
     if (pad & PAD_CIRCLE) ~= 0 then
-      local slots = (common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+      local slots = getPresentMcSlotsCached(s)
       if type(slots) == "table" and #slots > 1 then
         s.state = "choose_mc"
       else
@@ -1295,7 +1607,7 @@ local INIT_HDD_TIMEOUT_FRAMES = 180 -- 3s at 60fps
 local function runInitHdd(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dt = common.drawText
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local H = s.HINT_Y or common.HINT_Y
   local sc = s.scaleY or function(y) return y end
@@ -1391,7 +1703,7 @@ local function runOpen(s, pad)
     return
   end
   local dt = common.drawText
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
@@ -1402,7 +1714,7 @@ local function runOpen(s, pad)
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
       setStateAfterLoad(s)
-      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      markNewInMemoryConfigState(s)
       openDbg("mark modified", "reason=new file in memory (explicit path missing)")
       return
     end
@@ -1476,7 +1788,7 @@ local function runOpen(s, pad)
       openDbg("no existing file; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "no existing path")
       setStateAfterLoad(s)
-      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      markNewInMemoryConfigState(s)
       openDbg("mark modified", "reason=new file in memory (no existing path)")
     end
   elseif #existing == 1 then
@@ -1523,7 +1835,7 @@ local function runChooseLoad(s, pad)
   local main_str = (C.strings and C.strings.main) or {}
   local dev_str = (C.strings and C.strings.devices) or {}
   local dt, dlr = common.drawText, s.drawListRow
-  local M = common.MARGIN_X
+  local M = s.MARGIN_X or common.MARGIN_X
   local H = s.HINT_Y or common.HINT_Y
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
@@ -1533,7 +1845,7 @@ local function runChooseLoad(s, pad)
   local allowCreate = (s.loadAllowCreate == true)
   if s.loadSel < 1 then s.loadSel = 1 end
   if s.loadSel > #choices then s.loadSel = #choices end
-  local maxVis = common.MAX_VISIBLE
+  local maxVis = s.MAX_VISIBLE_LIST or s.MAX_VISIBLE or common.MAX_VISIBLE
   local total = #choices
   local maxLabelW = (s.w or 640) - (M + 24) - M
   local scroll = 0
@@ -1632,7 +1944,7 @@ local function runChooseLoad(s, pad)
       openDbg("selected missing path; creating new in memory", "path=" .. tostring(s.currentPath))
       initEmptyLinesForFileType(s, "choose_load create missing")
       setStateAfterLoad(s)
-      if common.markNewUnsavedConfig then common.markNewUnsavedConfig(s) else s.configModified = true end
+      markNewInMemoryConfigState(s)
       openDbg("mark modified", "reason=new file in memory (choose_load missing path)")
       clearLoadChoiceState(s)
     else

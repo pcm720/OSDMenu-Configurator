@@ -1,0 +1,31 @@
+# R3CONFIGURATOR startup configuration
+
+# Video mode: auto | ntsc | pal | 480p | 720p
+video_mode = auto
+
+# Swap confirm/cancel buttons: 0/1 (or false/true)
+swap_buttons = 0
+
+# Default UI language code (used when CWD strings.lua override is not present)
+default_language = en
+
+# Main page visibility: set to 1 to show, 0 to hide.
+show_freemcboot = 1
+show_freehddboot = 1
+show_osdmenu = 1
+show_osdmenu_mbr = 1
+show_hosdmenu = 1
+show_ps2bbl = 1
+show_psxbbl = 1
+
+# UI colors (RRGGBB format only)
+cross = 606060
+square = 606060
+triangle = 606060
+circle = 606060
+
+selected = 0072A0
+selected_dim = 003250
+unselected = A0A0A0
+dim = 606060
+background = 141414

@@ -3,6 +3,7 @@
 Build a virtual filesystem binary from:
   - all files under scripts/
   - all res/logo_*.png files
+  - res/title.png
 
 Binary format (all multi-byte values little-endian):
 
@@ -53,6 +54,11 @@ def main():
     if os.path.isdir(res_dir):
         for name in sorted(os.listdir(res_dir)):
             lower = name.lower()
+            if lower == "title.png":
+                path = os.path.join(res_dir, name)
+                if os.path.isfile(path):
+                    source_paths.append(path)
+                continue
             if not (lower.startswith("logo_") and lower.endswith(".png")):
                 continue
             path = os.path.join(res_dir, name)

@@ -24,11 +24,12 @@ local function run(ctx)
       hasCdrom = true; break
     end
   end
+  local hasCdromPathConflict = hasCdrom and (#paths > 1)
   if allowArgs and hasCdrom then table.insert(subOpts, _.menu_str.launch_disc_options) end
   if allowArgs and not (hasOsdOrShutdown or hasCdrom) then table.insert(subOpts, _.menu_str.arguments) end
   local pathsStr = _.menu_str.paths .. (#paths == 0 and _.menu_str.none or #paths .. _.menu_str.path_s)
   local argsStr = _.menu_str.args ..
-      ((not allowArgs or hasOsdOrShutdown or hasCdrom) and _.menu_str.none or
+      ((not allowArgs or hasOsdOrShutdown) and _.menu_str.none or
       (#args == 0 and _.menu_str.none or #args .. _.menu_str.arg_s))
   local summaryStr = pathsStr
   if allowArgs then
@@ -36,8 +37,22 @@ local function run(ctx)
   end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
-    _.menu_str.name .. (name == "" and _.common_str.empty or name:sub(1, 40)), _.DIM)
+    _.menu_str.name .. (name == "" and (_.common_str.name_not_defined or _.common_str.empty) or name:sub(1, 40)), _.DIM)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
+  if allowArgs and hasCdromPathConflict then
+    local warn = _.menu_str.cdrom_exclusive_warning or
+        "Launch disc with override must be the only path for this entry."
+    if _.common.fitListRowText then
+      local warnFit = _.common.fitListRowText(ctx, "menu_entry_edit_cdrom_warning", _.font, warn,
+        (_.w or 640) - 2 * _.MARGIN_X, 0.6, true)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.HIGHLIGHT or _.DIM)
+    elseif _.common.truncateTextToWidth then
+      local warnFit = _.common.truncateTextToWidth(_.font, warn, (_.w or 640) - 2 * _.MARGIN_X, 0.6)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.HIGHLIGHT or _.DIM)
+    else
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warn, _.HIGHLIGHT or _.DIM)
+    end
+  end
   if ctx.entryEditSub < 1 then ctx.entryEditSub = 1 end
   if ctx.entryEditSub > #subOpts then ctx.entryEditSub = #subOpts end
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
@@ -85,8 +100,18 @@ local function run(ctx)
       ctx.entryPathSel = ctx.entryPathSel or 1
       ctx.entryPathScroll = ctx.entryPathScroll or 0
     elseif opt == _.menu_str.launch_disc_options then
-      ctx.cdromOptSel = ctx.cdromOptSel or 1
-      ctx.state = "entry_cdrom_options"
+      if hasCdromPathConflict then
+        ctx.saveSplash = {
+          kind = "failed",
+          title = _.menu_str.invalid_selection_title or "Invalid selection",
+          detail = _.menu_str.cdrom_exclusive_warning or
+              "Launch disc with override must be the only path for this entry.",
+          framesLeft = 120
+        }
+      else
+        ctx.cdromOptSel = ctx.cdromOptSel or 1
+        ctx.state = "entry_cdrom_options"
+      end
     elseif opt == _.menu_str.arguments then
       if #args == 0 then
         ctx.entryArgAddMenu = true

@@ -88,8 +88,12 @@ local function buildOsdMcLocations(chosenMcSlot, fileName)
   return out
 end
 
--- Config file locations by context and file type (ps2bbl_ini, psxbbl_ini, osdmenu_cnf, osdmbr_cnf, osdgsm_cnf).
+-- Config file locations by context and file type
+-- (ps2bbl_ini, psxbbl_ini, osdmenu_cnf, osdmbr_cnf, osdgsm_cnf, r3configurator_cnf).
 function config_options.getLocations(context, fileType, chosenMcSlot)
+  if fileType == "r3configurator_cnf" then
+    return { "r3configurator.cnf" }
+  end
   if fileType == "ps2bbl_ini" then
     return buildPs2BblIniLocations()
   end
@@ -360,14 +364,14 @@ config_options.psxbbl_ini = buildBblIniGlobalOptions()
 config_options.ps2bbl_ini_auto = buildBblIniAutoOptions()
 config_options.psxbbl_ini_auto = buildBblIniAutoOptions()
 config_options.ps2bbl_ini_categories = {
-  { name = "GLOBAL", options = config_options.ps2bbl_ini },
-  { name = "AUTOBOOT", options = config_options.ps2bbl_ini_auto },
-  { name = "LAUNCH KEYS", options = { { key = "_bbl_hotkeys", optType = "action", label = "LAUNCH KEYS" } } },
+  { name = "Global", options = config_options.ps2bbl_ini },
+  { name = "Auto boot", options = config_options.ps2bbl_ini_auto },
+  { name = "Launch keys", options = { { key = "_bbl_hotkeys", optType = "action", label = "Launch keys" } } },
 }
 config_options.psxbbl_ini_categories = {
-  { name = "GLOBAL", options = config_options.psxbbl_ini },
-  { name = "AUTOBOOT", options = config_options.psxbbl_ini_auto },
-  { name = "LAUNCH KEYS", options = { { key = "_bbl_hotkeys", optType = "action", label = "LAUNCH KEYS" } } },
+  { name = "Global", options = config_options.psxbbl_ini },
+  { name = "Auto boot", options = config_options.psxbbl_ini_auto },
+  { name = "Launch keys", options = { { key = "_bbl_hotkeys", optType = "action", label = "Launch keys" } } },
 }
 
 -- optType: "path", "bool", "enum", "string", "int", "text", "color", "action", "header"
@@ -447,7 +451,7 @@ config_options.freemcboot_cnf_categories = {
       { key = "OSDSYS_version_x",           optType = "int",   default = "-1" },
       { key = "OSDSYS_version_y",           optType = "int",   default = "-1" },
       { key = "OSDSYS_cursor_max_velocity", optType = "int",   default = "1000" },
-      { key = "OSDSYS_cursor_acceleration", optType = "int",   default = "100" },
+      { key = "OSDSYS_cursor_acceleration", optType = "int",   default = "150" },
       { key = "OSDSYS_left_cursor",         optType = "text",  default = "",                   maxLen = 19 },
       { key = "OSDSYS_right_cursor",        optType = "text",  default = "",                   maxLen = 19 },
       { key = "OSDSYS_menu_top_delimiter",  optType = "text",  default = "",                   maxLen = 79 },
@@ -468,17 +472,111 @@ config_options.freemcboot_cnf_categories = {
     },
   },
   {
-    name = "AUTOBOOT",
+    name = "Auto boot",
     options = config_options.freemcboot_cnf_auto,
   },
   {
-    name = "LAUNCH KEYS",
-    options = { { key = "_bbl_hotkeys", optType = "action", label = "LAUNCH KEYS" } },
+    name = "Launch keys",
+    options = { { key = "_bbl_hotkeys", optType = "action", label = "Launch keys" } },
   },
   {
     name = "Edit menu entries",
     options = { { key = "_menu_entries", optType = "action" } },
   },
+}
+
+local function getLanguageCodeFromFile(file)
+  return type(file) == "string" and file:match("^strings_(%w+)%.lua$") or nil
+end
+
+local function buildR3DefaultLanguageSpec()
+  local enumVals = {}
+  local enumDisplayMap = {}
+  local seen = {}
+  local files = (_G.CONFIG_UI and _G.CONFIG_UI.langFiles) or {}
+  local names = (_G.CONFIG_UI and _G.CONFIG_UI.langDisplayNames) or {}
+
+  for i, file in ipairs(files) do
+    local code = tostring(getLanguageCodeFromFile(file) or ""):lower()
+    if code ~= "" and not seen[code] then
+      seen[code] = true
+      enumVals[#enumVals + 1] = code
+      local display = names[i]
+      if type(display) == "string" and display ~= "" then
+        enumDisplayMap[code] = display
+      end
+    end
+  end
+
+  if #enumVals == 0 then
+    enumVals = { "en" }
+    enumDisplayMap.en = "English"
+  end
+
+  local defaultCode = "en"
+  local hasEnglish = false
+  for i = 1, #enumVals do
+    if enumVals[i] == "en" then
+      hasEnglish = true
+      break
+    end
+  end
+  if not hasEnglish then
+    defaultCode = enumVals[1]
+  end
+
+  return defaultCode, enumVals, enumDisplayMap
+end
+
+local R3_DEFAULT_LANGUAGE_DEFAULT, R3_DEFAULT_LANGUAGE_ENUM_VALS, R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP = buildR3DefaultLanguageSpec()
+
+config_options.r3configurator_cnf = {
+  {
+    key = "video_mode",
+    optType = "enum",
+    default = "auto",
+    enumVals = { "auto", "ntsc", "pal", "480p" },
+    enumDisplayMap = {
+      auto = "AUTO",
+      ntsc = "NTSC",
+      pal = "PAL",
+      ["480p"] = "480p",
+    },
+    label = "Video mode",
+    desc = "Startup video mode (auto keeps native PS2 mode).",
+  },
+  {
+    key = "swap_buttons",
+    optType = "bool",
+    default = "0",
+    label = "Swap buttons",
+    desc = "Swap confirm/cancel (Cross <-> Circle).",
+  },
+  {
+    key = "default_language",
+    optType = "enum",
+    default = R3_DEFAULT_LANGUAGE_DEFAULT,
+    enumVals = R3_DEFAULT_LANGUAGE_ENUM_VALS,
+    enumDisplayMap = R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP,
+    label = "Default language",
+    desc = "Default UI language.",
+  },
+  { key = "show_freemcboot", optType = "bool", default = "1", label = "Show FreeMCBoot" },
+  { key = "show_freehddboot", optType = "bool", default = "1", label = "Show FreeHDBoot" },
+  { key = "show_osdmenu", optType = "bool", default = "1", label = "Show OSDMenu" },
+  { key = "show_osdmenu_mbr", optType = "bool", default = "1", label = "Show OSDMenu MBR" },
+  { key = "show_hosdmenu", optType = "bool", default = "1", label = "Show HOSDMenu" },
+  { key = "show_ps2bbl", optType = "bool", default = "1", label = "Show PS2BBL" },
+  { key = "show_psxbbl", optType = "bool", default = "1", label = "Show PSXBBL" },
+  { key = "cross", optType = "color", default = "606060", label = "Cross color" },
+  { key = "square", optType = "color", default = "606060", label = "Square color" },
+  { key = "triangle", optType = "color", default = "606060", label = "Triangle color" },
+  { key = "circle", optType = "color", default = "606060", label = "Circle color" },
+  { key = "selected", optType = "color", default = "0072A0", label = "Selected color" },
+  { key = "selected_dim", optType = "color", default = "003250", label = "Selected dim color" },
+  { key = "unselected", optType = "color", default = "A0A0A0", label = "Unselected color" },
+  { key = "dim", optType = "color", default = "606060", label = "Dim color" },
+  { key = "background", optType = "color", default = "141414", label = "Background color" },
 }
 
 -- Get default value for a single key from osdmenu_cnf_categories (nil if no default).
@@ -527,6 +625,25 @@ function config_options.getFreemcbootDefaults()
   return out
 end
 
+function config_options.getR3ConfiguratorDefault(key)
+  for _, o in ipairs(config_options.r3configurator_cnf or {}) do
+    if o.key == key and o.default ~= nil then
+      return o.default
+    end
+  end
+  return nil
+end
+
+function config_options.getR3ConfiguratorDefaults()
+  local out = {}
+  for _, o in ipairs(config_options.r3configurator_cnf or {}) do
+    if o.key and o.default ~= nil and o.key:sub(1, 1) ~= "_" then
+      out[o.key] = o.default
+    end
+  end
+  return out
+end
+
 -- Launch Disc (cdrom) options. key = launcher argument (-nologo etc.). Label/desc from strings.cdrom_options (by key without leading -).
 config_options.cdrom_options = {
   { key = "-nologo" },
@@ -535,6 +652,21 @@ config_options.cdrom_options = {
   { key = "-ps1fast" },
   { key = "-ps1smooth" },
   { key = "-ps1vneg" },
+}
+
+local OSD_LANGUAGE_DISPLAY = {
+  jap = "Japanese (Nihongo)",
+  eng = "English",
+  fre = "French (Francais)",
+  spa = "Spanish (Espanol)",
+  ger = "German (Deutsch)",
+  ita = "Italian (Italiano)",
+  dut = "Dutch (Nederlands)",
+  por = "Portuguese (Portugues)",
+  rus = "Russian (Russkiy)",
+  kor = "Korean (Hangugeo)",
+  tch = "Traditional Chinese (Zhongwen)",
+  sch = "Simplified Chinese (Zhongwen)",
 }
 
 -- OSDMBR.CNF: boot button paths (multi) + args; then other options. Label/desc from strings.options[key].
@@ -554,7 +686,13 @@ config_options.osdmbr_cnf = {
   { key = "prefer_bbn",           optType = "bool",      default = "0" },
   { key = "app_gameid",           optType = "bool",      default = "0" },
   { key = "osd_screentype",       optType = "enum",      default = "", enumVals = { "4:3", "16:9", "full" } },
-  { key = "osd_language",         optType = "enum",      default = "", enumVals = { "jap", "eng", "fre", "spa", "ger", "ita", "dut", "por", "rus", "kor", "tch", "sch" } },
+  {
+    key = "osd_language",
+    optType = "enum",
+    default = "",
+    enumVals = { "jap", "eng", "fre", "spa", "ger", "ita", "dut", "por", "rus", "kor", "tch", "sch" },
+    enumDisplayMap = OSD_LANGUAGE_DISPLAY,
+  },
 }
 
 -- OSDGSM.CNF: edited in egsm_editor state (default + title overrides on one screen). Option list not used.
