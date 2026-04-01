@@ -153,6 +153,7 @@ strings.path_picker = {
   bbl_cmd_credits_label = "Tworcy",
   bbl_cmd_hddchecker_label = "Sprawdz HDD",
   enter_path_prompt = "Wprowadź ścieżkę",
+  inactive_items_separator = "-- Items below are already used or must be E1 --",
   exclusive_path_warning = "Ta ścieżka musi być pierwszą i jedyną ścieżką dla tego wpisu.",
   invalid_selection_title = "Nieprawidłowy wybór",
   cross_select_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "circle", label = "Wstecz" } },

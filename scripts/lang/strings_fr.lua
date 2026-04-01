@@ -153,6 +153,7 @@ strings.path_picker = {
   bbl_cmd_credits_label = "Credits",
   bbl_cmd_hddchecker_label = "Verifier le HDD",
   enter_path_prompt = "Saisir le chemin",
+  inactive_items_separator = "-- Items below are already used or must be E1 --",
   exclusive_path_warning = "Ce chemin doit etre le premier et l'unique chemin de cette entree.",
   invalid_selection_title = "Selection invalide",
   cross_select_circle_back_items = { { pad = "cross", label = "Entrer" }, { pad = "circle", label = "Retour" } },

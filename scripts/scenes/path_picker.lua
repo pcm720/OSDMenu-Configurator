@@ -879,25 +879,22 @@ local function run(ctx)
         end
         local selectableRaw = {}
         local inactiveRaw = {}
-        local inactiveHasE1Restricted = false
         for rawIdx = 1, rawCount do
           if isSelectableRaw(rawIdx) then
             selectableRaw[#selectableRaw + 1] = rawIdx
           else
             inactiveRaw[#inactiveRaw + 1] = rawIdx
-            local e = deviceFromRawIndex(rawIdx)
-            if targetIndex and targetIndex ~= 1 and e and isE1RestrictedPathForContext(ctx, e.name) then
-              inactiveHasE1Restricted = true
-            end
           end
         end
         local displayRows = {}
         for i = 1, #selectableRaw do
           displayRows[#displayRows + 1] = { kind = "entry", rawIdx = selectableRaw[i], selectable = true }
         end
-        local showE1Divider = inactiveHasE1Restricted and (#inactiveRaw > 0)
-        if showE1Divider then
-          displayRows[#displayRows + 1] = { kind = "separator", selectable = false }
+        local showInactiveDivider = (#inactiveRaw > 0)
+        if showInactiveDivider then
+          local dividerText = (_.path_str and _.path_str.inactive_items_separator) or
+              "-- Items below are already used or must be E1 --"
+          displayRows[#displayRows + 1] = { kind = "separator", selectable = false, text = dividerText }
         end
         for i = 1, #inactiveRaw do
           displayRows[#displayRows + 1] = { kind = "entry", rawIdx = inactiveRaw[i], selectable = false }
@@ -957,7 +954,7 @@ local function run(ctx)
           local greyed = false
           local e = nil
           if row.kind == "separator" then
-            displayName = "-- Items below must be E1 --"
+            displayName = row.text or "-- Items below are already used or must be E1 --"
           else
             if includeManualEntry and listIdx == 1 then
               displayName = _.path_str.enter_path_manually
