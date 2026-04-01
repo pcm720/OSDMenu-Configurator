@@ -169,6 +169,25 @@ local function isBblE1ExclusivePath(pathVal)
   return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
 end
 
+local function getFmcbSingleUseCommand(pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  if up == "POWEROFF" or up == "OSDSYS" or up == "OSDMENU" or up == "FASTBOOT" then
+    return up
+  end
+  return nil
+end
+
+local function isFmcbSingleUseContext(ctx)
+  if not ctx then return false end
+  if ctx.pathPickerContext == "fmcb_entry" or ctx.pathPickerContext == "fmcb_launch" then
+    return true
+  end
+  if ctx.pathPickerBblHotkeyKey then
+    return (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  end
+  return false
+end
+
 local function isFmcbEntryE1LockedPath(ctx, pathVal)
   if not ctx or ctx.pathPickerContext ~= "fmcb_entry" then return false end
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
@@ -230,6 +249,50 @@ local function setMenuEntryPathValue(paths, editIdx, val)
     return
   end
   table.insert(paths, { value = val, disabled = false })
+end
+
+local function hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex)
+  if not isFmcbSingleUseContext(ctx) then return false end
+  local cmd = getFmcbSingleUseCommand(pathVal)
+  if not cmd then return false end
+  local _ = ctx._
+  if ctx.pathPickerBblHotkeyKey and ctx.lines and _.config_parse.getBblHotkeySlot then
+    local keyId = ctx.pathPickerBblHotkeyKey
+    local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
+    local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+    if isFmcb then
+      local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
+      maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
+    end
+    for i = 1, maxEntries do
+      if not targetIndex or i ~= targetIndex then
+        local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
+        local pv = s and s.path or nil
+        if s and s.pathExists and getFmcbSingleUseCommand(pv) == cmd then
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  local paths = nil
+  if ctx.pathPickerForEntryIdx and ctx.lines then
+    paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+  elseif ctx.pathPickerBootKey and ctx.lines then
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+  end
+  if not paths then return false end
+  for i = 1, #paths do
+    if not targetIndex or i ~= targetIndex then
+      local item = paths[i]
+      local pv = type(item) == "table" and item.value or item
+      if getFmcbSingleUseCommand(pv) == cmd then
+        return true
+      end
+    end
+  end
+  return false
 end
 
 local function getOtherTargetPathStats(ctx)
@@ -335,6 +398,10 @@ local function canUsePathSelection(ctx, pathVal)
   local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
   local stats = getOtherTargetPathStats(ctx)
   local targetIndex = tonumber(stats.targetIndex)
+  if hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex) then
+    showExclusivePathWarning(ctx, pathVal)
+    return false
+  end
   if targetIndex and targetIndex ~= 1 and isE1RestrictedPathForContext(ctx, pathVal) then
     showExclusivePathWarning(ctx, pathVal)
     return false
@@ -795,6 +862,9 @@ local function run(ctx)
         local targetIndex = tonumber(otherStats.targetIndex)
         local function isGreyed(e)
           if not e then return true end
+          if hasFmcbSingleUseDuplicateInTarget(ctx, e.name, targetIndex) then
+            return true
+          end
           if targetIndex and targetIndex ~= 1 and isE1RestrictedPathForContext(ctx, e.name) then
             return true
           end

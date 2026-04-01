@@ -2,6 +2,36 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
+local function trimPathValue(pathVal)
+  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function formatDisplayPath(_, pathVal)
+  local raw = tostring(pathVal or "")
+  local up = trimPathValue(raw):upper()
+  local p = _.path_str or {}
+  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch Disc" end
+  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch Disc no PS2 Logo" end
+  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
+  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
+  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  return raw
+end
+
+local function isE1ExclusivePath(pathVal, isFmcb)
+  local p = trimPathValue(pathVal)
+  if p == "" then return false end
+  if p:lower() == "cdrom" then return true end
+  local up = p:upper()
+  if up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER" then
+    return true
+  end
+  if isFmcb and (up == "OSDSYS" or up == "POWEROFF" or up == "FASTBOOT") then
+    return true
+  end
+  return false
+end
+
 local function buildRows(_, ctx, keyId, maxEntries, includeNameRow)
   local rows = {}
   if includeNameRow then
@@ -78,7 +108,12 @@ local function run(ctx)
   local keyDisabled = rowsCache.keyDisabled and true or false
   local rows = rowsCache.rows or {}
   local usedCount = tonumber(rowsCache.usedCount) or 0
-  local canMoveEntries = usedCount > 1
+  local e1Slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, 1) or nil
+  local e1LocksAdditionalPaths = (e1Slot and e1Slot.pathExists and isE1ExclusivePath(e1Slot.path, isFmcb)) and true or false
+  local function isEntryBlockedByE1(row)
+    return row and row.kind == "entry" and e1LocksAdditionalPaths and (tonumber(row.slot) or 0) > 1
+  end
+  local canMoveEntries = (usedCount > 1) and (not e1LocksAdditionalPaths)
   local function clearMoveState()
     ctx.bblEntryGrab = nil
     ctx.bblEntryMoveSnapshot = nil
@@ -117,7 +152,7 @@ local function run(ctx)
   if not canMoveEntries then
     confirmMoveState()
   end
-  local canInsert = usedCount < maxEntries
+  local canInsert = (usedCount < maxEntries) and (not e1LocksAdditionalPaths)
   if #rows == 0 then
     rows[#rows + 1] = { kind = "empty" }
   end
@@ -182,7 +217,7 @@ local function run(ctx)
       local slot = row.data
       local p = _.common_str.not_set
       if slot.path ~= "" then
-        p = slot.path
+        p = formatDisplayPath(_, slot.path)
       elseif slot.pathExists then
         p = _.common_str.empty
       end
@@ -191,7 +226,9 @@ local function run(ctx)
       else
         text = p .. " " .. formatArgCount(slot.argCount)
       end
-      if keyDisabled or slot.disabled then
+      if isEntryBlockedByE1(row) then
+        col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      elseif keyDisabled or slot.disabled then
         col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
     elseif row.kind == "empty" then
@@ -213,8 +250,12 @@ local function run(ctx)
 
   local sel = rows[ctx.bblEntrySel]
   local isEntrySel = sel and sel.kind == "entry"
+  local selBlockedByE1 = isEntryBlockedByE1(sel)
   local canOpenActions = sel and sel.kind ~= "name"
   local canCrossOpen = sel and (sel.kind ~= "empty" or canInsert)
+  if selBlockedByE1 then
+    canCrossOpen = false
+  end
   local hint = {
     {
       pad = canCrossOpen and "cross" or "",
@@ -233,8 +274,8 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = isEntrySel and "triangle" or "",
-      label = isEntrySel and
+      pad = (isEntrySel and not selBlockedByE1) and "triangle" or "",
+      label = (isEntrySel and not selBlockedByE1) and
           (sel.data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
@@ -443,6 +484,10 @@ local function run(ctx)
       ctx.textInputScroll = 1
       ctx.state = "text_input"
     elseif sel.kind == "entry" then
+      if selBlockedByE1 then
+        -- E1-exclusive commands lock later slots from editing.
+        return
+      end
       if isFmcb then
         -- FreeMCBoot/FreeHDBoot launch-key entries are path-only, so go straight to device select.
         beginPathPickerForSlot(sel.slot, ((sel.data and sel.data.disabled) and true or false) or keyDisabled)
@@ -458,7 +503,7 @@ local function run(ctx)
   end
 
   local function toggleSelectedEntryDisabled()
-    if sel and sel.kind == "entry" then
+    if sel and sel.kind == "entry" and not isEntryBlockedByE1(sel) then
       local changed = _.config_parse.setBblHotkeySlotDisabled and
           _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, sel.slot, not sel.data.disabled)
       if changed then

@@ -19,6 +19,22 @@ local function formatArgCount(n)
   return "(" .. tostring(count) .. " args)"
 end
 
+local function trimPathValue(pathVal)
+  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function formatDisplayPath(_, pathVal)
+  local raw = tostring(pathVal or "")
+  local up = trimPathValue(raw):upper()
+  local p = _.path_str or {}
+  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch Disc" end
+  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch Disc no PS2 Logo" end
+  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
+  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
+  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  return raw
+end
+
 local function getOsdmbrHotkeyPadName(key)
   if key == "boot_start" then return "start" end
   if key == "boot_triangle" then return "triangle" end
@@ -1175,7 +1191,7 @@ local function run(ctx)
         if slot and (slot.used or slot.pathExists) then
           local p = _.common_str.not_set
           if slot.path ~= "" then
-            p = slot.path
+            p = formatDisplayPath(_, slot.path)
           elseif slot.pathExists then
             p = _.common_str.empty
           end
@@ -1259,7 +1275,7 @@ local function run(ctx)
         local slot = _.config_parse.getBblHotkeySlot and cachedGetBblHotkeySlot(ctx.lines, "AUTO", slotIdx) or nil
         local pathDisp = _.common_str.not_set
         if slot and slot.path and slot.path ~= "" then
-          pathDisp = slot.path
+          pathDisp = formatDisplayPath(_, slot.path)
         elseif slot and slot.pathExists then
           pathDisp = _.common_str.empty
         end
