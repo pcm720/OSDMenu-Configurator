@@ -199,6 +199,11 @@ local function getBblMaxEntriesForContext(ctx)
   return maxEntries
 end
 
+-- Performance note:
+-- Free*BOOT Auto boot / Launch Keys choose-device can drop to ~30 FPS if we
+-- repeatedly call getBblHotkeySlot() per frame. Keep these per-slot stats
+-- cached and shared by both getOtherTargetPathStats() and
+-- buildFmcbSingleUseTakenMap() so we only scan slots once per frame context.
 local function getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
   if not (ctx and ctx.lines and keyId and slot and maxEntries) then return nil end
   local cache = ctx.pathPickerBblSelectionCache

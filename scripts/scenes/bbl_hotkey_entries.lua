@@ -201,6 +201,7 @@ local function run(ctx)
     _.drawText(_.font, _.drawMode, _.MARGIN_X + iconW + iconGap, _.MARGIN_Y, 1, titleSuffix, _.WHITE)
   end
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
+  local nameNotDefined = _.common_str.name_not_defined or _.common_str.empty
 
   for i = ctx.bblEntryScroll + 1, math.min(ctx.bblEntryScroll + _.MAX_VISIBLE_LIST, #rows) do
     local row = rows[i]
@@ -208,7 +209,7 @@ local function run(ctx)
     local col = (i == ctx.bblEntrySel) and _.SELECTED_ENTRY or _.WHITE
     local text = ""
     if row.kind == "name" then
-      local disp = (row.nameVal ~= "" and row.nameVal) or _.common_str.empty
+      local disp = (row.nameVal ~= "" and row.nameVal) or nameNotDefined
       text = (_.menu_str.name or "Name: ") .. disp
       if keyDisabled then
         col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)

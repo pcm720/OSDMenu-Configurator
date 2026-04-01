@@ -536,6 +536,9 @@ function common.refreshConfigModified(ctx)
   local cache = ctx._configModifiedCache
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
   local inputEpoch = tonumber(ctx._inputEpoch) or 0
+  -- Global performance rule:
+  -- avoid per-frame full semantic digest recomputation while navigating.
+  -- Input-only movement should hit cache; recompute when config state changes.
   local isCurrentlyModified = ctx.configModified and true or false
   local lineCount = #(ctx.lines or {})
   local cleanDigest = ctx.configCleanSemanticDigest

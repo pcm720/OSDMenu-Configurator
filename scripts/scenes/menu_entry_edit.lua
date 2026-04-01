@@ -37,7 +37,7 @@ local function run(ctx)
   end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
-    _.menu_str.name .. (name == "" and _.common_str.empty or name:sub(1, 40)), _.DIM)
+    _.menu_str.name .. (name == "" and (_.common_str.name_not_defined or _.common_str.empty) or name:sub(1, 40)), _.DIM)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
   if allowArgs and hasCdromPathConflict then
     local warn = _.menu_str.cdrom_exclusive_warning or

@@ -1256,7 +1256,7 @@ local function run(ctx)
       if o.key == "NAME_AUTO" then
         inlineAutoRow = true
         local nameVal = cachedGet(ctx.lines, o.key) or o.default or ""
-        local nameDisp = (nameVal ~= "" and nameVal) or _.common_str.empty
+        local nameDisp = (nameVal ~= "" and nameVal) or (_.common_str.name_not_defined or _.common_str.empty)
         lab = (_.menu_str.name or "Name: ") .. nameDisp
         valDisplay = ""
       elseif ctx.fileType == "freemcboot_cnf" and o.key and o.key:match("^ESR_Path_E%d+$") then
