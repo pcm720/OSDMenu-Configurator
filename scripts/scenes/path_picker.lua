@@ -669,10 +669,10 @@ local function ensureBblCommandRows(ctx)
     }
   else
     cmdRows = {
-      { name = "$CDVD", desc = p.bbl_cmd_cdvd_label or "Launch Disc", special = "bbl_cmd", exclusive = true },
+      { name = "$CDVD", desc = p.bbl_cmd_cdvd_label or "Launch disc", special = "bbl_cmd", exclusive = true },
       {
         name = "$CDVD_NO_PS2LOGO",
-        desc = p.bbl_cmd_cdvd_no_logo_label or "Launch Disc no PS2 Logo",
+        desc = p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo",
         special = "bbl_cmd",
         exclusive = true
       },

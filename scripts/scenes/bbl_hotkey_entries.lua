@@ -10,8 +10,8 @@ local function formatDisplayPath(_, pathVal)
   local raw = tostring(pathVal or "")
   local up = trimPathValue(raw):upper()
   local p = _.path_str or {}
-  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch Disc" end
-  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch Disc no PS2 Logo" end
+  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
+  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
   if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
   if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
   if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
