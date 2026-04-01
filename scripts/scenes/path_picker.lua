@@ -188,26 +188,82 @@ local function isFmcbSingleUseContext(ctx)
   return false
 end
 
+local function getBblMaxEntriesForContext(ctx)
+  local _ = ctx._
+  local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
+  local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  if isFmcb then
+    local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
+    maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
+  end
+  return maxEntries
+end
+
+local function getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
+  if not (ctx and ctx.lines and keyId and slot and maxEntries) then return nil end
+  local cache = ctx.pathPickerBblSelectionCache
+  if cache and cache.linesRef == ctx.lines and cache.pathListRef == ctx.pathList and cache.keyId == keyId and
+      cache.slot == slot and cache.maxEntries == maxEntries then
+    return cache.stats, cache.taken
+  end
+
+  local _ = ctx._
+  local stats = { count = 0, firstExclusive = false, firstCdrom = false, targetIndex = slot }
+  local taken = {}
+  local slots = {}
+  for i = 1, maxEntries do
+    local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
+    local pv = s and s.path or nil
+    local hasValue = false
+    if s and s.pathExists then
+      local sv = tostring(pv or ""):gsub("^%s+", ""):gsub("%s+$", "")
+      hasValue = (sv ~= "")
+    end
+    slots[i] = { path = pv, hasValue = hasValue }
+  end
+
+  if slot ~= 1 then
+    local first = slots[1]
+    local firstPv = first and first.path or nil
+    if first and first.hasValue then
+      stats.firstExclusive = (isE1LockedPath(firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
+      stats.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
+    end
+  end
+
+  for i = 1, maxEntries do
+    if i ~= slot then
+      local s = slots[i]
+      if s and s.hasValue then
+        stats.count = stats.count + 1
+        local cmd = getFmcbSingleUseCommand(s.path)
+        if cmd then taken[cmd] = true end
+      end
+    end
+  end
+
+  ctx.pathPickerBblSelectionCache = {
+    linesRef = ctx.lines,
+    pathListRef = ctx.pathList,
+    keyId = keyId,
+    slot = slot,
+    maxEntries = maxEntries,
+    stats = stats,
+    taken = taken,
+  }
+  return stats, taken
+end
+
 local function buildFmcbSingleUseTakenMap(ctx, targetIndex)
   local taken = {}
   if not isFmcbSingleUseContext(ctx) then return taken end
   local _ = ctx._
   if ctx.pathPickerBblHotkeyKey and ctx.lines and _.config_parse.getBblHotkeySlot then
     local keyId = ctx.pathPickerBblHotkeyKey
-    local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
-    local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
-    if isFmcb then
-      local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
-      maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
-    end
-    for i = 1, maxEntries do
-      if not targetIndex or i ~= targetIndex then
-        local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
-        local pv = s and s.path or nil
-        local cmd = (s and s.pathExists) and getFmcbSingleUseCommand(pv) or nil
-        if cmd then taken[cmd] = true end
-      end
-    end
+    local slot = tonumber(targetIndex) or tonumber(ctx.pathPickerBblHotkeySlot) or 1
+    local maxEntries = getBblMaxEntriesForContext(ctx)
+    local _, cachedTaken = getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
+    if cachedTaken then return cachedTaken end
     return taken
   end
 
@@ -308,33 +364,9 @@ local function getOtherTargetPathStats(ctx)
   if ctx.pathPickerBblHotkeyKey and ctx.pathPickerBblHotkeySlot and ctx.lines and _.config_parse.getBblHotkeySlot then
     local keyId = ctx.pathPickerBblHotkeyKey
     local slot = tonumber(ctx.pathPickerBblHotkeySlot) or 1
-    out.targetIndex = slot
-
-    local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
-    local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
-    if isFmcb then
-      local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
-      maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
-    end
-
-    if slot ~= 1 then
-      local first = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, 1)
-      local firstPv = first and first.path or nil
-      if first and first.pathExists and hasUsablePathValue(firstPv) then
-        out.firstExclusive = (isE1LockedPath(firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
-        out.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
-      end
-    end
-
-    for i = 1, maxEntries do
-      if i ~= slot then
-        local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
-        local pv = s and s.path or nil
-        if s and s.pathExists and hasUsablePathValue(pv) then
-          out.count = out.count + 1
-        end
-      end
-    end
+    local maxEntries = getBblMaxEntriesForContext(ctx)
+    local cachedStats = getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
+    if cachedStats then return cachedStats end
     return out
   end
 
