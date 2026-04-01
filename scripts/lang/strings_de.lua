@@ -215,8 +215,8 @@ strings.categories_freemcboot = {
   [1] = "OSD-Verhaltensmodifikatoren",
   [2] = "Benutzerdefinierte OSD-Menueoptionen",
   [3] = "Disc-Optionen",
-  [4] = "AUTOBOOT",
-  [5] = "START-TASTEN",
+  [4] = "Autoboot",
+  [5] = "Start-Tasten",
   [6] = "Menueeintraege bearbeiten",
 }
 

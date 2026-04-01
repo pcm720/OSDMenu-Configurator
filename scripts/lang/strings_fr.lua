@@ -215,8 +215,8 @@ strings.categories_freemcboot = {
   [1] = "Modificateurs du comportement OSD",
   [2] = "Options du menu OSD personnalise",
   [3] = "Options du disque",
-  [4] = "AUTOBOOT",
-  [5] = "TOUCHES DE LANCEMENT",
+  [4] = "Autoboot",
+  [5] = "Touches de lancement",
   [6] = "Modifier les entrees du menu",
 }
 

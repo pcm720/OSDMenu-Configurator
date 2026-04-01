@@ -364,14 +364,14 @@ config_options.psxbbl_ini = buildBblIniGlobalOptions()
 config_options.ps2bbl_ini_auto = buildBblIniAutoOptions()
 config_options.psxbbl_ini_auto = buildBblIniAutoOptions()
 config_options.ps2bbl_ini_categories = {
-  { name = "GLOBAL", options = config_options.ps2bbl_ini },
-  { name = "AUTOBOOT", options = config_options.ps2bbl_ini_auto },
-  { name = "LAUNCH KEYS", options = { { key = "_bbl_hotkeys", optType = "action", label = "LAUNCH KEYS" } } },
+  { name = "Global", options = config_options.ps2bbl_ini },
+  { name = "Auto boot", options = config_options.ps2bbl_ini_auto },
+  { name = "Launch keys", options = { { key = "_bbl_hotkeys", optType = "action", label = "Launch keys" } } },
 }
 config_options.psxbbl_ini_categories = {
-  { name = "GLOBAL", options = config_options.psxbbl_ini },
-  { name = "AUTOBOOT", options = config_options.psxbbl_ini_auto },
-  { name = "LAUNCH KEYS", options = { { key = "_bbl_hotkeys", optType = "action", label = "LAUNCH KEYS" } } },
+  { name = "Global", options = config_options.psxbbl_ini },
+  { name = "Auto boot", options = config_options.psxbbl_ini_auto },
+  { name = "Launch keys", options = { { key = "_bbl_hotkeys", optType = "action", label = "Launch keys" } } },
 }
 
 -- optType: "path", "bool", "enum", "string", "int", "text", "color", "action", "header"
@@ -472,12 +472,12 @@ config_options.freemcboot_cnf_categories = {
     },
   },
   {
-    name = "AUTOBOOT",
+    name = "Auto boot",
     options = config_options.freemcboot_cnf_auto,
   },
   {
-    name = "LAUNCH KEYS",
-    options = { { key = "_bbl_hotkeys", optType = "action", label = "LAUNCH KEYS" } },
+    name = "Launch keys",
+    options = { { key = "_bbl_hotkeys", optType = "action", label = "Launch keys" } },
   },
   {
     name = "Edit menu entries",
