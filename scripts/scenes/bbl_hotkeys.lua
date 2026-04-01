@@ -139,7 +139,6 @@ local function run(ctx)
   local iconGap = 8
   local nameNotDefined = _.common_str.name_not_defined or _.common_str.empty
   local pathNotDefined = _.common_str.path_not_defined or _.common_str.empty
-  local nameAndPathNotDefined = _.common_str.name_and_path_not_defined or _.common_str.empty
   for i = ctx.bblHotkeyScroll + 1, math.min(ctx.bblHotkeyScroll + _.MAX_VISIBLE_LIST, #hotkeys) do
     local keyId = hotkeys[i]
     local info = hotkeySummary[keyId] or { disabled = false, name = "", pathCount = 0 }
@@ -157,7 +156,7 @@ local function run(ctx)
         disp = formatPathCount(pathCount)
       end
     elseif not hasName and not hasPath then
-      disp = nameAndPathNotDefined
+      disp = _.common_str.empty
     elseif not hasName then
       disp = nameNotDefined .. " (" .. formatPathCount(pathCount) .. ")"
     elseif not hasPath then

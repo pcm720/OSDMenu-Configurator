@@ -204,7 +204,6 @@ strings.common = {
   empty = "(leer)",
   name_not_defined = "(Name nicht definiert)",
   path_not_defined = "(Pfad nicht definiert)",
-  name_and_path_not_defined = "(Name und Pfad nicht definiert)",
   second = "Sekunde",
   seconds = "Sekunden",
   enter_text = "Text eingeben",

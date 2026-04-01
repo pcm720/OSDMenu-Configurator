@@ -223,7 +223,6 @@ local function run(ctx)
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
   local missingNameLabel = _.common_str.name_not_defined or _.common_str.empty
   local missingPathLabel = _.common_str.path_not_defined or _.common_str.empty
-  local missingNamePathLabel = _.common_str.name_and_path_not_defined or _.common_str.empty
   for i = ctx.entryScroll + 1, math.min(ctx.entryScroll + maxVis, total) do
     local ent = ctx.entryList[i]
     local idx = ent.idx
@@ -233,7 +232,7 @@ local function run(ctx)
     local usesPlaceholder = false
     local label
     if not hasName and not hasPath then
-      label = missingNamePathLabel
+      label = _.common_str.empty
       usesPlaceholder = true
     elseif not hasName then
       label = missingNameLabel

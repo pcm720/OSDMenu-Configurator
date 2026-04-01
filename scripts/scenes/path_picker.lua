@@ -171,7 +171,13 @@ end
 
 local function getFmcbSingleUseCommand(pathVal)
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
-  if up == "POWEROFF" or up == "OSDSYS" or up == "OSDMENU" or up == "FASTBOOT" then
+  -- Free*BOOT conflict set:
+  -- OSDMENU, OSDSYS, and FASTBOOT are mutually exclusive in the same target
+  -- (menu entry/autoboot/launch key). POWEROFF remains single-use by itself.
+  if up == "OSDSYS" or up == "OSDMENU" or up == "FASTBOOT" then
+    return "__FMCB_OSD_FASTBOOT_GROUP__"
+  end
+  if up == "POWEROFF" then
     return up
   end
   return nil

@@ -372,6 +372,10 @@ local function applyOsdVisualPreset(ctx, _, preset)
   for key, value in pairs(preset) do
     setConfigValue(ctx, _, key, tostring(value or ""))
   end
+  -- Preset apply mutates many keys at once; clear frame caches so preview rows
+  -- and dirty-state are recomputed immediately on the next frame.
+  ctx.editorFrameParseCache = nil
+  ctx._configModifiedCache = nil
   if _.common and _.common.refreshConfigModified then
     _.common.refreshConfigModified(ctx)
   else
@@ -393,6 +397,10 @@ local function applyR3ColorPreset(ctx, _, preset)
       setConfigValue(ctx, _, key, tostring(value))
     end
   end
+  -- Preset apply mutates many keys at once; clear frame caches so color rows
+  -- and dirty-state are recomputed immediately on the next frame.
+  ctx.editorFrameParseCache = nil
+  ctx._configModifiedCache = nil
   if _.common and _.common.refreshConfigModified then
     _.common.refreshConfigModified(ctx)
   else
