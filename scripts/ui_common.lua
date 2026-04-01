@@ -536,18 +536,20 @@ function common.refreshConfigModified(ctx)
   local cache = ctx._configModifiedCache
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
   local inputEpoch = tonumber(ctx._inputEpoch) or 0
-  local hadInputThisFrame = false
-  if ctx._ and type(ctx._) == "table" then
-    local pe = tonumber(ctx._.padEffective) or 0
-    hadInputThisFrame = (pe ~= 0)
-  end
-  if not hadInputThisFrame then
-    local loopPad = tonumber(ctx._lastPadEffective) or 0
-    hadInputThisFrame = (loopPad ~= 0)
-  end
+  local isCurrentlyModified = ctx.configModified and true or false
+  local lineCount = #(ctx.lines or {})
   local cleanDigest = ctx.configCleanSemanticDigest
-  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch and
-      cache.cleanDigest == cleanDigest and not hadInputThisFrame then
+  local needsInitialSave = (ctx.configNeedsInitialSave == true)
+  local cacheHit = cache and
+      cache.linesRef == ctx.lines and
+      cache.sceneEpoch == sceneEpoch and
+      cache.cleanDigest == cleanDigest and
+      cache.needsInitialSave == needsInitialSave and
+      cache.lineCount == lineCount and
+      cache.result == isCurrentlyModified
+  -- When already dirty, keep inputEpoch as a conservative invalidator so reverting
+  -- back to the clean semantic state is detected on edit input.
+  if cacheHit and ((not isCurrentlyModified) or cache.inputEpoch == inputEpoch) then
     ctx.configModified = cache.result and true or false
     return ctx.configModified
   end
@@ -559,13 +561,14 @@ function common.refreshConfigModified(ctx)
 
   local currentDigest = computeSemanticDigest(ctx, ctx.lines)
   local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
-  local needsInitialSave = (ctx.configNeedsInitialSave == true)
   ctx.configModified = semanticChanged or needsInitialSave
   ctx._configModifiedCache = {
     linesRef = ctx.lines,
     sceneEpoch = sceneEpoch,
     inputEpoch = inputEpoch,
     cleanDigest = ctx.configCleanSemanticDigest,
+    needsInitialSave = needsInitialSave,
+    lineCount = lineCount,
     result = ctx.configModified and true or false,
     digest = currentDigest
   }

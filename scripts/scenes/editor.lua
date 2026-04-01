@@ -498,14 +498,22 @@ end
 local function getEditorParseCache(ctx, _)
   local sceneEpoch = ctx._sceneEpoch or 0
   local inputEpoch = ctx._inputEpoch or 0
+  local isDirty = ctx.configModified == true
   local cache = ctx.editorFrameParseCache
-  if cache and cache.linesRef == ctx.lines and cache.sceneEpoch == sceneEpoch and cache.inputEpoch == inputEpoch then
+  local cacheHit = cache and
+      cache.linesRef == ctx.lines and
+      cache.sceneEpoch == sceneEpoch and
+      cache.isDirty == isDirty
+  -- While dirty, retain inputEpoch as conservative invalidation so in-place edits
+  -- are reflected immediately without requiring state transitions.
+  if cacheHit and ((not isDirty) or cache.inputEpoch == inputEpoch) then
     return cache
   end
   cache = makeFrameParseCache(_, ctx.lines or {})
   cache.linesRef = ctx.lines
   cache.sceneEpoch = sceneEpoch
   cache.inputEpoch = inputEpoch
+  cache.isDirty = isDirty
   ctx.editorFrameParseCache = cache
   return cache
 end

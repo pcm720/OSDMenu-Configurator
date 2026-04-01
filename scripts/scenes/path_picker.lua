@@ -188,6 +188,47 @@ local function isFmcbSingleUseContext(ctx)
   return false
 end
 
+local function buildFmcbSingleUseTakenMap(ctx, targetIndex)
+  local taken = {}
+  if not isFmcbSingleUseContext(ctx) then return taken end
+  local _ = ctx._
+  if ctx.pathPickerBblHotkeyKey and ctx.lines and _.config_parse.getBblHotkeySlot then
+    local keyId = ctx.pathPickerBblHotkeyKey
+    local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
+    local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+    if isFmcb then
+      local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
+      maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
+    end
+    for i = 1, maxEntries do
+      if not targetIndex or i ~= targetIndex then
+        local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
+        local pv = s and s.path or nil
+        local cmd = (s and s.pathExists) and getFmcbSingleUseCommand(pv) or nil
+        if cmd then taken[cmd] = true end
+      end
+    end
+    return taken
+  end
+
+  local paths = nil
+  if ctx.pathPickerForEntryIdx and ctx.lines then
+    paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+  elseif ctx.pathPickerBootKey and ctx.lines then
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+  end
+  if not paths then return taken end
+  for i = 1, #paths do
+    if not targetIndex or i ~= targetIndex then
+      local item = paths[i]
+      local pv = type(item) == "table" and item.value or item
+      local cmd = getFmcbSingleUseCommand(pv)
+      if cmd then taken[cmd] = true end
+    end
+  end
+  return taken
+end
+
 local function isFmcbEntryE1LockedPath(ctx, pathVal)
   if not ctx or ctx.pathPickerContext ~= "fmcb_entry" then return false end
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
@@ -251,48 +292,12 @@ local function setMenuEntryPathValue(paths, editIdx, val)
   table.insert(paths, { value = val, disabled = false })
 end
 
-local function hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex)
+local function hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex, takenMap)
   if not isFmcbSingleUseContext(ctx) then return false end
   local cmd = getFmcbSingleUseCommand(pathVal)
   if not cmd then return false end
-  local _ = ctx._
-  if ctx.pathPickerBblHotkeyKey and ctx.lines and _.config_parse.getBblHotkeySlot then
-    local keyId = ctx.pathPickerBblHotkeyKey
-    local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
-    local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
-    if isFmcb then
-      local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
-      maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
-    end
-    for i = 1, maxEntries do
-      if not targetIndex or i ~= targetIndex then
-        local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
-        local pv = s and s.path or nil
-        if s and s.pathExists and getFmcbSingleUseCommand(pv) == cmd then
-          return true
-        end
-      end
-    end
-    return false
-  end
-
-  local paths = nil
-  if ctx.pathPickerForEntryIdx and ctx.lines then
-    paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
-  elseif ctx.pathPickerBootKey and ctx.lines then
-    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
-  end
-  if not paths then return false end
-  for i = 1, #paths do
-    if not targetIndex or i ~= targetIndex then
-      local item = paths[i]
-      local pv = type(item) == "table" and item.value or item
-      if getFmcbSingleUseCommand(pv) == cmd then
-        return true
-      end
-    end
-  end
-  return false
+  local map = takenMap or buildFmcbSingleUseTakenMap(ctx, targetIndex)
+  return map[cmd] and true or false
 end
 
 local function getOtherTargetPathStats(ctx)
@@ -393,12 +398,12 @@ local function showExclusivePathWarning(ctx, pathVal)
   }
 end
 
-local function canUsePathSelection(ctx, pathVal)
+local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
   local _ = ctx._
   local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
   local stats = getOtherTargetPathStats(ctx)
   local targetIndex = tonumber(stats.targetIndex)
-  if hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex) then
+  if hasFmcbSingleUseDuplicateInTarget(ctx, pathVal, targetIndex, singleUseTakenMap) then
     showExclusivePathWarning(ctx, pathVal)
     return false
   end
@@ -595,6 +600,49 @@ local function ensureBblCommandRows(ctx)
   end
 end
 
+local function isFreeBootFileContext(ctx)
+  if not ctx then return false end
+  return (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+end
+
+local function filterFreeBootChooseDeviceList(ctx)
+  if not ctx or ctx.pathPickerSub ~= "device" or not ctx.pathList then return end
+  if ctx.pathPickerFreeBootFilterAppliedTo == ctx.pathList then return end
+  local isFreeBootChoose = isFreeBootFileContext(ctx) or
+      (ctx.pathPickerContext == "fmcb_entry") or
+      (ctx.pathPickerContext == "fmcb_launch")
+  if not isFreeBootChoose then return end
+  local out = {}
+  for i = 1, #ctx.pathList do
+    local e = ctx.pathList[i]
+    local keep = false
+    if e and e.special then
+      -- Keep command rows (OSDSYS/OSDMENU/FASTBOOT/POWEROFF and other special entries).
+      keep = true
+    else
+      local name = tostring(e and e.name or ""):lower()
+      local deviceId = tostring(e and e.deviceId or ""):lower()
+      -- Free*BOOT choose-device supports MC, USB, and APA HDD.
+      if name == "mc0:" or name == "mc1:" or name == "hdd0:" then
+        keep = true
+      elseif deviceId == "usb0" or deviceId == "usb1" then
+        keep = true
+      end
+    end
+    if keep then out[#out + 1] = e end
+  end
+  ctx.pathList = out
+  ctx.pathPickerFreeBootFilterAppliedTo = ctx.pathList
+  local count = #out
+  if count <= 0 then
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
+  else
+    if (ctx.pathPickerSel or 1) > count then ctx.pathPickerSel = count end
+    if (ctx.pathPickerSel or 1) < 1 then ctx.pathPickerSel = 1 end
+  end
+end
+
 local function centeredScroll(sel, total, maxVis)
   if total <= maxVis then return 0 end
   local s = sel - math.floor(maxVis / 2)
@@ -615,6 +663,7 @@ end
 local function beginBrowseForDevice(ctx, e)
   if not e then return end
   local _ = ctx._
+  ctx.pathPickerFreeBootFilterAppliedTo = nil
   if e.deviceType == "hdd" and not e.deviceId then
     ctx.pathPickerDeviceSel = ctx.pathPickerSel
     ctx.pathPickerLoadedDeviceTypes = ctx.pathPickerLoadedDeviceTypes or {}
@@ -751,6 +800,7 @@ local function run(ctx)
   end
   if ctx.pathPickerSub == "device" then
     ensureBblCommandRows(ctx)
+    filterFreeBootChooseDeviceList(ctx)
     if isConfigOpenTarget(ctx) and ctx.pathPickerLockedDevice and not ctx.pathPickerLockedDeviceStarted then
       ctx.pathPickerLockedDeviceStarted = true
       beginBrowseForDevice(ctx, ctx.pathPickerLockedDevice)
@@ -840,7 +890,8 @@ local function run(ctx)
     if not ctx.pathPickerLoadingTimeoutMsg and not ctx.pathPickerLoading then
       _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1,
         ctx.isAddPath and _.path_str.add_path_choose_device or _.path_str.choose_device, _.WHITE)
-      if (ctx.pathPickerContext == "path_only" or ctx.pathPickerContext == "config_ini") and _.path_str.bbl_build_device_hint then
+      if (ctx.pathPickerContext == "path_only" or ctx.pathPickerContext == "config_ini") and
+          (not isFreeBootFileContext(ctx)) and _.path_str.bbl_build_device_hint then
         local hint = _.path_str.bbl_build_device_hint
         hint = hint:gsub("PS%?BBL", getSelectedBblName(ctx))
         if _.common.truncateTextToWidth then
@@ -860,9 +911,10 @@ local function run(ctx)
         end
         local otherStats = getOtherTargetPathStats(ctx)
         local targetIndex = tonumber(otherStats.targetIndex)
+        local fmcbSingleUseTaken = buildFmcbSingleUseTakenMap(ctx, targetIndex)
         local function isGreyed(e)
           if not e then return true end
-          if hasFmcbSingleUseDuplicateInTarget(ctx, e.name, targetIndex) then
+          if hasFmcbSingleUseDuplicateInTarget(ctx, e.name, targetIndex, fmcbSingleUseTaken) then
             return true
           end
           if targetIndex and targetIndex ~= 1 and isE1RestrictedPathForContext(ctx, e.name) then
@@ -872,10 +924,13 @@ local function run(ctx)
           if otherStats.firstExclusive then return true end
           return false
         end
+        local rawGreyed = {}
         local function isSelectableRaw(rawIdx)
           if includeManualEntry and rawIdx == 1 then return true end
           local e = deviceFromRawIndex(rawIdx)
-          return e ~= nil and not isGreyed(e)
+          local grey = (e == nil) or isGreyed(e)
+          rawGreyed[rawIdx] = grey
+          return (e ~= nil) and not grey
         end
         local selectableRaw = {}
         local inactiveRaw = {}
@@ -965,7 +1020,7 @@ local function run(ctx)
               else
                 displayName = e and (e.desc or e.name or _.common_str.empty) or _.common_str.empty
               end
-              greyed = isGreyed(e)
+              greyed = (rawGreyed[listIdx] == true)
             end
           end
           local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
@@ -1073,7 +1128,7 @@ local function run(ctx)
               showExclusivePathWarning(ctx, e and e.name)
               elseif e.special then
                 local pathVal = e.name or ""
-                if canUsePathSelection(ctx, pathVal) then
+                if canUsePathSelection(ctx, pathVal, fmcbSingleUseTaken) then
                   if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
                   if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
                   ctx.pathList = nil
