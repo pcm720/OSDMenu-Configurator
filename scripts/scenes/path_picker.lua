@@ -161,7 +161,7 @@ local function isE1LockedPath(pathVal)
   local p = tostring(pathVal or "")
   if p:lower() == "cdrom" then return true end
   local up = p:upper()
-  return up == "OSDSYS" or up == "POWEROFF"
+  return up == "OSDSYS" or up == "POWEROFF" or up == "FASTBOOT"
 end
 
 local function isBblE1ExclusivePath(pathVal)
@@ -919,13 +919,31 @@ local function run(ctx)
           _.drawListRow(_.MARGIN_X + 20, y, isSelectedEntryRow, displayName, col)
         end
         do
+          local function getFmcbCommandHelper(entry)
+            if not entry then return nil end
+            local isFmcbPicker = (ctx.pathPickerContext == "fmcb_entry" or ctx.pathPickerContext == "fmcb_launch")
+            local isFmcbPathOnly = (ctx.pathPickerContext == "path_only") and
+                ((ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot"))
+            if not (isFmcbPicker or isFmcbPathOnly) then return nil end
+            local key = tostring(entry.name or ""):upper()
+            local p = _.path_str or {}
+            if key == "OSDSYS" then
+              return p.fmcb_cmd_osdsys or "Boot hacked OSDSYS"
+            elseif key == "OSDMENU" then
+              return p.fmcb_cmd_osdmenu or "Boot hacked OSDSYS, enforce skip disc boot"
+            elseif key == "FASTBOOT" then
+              return p.fmcb_cmd_fastboot or "Boot PS2 Disc without logo"
+            elseif key == "POWEROFF" then
+              return p.fmcb_cmd_poweroff or "Shutdown the console: FMCB 1.966 only, else use POWEROFF.ELF"
+            end
+            return nil
+          end
+
           local selectedHelper = nil
           local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
           if not (includeManualEntry and selectedRawIdx == 1) then
             local selectedEntry = selectedRawIdx and deviceFromRawIndex(selectedRawIdx) or nil
-            if selectedEntry and selectedEntry.special == "bbl_cmd" and ctx.fileType == "freemcboot_cnf" then
-              selectedHelper = tostring(selectedEntry.desc or "")
-            end
+            selectedHelper = getFmcbCommandHelper(selectedEntry)
           end
           if selectedHelper and selectedHelper ~= "" then
             local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75

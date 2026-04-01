@@ -38,7 +38,7 @@ local function run(ctx)
     local p = tostring(pathVal or "")
     if p:lower() == "cdrom" then return true end
     local up = p:upper()
-    return up == "OSDSYS" or up == "POWEROFF"
+    return up == "OSDSYS" or up == "POWEROFF" or up == "FASTBOOT"
   end
   local isBoot = not not (ctx.bootKey and (ctx.context == "mbr" or ctx.fileType == "osdmbr_cnf"))
   if not ctx.lines then

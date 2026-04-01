@@ -45,7 +45,7 @@ local SPECIAL = {
   { name = "$PSBBN",   descKey = "psbbn",       special = "psbbn",    contexts = "mbr" },
   { name = "OSDSYS",   descKey = "osd",         special = "osdsys",   contexts = { "osdmenu", "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
   { name = "OSDMENU",  descKey = "osdmenu",     special = "osdmenu",  contexts = "fmcb_launch",         noargs = true },
-  { name = "FASTBOOT", descKey = "fastboot",    special = "fastboot", contexts = { "fmcb_entry", "fmcb_launch" }, noargs = true },
+  { name = "FASTBOOT", descKey = "fastboot",    special = "fastboot", contexts = { "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
   { name = "POWEROFF", descKey = "shutdown",    special = "poweroff", contexts = { "osdmenu", "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
   { name = "cdrom",    descKey = "launch_disc", special = "cdrom",    contexts = { "osdmenu", "mbr" }, noargs = true, exclusive = true, specialargs = true },
   { name = "dvd",      descKey = "dvd_player",  special = "dvd",      contexts = "mbr",                noargs = true, exclusive = true },
