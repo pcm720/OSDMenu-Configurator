@@ -164,11 +164,49 @@ local function isE1LockedPath(pathVal)
   return up == "OSDSYS" or up == "POWEROFF"
 end
 
+local function isBblE1ExclusivePath(pathVal)
+  local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
+end
+
 local function getOtherTargetPathStats(ctx)
   local _ = ctx._
   local editIdx = tonumber(ctx.pathPickerEditIdx)
-  local out = { count = 0, firstExclusive = false, firstCdrom = false }
+  local out = { count = 0, firstExclusive = false, firstCdrom = false, targetIndex = nil }
   local paths = nil
+  if ctx.pathPickerBblHotkeyKey and ctx.pathPickerBblHotkeySlot and ctx.lines and _.config_parse.getBblHotkeySlot then
+    local keyId = ctx.pathPickerBblHotkeyKey
+    local slot = tonumber(ctx.pathPickerBblHotkeySlot) or 1
+    out.targetIndex = slot
+
+    local maxEntries = (_.config_parse.getBblMaxEntries and _.config_parse.getBblMaxEntries()) or 10
+    local isFmcb = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+    if isFmcb then
+      local fmcbCap = (_.config_options and _.config_options.FMCB_BBL_MAX_ENTRIES) or 3
+      maxEntries = math.max(1, math.min(maxEntries, fmcbCap))
+    end
+
+    if slot ~= 1 then
+      local first = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, 1)
+      local firstPv = first and first.path or nil
+      if first and first.pathExists and firstPv and firstPv ~= "" then
+        out.firstExclusive = (isE1LockedPath(firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
+        out.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
+      end
+    end
+
+    for i = 1, maxEntries do
+      if i ~= slot then
+        local s = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, i)
+        local pv = s and s.path or nil
+        if s and s.pathExists and pv and pv ~= "" then
+          out.count = out.count + 1
+        end
+      end
+    end
+    return out
+  end
+
   if ctx.pathPickerForEntryIdx and ctx.lines then
     paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
   elseif ctx.pathPickerBootKey and ctx.lines then
@@ -222,6 +260,16 @@ local function canUsePathSelection(ctx, pathVal)
   local _ = ctx._
   local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
   local stats = getOtherTargetPathStats(ctx)
+  local targetIndex = tonumber(stats.targetIndex)
+  if targetIndex and isBblE1ExclusivePath(pathVal) then
+    if targetIndex ~= 1 then
+      showExclusivePathWarning(ctx, pathVal)
+      return false
+    end
+    if stats.count == 0 then return true end
+    showExclusivePathWarning(ctx, pathVal)
+    return false
+  end
   if flags.exclusive then
     if stats.count == 0 then return true end
     showExclusivePathWarning(ctx, pathVal)
@@ -394,11 +442,11 @@ local function ensureBblCommandRows(ctx)
     }
   else
     cmdRows = {
-      { name = "$CDVD", desc = p.bbl_cmd_cdvd or "$CDVD", special = "bbl_cmd" },
-      { name = "$CDVD_NO_PS2LOGO", desc = p.bbl_cmd_cdvd_no_logo or "$CDVD_NO_PS2LOGO", special = "bbl_cmd" },
+      { name = "$CDVD", desc = p.bbl_cmd_cdvd or "$CDVD", special = "bbl_cmd", exclusive = true },
+      { name = "$CDVD_NO_PS2LOGO", desc = p.bbl_cmd_cdvd_no_logo or "$CDVD_NO_PS2LOGO", special = "bbl_cmd", exclusive = true },
       { name = "$OSDSYS", desc = p.bbl_cmd_osdsys or "$OSDSYS", special = "bbl_cmd" },
-      { name = "$CREDITS", desc = p.bbl_cmd_credits or "$CREDITS", special = "bbl_cmd" },
-      { name = "$HDDCHECKER", desc = p.bbl_cmd_hddchecker or "$HDDCHECKER (HDD build)", special = "bbl_cmd" },
+      { name = "$CREDITS", desc = p.bbl_cmd_credits or "$CREDITS", special = "bbl_cmd", exclusive = true },
+      { name = "$HDDCHECKER", desc = p.bbl_cmd_hddchecker or "$HDDCHECKER (HDD build)", special = "bbl_cmd", exclusive = true },
     }
   end
   for i = 1, #cmdRows do
@@ -679,8 +727,12 @@ local function run(ctx)
           return ctx.pathList[devIdx]
         end
         local otherStats = getOtherTargetPathStats(ctx)
+        local bblSlot = tonumber(ctx.pathPickerBblHotkeySlot)
         local function isGreyed(e)
           if not e then return true end
+          if bblSlot and bblSlot ~= 1 and e.special == "bbl_cmd" and isBblE1ExclusivePath(e.name) then
+            return true
+          end
           if e.exclusive then return otherStats.count > 0 end
           if otherStats.firstExclusive then return true end
           return false

@@ -530,6 +530,13 @@ local function withStartHintVisibility(items, showStart)
   return out
 end
 
+local function drawColorSwatch(_, x, y, w, h, fillColor)
+  if not (_ and _.Graphics and _.Graphics.drawRect and fillColor) then return end
+  -- 1px white perimeter around the swatch.
+  _.Graphics.drawRect(x - 1, y - 1, w + 2, h + 2, _.WHITE)
+  _.Graphics.drawRect(x, y, w, h, fillColor)
+end
+
 local function isTimerDigitEditKey(key)
   return key == "KEY_READ_WAIT_TIME" or key == "pad_delay"
 end
@@ -1329,7 +1336,7 @@ local function run(ctx)
       elseif colorInlineEdit then
         local edit = ctx.colorInlineEdit
         local swatchColor = _.Color.new(edit.values[1], edit.values[2], edit.values[3], edit.values[4])
-        _.Graphics.drawRect(_.VALUE_X, y, 28, _.scaleY(18), swatchColor)
+        drawColorSwatch(_, _.VALUE_X, y, 28, _.scaleY(18), swatchColor)
         drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
       elseif valDisplay then
         if valDisplay ~= "" then
@@ -1355,7 +1362,7 @@ local function run(ctx)
         local raw = cachedGet(ctx.lines, o.key) or o.default
         local r, g, b, a = parseOptionColorValue(ctx, _, o.key, raw, o.default)
         local swatchColor = _.Color.new(r, g, b, a)
-        _.Graphics.drawRect(_.VALUE_X, y, 28, _.scaleY(18), swatchColor)
+        drawColorSwatch(_, _.VALUE_X, y, 28, _.scaleY(18), swatchColor)
       end
     end
     local selOpt = ctx.optList[ctx.optSel]
