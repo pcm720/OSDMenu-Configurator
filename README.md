@@ -18,15 +18,10 @@ Choose `Free McBoot`, `Free HDBoot`, `OSDMenu`, `HOSDMenu`, `OSDMenu MBR`, `PS2B
 
 - [PS2BBL Extended repository](https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended) for usage and installation.
 
-### Supported targets
 
-- FreeMcBoot (`FREEMCB.CNF`)
-- Free HDBoot (`FREEHDB.CNF`)
-- PS2BBL Extended (`PS2BBL.INI` / `CONFIG.INI`)
-- PSXBBL Extended (`PSXBBL.INI` + shared PS2BBL `CONFIG.INI` paths)
-- OSDMenu (`OSDMENU.CNF`, `OSDGSM.CNF`)
-- OSDMenu MBR (`OSDMBR.CNF`, `OSDGSM.CNF`)
-- HOSDMenu (`OSDMENU.CNF`, `OSDGSM.CNF`)
+<details>
+
+<summary>Config Lookup order for each application</summary>
 
 ## Config lookup order for each application
 
@@ -96,6 +91,12 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 
 The config is saved to the same location the config was loaded from
 
+</details>
+
+<details>
+
+<summary> Running and r3configurator.cnf</summary>
+
 ## Running
 
 Run the ELF from your preferred method.  
@@ -108,9 +109,7 @@ The automated build comes with `EMBED_VFS` flag set, so all scripts are already 
 
 ## Startup Configuration (CWD)
 
-Place `r3configurator.cnf` next to `r3configurator.elf` (in CWD) to control startup behavior from one file.
-
-The release output includes a default `r3configurator.cnf` next to the ELF, so users can edit or delete it directly.
+R3Configurator can configure itself and apply changes immediatly. `r3configurator.cnf` will be saved in CWD of `r3configurator.elf`
 
 ### Supported keys
 
@@ -131,6 +130,12 @@ The release output includes a default `r3configurator.cnf` next to the ELF, so u
 - UI color keys (`RRGGBB` format only):
   - `cross`, `square`, `triangle`, `circle`
   - `selected`, `selected_dim`, `unselected`, `dim`, `background`
+
+</details>
+
+<details>
+
+<summary> Language and font overrides</summary>
 
 ## Language and font overrides
 
@@ -153,6 +158,8 @@ You can override the built-in strings and font by placing files in the **current
 - To add a language: copy `scripts/lang/strings_en.lua` to `scripts/lang/strings_<lang>.lua`, then translate the **values** and keep all **keys** unchanged
 - If more than one `strings_*.lua` exists in `scripts/lang/` and you are *not* using a CWD `strings.lua` override, **L1 / R1** on the main menu cycle the language  
   When a CWD `strings.lua` override is used, language cycling is disabled
+
+</details>
 
 ### Contributing
 
