@@ -576,8 +576,14 @@ function config_parse.getBootArgEntries(lines, key)
   return out
 end
 
-function config_parse.setBootArgEntries(lines, key, args)
-  args = normalizeArgsWithGsmLast(args)
+function config_parse.setBootArgEntries(lines, key, args, opts)
+  local preserveOrder = true
+  if type(opts) == "table" and opts.preserveOrder ~= nil then
+    preserveOrder = opts.preserveOrder == true
+  end
+  if not preserveOrder then
+    args = normalizeArgsWithGsmLast(args)
+  end
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
   local i = 1
@@ -651,7 +657,7 @@ function config_parse.getBootArgs(lines, key)
   return out
 end
 
-function config_parse.setBootArgs(lines, key, args)
+function config_parse.setBootArgs(lines, key, args, opts)
   local normalized = {}
   for _, a in ipairs(args or {}) do
     if type(a) == "table" then
@@ -660,7 +666,7 @@ function config_parse.setBootArgs(lines, key, args)
       normalized[#normalized + 1] = { value = a or "", disabled = false }
     end
   end
-  config_parse.setBootArgEntries(lines, key, normalized)
+  config_parse.setBootArgEntries(lines, key, normalized, opts)
 end
 
 -- PS2BBL/PSXBBL key IDs and limits.
@@ -1049,10 +1055,16 @@ function config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
   return out
 end
 
-function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
+function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args, opts)
   local canonical = canonicalBblHotkeyId(keyId)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end
-  args = normalizeArgsWithGsmLast(args)
+  local preserveOrder = true
+  if type(opts) == "table" and opts.preserveOrder ~= nil then
+    preserveOrder = opts.preserveOrder == true
+  end
+  if not preserveOrder then
+    args = normalizeArgsWithGsmLast(args)
+  end
   local ids = bblHotkeyIdVariants(canonical)
   local keys = {}
   for i = 1, #ids do keys[#keys + 1] = bblArgKey(ids[i], entryIdx) end
@@ -1502,8 +1514,14 @@ function config_parse.getMenuEntryArgs(lines, idx)
 end
 
 -- Replace all arg_OSDSYS_ITEM_<idx> with the given list. Each item is { value, disabled } or a plain value (treated as enabled).
-function config_parse.setMenuEntryArgs(lines, idx, args)
-  args = normalizeArgsWithGsmLast(args)
+function config_parse.setMenuEntryArgs(lines, idx, args, opts)
+  local preserveOrder = true
+  if type(opts) == "table" and opts.preserveOrder ~= nil then
+    preserveOrder = opts.preserveOrder == true
+  end
+  if not preserveOrder then
+    args = normalizeArgsWithGsmLast(args)
+  end
   local key = "arg_OSDSYS_ITEM_" .. tostring(idx)
   local i = 1
   while i <= #lines do
@@ -1806,7 +1824,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
       if idx then
         local args = config_parse.getMenuEntryArgs(lines, idx)
         if #args > 0 then
-          config_parse.setMenuEntryArgs(lines, idx, args)
+          config_parse.setMenuEntryArgs(lines, idx, args, { preserveOrder = false })
         end
       end
     end
@@ -1832,7 +1850,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
       local k = keys[i]
       local args = config_parse.getBootArgEntries(lines, k)
       if #args > 0 then
-        config_parse.setBootArgEntries(lines, k, args)
+        config_parse.setBootArgEntries(lines, k, args, { preserveOrder = false })
       end
     end
   end
@@ -1842,7 +1860,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
       for slot = 1, BBL_MAX_ENTRIES do
         local args = config_parse.getBblHotkeyArgs(lines, keyId, slot)
         if #args > 0 then
-          config_parse.setBblHotkeyArgs(lines, keyId, slot, args)
+          config_parse.setBblHotkeyArgs(lines, keyId, slot, args, { preserveOrder = false })
         end
       end
     end

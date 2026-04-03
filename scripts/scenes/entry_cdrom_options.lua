@@ -168,9 +168,9 @@ local function run(ctx)
       if isBoot then
         local v = {}
         for _, item in ipairs(newArgs) do table.insert(v, type(item) == "table" and item.value or item) end
-        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v)
+        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v, { preserveOrder = true })
       else
-        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, newArgs)
+        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, newArgs, { preserveOrder = true })
       end
       ctx.configModified = true
     else
@@ -178,9 +178,9 @@ local function run(ctx)
       if isBoot then
         local v = {}
         for _, item in ipairs(args) do table.insert(v, type(item) == "table" and item.value or item) end
-        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v)
+        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v, { preserveOrder = true })
       else
-        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, args)
+        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, args, { preserveOrder = true })
       end
       ctx.configModified = true
     end
