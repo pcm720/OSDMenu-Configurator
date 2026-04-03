@@ -365,6 +365,7 @@ local function run(ctx)
 
   local hasSelection = (total > 0 and ctx.bblArgSel >= 1 and ctx.bblArgSel <= total and args[ctx.bblArgSel])
   local canAddArg = ((not hasArgCap) or total < maxArgs)
+  local canToggleSelectedArg = hasSelection and (not keyDisabled)
   local selectedDisabled = hasSelection and args[ctx.bblArgSel].disabled
   local crossPad = (hasSelection or canAddArg) and "cross" or ""
   local crossLabel = ""
@@ -386,8 +387,8 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = hasSelection and "triangle" or "",
-      label = hasSelection and
+      pad = canToggleSelectedArg and "triangle" or "",
+      label = canToggleSelectedArg and
           (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
@@ -549,7 +550,7 @@ local function run(ctx)
   end
 
   local function toggleSelectedArgDisabled()
-    if total > 0 then
+    if total > 0 and not keyDisabled then
       _.config_parse.setBblHotkeyArgDisabled(ctx.lines, keyId, slot, ctx.bblArgSel, not args[ctx.bblArgSel].disabled)
       markConfigMutated()
     end

@@ -1073,7 +1073,12 @@ function config_parse.setBblHotkeyDisabled(lines, keyId, disabled)
     if entry.key and keySet[entry.key] then
       touched = true
       if disabled then
-        entry.comment = entry.comment and 2 or true
+        if entry.key:match("^NAME_") then
+          entry.comment = true
+        else
+          -- Keep child slot lines explicitly disabled while parent is disabled.
+          entry.comment = 2
+        end
       else
         -- Parent enable should restore child slots as enabled for this hotkey.
         entry.comment = nil

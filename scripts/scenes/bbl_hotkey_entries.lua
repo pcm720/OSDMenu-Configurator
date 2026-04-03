@@ -257,6 +257,7 @@ local function run(ctx)
   local sel = rows[ctx.bblEntrySel]
   local isEntrySel = sel and sel.kind == "entry"
   local selBlockedByE1 = isEntryBlockedByE1(sel)
+  local canToggleSelectedEntry = isEntrySel and (not selBlockedByE1) and (not keyDisabled)
   local canOpenActions = sel and sel.kind ~= "name"
   local canCrossOpen = sel and (sel.kind ~= "empty" or canInsert)
   if selBlockedByE1 then
@@ -280,8 +281,8 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = (isEntrySel and not selBlockedByE1) and "triangle" or "",
-      label = (isEntrySel and not selBlockedByE1) and
+      pad = canToggleSelectedEntry and "triangle" or "",
+      label = canToggleSelectedEntry and
           (sel.data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
@@ -506,7 +507,7 @@ local function run(ctx)
   end
 
   local function toggleSelectedEntryDisabled()
-    if sel and sel.kind == "entry" and not isEntryBlockedByE1(sel) then
+    if sel and sel.kind == "entry" and not keyDisabled and not isEntryBlockedByE1(sel) then
       local changed = _.config_parse.setBblHotkeySlotDisabled and
           _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, sel.slot, not sel.data.disabled)
       if changed then
