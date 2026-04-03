@@ -110,6 +110,7 @@ function arg_presets.collectUsedArgs(args)
     patinfo = false,
     video = false,
     udpbd_ip = false,
+    udpfs_ip = false,
     egsm = false,
     gsm = false,
     osd = false,
@@ -137,6 +138,8 @@ function arg_presets.collectUsedArgs(args)
       usedKnown.video = true
     elseif a:match("^%-udpbd_ip%s*=") then
       usedKnown.udpbd_ip = true
+    elseif a:match("^%-udpfs_ip%s*=") then
+      usedKnown.udpfs_ip = true
     elseif a:match("^%-gsm%s*=") then
       usedKnown.egsm = true
       usedKnown.gsm = true
@@ -178,10 +181,14 @@ function arg_presets.rowDisabled(row, usedKnown, usedModes, total, maxArgs)
   local curTotal = math.max(0, math.floor(tonumber(total) or 0))
   local maxTotal = tonumber(maxArgs)
   local needUdpbdPair = (modes["udpbd"] ~= true and used.udpbd_ip ~= true)
+  local needUdpfsPair = (modes["udpfs"] ~= true and used.udpfs_ip ~= true)
   local enforceMax = (maxTotal ~= nil and maxTotal >= 0)
 
   if row.modeValue and row.modeValue ~= "" then
     if row.modeValue == "udpbd" and needUdpbdPair and enforceMax and curTotal > (maxTotal - 2) then
+      return true, "needs_two_slots"
+    end
+    if row.modeValue == "udpfs" and needUdpfsPair and enforceMax and curTotal > (maxTotal - 2) then
       return true, "needs_two_slots"
     end
     if modes[row.modeValue] == true then
@@ -195,6 +202,16 @@ function arg_presets.rowDisabled(row, usedKnown, usedModes, total, maxArgs)
       return true, "needs_two_slots"
     end
     if used.udpbd_ip == true then
+      return true, "in_use"
+    end
+    return false, nil
+  end
+
+  if row.kind == "udpfs_ip" then
+    if needUdpfsPair and enforceMax and curTotal > (maxTotal - 2) then
+      return true, "needs_two_slots"
+    end
+    if used.udpfs_ip == true then
       return true, "in_use"
     end
     return false, nil
@@ -236,6 +253,35 @@ function arg_presets.addUdpbdPair(args, ipValue, maxArgs)
   return out, true
 end
 
+function arg_presets.addUdpfsPair(args, ipValue, maxArgs)
+  local ip = trimText(ipValue)
+  local out = {}
+  for i = 1, #(args or {}) do out[i] = args[i] end
+  if ip == "" then return out, false end
+
+  local hasModeUdpfs = false
+  local hasUdpfsIp = false
+  for _, item in ipairs(out) do
+    local a = arg_presets.normalizeArg(argValue(item))
+    if a:match("^%-mode%s*=%s*udpfs%s*$") then
+      hasModeUdpfs = true
+    elseif a:match("^%-udpfs_ip%s*=") then
+      hasUdpfsIp = true
+    end
+  end
+
+  local needMode = not hasModeUdpfs
+  local needIp = not hasUdpfsIp
+  local needCount = (needMode and 1 or 0) + (needIp and 1 or 0)
+  if tonumber(maxArgs) and (#out + needCount) > tonumber(maxArgs) then
+    return out, false
+  end
+
+  if needMode then table.insert(out, { value = "-mode=udpfs", disabled = false }) end
+  if needIp then table.insert(out, { value = "-udpfs_ip=" .. ip, disabled = false }) end
+  return out, true
+end
+
 function arg_presets.removeArgAndPairedUdpbd(args, removeIdx, removePair)
   local out = {}
   for i = 1, #(args or {}) do out[i] = args[i] end
@@ -251,7 +297,9 @@ function arg_presets.removeArgAndPairedUdpbd(args, removeIdx, removePair)
 
   local removedVal = arg_presets.normalizeArg(argValue(removed))
   local removedModeUdpbd = removedVal:match("^%-mode%s*=%s*udpbd%s*$") ~= nil
+  local removedModeUdpfs = removedVal:match("^%-mode%s*=%s*udpfs%s*$") ~= nil
   local removedUdpbdIp = removedVal:match("^%-udpbd_ip%s*=") ~= nil
+  local removedUdpfsIp = removedVal:match("^%-udpfs_ip%s*=") ~= nil
 
   if removedModeUdpbd then
     for i = #out, 1, -1 do
@@ -261,10 +309,26 @@ function arg_presets.removeArgAndPairedUdpbd(args, removeIdx, removePair)
         break
       end
     end
+  elseif removedModeUdpfs then
+    for i = #out, 1, -1 do
+      local a = arg_presets.normalizeArg(argValue(out[i]))
+      if a:match("^%-udpfs_ip%s*=") then
+        table.remove(out, i)
+        break
+      end
+    end
   elseif removedUdpbdIp then
     for i = #out, 1, -1 do
       local a = arg_presets.normalizeArg(argValue(out[i]))
       if a:match("^%-mode%s*=%s*udpbd%s*$") then
+        table.remove(out, i)
+        break
+      end
+    end
+  elseif removedUdpfsIp then
+    for i = #out, 1, -1 do
+      local a = arg_presets.normalizeArg(argValue(out[i]))
+      if a:match("^%-mode%s*=%s*udpfs%s*$") then
         table.remove(out, i)
         break
       end

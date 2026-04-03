@@ -123,6 +123,8 @@ local rowsNhddl = {
   makeRow("-mode=hdl", "-mode=hdl", "NHDDL: initialize HDL mode only.", { modeValue = "hdl" }),
   makeRow("-mode=udpbd", "-mode=udpbd", "NHDDL UDPBD mode; pairs with -udpbd_ip=<ip>.", { modeValue = "udpbd" }),
   makeRow("-udpbd_ip=<ip>", nil, "NHDDL UDPBD IP; pairs with -mode=udpbd.", { kind = "udpbd_ip", uniqueKey = "udpbd_ip" }),
+  makeRow("-mode=udpfs", "-mode=udpfs", "NHDDL UDPFS mode; pairs with -udpfs_ip=<ip>.", { modeValue = "udpfs" }),
+  makeRow("-udpfs_ip=<ip>", nil, "NHDDL UDPFS IP; pairs with -mode=udpfs.", { kind = "udpfs_ip", uniqueKey = "udpfs_ip" }),
 }
 
 local rowsCdromLauncher = {

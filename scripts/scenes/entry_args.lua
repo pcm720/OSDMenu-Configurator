@@ -191,6 +191,16 @@ local function run(ctx)
     return true
   end
 
+  local function addUdpfsPair(ipValue)
+    local args2, ok = arg_presets.addUdpfsPair(getArgs(), ipValue)
+    if not ok then return false end
+    setArgs(args2)
+    local refreshed = getArgs()
+    local udpValue = "-udpfs_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ctx.entryArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
+    return true
+  end
+
   local function buildArgsModel()
     local outArgs = getArgs()
     local outTotal = #outArgs
@@ -339,6 +349,14 @@ local function run(ctx)
     end)
   end
 
+  local function openUdpfsIpInput()
+    openNewArgumentInput("UDPFS IP (x.x.x.x)", 15, function(val)
+      local ip = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
+      if ip ~= "" then addUdpfsPair(ip) end
+      ctx.state = "entry_args"
+    end)
+  end
+
   local function openTitleIdInput()
     openNewArgumentInput("TITLEID (up to 11 chars)", 11, function(val)
       local titleId = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -416,6 +434,10 @@ local function run(ctx)
               openUdpbdIpInput()
             elseif row.modeValue == "udpbd" and usedKnown.udpbd_ip ~= true then
               openUdpbdIpInput()
+            elseif row.kind == "udpfs_ip" then
+              openUdpfsIpInput()
+            elseif row.modeValue == "udpfs" and usedKnown.udpfs_ip ~= true then
+              openUdpfsIpInput()
             else
               addArgValue(row.value or "")
             end
