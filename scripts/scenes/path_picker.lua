@@ -569,7 +569,7 @@ local function applyManualPath(ctx, val)
     -- Done with empty path: return to entry paths or path_picker so we don't show "Choose device" / "No devices"
     if ctx.pathPickerForEntryIdx then
       ctx.entryIdx = ctx.pathPickerForEntryIdx
-      ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+      ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
       ctx.pathPickerForEntryIdx = nil
       ctx.pathPickerEditIdx = nil
       ctx.pathPickerInsertBelow = nil
@@ -635,7 +635,7 @@ local function applyManualPath(ctx, val)
     setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, val)
     _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
     ctx.entryIdx = ctx.pathPickerForEntryIdx
-    ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+    ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
     ctx.pathPickerForEntryIdx = nil
     ctx.pathPickerEditIdx = nil
   elseif ctx.isAddPath then
@@ -1243,9 +1243,11 @@ local function run(ctx)
                     _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
                     if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
                     ctx.entryIdx = ctx.pathPickerForEntryIdx
-                    ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+                    ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or
+                        "menu_entry_edit"
                     ctx.pathPickerForEntryIdx = nil
                     ctx.pathPickerEditIdx = nil
+                    ctx.pathPickerReturnState = nil
                   elseif ctx.isAddPath then
                     local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
                         ctx.addPathKey
@@ -1308,8 +1310,9 @@ local function run(ctx)
           ctx.pathPickerFileExts = nil
         elseif ctx.pathPickerForEntryIdx then
           ctx.entryIdx = ctx.pathPickerForEntryIdx
-          ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+          ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
           ctx.pathPickerForEntryIdx = nil; ctx.pathPickerEditIdx = nil
+          ctx.pathPickerReturnState = nil
         elseif isConfigOpenTarget(ctx) then
           ctx.state = ctx.pathPickerReturnState or "select_config"
           ctx.pathPickerReturnState = nil
@@ -1390,8 +1393,9 @@ local function run(ctx)
         setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, val)
         _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
         ctx.entryIdx = ctx.pathPickerForEntryIdx
-        ctx.state = (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
+        ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or "menu_entry_edit"
         ctx.pathPickerForEntryIdx = nil; ctx.pathPickerEditIdx = nil
+        ctx.pathPickerReturnState = nil
       elseif ctx.isAddPath then
         local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or ctx.addPathKey
         _.config_parse.append(ctx.lines, key, val)
