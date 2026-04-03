@@ -18,11 +18,57 @@ local function run(ctx)
     return t
   end)() or (_.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {})
   local opts = _.config_options.cdrom_options or {}
+  local optionOrderByKey = {}
+  for i = 1, #opts do
+    local o = opts[i]
+    local key = o and o.key or nil
+    if key and key ~= "" then
+      optionOrderByKey[key] = i
+    end
+  end
+  local targetOrderKey = isBoot and ("boot:" .. tostring(ctx.bootKey or "")) or
+      ("entry:" .. tostring(ctx.entryIdx or 0))
+  -- Keep launch-disc option args in stable per-target order so off/on reverts
+  -- return to the same semantic line order and don't leave a false dirty state.
+  if ctx.cdromOptionOrderKey ~= targetOrderKey or type(ctx.cdromOptionOrder) ~= "table" then
+    local rankByKey = {}
+    local nextRank = 1
+    for i = 1, #args do
+      local av = type(args[i]) == "table" and args[i].value or args[i]
+      if optionOrderByKey[av] and rankByKey[av] == nil then
+        rankByKey[av] = nextRank
+        nextRank = nextRank + 1
+      end
+    end
+    local fallbackBase = nextRank
+    for i = 1, #opts do
+      local key = opts[i] and opts[i].key or nil
+      if key and key ~= "" and rankByKey[key] == nil then
+        rankByKey[key] = fallbackBase + i
+      end
+    end
+    ctx.cdromOptionOrder = rankByKey
+    ctx.cdromOptionOrderKey = targetOrderKey
+  end
   if ctx.cdromOptSel < 1 then ctx.cdromOptSel = 1 end
   if ctx.cdromOptSel > #opts then ctx.cdromOptSel = #opts end
   local function hasArg(key)
     for _, a in ipairs(args) do if (type(a) == "table" and a.value or a) == key then return true end end
     return false
+  end
+  local function insertOptionArgWithStableOrder(argList, key)
+    local rankByKey = ctx.cdromOptionOrder or {}
+    local newRank = rankByKey[key] or (1000 + (optionOrderByKey[key] or 0))
+    local insertAt = #argList + 1
+    for i = 1, #argList do
+      local av = type(argList[i]) == "table" and argList[i].value or argList[i]
+      local r = rankByKey[av]
+      if r and r > newRank then
+        insertAt = i
+        break
+      end
+    end
+    table.insert(argList, insertAt, { value = key, disabled = false })
   end
   local function saveAndStay()
     ctx.saveSplash = nil
@@ -128,7 +174,7 @@ local function run(ctx)
       end
       ctx.configModified = true
     else
-      table.insert(args, { value = key, disabled = false })
+      insertOptionArgWithStableOrder(args, key)
       if isBoot then
         local v = {}
         for _, item in ipairs(args) do table.insert(v, type(item) == "table" and item.value or item) end
@@ -146,6 +192,8 @@ local function run(ctx)
     saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.cdromOptionOrder = nil
+    ctx.cdromOptionOrderKey = nil
     if isBoot then
       ctx.state = "editor"; ctx.bootKey = nil
     else

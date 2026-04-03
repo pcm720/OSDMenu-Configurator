@@ -521,47 +521,6 @@ local function computeSemanticDigest(ctx, lines)
   local parser = getConfigParser(ctx)
   local digestLines = lines or {}
 
-  -- Dirty tracking should reflect functional save output, not transient in-memory
-  -- key ordering side effects from edit helpers.
-  if parser and parser.regenerateForSave and ctx and ctx.fileType then
-    local rawDigest
-    if parser.semanticDigest then
-      rawDigest = parser.semanticDigest(digestLines)
-    else
-      rawDigest = fallbackSemanticDigest(digestLines)
-    end
-
-    -- Perf guard: while navigating, input epoch can invalidate modified-state cache.
-    -- Recompute expensive regenerateForSave digest only when raw content changes.
-    local normCache = ctx._normalizedSemanticDigestCache
-    if normCache and
-        normCache.linesRef == digestLines and
-        normCache.fileType == ctx.fileType and
-        normCache.rawDigest == rawDigest then
-      return normCache.normalizedDigest
-    end
-
-    local normalizedDigest = rawDigest
-    local cloned = common.cloneConfigLines(digestLines)
-    local cfgOptions = (_G and _G.CONFIG_UI and _G.CONFIG_UI.config_options) or nil
-    local okNormalize, normalized = pcall(parser.regenerateForSave, cloned, ctx.fileType, cfgOptions)
-    if okNormalize and type(normalized) == "table" then
-      if parser.semanticDigest then
-        normalizedDigest = parser.semanticDigest(normalized)
-      else
-        normalizedDigest = fallbackSemanticDigest(normalized)
-      end
-    end
-
-    ctx._normalizedSemanticDigestCache = {
-      linesRef = digestLines,
-      fileType = ctx.fileType,
-      rawDigest = rawDigest,
-      normalizedDigest = normalizedDigest,
-    }
-    return normalizedDigest
-  end
-
   if parser and parser.semanticDigest then
     return parser.semanticDigest(digestLines)
   end
