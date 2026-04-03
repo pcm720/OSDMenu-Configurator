@@ -50,8 +50,20 @@ local function run(ctx)
   end
 
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local bootKeyDisabledOverride = nil
+  local bootKeyOpts = nil
+  if isBoot then
+    local bootKeyTag = tostring(ctx.bootKey or "")
+    if ctx.entryArgsBootKeyDisabledTag ~= bootKeyTag or ctx.entryArgsBootKeyDisabledOverride == nil then
+      ctx.entryArgsBootKeyDisabledTag = bootKeyTag
+      ctx.entryArgsBootKeyDisabledOverride =
+          (_.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, ctx.bootKey)) and true or false
+    end
+    bootKeyDisabledOverride = ctx.entryArgsBootKeyDisabledOverride and true or false
+    bootKeyOpts = { keyDisabledOverride = bootKeyDisabledOverride }
+  end
   local function buildPathsModel()
-    local outPaths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey) or {}) or
+    local outPaths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey, bootKeyOpts) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
     local outHasOsdOrShutdown = false
     for _, p in ipairs(outPaths or {}) do
@@ -93,7 +105,7 @@ local function run(ctx)
 
   local function getArgs()
     if isBoot then
-      return _.config_parse.getBootArgEntries(ctx.lines, ctx.bootKey) or {}
+      return _.config_parse.getBootArgEntries(ctx.lines, ctx.bootKey, bootKeyOpts) or {}
     end
     return _.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {}
   end
@@ -105,7 +117,7 @@ local function run(ctx)
 
   local function setArgs(a)
     if isBoot then
-      _.config_parse.setBootArgEntries(ctx.lines, ctx.bootKey, a or {})
+      _.config_parse.setBootArgEntries(ctx.lines, ctx.bootKey, a or {}, bootKeyOpts)
     else
       _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, a)
     end
@@ -131,7 +143,7 @@ local function run(ctx)
     local value = tostring(v or "")
     if value == "" then return end
     if isBoot and ctx.entryArgInsertBelow and ctx.entryArgInsertBelow >= 0 then
-      _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value)
+      _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value, bootKeyOpts)
       markConfigMutated()
       invalidateArgsModel()
       local refreshed = getArgs()
@@ -496,7 +508,8 @@ local function run(ctx)
   local function toggleSelectedArgDisabled()
     if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
       if isBoot then
-        _.config_parse.setBootArgDisabled(ctx.lines, ctx.bootKey, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
+        _.config_parse.setBootArgDisabled(ctx.lines, ctx.bootKey, ctx.entryArgSel, not args[ctx.entryArgSel].disabled,
+          bootKeyOpts)
       else
         _.config_parse.setArgDisabled(ctx.lines, ctx.entryIdx, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
       end

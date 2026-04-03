@@ -287,6 +287,7 @@ local function run(ctx)
       ctx.pathPickerScroll = ctx.pathPickerScroll or 0
       ctx.pathBrowsePath = nil
       ctx.pathPickerBootKey = nil
+      ctx.pathPickerBootKeyDisabled = nil
       ctx.pathPickerForEntryIdx = nil
       ctx.pathPickerEditIdx = nil
       ctx.pathPickerBblIrxIdx = nil

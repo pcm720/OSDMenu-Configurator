@@ -162,6 +162,7 @@ local function run(ctx)
     ctx.editKey = nil
     ctx.pathPickerForEntryIdx = idx
     ctx.pathPickerBootKey = nil
+    ctx.pathPickerBootKeyDisabled = nil
     ctx.pathPickerBblHotkeyKey = nil
     ctx.pathPickerBblHotkeySlot = nil
     ctx.pathPickerBblHotkeyDisabled = nil

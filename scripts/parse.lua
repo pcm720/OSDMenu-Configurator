@@ -479,9 +479,16 @@ function config_parse.setBootKeyDisabled(lines, key, disabled)
   end
 end
 
-function config_parse.getBootPathEntries(lines, key)
+local function resolveBootKeyDisabled(lines, key, opts)
+  if type(opts) == "table" and opts.keyDisabledOverride ~= nil then
+    return opts.keyDisabledOverride and true or false
+  end
+  return config_parse.isBootKeyDisabled(lines, key)
+end
+
+function config_parse.getBootPathEntries(lines, key, opts)
   local out = {}
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for _, entry in ipairs(lines or {}) do
     if entry.key and entry.key == key then
       local c = entry.comment
@@ -492,7 +499,7 @@ function config_parse.getBootPathEntries(lines, key)
   return out
 end
 
-function config_parse.setBootPathEntries(lines, key, paths)
+function config_parse.setBootPathEntries(lines, key, paths, opts)
   local insertAt = nil
   local i = 1
   while i <= #lines do
@@ -515,7 +522,7 @@ function config_parse.setBootPathEntries(lines, key, paths)
     end
     if not insertAt then insertAt = #lines + 1 end
   end
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for _, item in ipairs(paths or {}) do
     local value = type(item) == "table" and item.value or item
     local disabled = false
@@ -530,7 +537,7 @@ function config_parse.setBootPathEntries(lines, key, paths)
     if type(item) == "table" and item.comment ~= nil then
       comment = (item.comment == 2) and 2 or (item.comment and true or nil)
     else
-      comment = disabled and (keyDisabled and 2 or true) or nil
+      comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
     end
     table.insert(lines, insertAt, {
       key = key,
@@ -541,24 +548,24 @@ function config_parse.setBootPathEntries(lines, key, paths)
   end
 end
 
-function config_parse.insertBootPathBelow(lines, key, belowIdx, value)
-  local entries = config_parse.getBootPathEntries(lines, key)
+function config_parse.insertBootPathBelow(lines, key, belowIdx, value, opts)
+  local entries = config_parse.getBootPathEntries(lines, key, opts)
   local insertPos = tonumber(belowIdx) or 0
   if insertPos < 0 then insertPos = 0 end
   if insertPos > #entries then insertPos = #entries end
   table.insert(entries, insertPos + 1, { value = value or "", disabled = false })
-  config_parse.setBootPathEntries(lines, key, entries)
+  config_parse.setBootPathEntries(lines, key, entries, opts)
   return insertPos + 1
 end
 
-function config_parse.setBootPathDisabled(lines, key, pathNum, disabled)
+function config_parse.setBootPathDisabled(lines, key, pathNum, disabled, opts)
   local n = 0
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for _, entry in ipairs(lines or {}) do
     if entry.key and entry.key == key then
       n = n + 1
       if n == pathNum then
-        entry.comment = disabled and (keyDisabled and 2 or true) or nil
+        entry.comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
         return true
       end
     end
@@ -567,9 +574,9 @@ function config_parse.setBootPathDisabled(lines, key, pathNum, disabled)
 end
 
 -- OSDMBR.CNF: boot_auto, boot_start, etc. can have multiple path lines.
-function config_parse.getBootPaths(lines, key)
+function config_parse.getBootPaths(lines, key, opts)
   local out = {}
-  local entries = config_parse.getBootPathEntries(lines, key)
+  local entries = config_parse.getBootPathEntries(lines, key, opts)
   for i = 1, #entries do
     if not entries[i].disabled then
       out[#out + 1] = entries[i].value
@@ -579,8 +586,8 @@ function config_parse.getBootPaths(lines, key)
 end
 
 -- Boot args: key_arg or key_argN (suffix ignored); fallback legacy arg_key.
-function config_parse.getBootArgEntries(lines, key)
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+function config_parse.getBootArgEntries(lines, key, opts)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   local out = {}
   local prefix = bootArgPrefix(key)
   local hasPrefixed = false
@@ -634,7 +641,7 @@ function config_parse.setBootArgEntries(lines, key, args, opts)
     end
     insertAt = (anchor and (anchor + 1)) or (#lines + 1)
   end
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for idx, item in ipairs(args or {}) do
     local value = type(item) == "table" and item.value or item
     local disabled = false
@@ -652,7 +659,7 @@ function config_parse.setBootArgEntries(lines, key, args, opts)
       -- toggling + reverting can round-trip to an identical semantic digest.
       comment = (item.comment == 2) and 2 or (item.comment and true or nil)
     else
-      comment = disabled and (keyDisabled and 2 or true) or nil
+      comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
     end
     table.insert(lines, insertAt, {
       key = prefix .. tostring(idx),
@@ -663,20 +670,20 @@ function config_parse.setBootArgEntries(lines, key, args, opts)
   end
 end
 
-function config_parse.insertBootArgBelow(lines, key, belowIdx, value)
-  local entries = config_parse.getBootArgEntries(lines, key)
+function config_parse.insertBootArgBelow(lines, key, belowIdx, value, opts)
+  local entries = config_parse.getBootArgEntries(lines, key, opts)
   local insertPos = tonumber(belowIdx) or 0
   if insertPos < 0 then insertPos = 0 end
   if insertPos > #entries then insertPos = #entries end
   table.insert(entries, insertPos + 1, { value = value or "", disabled = false })
-  config_parse.setBootArgEntries(lines, key, entries)
+  config_parse.setBootArgEntries(lines, key, entries, opts)
   return insertPos + 1
 end
 
-function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
+function config_parse.setBootArgDisabled(lines, key, argNum, disabled, opts)
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   local n = 0
   local hasPrefixed = false
   for _, entry in ipairs(lines or {}) do
@@ -684,7 +691,7 @@ function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
       hasPrefixed = true
       n = n + 1
       if n == argNum then
-        entry.comment = disabled and (keyDisabled and 2 or true) or nil
+        entry.comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
         return true
       end
     end
@@ -694,7 +701,7 @@ function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
     if entry.key and entry.key == legacy then
       n = n + 1
       if n == argNum then
-        entry.comment = disabled and (keyDisabled and 2 or true) or nil
+        entry.comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
         return true
       end
     end
@@ -702,9 +709,9 @@ function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
   return false
 end
 
-function config_parse.getBootArgs(lines, key)
+function config_parse.getBootArgs(lines, key, opts)
   local out = {}
-  local entries = config_parse.getBootArgEntries(lines, key)
+  local entries = config_parse.getBootArgEntries(lines, key, opts)
   for i = 1, #entries do
     if not entries[i].disabled then
       out[#out + 1] = entries[i].value

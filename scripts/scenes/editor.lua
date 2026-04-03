@@ -2264,6 +2264,7 @@ local function run(ctx)
             ctx.isAddPath = false
             ctx.addPathKey = nil
             ctx.pathPickerBootKey = nil
+            ctx.pathPickerBootKeyDisabled = nil
             ctx.pathPickerForEntryIdx = nil
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerBblHotkeyKey = nil
@@ -2311,6 +2312,7 @@ local function run(ctx)
             ctx.pathPickerTarget = nil
             ctx.pathPickerFileExts = nil
             ctx.pathPickerBootKey = nil
+            ctx.pathPickerBootKeyDisabled = nil
             ctx.pathPickerForEntryIdx = nil
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerBblIrxIdx = nil
@@ -2373,6 +2375,8 @@ local function run(ctx)
           ctx.pathPickerBblIrxIdx = nil
           ctx.pathPickerBblIrxDisabled = nil
           ctx.pathPickerBootKey = o.key
+          ctx.pathPickerBootKeyDisabled = (cachedIsBootKeyDisabled and cachedIsBootKeyDisabled(ctx.lines, o.key)) and true or
+              false
           if firstEntry ~= nil and tostring(firstEntryValue or "") == "" then
             ctx.pathPickerEditIdx = 1
             ctx.pathPickerInsertBelow = nil
@@ -2406,6 +2410,7 @@ local function run(ctx)
         ctx.pathPickerTarget = nil
         ctx.pathPickerFileExts = isBblLoadIrx and { ".irx" } or nil
         ctx.pathPickerBootKey = nil
+        ctx.pathPickerBootKeyDisabled = nil
         ctx.pathPickerForEntryIdx = nil
         ctx.pathPickerBblHotkeyKey = nil
         ctx.pathPickerBblHotkeySlot = nil
@@ -2440,7 +2445,13 @@ local function run(ctx)
           isOsdmbrToggleableBootKey(o.key) and osdmbrBootKeyHasEntries(ctx, _, o.key) then
         local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
         _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
-        markConfigMutated(ctx)
+        ctx.entryPathsBootKeyDisabledTag = tostring(o.key or "")
+        ctx.entryPathsBootKeyDisabledOverride = (not disabled) and true or false
+        ctx.entryArgsBootKeyDisabledTag = tostring(o.key or "")
+        ctx.entryArgsBootKeyDisabledOverride = (not disabled) and true or false
+        -- Key-level disable/enable is a common quick toggle; recompute dirty now
+        -- so Start reflects true semantic state immediately on the next frame.
+        markConfigMutated(ctx, true)
       elseif isOsdVisualCoordRow then
         if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet) then
           ctx.editorOsdVisualRestoreOpen = true

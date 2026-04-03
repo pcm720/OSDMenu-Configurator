@@ -2,26 +2,34 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
+local function bootKeyPickerOpts(ctx)
+  if not ctx then return nil end
+  if ctx.pathPickerBootKeyDisabled == nil then return nil end
+  return { keyDisabledOverride = ctx.pathPickerBootKeyDisabled and true or false }
+end
+
 -- Apply chosen path for MBR boot key and return next state. Returns nil if not a boot-key pick.
 local function applyBootPathAndReturn(ctx, val)
   if not ctx.pathPickerBootKey or not ctx.lines then return nil end
   local _ = ctx._
+  local bootOpts = bootKeyPickerOpts(ctx)
   if ctx.pathPickerEditIdx then
-    local paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+    local paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey, bootOpts) or {}
     local item = paths[ctx.pathPickerEditIdx]
     if type(item) == "table" then
       item.value = val
     else
       paths[ctx.pathPickerEditIdx] = { value = val, disabled = false }
     end
-    _.config_parse.setBootPathEntries(ctx.lines, ctx.pathPickerBootKey, paths)
+    _.config_parse.setBootPathEntries(ctx.lines, ctx.pathPickerBootKey, paths, bootOpts)
   elseif ctx.pathPickerInsertBelow then
-    _.config_parse.insertBootPathBelow(ctx.lines, ctx.pathPickerBootKey, ctx.pathPickerInsertBelow, val)
+    _.config_parse.insertBootPathBelow(ctx.lines, ctx.pathPickerBootKey, ctx.pathPickerInsertBelow, val, bootOpts)
   else
-    _.config_parse.insertBootPathBelow(ctx.lines, ctx.pathPickerBootKey, 0x7fffffff, val)
+    _.config_parse.insertBootPathBelow(ctx.lines, ctx.pathPickerBootKey, 0x7fffffff, val, bootOpts)
   end
   ctx.state = ctx.pathPickerReturnState or "editor"
   ctx.pathPickerBootKey = nil
+  ctx.pathPickerBootKeyDisabled = nil
   ctx.pathPickerReturnState = nil
   ctx.pathPickerForEntryIdx = nil
   ctx.pathPickerEditIdx = nil
@@ -321,7 +329,7 @@ local function buildFmcbSingleUseTakenMap(ctx, targetIndex)
   if ctx.pathPickerForEntryIdx and ctx.lines then
     paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
   elseif ctx.pathPickerBootKey and ctx.lines then
-    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey, bootKeyPickerOpts(ctx)) or {}
   end
   if not paths then return taken end
   for i = 1, #paths do
@@ -426,7 +434,7 @@ local function getOtherTargetPathStats(ctx)
   if ctx.pathPickerForEntryIdx and ctx.lines then
     paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
   elseif ctx.pathPickerBootKey and ctx.lines then
-    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey) or {}
+    paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey, bootKeyPickerOpts(ctx)) or {}
   end
   if not paths then return out end
 
@@ -639,6 +647,7 @@ local function applyManualPath(ctx, val)
     ctx.state = "editor"
   end
   ctx.pathPickerBootKey = nil
+  ctx.pathPickerBootKeyDisabled = nil
   ctx.pathPickerReturnState = nil
   ctx.pathPickerInsertBelow = nil
   ctx.pathPickerBdmPrefix = nil
@@ -1284,7 +1293,7 @@ local function run(ctx)
         if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
         if ctx.pathPickerBootKey then
           ctx.state = ctx.pathPickerReturnState or "editor"
-          ctx.pathPickerBootKey = nil; ctx.pathPickerReturnState = nil
+          ctx.pathPickerBootKey = nil; ctx.pathPickerBootKeyDisabled = nil; ctx.pathPickerReturnState = nil
         elseif ctx.pathPickerBblHotkeyKey then
           ctx.state = ctx.pathPickerReturnState or "bbl_hotkey_entry"
           ctx.pathPickerBblHotkeyKey = nil

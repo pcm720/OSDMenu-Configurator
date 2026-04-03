@@ -32,6 +32,7 @@ local function beginIrxPathEdit(_, ctx, entryIdx, disabled)
   ctx.isAddPath = false
   ctx.addPathKey = nil
   ctx.pathPickerBootKey = nil
+  ctx.pathPickerBootKeyDisabled = nil
   ctx.pathPickerForEntryIdx = nil
   ctx.pathPickerEditIdx = nil
   ctx.pathPickerBblHotkeyKey = nil
