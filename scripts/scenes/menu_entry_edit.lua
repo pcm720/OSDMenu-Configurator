@@ -59,7 +59,6 @@ local function run(ctx)
   local subRows = {}
   subRows[#subRows + 1] = { id = "edit_name", kind = "name", label = _.menu_str.edit_name }
   local function appendPathRows()
-    local pathPrefix = (_.menu_str.path_label and _.menu_str.path_label:gsub(":$", "")) or "Path"
     for i = 1, fmcbMaxPaths do
       local item = fmcbPaths[i]
       local hasValue = item ~= nil
@@ -70,7 +69,7 @@ local function run(ctx)
         pathIndex = i,
         hasValue = hasValue,
         disabled = hasValue and item.disabled or false,
-        label = pathPrefix .. " " .. tostring(i) .. ": " .. valueText,
+        label = valueText,
       }
     end
   end
@@ -138,6 +137,9 @@ local function run(ctx)
       end
     end
     local label = row.label
+    if row.kind == "path" and ctx.fmcbEntryPathGrab and i == ctx.entryEditSub then
+      label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
+    end
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "menu_entry_edit_row_" .. tostring(row.id or i), _.font, label, maxLabelW,
         _.FONT_SCALE, isSelected)
@@ -147,12 +149,65 @@ local function run(ctx)
     _.drawListRow(_.MARGIN_X + 20, y, isSelected, label, col)
   end
   local selectedRow = subRows[ctx.entryEditSub]
+  local function markConfigMutated()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
+  local function selectedPathRowIndex()
+    if not (isFmcbEntry and selectedRow and selectedRow.kind == "path") then return nil end
+    return tonumber(selectedRow.pathIndex)
+  end
+  local function selectedPathValueIndex()
+    local idx = selectedPathRowIndex()
+    if not idx then return nil end
+    if idx < 1 or idx > #fmcbPaths then return nil end
+    return idx
+  end
+  local function clearMoveState()
+    ctx.fmcbEntryPathGrab = nil
+    ctx.fmcbEntryPathMoveSnapshot = nil
+  end
+  local function confirmMoveState()
+    clearMoveState()
+  end
+  local function cancelMoveState()
+    if ctx.fmcbEntryPathMoveSnapshot then
+      if _.common and _.common.cloneConfigLines then
+        ctx.lines = _.common.cloneConfigLines(ctx.fmcbEntryPathMoveSnapshot)
+      else
+        ctx.lines = ctx.fmcbEntryPathMoveSnapshot
+      end
+      _.common.refreshConfigModified(ctx)
+    end
+    clearMoveState()
+  end
+  local function beginMoveState()
+    local idx = selectedPathValueIndex()
+    if not idx or #fmcbPaths <= 1 then return end
+    if _.common and _.common.cloneConfigLines then
+      ctx.fmcbEntryPathMoveSnapshot = _.common.cloneConfigLines(ctx.lines)
+    else
+      ctx.fmcbEntryPathMoveSnapshot = nil
+    end
+    ctx.fmcbEntryPathGrab = true
+  end
+  local function swapSelectedPath(step)
+    local idx = selectedPathValueIndex()
+    if not idx then return end
+    local dst = idx + step
+    if dst < 1 or dst > #fmcbPaths then return end
+    fmcbPaths[idx], fmcbPaths[dst] = fmcbPaths[dst], fmcbPaths[idx]
+    _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, fmcbPaths)
+    markConfigMutated()
+    ctx.entryEditSub = 1 + dst
+  end
   local function canOperateFmcbPathRow(row)
     if not (isFmcbEntry and row and row.kind == "path") then return false end
     local nextInsertIdx = math.min(fmcbMaxPaths, #fmcbPaths + 1)
     return row.pathIndex and row.pathIndex <= nextInsertIdx
   end
   local function canOpenFmcbPathActions(row)
+    if ctx.fmcbEntryPathGrab then return false end
     if not canOperateFmcbPathRow(row) then return false end
     return row.hasValue or (not row.hasValue)
   end
@@ -160,14 +215,19 @@ local function run(ctx)
   local crossLabel = (baseHints[1] and baseHints[1].label) or (_.menu_str.enter_label or _.menu_str.edit_label or "Enter")
   local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
   local crossPad = "cross"
-  if isFmcbEntry and selectedRow and selectedRow.kind == "path" then
-    if not canOperateFmcbPathRow(selectedRow) then
-      crossPad = ""
-      crossLabel = ""
-    elseif selectedRow.hasValue then
-      crossLabel = _.menu_str.edit_label or "Edit"
-    else
-      crossLabel = _.menu_str.insert_label or "Insert"
+  if isFmcbEntry then
+    if ctx.fmcbEntryPathGrab then
+      crossLabel = _.menu_str.confirm_label or "Confirm"
+      backLabel = _.menu_str.cancel_label or "Cancel"
+    elseif selectedRow and selectedRow.kind == "path" then
+      if not canOperateFmcbPathRow(selectedRow) then
+        crossPad = ""
+        crossLabel = ""
+      elseif selectedRow.hasValue then
+        crossLabel = _.menu_str.edit_label or "Edit"
+      else
+        crossLabel = _.menu_str.insert_label or "Insert"
+      end
     end
   end
   local entryEditHints = {
@@ -185,10 +245,6 @@ local function run(ctx)
     { pad = "circle", label = backLabel, row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, entryEditHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
-  local function markConfigMutated()
-    ctx._configModifiedCache = nil
-    ctx.configModified = true
-  end
   local function openPathPicker(editIdx)
     local pickerContext = isFmcbEntry and "fmcb_entry" or "osdmenu"
     ctx.editKey = nil
@@ -226,6 +282,12 @@ local function run(ctx)
         id = "edit",
         label = selectedRow.hasValue and (_.menu_str.edit_label or "Edit") or (_.menu_str.insert_label or "Insert"),
       }
+      if selectedRow.hasValue and #fmcbPaths > 1 then
+        actionRows[#actionRows + 1] = {
+          id = "move",
+          label = _.menu_str.grab_label or "Move",
+        }
+      end
       if selectedRow.hasValue then
         actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
       end
@@ -244,6 +306,8 @@ local function run(ctx)
               else
                 openPathPicker(nil)
               end
+            elseif row.id == "move" then
+              beginMoveState()
             elseif row.id == "remove" and selectedRow and selectedRow.kind == "path" then
               removeFmcbPath(selectedRow.pathIndex)
             end
@@ -276,12 +340,24 @@ local function run(ctx)
     end
   end
   if (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.entryEditSub = ctx.entryEditSub - 1; if ctx.entryEditSub < 1 then ctx.entryEditSub = #subRows end
+    if isFmcbEntry and ctx.fmcbEntryPathGrab then
+      swapSelectedPath(-1)
+    else
+      ctx.entryEditSub = ctx.entryEditSub - 1; if ctx.entryEditSub < 1 then ctx.entryEditSub = #subRows end
+    end
   end
   if (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.entryEditSub = ctx.entryEditSub + 1; if ctx.entryEditSub > #subRows then ctx.entryEditSub = 1 end
+    if isFmcbEntry and ctx.fmcbEntryPathGrab then
+      swapSelectedPath(1)
+    else
+      ctx.entryEditSub = ctx.entryEditSub + 1; if ctx.entryEditSub > #subRows then ctx.entryEditSub = 1 end
+    end
   end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    if isFmcbEntry and ctx.fmcbEntryPathGrab then
+      confirmMoveState()
+      return
+    end
     local row = subRows[ctx.entryEditSub]
     if row.kind == "name" then
       ctx.textInputTitleIdMode = nil
@@ -349,6 +425,10 @@ local function run(ctx)
     saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    if isFmcbEntry and ctx.fmcbEntryPathGrab then
+      cancelMoveState()
+      return
+    end
     ctx.state = "menu_entries"; ctx.entryIdx = nil
   end
 end
