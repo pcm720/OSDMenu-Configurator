@@ -315,6 +315,7 @@ local function run(ctx)
       local changed = _.config_parse.setBblHotkeySlotDisabled and
           _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, slot, not data.disabled)
       if changed then
+        ctx._configModifiedCache = nil
         ctx.configModified = true
       end
     end

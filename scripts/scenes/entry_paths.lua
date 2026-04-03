@@ -261,6 +261,12 @@ local function run(ctx)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, pathHints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
 
+  local function markConfigMutated()
+    invalidatePathScanCache()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
+
   local function openPathPicker(editIdx)
     local pickerContext = isBoot and "mbr" or (isFmcbEntry and "fmcb_entry" or "osdmenu")
     ctx.editKey = nil
@@ -290,7 +296,7 @@ local function run(ctx)
       else
         _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
       end
-      ctx.configModified = true
+      markConfigMutated()
     end
   end
   local function saveAndStay()
@@ -324,7 +330,7 @@ local function run(ctx)
     else
       _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, paths)
     end
-    ctx.configModified = true
+    markConfigMutated()
     refreshPaths()
     if ctx.entryPathSel > #paths then
       ctx.entryPathSel = math.max(1, #paths)
@@ -351,7 +357,7 @@ local function run(ctx)
     else
       _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, paths)
     end
-    ctx.configModified = true
+    markConfigMutated()
     ctx.entryPathSel = dst
     refreshPaths()
   end

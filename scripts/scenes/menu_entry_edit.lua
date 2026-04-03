@@ -121,6 +121,7 @@ local function run(ctx)
       ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
       ctx.textInputCallback = function(val)
         _.config_parse.setMenuEntryName(ctx.lines, ctx.entryIdx, val)
+        ctx._configModifiedCache = nil
         ctx.configModified = true
         ctx.state = "menu_entry_edit"
       end

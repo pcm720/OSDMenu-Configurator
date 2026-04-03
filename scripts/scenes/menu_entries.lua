@@ -65,6 +65,11 @@ local function run(ctx)
   local function invalidateMenuEntriesCache()
     ctx.menuEntriesCache = nil
   end
+  local function markConfigMutated()
+    invalidateMenuEntriesCache()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
 
   local function refreshEntries()
     local cache = getMenuEntriesCache()
@@ -180,8 +185,7 @@ local function run(ctx)
     local belowIdx = (total == 0) and 0 or ctx.entryList[ctx.entrySel].idx
     local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, "")
     if not newIdx then return end
-    ctx.configModified = true
-    invalidateMenuEntriesCache()
+    markConfigMutated()
     refreshEntries()
     ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
     ctx.entryIdx = newIdx
@@ -326,8 +330,7 @@ local function run(ctx)
             elseif row.id == "remove" and hasSelection then
               local idx = ctx.entryList[ctx.entrySel].idx
               _.config_parse.removeMenuEntry(ctx.lines, idx)
-              ctx.configModified = true
-              invalidateMenuEntriesCache()
+              markConfigMutated()
               refreshEntries()
             end
           end,
@@ -341,8 +344,7 @@ local function run(ctx)
       local curIdx = ctx.entryList[ctx.entrySel].idx
       local prevIdx = ctx.entryList[ctx.entrySel - 1].idx
       if _.config_parse.swapMenuEntryContent(ctx.lines, curIdx, prevIdx) then
-        ctx.configModified = true
-        invalidateMenuEntriesCache()
+        markConfigMutated()
         refreshEntries()
         ctx.entrySel = ctx.entrySel - 1
       end
@@ -356,8 +358,7 @@ local function run(ctx)
       local curIdx = ctx.entryList[ctx.entrySel].idx
       local nextIdx = ctx.entryList[ctx.entrySel + 1].idx
       if _.config_parse.swapMenuEntryContent(ctx.lines, curIdx, nextIdx) then
-        ctx.configModified = true
-        invalidateMenuEntriesCache()
+        markConfigMutated()
         refreshEntries()
         ctx.entrySel = ctx.entrySel + 1
       end
@@ -370,8 +371,7 @@ local function run(ctx)
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and hasSelection then
     local ent = ctx.entryList[ctx.entrySel]
     _.config_parse.setMenuEntryDisabled(ctx.lines, ent.idx, not ent.disabled)
-    ctx.configModified = true
-    invalidateMenuEntriesCache()
+    markConfigMutated()
     refreshEntries()
   end
 

@@ -104,6 +104,11 @@ local function run(ctx)
   local function invalidateRowsCache()
     ctx.bblHotkeyEntriesRowsCache = nil
   end
+  local function markConfigMutated()
+    invalidateRowsCache()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
   local rowsCache = getRowsCache()
   local keyDisabled = rowsCache.keyDisabled and true or false
   local rows = rowsCache.rows or {}
@@ -328,8 +333,7 @@ local function run(ctx)
     end
     local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, belowSlot, maxEntries)
     if newSlot then
-      ctx.configModified = true
-      invalidateRowsCache()
+      markConfigMutated()
       confirmMoveState()
       if isFmcb then
         local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or
@@ -350,8 +354,7 @@ local function run(ctx)
     if not canInsert then return end
     local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, keyId, 0, maxEntries)
     if not newSlot then return end
-    ctx.configModified = true
-    invalidateRowsCache()
+    markConfigMutated()
     confirmMoveState()
     local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or nil
     local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
@@ -385,8 +388,7 @@ local function run(ctx)
     if not (sel and sel.kind == "entry") then return end
     local removed = _.config_parse.removeBblHotkeySlot(ctx.lines, keyId, sel.slot)
     if removed then
-      ctx.configModified = true
-      invalidateRowsCache()
+      markConfigMutated()
       confirmMoveState()
     end
   end
@@ -396,8 +398,7 @@ local function run(ctx)
     local dst = sel.slot + step
     if dst < 1 or dst > maxEntries then return end
     _.config_parse.swapBblHotkeySlots(ctx.lines, keyId, sel.slot, dst)
-    ctx.configModified = true
-    invalidateRowsCache()
+    markConfigMutated()
     ctx.bblEntryFocusSlot = dst
   end
 
@@ -476,7 +477,7 @@ local function run(ctx)
       ctx.textInputMaxLen = 64
       ctx.textInputCallback = function(val)
         _.config_parse.setBblHotkeyName(ctx.lines, keyId, val or "")
-        ctx.configModified = true
+        markConfigMutated()
         ctx.state = "bbl_hotkey_entries"
       end
       ctx.textInputReturnState = "bbl_hotkey_entries"
@@ -508,8 +509,7 @@ local function run(ctx)
       local changed = _.config_parse.setBblHotkeySlotDisabled and
           _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, sel.slot, not sel.data.disabled)
       if changed then
-        ctx.configModified = true
-        invalidateRowsCache()
+        markConfigMutated()
       end
     end
   end

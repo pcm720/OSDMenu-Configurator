@@ -617,6 +617,7 @@ local function applyManualPath(ctx, val)
   if applyConfigOpenPathAndReturn(ctx, val) then
     return
   end
+  ctx._configModifiedCache = nil
   ctx.configModified = true
   if applyBootPathAndReturn(ctx, val) then
   elseif applyBblHotkeyPathAndReturn(ctx, val) then
@@ -824,6 +825,7 @@ local function run(ctx)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.path_str.wildcard_confirm_hint, nil, _.DIM,
       _.w - 2 * _.MARGIN_X)
     local function applyAndExit(chosenVal)
+      ctx._configModifiedCache = nil
       ctx.configModified = true
       if mode == "single" then
         _.config_parse.set(ctx.lines, ctx.editKey, chosenVal)
@@ -1388,6 +1390,7 @@ local function run(ctx)
       else
         _.config_parse.set(ctx.lines, ctx.editKey, val); ctx.state = "editor"
       end
+      ctx._configModifiedCache = nil
       ctx.configModified = true
       ctx.pathList = nil; ctx.pathBrowsePath = nil; ctx.pathPickerBdmPrefix = nil; ctx.pathPickerBdmMountpoint = nil
       ctx.pathPickerSub = "device"
@@ -1618,6 +1621,7 @@ local function run(ctx)
             ctx.state = "editor"
           end
           if not openedConfig then
+            ctx._configModifiedCache = nil
             ctx.configModified = true
             if not ctx.pathPickerWildcardConfirm then
               if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
