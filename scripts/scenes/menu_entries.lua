@@ -40,23 +40,65 @@ local function buildEntryPathPresenceMap(lines)
   return out
 end
 
+local function buildEntryActivePathPresenceMap(lines, entryDisabledByIdx)
+  local out = {}
+  for i = 1, #(lines or {}) do
+    local entry = lines[i]
+    local key = entry and entry.key
+    if key and (not entry.comment) then
+      local idx = key:match("^path%d+_OSDSYS_ITEM_(%d+)$")
+      if idx then
+        local n = tonumber(idx)
+        local value = tostring((entry and entry.value) or "")
+        value = value:gsub("^%s+", ""):gsub("%s+$", "")
+        if n and value ~= "" and (not (entryDisabledByIdx and entryDisabledByIdx[n])) then
+          out[n] = true
+        end
+      end
+    end
+  end
+  return out
+end
+
+local function buildEntrySeparatorMap(_, nameByIdx)
+  local out = {}
+  for idx, name in pairs(nameByIdx or {}) do
+    if _.config_parse.isMenuEntrySeparatorName and _.config_parse.isMenuEntrySeparatorName(name) then
+      out[idx] = true
+    end
+  end
+  return out
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
     ctx.state = "editor"
     return
   end
+  local supportsSeparators = (ctx.fileType == "osdmenu_cnf")
 
   local sceneEpoch = ctx._sceneEpoch or 0
   local function getMenuEntriesCache()
     local cache = ctx.menuEntriesCache
     if not cache or cache.linesRef ~= ctx.lines or cache.sceneEpoch ~= sceneEpoch then
+      local entryList = _.config_parse.getMenuEntryIndices(ctx.lines)
+      local entryDisabledByIdx = {}
+      for i = 1, #entryList do
+        local ent = entryList[i]
+        if ent and ent.idx then
+          entryDisabledByIdx[ent.idx] = ent.disabled and true or false
+        end
+      end
+      local entryNameByIdx = buildEntryNameMap(ctx.lines)
       cache = {
         linesRef = ctx.lines,
         sceneEpoch = sceneEpoch,
-        entryList = _.config_parse.getMenuEntryIndices(ctx.lines),
-        entryNameByIdx = buildEntryNameMap(ctx.lines),
+        entryList = entryList,
+        entryNameByIdx = entryNameByIdx,
         entryHasPathByIdx = buildEntryPathPresenceMap(ctx.lines),
+        entryHasActivePathByIdx = buildEntryActivePathPresenceMap(ctx.lines, entryDisabledByIdx),
+        entryIsSeparatorByIdx = supportsSeparators and buildEntrySeparatorMap(_, entryNameByIdx) or {},
       }
       ctx.menuEntriesCache = cache
     end
@@ -181,11 +223,16 @@ local function run(ctx)
     ctx.state = "path_picker"
   end
 
-  local function insertBelowSelection(canAddEntry, total, directPicker)
+  local function insertBelowSelection(canAddEntry, total, directPicker, insertName)
     if not canAddEntry then return end
     local belowIdx = (total == 0) and 0 or ctx.entryList[ctx.entrySel].idx
-    local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, "")
+    local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, insertName or "")
     if not newIdx then return end
+    if supportsSeparators and _.config_parse.isMenuEntrySeparatorName and
+        _.config_parse.isMenuEntrySeparatorName(insertName or "") then
+      _.config_parse.setMenuEntryPaths(ctx.lines, newIdx, {})
+      _.config_parse.setMenuEntryArgs(ctx.lines, newIdx, {})
+    end
     markConfigMutated()
     refreshEntries()
     ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
@@ -203,6 +250,8 @@ local function run(ctx)
   local cache = getMenuEntriesCache()
   local entryNameByIdx = cache.entryNameByIdx or {}
   local entryHasPathByIdx = cache.entryHasPathByIdx or {}
+  local entryHasActivePathByIdx = cache.entryHasActivePathByIdx or {}
+  local entryIsSeparatorByIdx = cache.entryIsSeparatorByIdx or {}
   local startY = _.MARGIN_Y + _.scaleY(50)
   local total = #ctx.entryList
   local canMoveEntries = total > 1
@@ -232,11 +281,16 @@ local function run(ctx)
     local ent = ctx.entryList[i]
     local idx = ent.idx
     local name = entryNameByIdx[idx]
+    local isSeparator = entryIsSeparatorByIdx[idx] == true
     local hasName = (name ~= nil and name ~= "")
     local hasPath = (entryHasPathByIdx[idx] == true)
+    local hasActivePath = (entryHasActivePathByIdx[idx] == true)
     local usesPlaceholder = false
     local label
-    if not hasName and not hasPath then
+    if isSeparator then
+      local sepText = (_.config_parse.getMenuEntrySeparatorText and _.config_parse.getMenuEntrySeparatorText(name)) or ""
+      label = (sepText ~= "" and sepText) or " "
+    elseif not hasName and not hasPath then
       label = _.common_str.empty
       usesPlaceholder = true
     elseif not hasName then
@@ -253,10 +307,11 @@ local function run(ctx)
     end
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
     local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.WHITE
+    local effectiveDisabled = ent.disabled or ((not isSeparator) and (not hasActivePath))
     if usesPlaceholder then
       col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.DIM
     end
-    if ent.disabled then
+    if effectiveDisabled then
       col = (i == ctx.entrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     if _.common.fitListRowText then
@@ -308,6 +363,12 @@ local function run(ctx)
     end
     if canAddEntry then
       actionRows[#actionRows + 1] = { id = "insert", label = (_.menu_str.insert_label or "Insert") }
+      if supportsSeparators then
+        actionRows[#actionRows + 1] = {
+          id = "insert_separator",
+          label = (_.menu_str.insert_separator_label or "Insert separator")
+        }
+      end
     end
     if hasSelection then
       actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
@@ -328,6 +389,8 @@ local function run(ctx)
               end
             elseif row.id == "insert" then
               insertBelowSelection(canAddEntry, total)
+            elseif row.id == "insert_separator" then
+              insertBelowSelection(canAddEntry, total, false, "$!")
             elseif row.id == "remove" and hasSelection then
               local idx = ctx.entryList[ctx.entrySel].idx
               _.config_parse.removeMenuEntry(ctx.lines, idx)
@@ -371,9 +434,14 @@ local function run(ctx)
 
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and hasSelection then
     local ent = ctx.entryList[ctx.entrySel]
-    _.config_parse.setMenuEntryDisabled(ctx.lines, ent.idx, not ent.disabled)
-    markConfigMutated()
-    refreshEntries()
+    local idx = ent.idx
+    local currentDisabled = _.config_parse.isMenuEntryDisabled(ctx.lines, idx) and true or false
+    local targetDisabled = not (selectedDisabled and true or false)
+    if currentDisabled ~= targetDisabled then
+      _.config_parse.setMenuEntryDisabled(ctx.lines, idx, targetDisabled)
+      markConfigMutated()
+      refreshEntries()
+    end
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then

@@ -26,8 +26,10 @@ local function run(ctx)
     return p
   end
   local isFmcbEntry = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
+  local isSeparatorEntry = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
+      _.config_parse.isMenuEntrySeparatorName(name)
   local hasOsdOrShutdown = false
-  local allowArgs = not isFmcbEntry
+  local allowArgs = (not isFmcbEntry) and (not isSeparatorEntry)
   for _, p in ipairs(paths) do
     local pv = type(p) == "table" and p.value or p
     if (pv or ""):upper() == "OSDSYS" or (pv or ""):upper() == "POWEROFF" then
@@ -75,7 +77,7 @@ local function run(ctx)
   end
   if isFmcbEntry then
     appendPathRows()
-  else
+  elseif not isSeparatorEntry then
     subRows[#subRows + 1] = { id = "paths", kind = "paths", label = _.menu_str.paths_label }
   end
   local hasCdrom = false
@@ -367,7 +369,13 @@ local function run(ctx)
       ctx.textInputValue = name
       ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
       ctx.textInputCallback = function(val)
+        local newIsSeparator = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
+            _.config_parse.isMenuEntrySeparatorName(val)
         _.config_parse.setMenuEntryName(ctx.lines, ctx.entryIdx, val)
+        if newIsSeparator then
+          _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, {})
+          _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, {})
+        end
         ctx._configModifiedCache = nil
         ctx.configModified = true
         ctx.state = "menu_entry_edit"

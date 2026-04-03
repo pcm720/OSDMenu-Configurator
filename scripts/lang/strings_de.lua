@@ -128,6 +128,7 @@ strings.menu_entries = {
   grab_label = "Verschieben",
   grabbed_tag = "Verschieben",
   insert_label = "Einfuegen",
+  insert_separator_label = "Trenner einfuegen",
   remove_label = "Entfernen",
   save_config_label = "Speichern",
 }
