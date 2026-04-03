@@ -62,6 +62,13 @@ local function run(ctx)
     bootKeyDisabledOverride = ctx.entryArgsBootKeyDisabledOverride and true or false
     bootKeyOpts = { keyDisabledOverride = bootKeyDisabledOverride }
   end
+  local parentArgsDisabled = false
+  if isBoot then
+    parentArgsDisabled = bootKeyDisabledOverride and true or false
+  else
+    parentArgsDisabled = (_.config_parse.isMenuEntryDisabled and _.config_parse.isMenuEntryDisabled(ctx.lines, ctx.entryIdx)) and
+        true or false
+  end
   local function buildPathsModel()
     local outPaths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey, bootKeyOpts) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
@@ -463,7 +470,7 @@ local function run(ctx)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local col = (i == ctx.entryArgSel) and _.SELECTED_ENTRY or _.WHITE
-    if not isBoot and type(a) == "table" and a.disabled then
+    if type(a) == "table" and (parentArgsDisabled or a.disabled) then
       col = (i == ctx.entryArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryArgSel, label, col)
@@ -471,7 +478,8 @@ local function run(ctx)
 
   local hasSelection = (ctx.entryArgSel >= 1 and ctx.entryArgSel <= total)
   local canAddArg = (isBoot or not hasCdrom)
-  local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and args[ctx.entryArgSel].disabled
+  local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and
+      (parentArgsDisabled or args[ctx.entryArgSel].disabled)
   local crossPad = (hasSelection or canAddArg) and "cross" or ""
   local crossLabel = ""
   if hasSelection then
@@ -492,7 +500,7 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = hasSelection and "triangle" or "",
+      pad = (hasSelection and (not parentArgsDisabled)) and "triangle" or "",
       label = hasSelection and
           (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
@@ -506,6 +514,7 @@ local function run(ctx)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, argHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   local function toggleSelectedArgDisabled()
+    if parentArgsDisabled then return end
     if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
       if isBoot then
         _.config_parse.setBootArgDisabled(ctx.lines, ctx.bootKey, ctx.entryArgSel, not args[ctx.entryArgSel].disabled,
