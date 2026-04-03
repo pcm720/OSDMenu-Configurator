@@ -1074,7 +1074,8 @@ function config_parse.setBblHotkeyDisabled(lines, keyId, disabled)
       if disabled then
         entry.comment = entry.comment and 2 or true
       else
-        if entry.comment == 2 then entry.comment = true else entry.comment = nil end
+        -- Parent enable should restore child slots as enabled for this hotkey.
+        entry.comment = nil
       end
     end
   end

@@ -217,6 +217,10 @@ local function run(ctx)
   local crossLabel = (baseHints[1] and baseHints[1].label) or (_.menu_str.enter_label or _.menu_str.edit_label or "Enter")
   local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
   local crossPad = "cross"
+  local canToggleFmcbPathDisabled = isFmcbEntry and (not ctx.fmcbEntryPathGrab) and selectedRow and
+      selectedRow.kind == "path" and selectedRow.hasValue
+  local fmcbPathToggleLabel = canToggleFmcbPathDisabled and
+      (selectedRow.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or ""
   if isFmcbEntry then
     if ctx.fmcbEntryPathGrab then
       crossLabel = _.menu_str.confirm_label or "Confirm"
@@ -242,6 +246,11 @@ local function run(ctx)
     {
       pad = ctx.configModified and "start" or "",
       label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    {
+      pad = canToggleFmcbPathDisabled and "triangle" or "",
+      label = canToggleFmcbPathDisabled and fmcbPathToggleLabel or "",
       row = 1
     },
     { pad = "circle", label = backLabel, row = 1 },
@@ -277,6 +286,21 @@ local function run(ctx)
     _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, fmcbPaths)
     markConfigMutated()
   end
+  local function setFmcbPathDisabled(pathIndex, disabled)
+    if not isFmcbEntry then return end
+    if pathIndex < 1 or pathIndex > #fmcbPaths then return end
+    local current = fmcbPaths[pathIndex].disabled and true or false
+    local target = disabled
+    if target == nil then
+      target = not current
+    else
+      target = target and true or false
+    end
+    if current == target then return end
+    fmcbPaths[pathIndex].disabled = target
+    _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, fmcbPaths)
+    markConfigMutated()
+  end
   if isFmcbEntry and ctx.fmcbEntryPathActionsOpen then
     local actionRows = {}
     if selectedRow and selectedRow.kind == "path" and canOperateFmcbPathRow(selectedRow) then
@@ -291,6 +315,11 @@ local function run(ctx)
         }
       end
       if selectedRow.hasValue then
+        actionRows[#actionRows + 1] = {
+          id = "toggle_disabled",
+          label = selectedRow.disabled and (_.menu_str.enable_label or "Enable") or
+              (_.menu_str.disable_label or "Disable")
+        }
         actionRows[#actionRows + 1] = { id = "remove", label = (_.menu_str.remove_label or "Remove") }
       end
     end
@@ -310,6 +339,8 @@ local function run(ctx)
               end
             elseif row.id == "move" then
               beginMoveState()
+            elseif row.id == "toggle_disabled" and selectedRow and selectedRow.kind == "path" then
+              setFmcbPathDisabled(selectedRow.pathIndex, nil)
             elseif row.id == "remove" and selectedRow and selectedRow.kind == "path" then
               removeFmcbPath(selectedRow.pathIndex)
             end
@@ -427,6 +458,12 @@ local function run(ctx)
       ctx.fmcbEntryPathActionsOpen = true
       ctx.fmcbEntryPathActionsSel = ctx.fmcbEntryPathActionsSel or 1
       ctx.fmcbEntryPathActionsScroll = ctx.fmcbEntryPathActionsScroll or 0
+    end
+  end
+  if isFmcbEntry and (not ctx.fmcbEntryPathGrab) and (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
+    local row = subRows[ctx.entryEditSub]
+    if row and row.kind == "path" and row.hasValue then
+      setFmcbPathDisabled(row.pathIndex, nil)
     end
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
