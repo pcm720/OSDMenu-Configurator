@@ -31,23 +31,23 @@ local function run(ctx)
   -- Keep launch-disc option args in stable per-target order so off/on reverts
   -- return to the same semantic line order and don't leave a false dirty state.
   if ctx.cdromOptionOrderKey ~= targetOrderKey or type(ctx.cdromOptionOrder) ~= "table" then
-    local rankByKey = {}
+    local rankByValue = {}
     local nextRank = 1
     for i = 1, #args do
       local av = type(args[i]) == "table" and args[i].value or args[i]
-      if optionOrderByKey[av] and rankByKey[av] == nil then
-        rankByKey[av] = nextRank
+      if av ~= nil and rankByValue[av] == nil then
+        rankByValue[av] = nextRank
         nextRank = nextRank + 1
       end
     end
     local fallbackBase = nextRank
     for i = 1, #opts do
       local key = opts[i] and opts[i].key or nil
-      if key and key ~= "" and rankByKey[key] == nil then
-        rankByKey[key] = fallbackBase + i
+      if key and key ~= "" and rankByValue[key] == nil then
+        rankByValue[key] = fallbackBase + i
       end
     end
-    ctx.cdromOptionOrder = rankByKey
+    ctx.cdromOptionOrder = rankByValue
     ctx.cdromOptionOrderKey = targetOrderKey
   end
   if ctx.cdromOptSel < 1 then ctx.cdromOptSel = 1 end
@@ -57,12 +57,12 @@ local function run(ctx)
     return false
   end
   local function insertOptionArgWithStableOrder(argList, key)
-    local rankByKey = ctx.cdromOptionOrder or {}
-    local newRank = rankByKey[key] or (1000 + (optionOrderByKey[key] or 0))
+    local rankByValue = ctx.cdromOptionOrder or {}
+    local newRank = rankByValue[key] or (1000 + (optionOrderByKey[key] or 0))
     local insertAt = #argList + 1
     for i = 1, #argList do
       local av = type(argList[i]) == "table" and argList[i].value or argList[i]
-      local r = rankByKey[av]
+      local r = rankByValue[av]
       if r and r > newRank then
         insertAt = i
         break
