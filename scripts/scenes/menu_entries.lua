@@ -223,13 +223,61 @@ local function run(ctx)
     ctx.state = "path_picker"
   end
 
+  local function focusEntryByIdx(entryIdx)
+    local idx = tonumber(entryIdx)
+    if not idx then return end
+    for pos, ent in ipairs(ctx.entryList or {}) do
+      if ent and ent.idx == idx then
+        ctx.entrySel = pos
+        return
+      end
+    end
+  end
+
+  local function openSeparatorNameInput(entryIdx)
+    if not supportsSeparators then return false end
+    local idx = tonumber(entryIdx)
+    if not idx then return false end
+    local currentNameRaw = _.config_parse.getMenuEntryName(ctx.lines, idx) or ""
+    local currentNameDisplay = currentNameRaw
+    if _.config_parse.getMenuEntrySeparatorText and _.config_parse.isMenuEntrySeparatorName and
+        _.config_parse.isMenuEntrySeparatorName(currentNameRaw) then
+      currentNameDisplay = _.config_parse.getMenuEntrySeparatorText(currentNameRaw) or ""
+    end
+    if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
+    ctx.textInputTitleIdMode = nil
+    ctx.textInputPrompt = _.menu_str.entry_name_prompt
+    ctx.textInputValue = currentNameDisplay
+    ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+    ctx.textInputCallback = function(val)
+      local nameText = tostring(val or "")
+      if nameText:sub(1, 2) == "$!" then
+        nameText = nameText:sub(3)
+      end
+      _.config_parse.setMenuEntryName(ctx.lines, idx, "$!" .. nameText)
+      _.config_parse.setMenuEntryPaths(ctx.lines, idx, {})
+      _.config_parse.setMenuEntryArgs(ctx.lines, idx, {})
+      markConfigMutated()
+      refreshEntries()
+      focusEntryByIdx(idx)
+      ctx.state = "menu_entries"
+    end
+    ctx.textInputReturnState = "menu_entries"
+    ctx.textInputGridSel = 1
+    ctx.textInputCursor = #ctx.textInputValue + 1
+    ctx.textInputScroll = 1
+    ctx.state = "text_input"
+    return true
+  end
+
   local function insertBelowSelection(canAddEntry, total, directPicker, insertName)
     if not canAddEntry then return end
     local belowIdx = (total == 0) and 0 or ctx.entryList[ctx.entrySel].idx
     local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, insertName or "")
     if not newIdx then return end
-    if supportsSeparators and _.config_parse.isMenuEntrySeparatorName and
-        _.config_parse.isMenuEntrySeparatorName(insertName or "") then
+    local insertedIsSeparator = supportsSeparators and _.config_parse.isMenuEntrySeparatorName and
+        _.config_parse.isMenuEntrySeparatorName(insertName or "")
+    if insertedIsSeparator then
       _.config_parse.setMenuEntryPaths(ctx.lines, newIdx, {})
       _.config_parse.setMenuEntryArgs(ctx.lines, newIdx, {})
     end
@@ -239,9 +287,31 @@ local function run(ctx)
     ctx.entryIdx = newIdx
     ctx.entryEditSub = ctx.entryEditSub or 1
     confirmMoveState()
+    if insertedIsSeparator then
+      openSeparatorNameInput(newIdx)
+      return
+    end
     if directPicker then
       openPathPickerForEntry(newIdx)
     else
+      ctx.state = "menu_entry_edit"
+    end
+  end
+
+  local function insertSeparatorBelowSelection(canAddEntry, total)
+    if not supportsSeparators or not canAddEntry then return end
+    local belowIdx = (total == 0) and 0 or ctx.entryList[ctx.entrySel].idx
+    local newIdx = _.config_parse.insertMenuEntryBelow(ctx.lines, belowIdx, "$!")
+    if not newIdx then return end
+    _.config_parse.setMenuEntryPaths(ctx.lines, newIdx, {})
+    _.config_parse.setMenuEntryArgs(ctx.lines, newIdx, {})
+    markConfigMutated()
+    refreshEntries()
+    ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
+    ctx.entryIdx = newIdx
+    ctx.entryEditSub = ctx.entryEditSub or 1
+    confirmMoveState()
+    if not openSeparatorNameInput(newIdx) then
       ctx.state = "menu_entry_edit"
     end
   end
@@ -395,7 +465,7 @@ local function run(ctx)
             elseif row.id == "insert" then
               insertBelowSelection(canAddEntry, total)
             elseif row.id == "insert_separator" then
-              insertBelowSelection(canAddEntry, total, false, "$!")
+              insertSeparatorBelowSelection(canAddEntry, total)
             elseif row.id == "remove" and hasSelection then
               local idx = ctx.entryList[ctx.entrySel].idx
               _.config_parse.removeMenuEntry(ctx.lines, idx)
@@ -455,7 +525,13 @@ local function run(ctx)
         confirmMoveState()
         return
       end
-      ctx.entryIdx = ctx.entryList[ctx.entrySel].idx
+      local selectedIdx = ctx.entryList[ctx.entrySel].idx
+      if supportsSeparators and entryIsSeparatorByIdx[selectedIdx] == true then
+        if openSeparatorNameInput(selectedIdx) then
+          return
+        end
+      end
+      ctx.entryIdx = selectedIdx
       ctx.entryEditSub = ctx.entryEditSub or 1
       ctx.state = "menu_entry_edit"
     elseif canAddEntry then
