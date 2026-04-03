@@ -333,6 +333,17 @@ local function setConfigValue(ctx, _, key, value)
   applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
 end
 
+local function markConfigMutated(ctx, recomputeDirty)
+  if not ctx then return end
+  ctx.editorFrameParseCache = nil
+  ctx._configModifiedCache = nil
+  if recomputeDirty and ctx._ and ctx._.common and ctx._.common.refreshConfigModified then
+    ctx._.common.refreshConfigModified(ctx)
+  else
+    ctx.configModified = true
+  end
+end
+
 local OSD_VISUAL_COORD_KEYS = {
   OSDSYS_menu_x = true,
   OSDSYS_menu_y = true,
@@ -372,15 +383,8 @@ local function applyOsdVisualPreset(ctx, _, preset)
   for key, value in pairs(preset) do
     setConfigValue(ctx, _, key, tostring(value or ""))
   end
-  -- Preset apply mutates many keys at once; clear frame caches so preview rows
-  -- and dirty-state are recomputed immediately on the next frame.
-  ctx.editorFrameParseCache = nil
-  ctx._configModifiedCache = nil
-  if _.common and _.common.refreshConfigModified then
-    _.common.refreshConfigModified(ctx)
-  else
-    ctx.configModified = true
-  end
+  -- Preset apply mutates many keys at once and may resolve back to clean.
+  markConfigMutated(ctx, true)
 end
 
 local R3_PRESET_COLOR_KEYS = {
@@ -397,15 +401,8 @@ local function applyR3ColorPreset(ctx, _, preset)
       setConfigValue(ctx, _, key, tostring(value))
     end
   end
-  -- Preset apply mutates many keys at once; clear frame caches so color rows
-  -- and dirty-state are recomputed immediately on the next frame.
-  ctx.editorFrameParseCache = nil
-  ctx._configModifiedCache = nil
-  if _.common and _.common.refreshConfigModified then
-    _.common.refreshConfigModified(ctx)
-  else
-    ctx.configModified = true
-  end
+  -- Preset apply mutates many keys at once and may resolve back to clean.
+  markConfigMutated(ctx, true)
 end
 
 local function valuesEquivalent(a, b)
@@ -645,7 +642,7 @@ local function runTimerDigitInlineInput(ctx, _)
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     setConfigValue(ctx, _, edit.key, tostring(edit.value))
-    ctx.configModified = true
+    markConfigMutated(ctx)
     ctx.timerDigitEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.timerDigitEdit = nil
@@ -765,7 +762,7 @@ local function runIntDigitInlineInput(ctx, _)
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     setConfigValue(ctx, _, edit.key, tostring(math.floor(tonumber(edit.value) or 0)))
-    ctx.configModified = true
+    markConfigMutated(ctx)
     ctx.intDigitEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.intDigitEdit = nil
@@ -922,13 +919,13 @@ local function runInlineColorEditInput(ctx, _)
   end
   if changed and isR3 then
     setConfigValue(ctx, _, edit.key, formatR3HexColor(edit.values[1], edit.values[2], edit.values[3]))
-    ctx.configModified = true
+    markConfigMutated(ctx)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     setConfigValue(ctx, _, edit.key,
       formatOptionColorValue(ctx, _, edit.key, edit.values[1], edit.values[2], edit.values[3], edit.values[4]))
-    ctx.configModified = true
+    markConfigMutated(ctx)
     ctx.colorInlineEdit = nil
   elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if isR3 and edit.orig then
@@ -1675,7 +1672,7 @@ local function run(ctx)
       local dst = autoSlotNum + step
       if dst < 1 or dst > maxAutoSlots then return end
       _.config_parse.swapBblHotkeySlots(ctx.lines, "AUTO", autoSlotNum, dst)
-      ctx.configModified = true
+      markConfigMutated(ctx)
       if ctx.optSel > 1 then
         ctx.optSel = _.common.clampListSelection(ctx.optSel + step, #ctx.optList)
       end
@@ -1687,7 +1684,7 @@ local function run(ctx)
       if usedCount >= maxAutoSlots then return end
       local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, "AUTO", autoSlotNum, maxAutoSlots)
       if newSlot then
-        ctx.configModified = true
+        markConfigMutated(ctx)
         confirmAutoMoveState()
         if newSlot < autoSlotNum and ctx.optSel > 1 then
           ctx.optSel = ctx.optSel + (newSlot - autoSlotNum)
@@ -1724,7 +1721,7 @@ local function run(ctx)
           _.config_parse.setBblHotkeyArgs(ctx.lines, "AUTO", i, {})
         end
       end
-      ctx.configModified = true
+      markConfigMutated(ctx)
       confirmAutoMoveState()
     end
 
@@ -1774,7 +1771,7 @@ local function run(ctx)
       local slots = getEsrSlots()
       slots[esrSlotNum], slots[dst] = slots[dst], slots[esrSlotNum]
       applyEsrSlots(slots)
-      ctx.configModified = true
+      markConfigMutated(ctx)
       focusEsrSlot(dst)
     end
 
@@ -1790,7 +1787,7 @@ local function run(ctx)
       end
       slots[esrSlotNum + 1] = { value = "", disabled = false }
       applyEsrSlots(slots)
-      ctx.configModified = true
+      markConfigMutated(ctx)
       confirmEsrMoveState()
       focusEsrSlot(esrSlotNum + 1)
     end
@@ -1807,7 +1804,7 @@ local function run(ctx)
       end
       slots[3] = { value = "", disabled = false }
       applyEsrSlots(slots)
-      ctx.configModified = true
+      markConfigMutated(ctx)
       confirmEsrMoveState()
       focusEsrSlot(math.min(esrSlotNum, 3))
     end
@@ -1816,7 +1813,7 @@ local function run(ctx)
       if not (isEsrPathRow and esrSlotNum) then return end
       local slot = getEsrSlot(esrSlotNum)
       setEsrSlot(esrSlotNum, slot.value or "", not slot.disabled)
-      ctx.configModified = true
+      markConfigMutated(ctx)
     end
 
     if isAutoSlotRow then
@@ -2104,11 +2101,11 @@ local function run(ctx)
           if idx > #o.enumVals then idx = (allowUnset and 0 or 1) end
         end
         setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
-        ctx.configModified = true
+        markConfigMutated(ctx)
       elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
-        ctx.configModified = true
+        markConfigMutated(ctx)
       elseif o.optType == "int" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
@@ -2136,7 +2133,7 @@ local function run(ctx)
         if delta ~= 0 then
           num = clampNumber(num + delta, minV, maxV)
           setConfigValue(ctx, _, o.key, tostring(math.floor(num)))
-          ctx.configModified = true
+          markConfigMutated(ctx)
         end
       elseif o.optType == "string" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
@@ -2169,7 +2166,7 @@ local function run(ctx)
             if num < minV then num = minV end
             if num > maxV then num = maxV end
             setConfigValue(ctx, _, o.key, tostring(num))
-            ctx.configModified = true
+            markConfigMutated(ctx)
           end
         end
       end
@@ -2201,11 +2198,11 @@ local function run(ctx)
         idx = idx + 1
         if idx > #o.enumVals then idx = 1 end
         setConfigValue(ctx, _, o.key, o.enumVals[idx])
-        ctx.configModified = true
+        markConfigMutated(ctx)
       elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
-        ctx.configModified = true
+        markConfigMutated(ctx)
       elseif o.optType == "int" then
         if isTimerDigitEditKey(o.key) then
           startTimerDigitEdit(ctx, _, o)
@@ -2222,7 +2219,7 @@ local function run(ctx)
         ctx.textInputMaxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
         ctx.textInputCallback = function(val)
           setConfigValue(ctx, _, o.key, val or "")
-          ctx.configModified = true
+          markConfigMutated(ctx)
           ctx.state = "editor"
         end
         ctx.textInputReturnState = "editor"
@@ -2257,7 +2254,7 @@ local function run(ctx)
           if not targetIrxIdx and _.config_parse.insertBblIrxEntryBelow then
             targetIrxIdx = _.config_parse.insertBblIrxEntryBelow(ctx.lines, 0, "")
             if targetIrxIdx then
-              ctx.configModified = true
+              markConfigMutated(ctx)
             end
           end
           if targetIrxIdx then
@@ -2267,6 +2264,7 @@ local function run(ctx)
             ctx.isAddPath = false
             ctx.addPathKey = nil
             ctx.pathPickerBootKey = nil
+            ctx.pathPickerBootKeyDisabled = nil
             ctx.pathPickerForEntryIdx = nil
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerBblHotkeyKey = nil
@@ -2314,6 +2312,7 @@ local function run(ctx)
             ctx.pathPickerTarget = nil
             ctx.pathPickerFileExts = nil
             ctx.pathPickerBootKey = nil
+            ctx.pathPickerBootKeyDisabled = nil
             ctx.pathPickerForEntryIdx = nil
             ctx.pathPickerEditIdx = nil
             ctx.pathPickerBblIrxIdx = nil
@@ -2376,6 +2375,8 @@ local function run(ctx)
           ctx.pathPickerBblIrxIdx = nil
           ctx.pathPickerBblIrxDisabled = nil
           ctx.pathPickerBootKey = o.key
+          ctx.pathPickerBootKeyDisabled = (cachedIsBootKeyDisabled and cachedIsBootKeyDisabled(ctx.lines, o.key)) and true or
+              false
           if firstEntry ~= nil and tostring(firstEntryValue or "") == "" then
             ctx.pathPickerEditIdx = 1
             ctx.pathPickerInsertBelow = nil
@@ -2409,6 +2410,7 @@ local function run(ctx)
         ctx.pathPickerTarget = nil
         ctx.pathPickerFileExts = isBblLoadIrx and { ".irx" } or nil
         ctx.pathPickerBootKey = nil
+        ctx.pathPickerBootKeyDisabled = nil
         ctx.pathPickerForEntryIdx = nil
         ctx.pathPickerBblHotkeyKey = nil
         ctx.pathPickerBblHotkeySlot = nil
@@ -2443,7 +2445,13 @@ local function run(ctx)
           isOsdmbrToggleableBootKey(o.key) and osdmbrBootKeyHasEntries(ctx, _, o.key) then
         local disabled = _.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, o.key)
         _.config_parse.setBootKeyDisabled(ctx.lines, o.key, not disabled)
-        ctx.configModified = true
+        ctx.entryPathsBootKeyDisabledTag = tostring(o.key or "")
+        ctx.entryPathsBootKeyDisabledOverride = (not disabled) and true or false
+        ctx.entryArgsBootKeyDisabledTag = tostring(o.key or "")
+        ctx.entryArgsBootKeyDisabledOverride = (not disabled) and true or false
+        -- Key-level disable/enable is a common quick toggle; recompute dirty now
+        -- so Start reflects true semantic state immediately on the next frame.
+        markConfigMutated(ctx, true)
       elseif isOsdVisualCoordRow then
         if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet) then
           ctx.editorOsdVisualRestoreOpen = true
@@ -2459,7 +2467,7 @@ local function run(ctx)
           local changed = _.config_parse.setBblHotkeySlotDisabled and
               _.config_parse.setBblHotkeySlotDisabled(ctx.lines, "AUTO", slotNum, not slot.disabled)
           if changed then
-            ctx.configModified = true
+            markConfigMutated(ctx)
           end
         end
       elseif o and o.optType == "color" and o.key and isR3ConfiguratorColorKey(ctx, o.key) then
@@ -2471,11 +2479,7 @@ local function run(ctx)
         local def = resetDefaultFn and resetDefaultFn(o.key)
         if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def, cachedGet) then
           setConfigValue(ctx, _, o.key, def)
-          if _.common and _.common.refreshConfigModified then
-            _.common.refreshConfigModified(ctx)
-          else
-            ctx.configModified = true
-          end
+          markConfigMutated(ctx, true)
         end
       end
     end

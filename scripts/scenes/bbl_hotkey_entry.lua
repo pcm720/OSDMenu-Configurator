@@ -287,6 +287,7 @@ local function run(ctx)
       ctx.pathPickerScroll = ctx.pathPickerScroll or 0
       ctx.pathBrowsePath = nil
       ctx.pathPickerBootKey = nil
+      ctx.pathPickerBootKeyDisabled = nil
       ctx.pathPickerForEntryIdx = nil
       ctx.pathPickerEditIdx = nil
       ctx.pathPickerBblIrxIdx = nil
@@ -315,6 +316,7 @@ local function run(ctx)
       local changed = _.config_parse.setBblHotkeySlotDisabled and
           _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, slot, not data.disabled)
       if changed then
+        ctx._configModifiedCache = nil
         ctx.configModified = true
       end
     end
@@ -326,6 +328,7 @@ local function run(ctx)
   if rows[ctx.bblEntryDetailSel] == "path" and canRemoveSlot and (_.padEffective & _.PAD_SQUARE) ~= 0 then
     local removed = removeCurrentSlotCompact()
     if removed then
+      ctx._configModifiedCache = nil
       ctx.configModified = true
       ctx.bblEntryFocusSlot = math.max(1, math.min(slot, maxEntries))
     end

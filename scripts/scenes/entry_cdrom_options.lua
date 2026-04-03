@@ -18,11 +18,85 @@ local function run(ctx)
     return t
   end)() or (_.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {})
   local opts = _.config_options.cdrom_options or {}
+  local optionOrderByKey = {}
+  for i = 1, #opts do
+    local o = opts[i]
+    local key = o and o.key or nil
+    if key and key ~= "" then
+      optionOrderByKey[key] = i
+    end
+  end
+  local targetOrderKey = isBoot and ("boot:" .. tostring(ctx.bootKey or "")) or
+      ("entry:" .. tostring(ctx.entryIdx or 0))
+  -- Keep launch-disc option args in stable per-target order so off/on reverts
+  -- return to the same semantic line order and don't leave a false dirty state.
+  if ctx.cdromOptionOrderKey ~= targetOrderKey or type(ctx.cdromOptionOrder) ~= "table" then
+    local rankByValue = {}
+    local nextRank = 1
+    for i = 1, #args do
+      local av = type(args[i]) == "table" and args[i].value or args[i]
+      if av ~= nil and rankByValue[av] == nil then
+        rankByValue[av] = nextRank
+        nextRank = nextRank + 1
+      end
+    end
+    local fallbackBase = nextRank
+    for i = 1, #opts do
+      local key = opts[i] and opts[i].key or nil
+      if key and key ~= "" and rankByValue[key] == nil then
+        rankByValue[key] = fallbackBase + i
+      end
+    end
+    ctx.cdromOptionOrder = rankByValue
+    ctx.cdromOptionOrderKey = targetOrderKey
+  end
   if ctx.cdromOptSel < 1 then ctx.cdromOptSel = 1 end
   if ctx.cdromOptSel > #opts then ctx.cdromOptSel = #opts end
   local function hasArg(key)
     for _, a in ipairs(args) do if (type(a) == "table" and a.value or a) == key then return true end end
     return false
+  end
+  local function markConfigMutated()
+    -- Force frame-end dirty recomputation after an edit so immediate revert
+    -- can clear Save without waiting for stale cache invalidation.
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
+  local function insertOptionArgWithStableOrder(argList, key)
+    local rankByValue = ctx.cdromOptionOrder or {}
+    local newRank = rankByValue[key] or (1000 + (optionOrderByKey[key] or 0))
+    local insertAt = #argList + 1
+    for i = 1, #argList do
+      local av = type(argList[i]) == "table" and argList[i].value or argList[i]
+      local r = rankByValue[av]
+      if r and r > newRank then
+        insertAt = i
+        break
+      end
+    end
+    table.insert(argList, insertAt, { value = key, disabled = false })
+  end
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
   end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.launch_disc_options_title, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8, _.menu_str.launch_disc_options_sub, _.DIM)
@@ -60,8 +134,22 @@ local function run(ctx)
     local x = _.common.centerX(_, tw)
     _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selCoSt.desc, hintColor, hintTextH)
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.menu_str.cdrom_toggle_hint_items, nil, _.DIM,
-    _.w - 2 * _.MARGIN_X)
+  local baseHints = _.menu_str.cdrom_toggle_hint_items or {}
+  local crossLabel = (baseHints[1] and baseHints[1].label) or "Toggle"
+  local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
+  local cdromHints = {
+    { pad = "cross", label = crossLabel, row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    { pad = "circle", label = backLabel, row = 1 },
+  }
+  for i = 3, #baseHints do
+    cdromHints[#cdromHints + 1] = baseHints[i]
+  end
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, cdromHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.cdromOptSel = ctx.cdromOptSel - 1; if ctx.cdromOptSel < 1 then ctx.cdromOptSel = #opts end
   end
@@ -86,27 +174,32 @@ local function run(ctx)
       if isBoot then
         local v = {}
         for _, item in ipairs(newArgs) do table.insert(v, type(item) == "table" and item.value or item) end
-        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v)
+        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v, { preserveOrder = true })
       else
-        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, newArgs)
+        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, newArgs, { preserveOrder = true })
       end
-      ctx.configModified = true
+      markConfigMutated()
     else
-      table.insert(args, { value = key, disabled = false })
+      insertOptionArgWithStableOrder(args, key)
       if isBoot then
         local v = {}
         for _, item in ipairs(args) do table.insert(v, type(item) == "table" and item.value or item) end
-        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v)
+        _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v, { preserveOrder = true })
       else
-        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, args)
+        _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, args, { preserveOrder = true })
       end
-      ctx.configModified = true
+      markConfigMutated()
     end
   end
   if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT | _.PAD_CROSS)) ~= 0 then
     toggleSelectedOption()
   end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
+  end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.cdromOptionOrder = nil
+    ctx.cdromOptionOrderKey = nil
     if isBoot then
       ctx.state = "editor"; ctx.bootKey = nil
     else

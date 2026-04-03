@@ -256,6 +256,7 @@ local function run(ctx)
     ctx.pathPickerTarget = nil
     ctx.pathPickerFileExts = nil
     ctx.pathPickerBootKey = nil
+    ctx.pathPickerBootKeyDisabled = nil
     ctx.pathPickerForEntryIdx = nil
     ctx.pathPickerEditIdx = nil
     ctx.pathPickerInsertBelow = nil

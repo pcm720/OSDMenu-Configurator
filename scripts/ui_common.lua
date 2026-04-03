@@ -519,10 +519,12 @@ end
 
 local function computeSemanticDigest(ctx, lines)
   local parser = getConfigParser(ctx)
+  local digestLines = lines or {}
+
   if parser and parser.semanticDigest then
-    return parser.semanticDigest(lines or {})
+    return parser.semanticDigest(digestLines)
   end
-  return fallbackSemanticDigest(lines)
+  return fallbackSemanticDigest(digestLines)
 end
 
 function common.refreshConfigModified(ctx)

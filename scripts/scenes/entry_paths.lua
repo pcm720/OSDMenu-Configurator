@@ -51,12 +51,24 @@ local function run(ctx)
     ctx.state = "editor"; return
   end
   local sceneEpoch = tonumber(ctx._sceneEpoch) or 0
+  local bootKeyDisabledOverride = nil
+  local bootKeyOpts = nil
+  if isBoot then
+    local bootKeyTag = tostring(ctx.bootKey or "")
+    if ctx.entryPathsBootKeyDisabledTag ~= bootKeyTag or ctx.entryPathsBootKeyDisabledOverride == nil then
+      ctx.entryPathsBootKeyDisabledTag = bootKeyTag
+      ctx.entryPathsBootKeyDisabledOverride =
+          (_.config_parse.isBootKeyDisabled and _.config_parse.isBootKeyDisabled(ctx.lines, ctx.bootKey)) and true or false
+    end
+    bootKeyDisabledOverride = ctx.entryPathsBootKeyDisabledOverride and true or false
+    bootKeyOpts = { keyDisabledOverride = bootKeyDisabledOverride }
+  end
   local paths = {}
   local hasArgsPaths = false
   local hasSpecialArgsPath = false
   local hasFirstExclusivePath = false
   local function buildPathScan()
-    local outPaths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey) or {}) or
+    local outPaths = isBoot and (_.config_parse.getBootPathEntries(ctx.lines, ctx.bootKey, bootKeyOpts) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
     local outHasArgs = false
     local outHasSpecialArgs = false
@@ -198,10 +210,10 @@ local function run(ctx)
     local label
     if isBoot and (hasArgsPaths or hasSpecialArgsPath) and i == argsRow then
       if argsRowIsSpecial then
-        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey) or {}
+        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey, bootKeyOpts) or {}
         label = _.menu_str.launch_disc_options .. (#args == 0 and "" or (" (" .. #args .. ")"))
       else
-        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey) or {}
+        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey, bootKeyOpts) or {}
         label = _.menu_str.arguments .. (#args == 0 and "" or (" (" .. #args .. ")"))
       end
     else
@@ -261,11 +273,18 @@ local function run(ctx)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, pathHints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
 
+  local function markConfigMutated()
+    invalidatePathScanCache()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
+
   local function openPathPicker(editIdx)
     local pickerContext = isBoot and "mbr" or (isFmcbEntry and "fmcb_entry" or "osdmenu")
     ctx.editKey = nil
     ctx.pathPickerForEntryIdx = isBoot and nil or ctx.entryIdx
     ctx.pathPickerBootKey = isBoot and ctx.bootKey or nil
+    ctx.pathPickerBootKeyDisabled = isBoot and bootKeyDisabledOverride or nil
     ctx.pathPickerBblHotkeyKey = nil
     ctx.pathPickerBblHotkeySlot = nil
     ctx.pathPickerBblHotkeyDisabled = nil
@@ -286,11 +305,12 @@ local function run(ctx)
   local function toggleSelectedPathDisabled()
     if ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
       if isBoot then
-        _.config_parse.setBootPathDisabled(ctx.lines, ctx.bootKey, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
+        _.config_parse.setBootPathDisabled(ctx.lines, ctx.bootKey, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled,
+          bootKeyOpts)
       else
         _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
       end
-      ctx.configModified = true
+      markConfigMutated()
     end
   end
   local function saveAndStay()
@@ -320,11 +340,11 @@ local function run(ctx)
     refreshPaths()
     table.remove(paths, ctx.entryPathSel)
     if isBoot then
-      _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
+      _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths, bootKeyOpts)
     else
       _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, paths)
     end
-    ctx.configModified = true
+    markConfigMutated()
     refreshPaths()
     if ctx.entryPathSel > #paths then
       ctx.entryPathSel = math.max(1, #paths)
@@ -347,11 +367,11 @@ local function run(ctx)
     if dst < 1 or dst > #paths then return end
     paths[ctx.entryPathSel], paths[dst] = paths[dst], paths[ctx.entryPathSel]
     if isBoot then
-      _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths)
+      _.config_parse.setBootPathEntries(ctx.lines, ctx.bootKey, paths, bootKeyOpts)
     else
       _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, paths)
     end
-    ctx.configModified = true
+    markConfigMutated()
     ctx.entryPathSel = dst
     refreshPaths()
   end
@@ -426,12 +446,14 @@ local function run(ctx)
         ctx.cdromOptSel = ctx.cdromOptSel or 1
         ctx.state = "entry_cdrom_options"
       else
-        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey) or {}
+        local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey, bootKeyOpts) or {}
         if #args == 0 then
           ctx.entryArgAddMenu = true
           ctx.entryArgAddSel = 1
           ctx.entryArgAddScroll = 0
         end
+        ctx.entryArgsBootKeyDisabledTag = tostring(ctx.bootKey or "")
+        ctx.entryArgsBootKeyDisabledOverride = bootKeyDisabledOverride and true or false
         ctx.entryArgSel = ctx.entryArgSel or 1
         ctx.entryArgScroll = ctx.entryArgScroll or 0
         ctx.state = "entry_args"

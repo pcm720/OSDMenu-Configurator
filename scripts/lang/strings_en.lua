@@ -256,7 +256,7 @@ strings.options_osdmenu = {
   OSDSYS_num_displayed_items = { label = "Items shown", desc = "Number of menu items visible" },
   OSDSYS_selected_color = { label = "Selected color", desc = "Menu entry highlight color" },
   OSDSYS_unselected_color = { label = "Unselected color", desc = "Menu entry color" },
-  cdrom_skip_ps2logo = { label = "Skip PS2LOGO", desc = "Skip PlayStation 2 logo at disc boot" },
+  cdrom_skip_ps2logo = { label = "Skip PS2 Logo", desc = "Skip PlayStation 2 logo at disc boot" },
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "Use DKWDRV", desc = "Use DKWDRV for PS1 discs" },
   ps1drv_enable_fast = { label = "PS1 fast loading", desc = "Force PS1 fast disc speed" },
@@ -280,7 +280,7 @@ strings.options_osdmbr = {
   boot_circle = { label = "Boot CIRCLE", desc = "Paths and arguments for circle button" },
   boot_cross = { label = "Boot CROSS", desc = "Paths and arguments for cross button" },
   boot_square = { label = "Boot SQUARE", desc = "Paths and arguments for square button" },
-  cdrom_skip_ps2logo = { label = "Skip PS2LOGO", desc = "Skip PlayStation 2 logo at disc boot" },
+  cdrom_skip_ps2logo = { label = "Skip PS2 Logo", desc = "Skip PlayStation 2 logo at disc boot" },
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "Use DKWDRV", desc = "Use DKWDRV for PS1 discs" },
   ps1drv_enable_fast = { label = "PS1 fast loading", desc = "Force PS1 fast disc speed" },
@@ -363,7 +363,7 @@ for k, v in pairs(strings.options_r3configurator or {}) do strings.options[k] = 
 
 -- CDROM option labels/descs (Launch disc options sub-screen). Keys are symbolic (no raw args).
 strings.cdrom_options = {
-  nologo = { label = "Skip PS2LOGO", desc = "Skip PlayStation 2 logo at disc boot" },
+  nologo = { label = "Skip PS2 Logo", desc = "Skip PlayStation 2 logo at disc boot" },
   nogameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   dkwdrv = { label = "Use DKWDRV", desc = "Use DKWDRV for PS1 discs" },
   ps1fast = { label = "PS1 fast loading", desc = "Force PS1 fast disc speed" },

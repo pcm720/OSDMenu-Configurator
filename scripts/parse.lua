@@ -479,9 +479,16 @@ function config_parse.setBootKeyDisabled(lines, key, disabled)
   end
 end
 
-function config_parse.getBootPathEntries(lines, key)
+local function resolveBootKeyDisabled(lines, key, opts)
+  if type(opts) == "table" and opts.keyDisabledOverride ~= nil then
+    return opts.keyDisabledOverride and true or false
+  end
+  return config_parse.isBootKeyDisabled(lines, key)
+end
+
+function config_parse.getBootPathEntries(lines, key, opts)
   local out = {}
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for _, entry in ipairs(lines or {}) do
     if entry.key and entry.key == key then
       local c = entry.comment
@@ -492,45 +499,73 @@ function config_parse.getBootPathEntries(lines, key)
   return out
 end
 
-function config_parse.setBootPathEntries(lines, key, paths)
+function config_parse.setBootPathEntries(lines, key, paths, opts)
+  local insertAt = nil
   local i = 1
   while i <= #lines do
     if lines[i].key == key then
+      if not insertAt then insertAt = i end
       table.remove(lines, i)
     else
       i = i + 1
     end
   end
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  if not insertAt then
+    local argPrefix = bootArgPrefix(key)
+    local legacyArg = bootLegacyArgKey(key)
+    for j = 1, #lines do
+      local k = lines[j].key
+      if k and (k == legacyArg or k:sub(1, #argPrefix) == argPrefix) then
+        insertAt = j
+        break
+      end
+    end
+    if not insertAt then insertAt = #lines + 1 end
+  end
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for _, item in ipairs(paths or {}) do
     local value = type(item) == "table" and item.value or item
-    local disabled = type(item) == "table" and item.disabled
-    table.insert(lines, {
+    local disabled = false
+    if type(item) == "table" then
+      if item.disabled ~= nil then
+        disabled = item.disabled and true or false
+      elseif item.comment ~= nil then
+        disabled = keyDisabled and (item.comment == 2) or (item.comment and true or false)
+      end
+    end
+    local comment = nil
+    if type(item) == "table" and item.comment ~= nil then
+      comment = (item.comment == 2) and 2 or (item.comment and true or nil)
+    else
+      comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
+    end
+    table.insert(lines, insertAt, {
       key = key,
       value = value or "",
-      comment = disabled and (keyDisabled and 2 or true) or nil,
+      comment = comment,
     })
+    insertAt = insertAt + 1
   end
 end
 
-function config_parse.insertBootPathBelow(lines, key, belowIdx, value)
-  local entries = config_parse.getBootPathEntries(lines, key)
+function config_parse.insertBootPathBelow(lines, key, belowIdx, value, opts)
+  local entries = config_parse.getBootPathEntries(lines, key, opts)
   local insertPos = tonumber(belowIdx) or 0
   if insertPos < 0 then insertPos = 0 end
   if insertPos > #entries then insertPos = #entries end
   table.insert(entries, insertPos + 1, { value = value or "", disabled = false })
-  config_parse.setBootPathEntries(lines, key, entries)
+  config_parse.setBootPathEntries(lines, key, entries, opts)
   return insertPos + 1
 end
 
-function config_parse.setBootPathDisabled(lines, key, pathNum, disabled)
+function config_parse.setBootPathDisabled(lines, key, pathNum, disabled, opts)
   local n = 0
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for _, entry in ipairs(lines or {}) do
     if entry.key and entry.key == key then
       n = n + 1
       if n == pathNum then
-        entry.comment = disabled and (keyDisabled and 2 or true) or nil
+        entry.comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
         return true
       end
     end
@@ -539,9 +574,9 @@ function config_parse.setBootPathDisabled(lines, key, pathNum, disabled)
 end
 
 -- OSDMBR.CNF: boot_auto, boot_start, etc. can have multiple path lines.
-function config_parse.getBootPaths(lines, key)
+function config_parse.getBootPaths(lines, key, opts)
   local out = {}
-  local entries = config_parse.getBootPathEntries(lines, key)
+  local entries = config_parse.getBootPathEntries(lines, key, opts)
   for i = 1, #entries do
     if not entries[i].disabled then
       out[#out + 1] = entries[i].value
@@ -551,8 +586,8 @@ function config_parse.getBootPaths(lines, key)
 end
 
 -- Boot args: key_arg or key_argN (suffix ignored); fallback legacy arg_key.
-function config_parse.getBootArgEntries(lines, key)
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+function config_parse.getBootArgEntries(lines, key, opts)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   local out = {}
   local prefix = bootArgPrefix(key)
   local hasPrefixed = false
@@ -576,45 +611,79 @@ function config_parse.getBootArgEntries(lines, key)
   return out
 end
 
-function config_parse.setBootArgEntries(lines, key, args)
-  args = normalizeArgsWithGsmLast(args)
+function config_parse.setBootArgEntries(lines, key, args, opts)
+  local preserveOrder = true
+  if type(opts) == "table" and opts.preserveOrder ~= nil then
+    preserveOrder = opts.preserveOrder == true
+  end
+  if not preserveOrder then
+    args = normalizeArgsWithGsmLast(args)
+  end
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
+  local insertAt = nil
   local i = 1
   while i <= #lines do
     local k = lines[i].key
     if k and (k == legacy or k:sub(1, #prefix) == prefix) then
+      if not insertAt then insertAt = i end
       table.remove(lines, i)
     else
       i = i + 1
     end
   end
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  if not insertAt then
+    local anchor = nil
+    for j = 1, #lines do
+      if lines[j].key == key then
+        anchor = j
+      end
+    end
+    insertAt = (anchor and (anchor + 1)) or (#lines + 1)
+  end
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   for idx, item in ipairs(args or {}) do
     local value = type(item) == "table" and item.value or item
-    local disabled = type(item) == "table" and item.disabled
-    table.insert(lines, {
+    local disabled = false
+    if type(item) == "table" then
+      if item.disabled ~= nil then
+        disabled = item.disabled and true or false
+      elseif item.comment ~= nil then
+        -- For legacy callers that only pass comment state.
+        disabled = keyDisabled and (item.comment == 2) or (item.comment and true or false)
+      end
+    end
+    local comment = nil
+    if preserveOrder and type(item) == "table" and item.comment ~= nil then
+      -- Preserve raw comment marker (nil / # / ##) during in-editor mutations so
+      -- toggling + reverting can round-trip to an identical semantic digest.
+      comment = (item.comment == 2) and 2 or (item.comment and true or nil)
+    else
+      comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
+    end
+    table.insert(lines, insertAt, {
       key = prefix .. tostring(idx),
       value = value or "",
-      comment = disabled and (keyDisabled and 2 or true) or nil,
+      comment = comment,
     })
+    insertAt = insertAt + 1
   end
 end
 
-function config_parse.insertBootArgBelow(lines, key, belowIdx, value)
-  local entries = config_parse.getBootArgEntries(lines, key)
+function config_parse.insertBootArgBelow(lines, key, belowIdx, value, opts)
+  local entries = config_parse.getBootArgEntries(lines, key, opts)
   local insertPos = tonumber(belowIdx) or 0
   if insertPos < 0 then insertPos = 0 end
   if insertPos > #entries then insertPos = #entries end
   table.insert(entries, insertPos + 1, { value = value or "", disabled = false })
-  config_parse.setBootArgEntries(lines, key, entries)
+  config_parse.setBootArgEntries(lines, key, entries, opts)
   return insertPos + 1
 end
 
-function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
+function config_parse.setBootArgDisabled(lines, key, argNum, disabled, opts)
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
-  local keyDisabled = config_parse.isBootKeyDisabled(lines, key)
+  local keyDisabled = resolveBootKeyDisabled(lines, key, opts)
   local n = 0
   local hasPrefixed = false
   for _, entry in ipairs(lines or {}) do
@@ -622,7 +691,7 @@ function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
       hasPrefixed = true
       n = n + 1
       if n == argNum then
-        entry.comment = disabled and (keyDisabled and 2 or true) or nil
+        entry.comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
         return true
       end
     end
@@ -632,7 +701,7 @@ function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
     if entry.key and entry.key == legacy then
       n = n + 1
       if n == argNum then
-        entry.comment = disabled and (keyDisabled and 2 or true) or nil
+        entry.comment = disabled and (keyDisabled and 2 or true) or (keyDisabled and true or nil)
         return true
       end
     end
@@ -640,9 +709,9 @@ function config_parse.setBootArgDisabled(lines, key, argNum, disabled)
   return false
 end
 
-function config_parse.getBootArgs(lines, key)
+function config_parse.getBootArgs(lines, key, opts)
   local out = {}
-  local entries = config_parse.getBootArgEntries(lines, key)
+  local entries = config_parse.getBootArgEntries(lines, key, opts)
   for i = 1, #entries do
     if not entries[i].disabled then
       out[#out + 1] = entries[i].value
@@ -651,7 +720,7 @@ function config_parse.getBootArgs(lines, key)
   return out
 end
 
-function config_parse.setBootArgs(lines, key, args)
+function config_parse.setBootArgs(lines, key, args, opts)
   local normalized = {}
   for _, a in ipairs(args or {}) do
     if type(a) == "table" then
@@ -660,7 +729,7 @@ function config_parse.setBootArgs(lines, key, args)
       normalized[#normalized + 1] = { value = a or "", disabled = false }
     end
   end
-  config_parse.setBootArgEntries(lines, key, normalized)
+  config_parse.setBootArgEntries(lines, key, normalized, opts)
 end
 
 -- PS2BBL/PSXBBL key IDs and limits.
@@ -1018,11 +1087,35 @@ function config_parse.setBblHotkeyPath(lines, keyId, entryIdx, value, disabled)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end
   local ids = bblHotkeyIdVariants(canonical)
   local keys = {}
+  local keySet = {}
+  local argSet = {}
   for i = 1, #ids do keys[#keys + 1] = bblPathKey(ids[i], entryIdx) end
-  removeAllKeys(lines, keys)
+  for i = 1, #keys do keySet[keys[i]] = true end
+  for i = 1, #ids do argSet[bblArgKey(ids[i], entryIdx)] = true end
+  local insertAt = nil
+  local i = 1
+  while i <= #lines do
+    local k = lines[i].key
+    if k and keySet[k] then
+      if not insertAt then insertAt = i end
+      table.remove(lines, i)
+    else
+      i = i + 1
+    end
+  end
+  if not insertAt then
+    for j = 1, #lines do
+      local k = lines[j].key
+      if k and argSet[k] then
+        insertAt = j
+        break
+      end
+    end
+    if not insertAt then insertAt = #lines + 1 end
+  end
   if value == nil then return true end
   local keyDisabled = config_parse.isBblHotkeyDisabled(lines, canonical)
-  table.insert(lines, {
+  table.insert(lines, insertAt, {
     key = bblPathKey(canonical, entryIdx),
     value = value or "",
     comment = disabled and (keyDisabled and 2 or true) or nil
@@ -1049,14 +1142,44 @@ function config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
   return out
 end
 
-function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
+function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args, opts)
   local canonical = canonicalBblHotkeyId(keyId)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end
-  args = normalizeArgsWithGsmLast(args)
+  local preserveOrder = true
+  if type(opts) == "table" and opts.preserveOrder ~= nil then
+    preserveOrder = opts.preserveOrder == true
+  end
+  if not preserveOrder then
+    args = normalizeArgsWithGsmLast(args)
+  end
   local ids = bblHotkeyIdVariants(canonical)
   local keys = {}
+  local keySet = {}
+  local pathSet = {}
   for i = 1, #ids do keys[#keys + 1] = bblArgKey(ids[i], entryIdx) end
-  removeAllKeys(lines, keys)
+  for i = 1, #keys do keySet[keys[i]] = true end
+  for i = 1, #ids do pathSet[bblPathKey(ids[i], entryIdx)] = true end
+  local insertAt = nil
+  local i = 1
+  while i <= #lines do
+    local k = lines[i].key
+    if k and keySet[k] then
+      if not insertAt then insertAt = i end
+      table.remove(lines, i)
+    else
+      i = i + 1
+    end
+  end
+  if not insertAt then
+    local anchor = nil
+    for j = 1, #lines do
+      local k = lines[j].key
+      if k and pathSet[k] then
+        anchor = j
+      end
+    end
+    insertAt = (anchor and (anchor + 1)) or (#lines + 1)
+  end
   local key = bblArgKey(canonical, entryIdx)
   local keyDisabled = config_parse.isBblHotkeyDisabled(lines, canonical)
   for _, item in ipairs(args or {}) do
@@ -1070,7 +1193,14 @@ function config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
         disabled = item.comment and true or false
       end
     end
-    table.insert(lines, { key = key, value = value or "", comment = disabled and (keyDisabled and 2 or true) or nil })
+    local comment = nil
+    if preserveOrder and type(item) == "table" and item.comment ~= nil then
+      comment = (item.comment == 2) and 2 or (item.comment and true or nil)
+    else
+      comment = disabled and (keyDisabled and 2 or true) or nil
+    end
+    table.insert(lines, insertAt, { key = key, value = value or "", comment = comment })
+    insertAt = insertAt + 1
   end
   return true
 end
@@ -1429,7 +1559,26 @@ function config_parse.setMenuEntryDisabled(lines, idx, disabled)
 end
 
 function config_parse.setMenuEntryName(lines, idx, name)
-  config_parse.set(lines, "name_OSDSYS_ITEM_" .. tostring(idx), name or "")
+  local idxStr = tostring(idx)
+  local key = "name_OSDSYS_ITEM_" .. idxStr
+  for _, entry in ipairs(lines) do
+    if entry.key and entry.key == key then
+      entry.value = name or ""
+      return
+    end
+  end
+  local argKey = "arg_OSDSYS_ITEM_" .. idxStr
+  local pathPat = "^path%d+_OSDSYS_ITEM_" .. idxStr .. "$"
+  local insertAt = nil
+  for i = 1, #lines do
+    local k = lines[i].key
+    if k and (k == argKey or k:match(pathPat)) then
+      insertAt = i
+      break
+    end
+  end
+  if not insertAt then insertAt = #lines + 1 end
+  table.insert(lines, insertAt, { key = key, value = name or "" })
 end
 
 -- Paths: path1_OSDSYS_ITEM_<idx>, path2_..., etc. Return in order: { value, disabled [, comment] } (includes commented lines).
@@ -1465,22 +1614,58 @@ end
 function config_parse.setMenuEntryPaths(lines, idx, paths)
   local idxStr = tostring(idx)
   local pattern = "^path(%d+)_OSDSYS_ITEM_" .. idxStr .. "$"
+  local insertAt = nil
   local i = 1
   while i <= #lines do
     local e = lines[i]
     if e.key and e.key:match(pattern) then
+      if not insertAt then insertAt = i end
       table.remove(lines, i)
     else
       i = i + 1
     end
   end
+  if not insertAt then
+    local nameKey = "name_OSDSYS_ITEM_" .. idxStr
+    local argKey = "arg_OSDSYS_ITEM_" .. idxStr
+    local namePos = nil
+    local argPos = nil
+    for j = 1, #lines do
+      local k = lines[j].key
+      if k == nameKey then
+        namePos = j
+      elseif k == argKey and not argPos then
+        argPos = j
+      end
+    end
+    if argPos then
+      insertAt = argPos
+    elseif namePos then
+      insertAt = namePos + 1
+    else
+      insertAt = #lines + 1
+    end
+  end
   local entryDisabled = config_parse.isMenuEntryDisabled(lines, idx)
   for pnum, item in ipairs(paths or {}) do
     local v = type(item) == "table" and item.value or item
-    local disabled = type(item) == "table" and item.disabled
-    table.insert(lines,
-      { key = "path" .. tostring(pnum) .. "_OSDSYS_ITEM_" .. idxStr, value = v, comment = disabled and
-      (entryDisabled and 2 or true) or nil })
+    local disabled = false
+    if type(item) == "table" then
+      if item.disabled ~= nil then
+        disabled = item.disabled and true or false
+      elseif item.comment ~= nil then
+        disabled = entryDisabled and (item.comment == 2) or (item.comment and true or false)
+      end
+    end
+    local comment = nil
+    if type(item) == "table" and item.comment ~= nil then
+      comment = (item.comment == 2) and 2 or (item.comment and true or nil)
+    else
+      comment = disabled and (entryDisabled and 2 or true) or nil
+    end
+    table.insert(lines, insertAt,
+      { key = "path" .. tostring(pnum) .. "_OSDSYS_ITEM_" .. idxStr, value = v, comment = comment })
+    insertAt = insertAt + 1
   end
 end
 
@@ -1502,22 +1687,58 @@ function config_parse.getMenuEntryArgs(lines, idx)
 end
 
 -- Replace all arg_OSDSYS_ITEM_<idx> with the given list. Each item is { value, disabled } or a plain value (treated as enabled).
-function config_parse.setMenuEntryArgs(lines, idx, args)
-  args = normalizeArgsWithGsmLast(args)
+function config_parse.setMenuEntryArgs(lines, idx, args, opts)
+  local preserveOrder = true
+  if type(opts) == "table" and opts.preserveOrder ~= nil then
+    preserveOrder = opts.preserveOrder == true
+  end
+  if not preserveOrder then
+    args = normalizeArgsWithGsmLast(args)
+  end
   local key = "arg_OSDSYS_ITEM_" .. tostring(idx)
+  local insertAt = nil
   local i = 1
   while i <= #lines do
     if lines[i].key == key then
+      if not insertAt then insertAt = i end
       table.remove(lines, i)
     else
       i = i + 1
     end
   end
+  if not insertAt then
+    local idxStr = tostring(idx)
+    local nameKey = "name_OSDSYS_ITEM_" .. idxStr
+    local pathPat = "^path%d+_OSDSYS_ITEM_" .. idxStr .. "$"
+    local anchor = nil
+    for j = 1, #lines do
+      local k = lines[j].key
+      if k and (k == nameKey or k:match(pathPat)) then
+        anchor = j
+      end
+    end
+    insertAt = (anchor and (anchor + 1)) or (#lines + 1)
+  end
   local entryDisabled = config_parse.isMenuEntryDisabled(lines, idx)
   for _, item in ipairs(args or {}) do
     local v = type(item) == "table" and item.value or item
-    local disabled = type(item) == "table" and item.disabled
-    table.insert(lines, { key = key, value = v, comment = disabled and (entryDisabled and 2 or true) or nil })
+    local disabled = false
+    if type(item) == "table" then
+      if item.disabled ~= nil then
+        disabled = item.disabled and true or false
+      elseif item.comment ~= nil then
+        -- For legacy callers that only pass comment state.
+        disabled = entryDisabled and (item.comment == 2) or (item.comment and true or false)
+      end
+    end
+    local comment = nil
+    if preserveOrder and type(item) == "table" and item.comment ~= nil then
+      comment = (item.comment == 2) and 2 or (item.comment and true or nil)
+    else
+      comment = disabled and (entryDisabled and 2 or true) or nil
+    end
+    table.insert(lines, insertAt, { key = key, value = v, comment = comment })
+    insertAt = insertAt + 1
   end
 end
 
@@ -1806,7 +2027,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
       if idx then
         local args = config_parse.getMenuEntryArgs(lines, idx)
         if #args > 0 then
-          config_parse.setMenuEntryArgs(lines, idx, args)
+          config_parse.setMenuEntryArgs(lines, idx, args, { preserveOrder = false })
         end
       end
     end
@@ -1832,7 +2053,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
       local k = keys[i]
       local args = config_parse.getBootArgEntries(lines, k)
       if #args > 0 then
-        config_parse.setBootArgEntries(lines, k, args)
+        config_parse.setBootArgEntries(lines, k, args, { preserveOrder = false })
       end
     end
   end
@@ -1842,7 +2063,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
       for slot = 1, BBL_MAX_ENTRIES do
         local args = config_parse.getBblHotkeyArgs(lines, keyId, slot)
         if #args > 0 then
-          config_parse.setBblHotkeyArgs(lines, keyId, slot, args)
+          config_parse.setBblHotkeyArgs(lines, keyId, slot, args, { preserveOrder = false })
         end
       end
     end
