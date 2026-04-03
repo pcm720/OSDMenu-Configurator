@@ -485,7 +485,8 @@ function config_parse.setBootKeyDisabled(lines, key, disabled)
       if disabled then
         entry.comment = entry.comment and 2 or true
       else
-        if entry.comment == 2 then entry.comment = true else entry.comment = nil end
+        -- Parent enable should restore all child paths/args as enabled.
+        entry.comment = nil
       end
     end
   end
@@ -1564,8 +1565,8 @@ function config_parse.isMenuEntryDisabled(lines, idx)
 end
 
 -- Set all lines for this menu entry (name, path*, arg) to commented or not.
--- When disabling: use comment = 2 (##) for path/arg lines that were already commented (per-item disabled), so enabling the entry later restores their disabled state.
--- When enabling: uncomment only lines with comment == true; leave comment = true where comment == 2 (was double-disabled).
+-- When disabling: preserve child-disabled state by promoting already-commented child lines to ##.
+-- When enabling: clear comment markers so parent + all children are enabled immediately.
 function config_parse.setMenuEntryDisabled(lines, idx, disabled)
   local idxStr = tostring(idx)
   local nameKey = "name_OSDSYS_ITEM_" .. idxStr
@@ -1576,7 +1577,7 @@ function config_parse.setMenuEntryDisabled(lines, idx, disabled)
       if disabled then
         entry.comment = entry.comment and 2 or true                                  -- already commented (per-item) -> ## (2)
       else
-        if entry.comment == 2 then entry.comment = true else entry.comment = nil end -- ## -> keep commented; # -> uncomment
+        entry.comment = nil
       end
     end
   end

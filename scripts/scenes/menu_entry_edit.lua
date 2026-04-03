@@ -28,6 +28,11 @@ local function run(ctx)
   local isFmcbEntry = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
   local isSeparatorEntry = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
       _.config_parse.isMenuEntrySeparatorName(name)
+  local separatorText = nil
+  if isSeparatorEntry and _.config_parse.getMenuEntrySeparatorText then
+    separatorText = _.config_parse.getMenuEntrySeparatorText(name) or ""
+  end
+  local nameDisplay = (separatorText ~= nil) and separatorText or name
   local hasOsdOrShutdown = false
   local allowArgs = (not isFmcbEntry) and (not isSeparatorEntry)
   for _, p in ipairs(paths) do
@@ -104,7 +109,8 @@ local function run(ctx)
   end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
-    _.menu_str.name .. (name == "" and (_.common_str.name_not_defined or _.common_str.empty) or name:sub(1, 40)), _.DIM)
+    _.menu_str.name .. (nameDisplay == "" and (_.common_str.name_not_defined or _.common_str.empty) or
+      nameDisplay:sub(1, 40)), _.DIM)
   if not isFmcbEntry then
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
   end
@@ -395,14 +401,24 @@ local function run(ctx)
     if row.kind == "name" then
       ctx.textInputTitleIdMode = nil
       ctx.textInputPrompt = _.menu_str.entry_name_prompt
-      local name = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
-      if name == _.menu_str.add_entry_label then name = "" end
-      ctx.textInputValue = name
+      local currentNameRaw = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
+      local editingSeparator = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
+          _.config_parse.isMenuEntrySeparatorName(currentNameRaw)
+      local currentNameDisplay = currentNameRaw
+      if editingSeparator and _.config_parse.getMenuEntrySeparatorText then
+        currentNameDisplay = _.config_parse.getMenuEntrySeparatorText(currentNameRaw) or ""
+      end
+      if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
+      ctx.textInputValue = currentNameDisplay
       ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
       ctx.textInputCallback = function(val)
+        local saveVal = val or ""
+        if editingSeparator and saveVal:sub(1, 2) ~= "$!" then
+          saveVal = "$!" .. saveVal
+        end
         local newIsSeparator = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
-            _.config_parse.isMenuEntrySeparatorName(val)
-        _.config_parse.setMenuEntryName(ctx.lines, ctx.entryIdx, val)
+            _.config_parse.isMenuEntrySeparatorName(saveVal)
+        _.config_parse.setMenuEntryName(ctx.lines, ctx.entryIdx, saveVal)
         if newIsSeparator then
           _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, {})
           _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, {})

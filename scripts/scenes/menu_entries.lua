@@ -277,6 +277,7 @@ local function run(ctx)
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
   local missingNameLabel = _.common_str.name_not_defined or _.common_str.empty
   local missingPathLabel = _.common_str.path_not_defined or _.common_str.empty
+  local separatorSuffix = _.menu_str.separator_suffix or "(separator)"
   for i = ctx.entryScroll + 1, math.min(ctx.entryScroll + maxVis, total) do
     local ent = ctx.entryList[i]
     local idx = ent.idx
@@ -289,7 +290,11 @@ local function run(ctx)
     local label
     if isSeparator then
       local sepText = (_.config_parse.getMenuEntrySeparatorText and _.config_parse.getMenuEntrySeparatorText(name)) or ""
-      label = (sepText ~= "" and sepText) or " "
+      if sepText ~= "" then
+        label = sepText .. " " .. separatorSuffix
+      else
+        label = separatorSuffix
+      end
     elseif not hasName and not hasPath then
       label = _.common_str.empty
       usesPlaceholder = true
