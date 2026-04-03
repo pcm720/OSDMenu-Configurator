@@ -1687,6 +1687,7 @@ local function run(ctx)
       if usedCount >= maxAutoSlots then return end
       local newSlot = _.config_parse.insertBblHotkeySlotBelow(ctx.lines, "AUTO", autoSlotNum, maxAutoSlots)
       if newSlot then
+        ctx._configModifiedCache = nil
         ctx.configModified = true
         confirmAutoMoveState()
         if newSlot < autoSlotNum and ctx.optSel > 1 then
@@ -1724,6 +1725,7 @@ local function run(ctx)
           _.config_parse.setBblHotkeyArgs(ctx.lines, "AUTO", i, {})
         end
       end
+      ctx._configModifiedCache = nil
       ctx.configModified = true
       confirmAutoMoveState()
     end

@@ -56,6 +56,12 @@ local function run(ctx)
     for _, a in ipairs(args) do if (type(a) == "table" and a.value or a) == key then return true end end
     return false
   end
+  local function markConfigMutated()
+    -- Force frame-end dirty recomputation after an edit so immediate revert
+    -- can clear Save without waiting for stale cache invalidation.
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
   local function insertOptionArgWithStableOrder(argList, key)
     local rankByValue = ctx.cdromOptionOrder or {}
     local newRank = rankByValue[key] or (1000 + (optionOrderByKey[key] or 0))
@@ -172,7 +178,7 @@ local function run(ctx)
       else
         _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, newArgs, { preserveOrder = true })
       end
-      ctx.configModified = true
+      markConfigMutated()
     else
       insertOptionArgWithStableOrder(args, key)
       if isBoot then
@@ -182,7 +188,7 @@ local function run(ctx)
       else
         _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, args, { preserveOrder = true })
       end
-      ctx.configModified = true
+      markConfigMutated()
     end
   end
   if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT | _.PAD_CROSS)) ~= 0 then

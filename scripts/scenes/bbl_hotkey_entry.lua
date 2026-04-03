@@ -326,6 +326,7 @@ local function run(ctx)
   if rows[ctx.bblEntryDetailSel] == "path" and canRemoveSlot and (_.padEffective & _.PAD_SQUARE) ~= 0 then
     local removed = removeCurrentSlotCompact()
     if removed then
+      ctx._configModifiedCache = nil
       ctx.configModified = true
       ctx.bblEntryFocusSlot = math.max(1, math.min(slot, maxEntries))
     end

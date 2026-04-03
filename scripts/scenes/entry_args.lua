@@ -98,14 +98,18 @@ local function run(ctx)
     return _.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {}
   end
 
+  local function markConfigMutated()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
+
   local function setArgs(a)
     if isBoot then
       _.config_parse.setBootArgEntries(ctx.lines, ctx.bootKey, a or {})
-      ctx.configModified = true
     else
       _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, a)
-      ctx.configModified = true
     end
+    markConfigMutated()
     ctx.entryArgsModelCache = nil
   end
 
@@ -128,7 +132,7 @@ local function run(ctx)
     if value == "" then return end
     if isBoot and ctx.entryArgInsertBelow and ctx.entryArgInsertBelow >= 0 then
       _.config_parse.insertBootArgBelow(ctx.lines, ctx.bootKey, ctx.entryArgInsertBelow, value)
-      ctx.configModified = true
+      markConfigMutated()
       invalidateArgsModel()
       local refreshed = getArgs()
       ctx.entryArgSel = findArgIndexByValue(refreshed, value, #refreshed)
@@ -496,7 +500,7 @@ local function run(ctx)
       else
         _.config_parse.setArgDisabled(ctx.lines, ctx.entryIdx, ctx.entryArgSel, not args[ctx.entryArgSel].disabled)
       end
-      ctx.configModified = true
+      markConfigMutated()
       invalidateArgsModel()
     end
   end

@@ -1244,6 +1244,7 @@ local function run(ctx)
                     _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
                     ctx.state = "editor"
                   end
+                  ctx._configModifiedCache = nil
                   ctx.configModified = true
                 end
               else

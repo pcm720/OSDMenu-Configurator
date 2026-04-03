@@ -57,9 +57,14 @@ local function run(ctx)
     return _.config_parse.getBblHotkeyArgs(ctx.lines, keyId, slot) or {}
   end
 
+  local function markConfigMutated()
+    ctx._configModifiedCache = nil
+    ctx.configModified = true
+  end
+
   local function setArgs(args)
     _.config_parse.setBblHotkeyArgs(ctx.lines, keyId, slot, args)
-    ctx.configModified = true
+    markConfigMutated()
   end
 
   local function findArgIndexByValue(argList, value, fallback)
@@ -523,7 +528,7 @@ local function run(ctx)
   local function toggleSelectedArgDisabled()
     if total > 0 then
       _.config_parse.setBblHotkeyArgDisabled(ctx.lines, keyId, slot, ctx.bblArgSel, not args[ctx.bblArgSel].disabled)
-      ctx.configModified = true
+      markConfigMutated()
     end
   end
 
