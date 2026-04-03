@@ -400,7 +400,11 @@ local function run(ctx)
 
   local hasSelection = (ctx.entrySel >= 1 and ctx.entrySel <= total)
   local canCrossOpen = hasSelection or canAddEntry
-  local selectedDisabled = hasSelection and ctx.entryList[ctx.entrySel].disabled
+  local selectedIdx = hasSelection and ctx.entryList[ctx.entrySel].idx or nil
+  local selectedIsSeparator = selectedIdx and (entryIsSeparatorByIdx[selectedIdx] == true) or false
+  local selectedHasActivePath = selectedIdx and (entryHasActivePathByIdx[selectedIdx] == true) or false
+  local selectedDisabled = hasSelection and
+      (ctx.entryList[ctx.entrySel].disabled or ((not selectedIsSeparator) and (not selectedHasActivePath))) or false
   local hintItems = {
     {
       pad = canCrossOpen and "cross" or "",
@@ -512,7 +516,11 @@ local function run(ctx)
     local idx = ent.idx
     local currentDisabled = _.config_parse.isMenuEntryDisabled(ctx.lines, idx) and true or false
     local targetDisabled = not (selectedDisabled and true or false)
-    if currentDisabled ~= targetDisabled then
+    -- If entry is effectively disabled only because all child paths are disabled,
+    -- a single triangle press should still enable parent + children.
+    local shouldApply = (currentDisabled ~= targetDisabled) or
+        (selectedDisabled and (not currentDisabled) and (not targetDisabled))
+    if shouldApply then
       _.config_parse.setMenuEntryDisabled(ctx.lines, idx, targetDisabled)
       markConfigMutated()
       refreshEntries()

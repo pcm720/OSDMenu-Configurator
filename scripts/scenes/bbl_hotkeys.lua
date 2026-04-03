@@ -228,7 +228,9 @@ local function run(ctx)
 
   local selKey = hotkeys[ctx.bblHotkeySel]
   local selInfo = selKey and hotkeySummary[selKey] or nil
-  local selDisabled = selInfo and selInfo.disabled and true or false
+  local selDisabledRaw = selInfo and selInfo.disabled and true or false
+  local selHasActivePath = (tonumber(selInfo and selInfo.activePathCount) or 0) > 0
+  local selDisabled = selDisabledRaw or (not selHasActivePath)
   local selCanToggleDisabled = selInfo and selInfo.disabledSeen and true or false
   local hint = {
     { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
@@ -335,8 +337,11 @@ local function run(ctx)
     local info = keyId and hotkeySummary[keyId] or nil
     local canToggle = info and info.disabledSeen and true or false
     if keyId and canToggle and _.config_parse.setBblHotkeyDisabled then
-      local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
-      local changed = _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
+      local rawDisabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId) and true or false
+      local hasActivePath = (tonumber(info and info.activePathCount) or 0) > 0
+      local effectiveDisabled = rawDisabled or (not hasActivePath)
+      local targetDisabled = not effectiveDisabled
+      local changed = _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, targetDisabled)
       if changed then
         ctx.configModified = true
         ctx.bblHotkeySummaryCache = nil
