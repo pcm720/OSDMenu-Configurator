@@ -519,10 +519,23 @@ end
 
 local function computeSemanticDigest(ctx, lines)
   local parser = getConfigParser(ctx)
-  if parser and parser.semanticDigest then
-    return parser.semanticDigest(lines or {})
+  local digestLines = lines or {}
+
+  -- Dirty tracking should reflect functional save output, not transient in-memory
+  -- key ordering side effects from edit helpers.
+  if parser and parser.regenerateForSave and ctx and ctx.fileType then
+    local cloned = common.cloneConfigLines(digestLines)
+    local cfgOptions = (_G and _G.CONFIG_UI and _G.CONFIG_UI.config_options) or nil
+    local okNormalize, normalized = pcall(parser.regenerateForSave, cloned, ctx.fileType, cfgOptions)
+    if okNormalize and type(normalized) == "table" then
+      digestLines = normalized
+    end
   end
-  return fallbackSemanticDigest(lines)
+
+  if parser and parser.semanticDigest then
+    return parser.semanticDigest(digestLines)
+  end
+  return fallbackSemanticDigest(digestLines)
 end
 
 function common.refreshConfigModified(ctx)
