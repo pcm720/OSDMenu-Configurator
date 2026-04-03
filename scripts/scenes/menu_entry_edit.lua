@@ -68,8 +68,42 @@ local function run(ctx)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryEditSub, label, col)
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.menu_str.cross_select_circle_back_items, nil,
-    _.DIM, _.w - 2 * _.MARGIN_X)
+  local baseHints = _.menu_str.cross_select_circle_back_items or {}
+  local crossLabel = (baseHints[1] and baseHints[1].label) or (_.menu_str.enter_label or _.menu_str.edit_label or "Enter")
+  local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
+  local entryEditHints = {
+    { pad = "cross", label = crossLabel, row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    { pad = "circle", label = backLabel, row = 1 },
+  }
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, entryEditHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.entryEditSub = ctx.entryEditSub - 1; if ctx.entryEditSub < 1 then ctx.entryEditSub = #subOpts end
   end
@@ -122,6 +156,9 @@ local function run(ctx)
       ctx.entryArgSel = ctx.entryArgSel or 1
       ctx.entryArgScroll = ctx.entryArgScroll or 0
     end
+  end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.state = "menu_entries"; ctx.entryIdx = nil

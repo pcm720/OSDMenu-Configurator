@@ -24,6 +24,28 @@ local function run(ctx)
     for _, a in ipairs(args) do if (type(a) == "table" and a.value or a) == key then return true end end
     return false
   end
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.launch_disc_options_title, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8, _.menu_str.launch_disc_options_sub, _.DIM)
   local startY = _.MARGIN_Y + _.scaleY(50)
@@ -60,8 +82,22 @@ local function run(ctx)
     local x = _.common.centerX(_, tw)
     _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selCoSt.desc, hintColor, hintTextH)
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.menu_str.cdrom_toggle_hint_items, nil, _.DIM,
-    _.w - 2 * _.MARGIN_X)
+  local baseHints = _.menu_str.cdrom_toggle_hint_items or {}
+  local crossLabel = (baseHints[1] and baseHints[1].label) or "Toggle"
+  local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
+  local cdromHints = {
+    { pad = "cross", label = crossLabel, row = 1 },
+    {
+      pad = ctx.configModified and "start" or "",
+      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
+      row = 1
+    },
+    { pad = "circle", label = backLabel, row = 1 },
+  }
+  for i = 3, #baseHints do
+    cdromHints[#cdromHints + 1] = baseHints[i]
+  end
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, cdromHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.cdromOptSel = ctx.cdromOptSel - 1; if ctx.cdromOptSel < 1 then ctx.cdromOptSel = #opts end
   end
@@ -105,6 +141,9 @@ local function run(ctx)
   end
   if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT | _.PAD_CROSS)) ~= 0 then
     toggleSelectedOption()
+  end
+  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
+    saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if isBoot then
