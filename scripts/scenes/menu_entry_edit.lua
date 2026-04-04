@@ -305,8 +305,12 @@ local function run(ctx)
     else
       target = target and true or false
     end
-    if current == target then return end
+    local desiredComment = target and true or nil
+    local currentComment = fmcbPaths[pathIndex].comment
+    local normalizedCurrentComment = (currentComment == 2) and 2 or (currentComment and true or nil)
+    if current == target and normalizedCurrentComment == desiredComment then return end
     fmcbPaths[pathIndex].disabled = target
+    fmcbPaths[pathIndex].comment = desiredComment
     _.config_parse.setMenuEntryPaths(ctx.lines, ctx.entryIdx, fmcbPaths)
     markConfigMutated()
   end
