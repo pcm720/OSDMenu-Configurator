@@ -530,9 +530,32 @@ local function fallbackSemanticDigest(lines)
   return table.concat(out, "\n")
 end
 
+local function canonicalizeLinesForSemanticDigest(ctx, parser, lines)
+  local digestLines = lines or {}
+  if not (ctx and parser and parser.regenerateForSave) then
+    return digestLines
+  end
+  if type(ctx.fileType) ~= "string" or ctx.fileType == "" then
+    return digestLines
+  end
+  local options = ctx._ and ctx._.config_options
+  if type(options) ~= "table" then
+    return digestLines
+  end
+
+  -- regenerateForSave may normalize in-place; clone first so dirty tracking
+  -- never mutates the live config lines while only computing digest.
+  local regenInput = common.cloneConfigLines(digestLines)
+  local ok, canonical = pcall(parser.regenerateForSave, regenInput, ctx.fileType, options)
+  if ok and type(canonical) == "table" then
+    return canonical
+  end
+  return digestLines
+end
+
 local function computeSemanticDigest(ctx, lines)
   local parser = getConfigParser(ctx)
-  local digestLines = lines or {}
+  local digestLines = canonicalizeLinesForSemanticDigest(ctx, parser, lines)
 
   if parser and parser.semanticDigest then
     return parser.semanticDigest(digestLines)
