@@ -530,6 +530,15 @@ local function fallbackSemanticDigest(lines)
   return table.concat(out, "\n")
 end
 
+local function computeRawSemanticDigest(ctx, lines)
+  local parser = getConfigParser(ctx)
+  local digestLines = lines or {}
+  if parser and parser.semanticDigest then
+    return parser.semanticDigest(digestLines)
+  end
+  return fallbackSemanticDigest(digestLines)
+end
+
 local function canonicalizeLinesForSemanticDigest(ctx, parser, lines)
   local digestLines = lines or {}
   if not (ctx and parser and parser.regenerateForSave) then
@@ -567,6 +576,7 @@ function common.refreshConfigModified(ctx)
   if not ctx then return false end
   if not ctx.lines then
     ctx.configModified = false
+    ctx.configCleanSemanticDigestRaw = nil
     ctx._configModifiedCache = nil
     return false
   end
@@ -580,17 +590,20 @@ function common.refreshConfigModified(ctx)
   local isCurrentlyModified = ctx.configModified and true or false
   local lineCount = #(ctx.lines or {})
   local cleanDigest = ctx.configCleanSemanticDigest
+  local cleanRawDigest = ctx.configCleanSemanticDigestRaw
+  local currentRawDigest = computeRawSemanticDigest(ctx, ctx.lines)
   local needsInitialSave = (ctx.configNeedsInitialSave == true)
   local cacheHit = cache and
       cache.linesRef == ctx.lines and
       cache.sceneEpoch == sceneEpoch and
       cache.cleanDigest == cleanDigest and
+      cache.cleanRawDigest == cleanRawDigest and
       cache.needsInitialSave == needsInitialSave and
       cache.lineCount == lineCount and
+      cache.rawDigest == currentRawDigest and
       cache.result == isCurrentlyModified
-  -- When already dirty, keep inputEpoch as a conservative invalidator so reverting
-  -- back to the clean semantic state is detected on edit input.
-  if cacheHit and ((not isCurrentlyModified) or cache.inputEpoch == inputEpoch) then
+  -- If raw semantic digest is unchanged, result is unchanged regardless of input polling.
+  if cacheHit then
     ctx.configModified = cache.result and true or false
     return ctx.configModified
   end
@@ -599,17 +612,27 @@ function common.refreshConfigModified(ctx)
     ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, ctx.lines)
     cleanDigest = ctx.configCleanSemanticDigest
   end
+  if ctx.configCleanSemanticDigestRaw == nil then
+    ctx.configCleanSemanticDigestRaw = computeRawSemanticDigest(ctx, ctx.lines)
+    cleanRawDigest = ctx.configCleanSemanticDigestRaw
+  end
 
-  local currentDigest = computeSemanticDigest(ctx, ctx.lines)
-  local semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
+  local currentDigest = ctx.configCleanSemanticDigest or ""
+  local semanticChanged = false
+  if currentRawDigest ~= (ctx.configCleanSemanticDigestRaw or "") then
+    currentDigest = computeSemanticDigest(ctx, ctx.lines)
+    semanticChanged = currentDigest ~= (ctx.configCleanSemanticDigest or "")
+  end
   ctx.configModified = semanticChanged or needsInitialSave
   ctx._configModifiedCache = {
     linesRef = ctx.lines,
     sceneEpoch = sceneEpoch,
     inputEpoch = inputEpoch,
     cleanDigest = ctx.configCleanSemanticDigest,
+    cleanRawDigest = ctx.configCleanSemanticDigestRaw,
     needsInitialSave = needsInitialSave,
     lineCount = lineCount,
+    rawDigest = currentRawDigest,
     result = ctx.configModified and true or false,
     digest = currentDigest
   }
@@ -684,6 +707,7 @@ function common.setCleanConfigSnapshot(ctx, opts)
   opts = opts or {}
   local snapshotLines = (opts.lines ~= nil) and opts.lines or ctx.lines or {}
   ctx.configCleanSemanticDigest = computeSemanticDigest(ctx, snapshotLines)
+  ctx.configCleanSemanticDigestRaw = computeRawSemanticDigest(ctx, snapshotLines)
   ctx.configNeedsInitialSave = opts.needsInitialSave == true
   ctx._configModifiedCache = nil
   return common.refreshConfigModified(ctx)
