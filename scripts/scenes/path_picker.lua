@@ -789,7 +789,7 @@ local function beginBrowseForDevice(ctx, e)
       if mp and mp ~= "" then
         local mpNorm = (mp:sub(-1) == ":") and mp or (mp .. ":")
         ctx.pathPickerBdmMountpoint = mpNorm
-        ctx.pathPickerBdmPrefix = _.file_selector.getBdmPathPrefix(e.deviceId)
+        ctx.pathPickerBdmPrefix = _.file_selector.getBdmPathPrefix(e.deviceId, ctx.pathPickerContext)
         ctx.pathBrowsePath = (mp:sub(-1) == ":") and (mp .. "/") or mp
         ctx.pathList = listBrowseEntries(ctx, ctx.pathBrowsePath)
         ctx.pathPickerSub = "browse"
@@ -954,7 +954,7 @@ local function run(ctx)
           ctx.pathPickerLoadedDeviceTypes[load.deviceType] = true
           local mpNorm = (mp:sub(-1) == ":") and mp or (mp .. ":")
           ctx.pathPickerBdmMountpoint = mpNorm
-          ctx.pathPickerBdmPrefix = _.file_selector.getBdmPathPrefix(load.deviceId)
+          ctx.pathPickerBdmPrefix = _.file_selector.getBdmPathPrefix(load.deviceId, ctx.pathPickerContext)
           ctx.pathBrowsePath = (mp:sub(-1) == ":") and (mp .. "/") or mp
           ctx.pathList = listBrowseEntries(ctx, ctx.pathBrowsePath)
           ctx.pathPickerSub = "browse"

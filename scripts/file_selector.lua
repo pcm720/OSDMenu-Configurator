@@ -37,6 +37,14 @@ local BDM_OPTIONS = {
   { deviceId = "mx4sio", bdmType = "mx4sio", bdmPathPrefix = "massX" },
 }
 
+local function bdmPrefixForContext(opt, context)
+  if not opt then return nil end
+  if opt.bdmType == "usb" and (context == "osdmenu" or context == "mbr") then
+    return "usb"
+  end
+  return opt.bdmPathPrefix
+end
+
 -- Special devices (instant-select, no browse). descKey = key in strings.devices.
 -- contexts = "osdmenu" | "mbr" | "fmcb_entry" | "fmcb_launch" | { ... }.
 -- Optional: noargs, exclusive, specialargs (specialargs is ignored unless exclusive is set).
@@ -227,7 +235,7 @@ function file_selector.getDevices(context)
             desc = desc,
             deviceType = deviceType,
             deviceId = opt.deviceId,
-            bdmPathPrefix = opt.bdmPathPrefix
+            bdmPathPrefix = bdmPrefixForContext(opt, context)
           }))
       end
     end
@@ -252,8 +260,7 @@ function file_selector.getDevices(context)
           desc = desc,
           deviceType = deviceType,
           deviceId = opt.deviceId,
-          bdmPathPrefix =
-              opt.bdmPathPrefix
+          bdmPathPrefix = bdmPrefixForContext(opt, context)
         }))
     end
   end
@@ -311,11 +318,12 @@ function file_selector.listDirectory(path)
   return out
 end
 
--- BDM deviceId (ata0, usb0, usb1, mx4sio) -> path prefix for config (ata, usb, mx4sio). Returns nil if not BDM.
-function file_selector.getBdmPathPrefix(deviceId)
+-- BDM deviceId (ata0, usb0, usb1, mx4sio) -> path prefix for config.
+-- Optional context allows scene-specific prefix mapping.
+function file_selector.getBdmPathPrefix(deviceId, context)
   if not deviceId then return nil end
   for _, opt in ipairs(BDM_OPTIONS) do
-    if opt.deviceId == deviceId then return opt.bdmPathPrefix end
+    if opt.deviceId == deviceId then return bdmPrefixForContext(opt, context) end
   end
   return nil
 end
