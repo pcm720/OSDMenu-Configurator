@@ -68,6 +68,9 @@ local function formatDisplayPath(_, pathVal)
   if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
   if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
   if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  if _.common and _.common.normalizePathForDisplay then
+    return _.common.normalizePathForDisplay(raw)
+  end
   return raw
 end
 

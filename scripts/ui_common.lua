@@ -181,6 +181,39 @@ function common.makeDebugLogger(flagName, prefix)
   end
 end
 
+-- Canonicalize HDD APA/PFS display paths:
+-- - hdd0:PART:pfs:foo   -> hdd0:PART:pfs:/foo
+-- - hdd0:/PART/dir/file -> hdd0:PART:pfs:/dir/file
+-- - hdd0:PART/dir/file  -> hdd0:PART:pfs:/dir/file
+function common.normalizePathForDisplay(path)
+  local raw = tostring(path or "")
+  if raw == "" then return raw end
+
+  local dev, part, rest = raw:match("^(hdd%d):/?([^:/]+):pfs:(.*)$")
+  if dev and part then
+    local suffix = tostring(rest or "")
+    if suffix == "" then
+      suffix = "/"
+    else
+      suffix = "/" .. suffix:gsub("^/+", "")
+    end
+    return dev .. ":" .. part .. ":pfs:" .. suffix
+  end
+
+  dev, part, rest = raw:match("^(hdd%d):/?([^:/]+)/(.*)$")
+  if dev and part then
+    local suffix = tostring(rest or ""):gsub("^/+", "")
+    if suffix == "" then
+      suffix = "/"
+    else
+      suffix = "/" .. suffix
+    end
+    return dev .. ":" .. part .. ":pfs:" .. suffix
+  end
+
+  return raw
+end
+
 local function getRuntimeFtPixelBase()
   local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
   if runtimePx > 0 then

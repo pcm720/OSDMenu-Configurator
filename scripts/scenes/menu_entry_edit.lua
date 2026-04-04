@@ -23,6 +23,9 @@ local function run(ctx)
     if (p or ""):upper() == "$PSBBN" then return _.dev_str.psbbn end
     if p == "OSDSYS" or p == "osdsys" then return _.dev_str.osd end
     if p == "POWEROFF" or p == "poweroff" then return _.dev_str.shutdown end
+    if _.common and _.common.normalizePathForDisplay then
+      return _.common.normalizePathForDisplay(p)
+    end
     return p
   end
   local isFmcbEntry = (ctx.fileType == "freemcboot_cnf") or (ctx.context == "freehddboot")
