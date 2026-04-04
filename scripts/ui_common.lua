@@ -168,6 +168,19 @@ function common.remapCrossCircleMask(mask)
   return out
 end
 
+function common.makeDebugLogger(flagName, prefix)
+  local flagKey = tostring(flagName or "")
+  local msgPrefix = tostring(prefix or "")
+  return function(...)
+    if flagKey ~= "" and _G and _G[flagKey] == false then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[#parts + 1] = tostring(select(i, ...))
+    end
+    print(msgPrefix .. table.concat(parts, " "))
+  end
+end
+
 local function getRuntimeFtPixelBase()
   local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
   if runtimePx > 0 then
@@ -580,6 +593,69 @@ function common.refreshConfigModified(ctx)
   return ctx.configModified
 end
 
+function common.getPathModuleType(path)
+  local p = tostring(path or ""):lower()
+  if p == "" then return nil end
+  if p:match("^massx:") then return "mx4sio" end
+  if p:match("^mmce%d:") then return "mmce" end
+  if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end
+  if p:match("^mass:") or p:match("^mass%d:") then return "usb" end
+  return nil
+end
+
+local function resolveSaveTargetModule(path)
+  local fromPath = common.getPathModuleType(path)
+  if fromPath then
+    return fromPath, path, "path"
+  end
+  if type(path) == "string" and path ~= "" and not path:find(":", 1, true) then
+    local startupCwd = (_G and _G.CONFIG_UI and _G.CONFIG_UI.startupCwd) or nil
+    if type(startupCwd) == "string" and startupCwd ~= "" then
+      local fromStartupCwd = common.getPathModuleType(startupCwd)
+      if fromStartupCwd then
+        return fromStartupCwd, startupCwd, "startupCwd"
+      end
+    end
+    if System and System.currentDirectory then
+      local okCwd, cwd = pcall(System.currentDirectory)
+      local cwdPath = okCwd and tostring(cwd or "") or ""
+      if cwdPath ~= "" then
+        local fromCwd = common.getPathModuleType(cwdPath)
+        if fromCwd then
+          return fromCwd, cwdPath, "cwd"
+        end
+      end
+    end
+  end
+  return nil, nil, nil
+end
+
+local function ensureSaveTargetDeviceReady(path, saveDbg)
+  if not (System and System.loadModules) then
+    return true, nil
+  end
+
+  local moduleType, sourcePath, sourceKind = resolveSaveTargetModule(path)
+  if not moduleType then
+    saveDbg("prepare skipped", "reason=no_device_module_match", "path=" .. tostring(path))
+    return true, nil
+  end
+
+  saveDbg("prepare target", "module=" .. tostring(moduleType), "source=" .. tostring(sourceKind),
+    "value=" .. tostring(sourcePath))
+  local ok, res = pcall(System.loadModules, moduleType)
+  if not ok then
+    saveDbg("prepare failed", "module=" .. tostring(moduleType), "error=" .. tostring(res))
+    return false, "failed to prepare device modules (" .. tostring(moduleType) .. ")"
+  end
+  if type(res) == "number" and res < 0 then
+    saveDbg("prepare failed", "module=" .. tostring(moduleType), "result=" .. tostring(res))
+    return false, "failed to prepare device modules (" .. tostring(moduleType) .. ")"
+  end
+  saveDbg("prepare done", "module=" .. tostring(moduleType), "result=" .. tostring(res))
+  return true, nil
+end
+
 function common.setCleanConfigSnapshot(ctx, opts)
   if not ctx then return false end
   opts = opts or {}
@@ -602,17 +678,14 @@ end
 
 -- Save config; for pfs0 (__sysconf) paths we mount, save, then unmount so ELF browsing does not break saving.
 function common.saveConfig(ctx, path, lines, createDir)
-  local function saveDbg(...)
-    if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
-    local parts = {}
-    for i = 1, select("#", ...) do
-      parts[#parts + 1] = tostring(select(i, ...))
-    end
-    print("[save] " .. table.concat(parts, " "))
-  end
+  local saveDbg = common.makeDebugLogger("CONFIG_UI_SAVE_DEBUG", "[save] ")
 
   saveDbg("route begin", "context=" .. tostring(ctx and ctx.context), "fileType=" .. tostring(ctx and ctx.fileType),
     "path=" .. tostring(path), "createDir=" .. tostring(createDir))
+  local prepOk, prepErr = ensureSaveTargetDeviceReady(path, saveDbg)
+  if not prepOk then
+    return nil, prepErr
+  end
   local savePath = path
   local saveDir = createDir
   local mounted = nil
@@ -700,9 +773,7 @@ function common.listDirectoryElfOnly(path, file_selector)
   return common.listDirectoryFiltered(path, file_selector, { extensions = { ".elf" } })
 end
 
-local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 0x0010, 0x0040, 0x0080, 0x0020
-local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = 0x0400, 0x0800, 0x0100, 0x0200
-common.REPEATABLE_MASK = PAD_UP | PAD_DOWN
+common.REPEATABLE_MASK = common.PAD_UP | common.PAD_DOWN
 common.REPEAT_START_HZ = 3
 common.REPEAT_END_HZ = 12
 common.REPEAT_ACCEL_SECONDS = 4
@@ -1022,6 +1093,75 @@ function common.centeredListScroll(sel, total, maxVisible)
   local maxScroll = count - maxVis
   if scroll > maxScroll then scroll = maxScroll end
   return scroll
+end
+
+-- Draw a right-side list scrollbar for overflowing row lists.
+-- opts: { totalRows, visibleRows, scrollRows, rowTopY, rowHeight, color, barWidth, x, minBarHeight }.
+function common.drawListScrollbar(_, opts)
+  if not (_ and _.Graphics and _.Graphics.drawRect) then return end
+  local totalRows = math.max(0, math.floor(tonumber(opts and opts.totalRows) or 0))
+  local visibleRows = math.max(0, math.floor(tonumber(opts and opts.visibleRows) or 0))
+  if visibleRows <= 0 or totalRows <= visibleRows then return end
+
+  local rowTopY = math.floor(tonumber(opts and opts.rowTopY) or 0)
+  local rowHeight = math.max(1, math.floor(tonumber(opts and opts.rowHeight) or (_.LINE_H or common.LINE_H)))
+  local trackHeight = math.max(1, visibleRows * rowHeight)
+
+  local defaultBarW = (_.scaleX and _.scaleX(8)) or 8
+  local barWidth = math.max(1, math.floor(tonumber(opts and opts.barWidth) or defaultBarW))
+  local x = tonumber(opts and opts.x)
+  if not x then
+    x = ((_.w or common.DEFAULT_W) - (_.MARGIN_X or common.MARGIN_X) - barWidth)
+  end
+
+  local maxScroll = math.max(0, totalRows - visibleRows)
+  local scrollRows = math.floor(tonumber(opts and opts.scrollRows) or 0)
+  if scrollRows < 0 then scrollRows = 0 end
+  if scrollRows > maxScroll then scrollRows = maxScroll end
+
+  local color = (opts and opts.color) or _.DIM or common.DIM
+  local trackX = math.floor(x + 0.5)
+  local trackY = math.floor(rowTopY + 0.5)
+  local trackW = math.max(1, barWidth)
+  local trackH = math.max(1, trackHeight)
+
+  if trackW >= 2 and trackH >= 2 then
+    -- 1px perimeter around the full track (top of first row to bottom of last row).
+    _.Graphics.drawRect(trackX, trackY, trackW, 1, color)
+    _.Graphics.drawRect(trackX, trackY + trackH - 1, trackW, 1, color)
+    if trackH > 2 then
+      _.Graphics.drawRect(trackX, trackY + 1, 1, trackH - 2, color)
+      _.Graphics.drawRect(trackX + trackW - 1, trackY + 1, 1, trackH - 2, color)
+    end
+
+    local innerX = trackX + 1
+    local innerY = trackY + 1
+    local innerW = math.max(1, trackW - 2)
+    local innerH = math.max(1, trackH - 2)
+    local barHeight = math.floor((innerH * (visibleRows / totalRows)) + 0.5)
+    local minBarH = (_.scaleY and _.scaleY(6)) or 6
+    minBarH = math.max(2, math.floor(tonumber(opts and opts.minBarHeight) or minBarH))
+    if barHeight < minBarH then barHeight = minBarH end
+    if barHeight > innerH then barHeight = innerH end
+    local travel = math.max(0, innerH - barHeight)
+    local y = innerY
+    if travel > 0 and maxScroll > 0 then
+      y = innerY + math.floor(((scrollRows / maxScroll) * travel) + 0.5)
+    end
+    _.Graphics.drawRect(innerX, y, innerW, barHeight, color)
+    return
+  end
+
+  -- Fallback for very tiny widths/heights.
+  local barHeight = math.floor((trackH * (visibleRows / totalRows)) + 0.5)
+  if barHeight < 1 then barHeight = 1 end
+  if barHeight > trackH then barHeight = trackH end
+  local travel = math.max(0, trackH - barHeight)
+  local y = trackY
+  if travel > 0 and maxScroll > 0 then
+    y = trackY + math.floor(((scrollRows / maxScroll) * travel) + 0.5)
+  end
+  _.Graphics.drawRect(trackX, y, trackW, barHeight, color)
 end
 
 -- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee

@@ -108,17 +108,10 @@ local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
 
-local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_SQUARE, PAD_TRIANGLE = common.PAD_UP, common.PAD_DOWN,
-    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START, common.PAD_SQUARE, common.PAD_TRIANGLE
+local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_SQUARE, PAD_TRIANGLE = common.PAD_UP, common.PAD_DOWN,
+    common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_SQUARE, common.PAD_TRIANGLE
 
-local function openDbg(...)
-  if _G and _G.CONFIG_UI_OPEN_DEBUG == false then return end
-  local parts = {}
-  for i = 1, select("#", ...) do
-    parts[#parts + 1] = tostring(select(i, ...))
-  end
-  print("[open] " .. table.concat(parts, " "))
-end
+local openDbg = common.makeDebugLogger("CONFIG_UI_OPEN_DEBUG", "[open] ")
 
 local function countTrue(list)
   local n = 0
@@ -555,16 +548,6 @@ local function initEmptyLinesForFileType(s, reason)
     "lineCount=" .. tostring(#(s.lines or {})))
 end
 
-local function getPathModuleType(path)
-  if not path or path == "" then return nil end
-  local p = tostring(path)
-  if p:match("^massX:") then return "mx4sio" end
-  if p:match("^mass%d*:") then return "usb" end
-  if p:match("^mmce%d:") then return "mmce" end
-  if p:match("^hdd%d:") or p:match("^pfs%d:/") then return "hdd" end
-  return nil
-end
-
 local function mapPartitionPathToMountedPfs(path)
   if not path then return nil, nil end
   local raw = tostring(path)
@@ -580,7 +563,7 @@ local function mapPartitionPathToMountedPfs(path)
 end
 
 local function beginPathAccess(path)
-  local moduleType = getPathModuleType(path)
+  local moduleType = common.getPathModuleType and common.getPathModuleType(path)
   if moduleType and System and System.loadModules then
     pcall(System.loadModules, moduleType)
   end

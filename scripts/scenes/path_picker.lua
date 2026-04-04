@@ -1081,21 +1081,23 @@ local function run(ctx)
           end
           ctx.pathPickerSel = found or 1
         end
-        local selectedProgress = 0
-        for idx = 1, ctx.pathPickerSel do
-          if rawIndexFromDisplay(idx) then
-            selectedProgress = selectedProgress + 1
-          end
-        end
-        if selectedProgress < 1 then selectedProgress = 1 end
-        _.drawText(_.font, _.drawMode, _.w - _.MARGIN_X - 56, _.MARGIN_Y, 0.9,
-          selectedProgress .. " / " .. rawCount, _.DIM)
         local maxVis = _.MAX_VISIBLE_LIST
         if totalCount > maxVis then
           ctx.pathPickerScroll = ctx.pathPickerSel - math.floor(maxVis / 2)
           ctx.pathPickerScroll = math.max(0, math.min(ctx.pathPickerScroll, totalCount - maxVis))
         else
           ctx.pathPickerScroll = 0
+        end
+        local startY = _.MARGIN_Y + _.scaleY(50)
+        if _.common and _.common.drawListScrollbar then
+          _.common.drawListScrollbar(_, {
+            totalRows = totalCount,
+            visibleRows = maxVis,
+            scrollRows = ctx.pathPickerScroll,
+            rowTopY = startY,
+            rowHeight = _.LINE_H,
+            color = _.DIM,
+          })
         end
         local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
         for i = 1, math.min(maxVis, totalCount - ctx.pathPickerScroll) do
@@ -1120,7 +1122,7 @@ local function run(ctx)
               greyed = (rawGreyed[listIdx] == true)
             end
           end
-          local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
+          local y = startY + (i - 1) * _.LINE_H
           local isSelectedEntryRow = (row.kind == "entry") and isSelectableDisplay(displayIdx) and
               (displayIdx == ctx.pathPickerSel)
           local col = _.DIM
@@ -1330,21 +1332,28 @@ local function run(ctx)
     if ctx.pathPickerSel < 1 then ctx.pathPickerSel = 1 end
     if ctx.pathPickerSel > #parts then ctx.pathPickerSel = #parts end
     local maxVis = _.MAX_VISIBLE_LIST
+    local startY = _.MARGIN_Y + _.scaleY(50)
     if #parts > maxVis then
       ctx.pathPickerScroll = ctx.pathPickerSel - math.floor(maxVis / 2)
       ctx.pathPickerScroll = math.max(0, math.min(ctx.pathPickerScroll, #parts - maxVis))
     else
       ctx.pathPickerScroll = 0
     end
-    if #parts > 0 then
-      _.drawText(_.font, _.drawMode, _.w - _.MARGIN_X - 56, _.MARGIN_Y, 0.9, ctx.pathPickerSel .. " / " .. #parts,
-        _.DIM)
+    if _.common and _.common.drawListScrollbar then
+      _.common.drawListScrollbar(_, {
+        totalRows = #parts,
+        visibleRows = maxVis,
+        scrollRows = ctx.pathPickerScroll,
+        rowTopY = startY,
+        rowHeight = _.LINE_H,
+        color = _.DIM,
+      })
     end
     local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
     for i = ctx.pathPickerScroll + 1, math.min(ctx.pathPickerScroll + maxVis, #parts) do
       local p = parts[i]
       if not p then break end
-      local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.pathPickerScroll - 1) * _.LINE_H
+      local y = startY + (i - ctx.pathPickerScroll - 1) * _.LINE_H
       local col = (i == ctx.pathPickerSel) and _.SELECTED_ENTRY or _.GRAY
       local label = p.name or _.common_str.empty
       if _.common.fitListRowText then
@@ -1458,21 +1467,28 @@ local function run(ctx)
       ctx.pathPickerSel = math.max(1, math.min(ctx.pathPickerSel, #show))
     end
     local maxVis = _.MAX_VISIBLE_LIST
+    local startY = _.MARGIN_Y + _.scaleY(50)
     if #show > maxVis and ctx.pathPickerSel > 0 then
       ctx.pathPickerScroll = ctx.pathPickerSel - math.floor(maxVis / 2)
       ctx.pathPickerScroll = math.max(0, math.min(ctx.pathPickerScroll, #show - maxVis))
     elseif #show <= maxVis then
       ctx.pathPickerScroll = 0
     end
-    if #show > 0 then
-      _.drawText(_.font, _.drawMode, _.w - _.MARGIN_X - 56, _.MARGIN_Y, 0.9, ctx.pathPickerSel .. " / " .. #show,
-        _.DIM)
+    if _.common and _.common.drawListScrollbar then
+      _.common.drawListScrollbar(_, {
+        totalRows = #show,
+        visibleRows = maxVis,
+        scrollRows = ctx.pathPickerScroll,
+        rowTopY = startY,
+        rowHeight = _.LINE_H,
+        color = _.DIM,
+      })
     end
     local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
     for i = ctx.pathPickerScroll + 1, math.min(ctx.pathPickerScroll + maxVis, #show) do
       local e = show[i]
       if not e then break end
-      local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.pathPickerScroll - 1) * _.LINE_H
+      local y = startY + (i - ctx.pathPickerScroll - 1) * _.LINE_H
       local label = e.name or _.common_str.empty
       if e.directory and label ~= "" then label = label .. "/" end
       local col = (i == ctx.pathPickerSel) and _.SELECTED_ENTRY or _.GRAY

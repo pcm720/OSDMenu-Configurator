@@ -290,6 +290,20 @@ function actions_menu.run(ctx, opts)
   local rowMarkerX = rowLabelX - markerW - spaceW
   local maxLabelW = (boxX + boxW) - padX - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
+  if _.common and _.common.drawListScrollbar then
+    local barWidth = (_.scaleX and _.scaleX(8)) or 8
+    _.common.drawListScrollbar(_, {
+      totalRows = #rows,
+      visibleRows = maxVisible,
+      scrollRows = ctx[scrollKey],
+      rowTopY = rowStartY,
+      rowHeight = rowStep,
+      color = _.DIM,
+      barWidth = barWidth,
+      x = (boxX + boxW - padX - barWidth),
+      minBarHeight = (_.scaleY and _.scaleY(4)) or 4,
+    })
+  end
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep

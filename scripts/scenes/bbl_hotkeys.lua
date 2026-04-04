@@ -163,6 +163,17 @@ local function run(ctx)
   else
     ctx.bblHotkeyScroll = 0
   end
+  local startY = _.MARGIN_Y + _.scaleY(50)
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = #hotkeys,
+      visibleRows = _.MAX_VISIBLE_LIST,
+      scrollRows = ctx.bblHotkeyScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
+  end
 
   local rowX = _.MARGIN_X + 20
   local maxLabelW = (_.w or 640) - (rowX + 4) - _.MARGIN_X
@@ -210,7 +221,7 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       line = _.common.truncateTextToWidth(_.font, line, lineMaxW, _.FONT_SCALE)
     end
-    local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.bblHotkeyScroll - 1) * _.LINE_H
+    local y = startY + (i - ctx.bblHotkeyScroll - 1) * _.LINE_H
     local col = (i == ctx.bblHotkeySel) and _.SELECTED_ENTRY or _.WHITE
     if effectiveDisabled then
       col = (i == ctx.bblHotkeySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)

@@ -148,9 +148,7 @@ local function run(ctx)
   if total == 0 then ctx.bblIrxSel = 1 end
   if total > 0 and ctx.bblIrxSel > total then ctx.bblIrxSel = total end
 
-  local counterStr = (total == 0 and "0 / 0") or (tostring(ctx.bblIrxSel) .. " / " .. tostring(total))
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.edit_irx_entries or "Edit IRX entries", _.WHITE)
-  _.drawText(_.font, _.drawMode, 540, _.MARGIN_Y, 0.9, counterStr, _.DIM)
   local irxOrderHint = (_.menu_str.irx_order_hint or "IRX entry order matters!")
   local hintTextScale = (_.common.PAD_HINT_TEXT_SCALE or 0.75)
   local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
@@ -174,6 +172,16 @@ local function run(ctx)
     ctx.bblIrxScroll = math.max(0, math.min(ctx.bblIrxScroll, total - maxVis))
   else
     ctx.bblIrxScroll = 0
+  end
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = total,
+      visibleRows = maxVis,
+      scrollRows = ctx.bblIrxScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
   end
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X

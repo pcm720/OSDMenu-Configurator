@@ -109,10 +109,16 @@ local function run(ctx)
 
   local defValue, defCommented = _.config_parse.getEgsmDefault(ctx.lines)
   local startY = _.MARGIN_Y + _.scaleY(50)
-  local counterStr = ctx.egsmSel .. "/" .. total
-  local counterW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, counterStr, 0.7)) or (#counterStr * 8)
-  _.drawText(_.font, _.drawMode, math.max(_.MARGIN_X, (_.w or 640) - _.MARGIN_X - counterW), _.MARGIN_Y, 0.7, counterStr,
-    _.DIM)
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = total,
+      visibleRows = maxVis,
+      scrollRows = ctx.egsmScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
+  end
   for i = ctx.egsmScroll + 1, math.min(ctx.egsmScroll + maxVis, total) do
     local y = startY + (i - ctx.egsmScroll - 1) * _.LINE_H
     local col = (i == ctx.egsmSel) and _.SELECTED_ENTRY or _.WHITE

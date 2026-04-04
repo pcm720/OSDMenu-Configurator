@@ -476,9 +476,20 @@ local function run(ctx)
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.75, _.menu_str.cdrom_hint, _.DIM)
   end
 
+  local startY = _.MARGIN_Y + _.scaleY(50)
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = total,
+      visibleRows = _.MAX_VISIBLE_LIST,
+      scrollRows = ctx.entryArgScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
+  end
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   for i = ctx.entryArgScroll + 1, math.min(ctx.entryArgScroll + _.MAX_VISIBLE_LIST, total) do
-    local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.entryArgScroll - 1) * _.LINE_H
+    local y = startY + (i - ctx.entryArgScroll - 1) * _.LINE_H
     local a = args[i]
     local av = type(a) == "table" and a.value or a
     local label = (av and av ~= "" and av) or _.common_str.empty

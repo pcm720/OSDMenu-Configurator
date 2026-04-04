@@ -1062,10 +1062,21 @@ local function run(ctx)
     local maxVis = _.MAX_VISIBLE
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #cats)
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #cats, maxVis)
+    local startY = _.MARGIN_Y + _.scaleY(50)
+    if _.common and _.common.drawListScrollbar then
+      _.common.drawListScrollbar(_, {
+        totalRows = #cats,
+        visibleRows = maxVis,
+        scrollRows = ctx.optScroll,
+        rowTopY = startY,
+        rowHeight = _.ROW_H,
+        color = _.DIM,
+      })
+    end
     local maxCatLabelW = (_.w or 640) - (_.MARGIN_X + 16) - (_.MARGIN_X + 8)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #cats) do
       local cat = cats[i]
-      local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.optScroll - 1) * _.ROW_H
+      local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
       local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.WHITE
       local catLabel = cat.name or _.common_str.empty
       if ctx.fileType == "osdmenu_cnf" then
@@ -1162,6 +1173,16 @@ local function run(ctx)
       end
     end
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #ctx.optList, maxVis)
+    if _.common and _.common.drawListScrollbar then
+      _.common.drawListScrollbar(_, {
+        totalRows = #ctx.optList,
+        visibleRows = maxVis,
+        scrollRows = ctx.optScroll,
+        rowTopY = startY,
+        rowHeight = _.ROW_H,
+        color = _.DIM,
+      })
+    end
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #ctx.optList) do
       local o = ctx.optList[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
