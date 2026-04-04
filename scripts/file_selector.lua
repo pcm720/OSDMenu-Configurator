@@ -42,6 +42,9 @@ local function bdmPrefixForContext(opt, context)
   if opt.bdmType == "usb" and (context == "osdmenu" or context == "mbr") then
     return "usb"
   end
+  if opt.bdmType == "mx4sio" and (context == "osdmenu" or context == "mbr") then
+    return "mx4sio"
+  end
   return opt.bdmPathPrefix
 end
 
