@@ -1256,6 +1256,35 @@ function config_parse.setBblHotkeySlotDisabled(lines, keyId, entryIdx, disabled)
   return changed
 end
 
+-- When a hotkey parent is disabled, enabling one child slot should:
+-- 1) enable the parent and all child lines,
+-- 2) then keep only the selected slot enabled and disable other used slots.
+function config_parse.enableBblHotkeySlotFromDisabledParent(lines, keyId, entryIdx)
+  if not isValidBblEntryIdx(entryIdx) then return false end
+  local selected = config_parse.getBblHotkeySlot(lines, keyId, entryIdx)
+  if not (selected and selected.used) then return false end
+
+  local changed = false
+  if config_parse.isBblHotkeyDisabled(lines, keyId) then
+    if config_parse.setBblHotkeyDisabled(lines, keyId, false) then
+      changed = true
+    end
+  end
+
+  for i = 1, BBL_MAX_ENTRIES do
+    local slot = config_parse.getBblHotkeySlot(lines, keyId, i)
+    if slot and slot.used then
+      local shouldDisable = (i ~= entryIdx)
+      if (slot.disabled and true or false) ~= shouldDisable then
+        changed = true
+      end
+      config_parse.setBblHotkeySlotDisabled(lines, keyId, i, shouldDisable)
+    end
+  end
+
+  return changed
+end
+
 function config_parse.removeBblHotkeySlot(lines, keyId, entryIdx)
   local canonical = canonicalBblHotkeyId(keyId)
   if not canonical or not isValidBblEntryIdx(entryIdx) then return false end
@@ -1782,6 +1811,39 @@ function config_parse.setPathDisabled(lines, idx, pathNum, disabled)
       return
     end
   end
+end
+
+-- When a menu-entry parent is disabled, enabling one child path should:
+-- 1) enable the parent and all child lines,
+-- 2) then keep only the selected path enabled and disable other defined paths.
+function config_parse.enableMenuEntryPathFromDisabledParent(lines, idx, pathNum)
+  local selectedPath = math.floor(tonumber(pathNum) or 0)
+  local paths = config_parse.getMenuEntryPaths(lines, idx)
+  if selectedPath < 1 or selectedPath > #paths then return false end
+
+  local changed = false
+  if config_parse.isMenuEntryDisabled(lines, idx) then
+    config_parse.setMenuEntryDisabled(lines, idx, false)
+    changed = true
+  end
+
+  for i = 1, #paths do
+    local shouldDisable = (i ~= selectedPath)
+    local item = paths[i] or {}
+    local currentDisabled = item.disabled and true or false
+    local currentComment = item.comment
+    local normalizedComment = (currentComment == 2) and 2 or (currentComment and true or nil)
+    local desiredComment = shouldDisable and true or nil
+    if currentDisabled ~= shouldDisable or normalizedComment ~= desiredComment then
+      changed = true
+    end
+    item.disabled = shouldDisable
+    item.comment = desiredComment
+    paths[i] = item
+  end
+
+  config_parse.setMenuEntryPaths(lines, idx, paths)
+  return changed
 end
 
 -- Set disabled state of one argument (1-based arg index). Menu entry only.

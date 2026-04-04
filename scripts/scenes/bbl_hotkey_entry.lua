@@ -228,17 +228,18 @@ local function run(ctx)
   if rows[ctx.bblEntryDetailSel] == "path" then
     local enableHint = _.menu_str.paths_hint_items_with_enable or _.menu_str.paths_hint_items
     local disableHint = _.menu_str.paths_hint_items_with_disable or _.menu_str.paths_hint_items
-    local baseHint = data.disabled and enableHint or disableHint
-    local canTogglePathDisabled = not keyDisabled
+    local effectivePathDisabled = (keyDisabled or data.disabled) and true or false
+    local baseHint = effectivePathDisabled and enableHint or disableHint
+    local canTogglePathDisabled = true
     local toggleLayoutLabel = findWidestHintLabel(_, enableHint, disableHint, "triangle",
-      data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"))
+      effectivePathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"))
     hint = {
       { pad = "cross", label = findHintLabel(baseHint, "cross", (_.menu_str.edit_label or "Edit")), row = 1 },
       {
         pad = canTogglePathDisabled and "triangle" or "",
         label = canTogglePathDisabled and
             findHintLabel(baseHint, "triangle",
-              data.disabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
+              effectivePathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
         layoutLabel = toggleLayoutLabel,
         row = 1
       },
@@ -314,9 +315,15 @@ local function run(ctx)
   end
 
   local function toggleSelectedPathDisabled()
-    if rows[ctx.bblEntryDetailSel] == "path" and not keyDisabled then
-      local changed = _.config_parse.setBblHotkeySlotDisabled and
-          _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, slot, not data.disabled)
+    if rows[ctx.bblEntryDetailSel] == "path" then
+      local changed = false
+      local effectivePathDisabled = (keyDisabled or data.disabled) and true or false
+      if keyDisabled and effectivePathDisabled and _.config_parse.enableBblHotkeySlotFromDisabledParent then
+        changed = _.config_parse.enableBblHotkeySlotFromDisabledParent(ctx.lines, keyId, slot) and true or false
+      else
+        changed = _.config_parse.setBblHotkeySlotDisabled and
+            _.config_parse.setBblHotkeySlotDisabled(ctx.lines, keyId, slot, not data.disabled) or false
+      end
       if changed then
         ctx._configModifiedCache = nil
         ctx.configModified = true

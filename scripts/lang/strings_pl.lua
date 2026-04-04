@@ -129,6 +129,7 @@ strings.menu_entries = {
   grabbed_tag = "Przenieś",
   insert_label = "Wstaw",
   insert_separator_label = "Wstaw separator",
+  separator_suffix = "(separator)",
   remove_label = "Usuń",
   save_config_label = "Zapisz",
 }

@@ -129,6 +129,7 @@ strings.menu_entries = {
   grabbed_tag = "Deplacer",
   insert_label = "Inserer",
   insert_separator_label = "Inserer separateur",
+  separator_suffix = "(separateur)",
   remove_label = "Supprimer",
   save_config_label = "Sauver",
 }
