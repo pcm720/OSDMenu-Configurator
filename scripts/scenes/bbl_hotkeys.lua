@@ -14,6 +14,12 @@ local function canonicalHotkeyId(raw, hotkeySet)
   return nil
 end
 
+local function hasUsablePathValue(value)
+  local s = tostring(value or "")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  return s ~= ""
+end
+
 -- Build per-hotkey summary in one pass to avoid repeated O(lines) lookups per row/slot.
 local function buildHotkeySummary(lines, hotkeys, maxEntries)
   local cap = math.max(0, math.floor(tonumber(maxEntries) or 0))
@@ -27,7 +33,8 @@ local function buildHotkeySummary(lines, hotkeys, maxEntries)
       disabledSeen = false,
       name = "",
       pathCount = 0,
-      pathSeen = {},
+      activePathCount = 0,
+      slotState = {},
     }
   end
 
@@ -58,11 +65,17 @@ local function buildHotkeySummary(lines, hotkeys, maxEntries)
               s.disabledSeen = true
             end
             local slot = tonumber(slotStr)
-            if slot and slot >= 1 and slot <= cap and not s.pathSeen[slot] then
-              s.pathSeen[slot] = true
-              local v = entry.value
-              if type(v) == "string" and v ~= "" then
-                s.pathCount = s.pathCount + 1
+            if slot and slot >= 1 and slot <= cap then
+              local slotState = s.slotState[slot]
+              if not slotState then
+                slotState = { defined = false, active = false }
+                s.slotState[slot] = slotState
+              end
+              if hasUsablePathValue(entry.value) then
+                slotState.defined = true
+                if not entry.comment then
+                  slotState.active = true
+                end
               end
             end
           end
@@ -78,6 +91,28 @@ local function buildHotkeySummary(lines, hotkeys, maxEntries)
           end
         end
       end
+    end
+  end
+  for i = 1, #hotkeys do
+    local keyId = hotkeys[i]
+    local s = summary[keyId]
+    if s and s.slotState then
+      local pathCount = 0
+      local activePathCount = 0
+      for slot = 1, cap do
+        local slotState = s.slotState[slot]
+        if slotState then
+          if slotState.defined then
+            pathCount = pathCount + 1
+          end
+          if slotState.active then
+            activePathCount = activePathCount + 1
+          end
+        end
+      end
+      s.pathCount = pathCount
+      s.activePathCount = activePathCount
+      s.slotState = nil
     end
   end
 
@@ -146,8 +181,11 @@ local function run(ctx)
     local keyDisabled = info.disabled and true or false
     local nameVal = info.name or ""
     local pathCount = tonumber(info.pathCount) or 0
+    local activePathCount = tonumber(info.activePathCount) or 0
     local hasName = (nameVal ~= "")
     local hasPath = (pathCount > 0)
+    local hasActivePath = (activePathCount > 0)
+    local effectiveDisabled = keyDisabled or (not hasActivePath)
     local disp
     if isFmcb then
       if pathCount <= 0 then
@@ -174,7 +212,7 @@ local function run(ctx)
     end
     local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.bblHotkeyScroll - 1) * _.LINE_H
     local col = (i == ctx.bblHotkeySel) and _.SELECTED_ENTRY or _.WHITE
-    if keyDisabled then
+    if effectiveDisabled then
       col = (i == ctx.bblHotkeySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     if keyIcon then
@@ -190,7 +228,9 @@ local function run(ctx)
 
   local selKey = hotkeys[ctx.bblHotkeySel]
   local selInfo = selKey and hotkeySummary[selKey] or nil
-  local selDisabled = selInfo and selInfo.disabled and true or false
+  local selDisabledRaw = selInfo and selInfo.disabled and true or false
+  local selHasActivePath = (tonumber(selInfo and selInfo.activePathCount) or 0) > 0
+  local selDisabled = selDisabledRaw or (not selHasActivePath)
   local selCanToggleDisabled = selInfo and selInfo.disabledSeen and true or false
   local hint = {
     { pad = "cross", label = (_.menu_str.enter_label or "Enter"), row = 1 },
@@ -297,8 +337,11 @@ local function run(ctx)
     local info = keyId and hotkeySummary[keyId] or nil
     local canToggle = info and info.disabledSeen and true or false
     if keyId and canToggle and _.config_parse.setBblHotkeyDisabled then
-      local disabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)
-      local changed = _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, not disabled)
+      local rawDisabled = _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId) and true or false
+      local hasActivePath = (tonumber(info and info.activePathCount) or 0) > 0
+      local effectiveDisabled = rawDisabled or (not hasActivePath)
+      local targetDisabled = not effectiveDisabled
+      local changed = _.config_parse.setBblHotkeyDisabled(ctx.lines, keyId, targetDisabled)
       if changed then
         ctx.configModified = true
         ctx.bblHotkeySummaryCache = nil

@@ -20,22 +20,34 @@ function config_parse.regenerateLinesBbl(lines, options)
   -- 2. Autoboot section (NAME_AUTO, LK_AUTO_E#, ARG_AUTO_E#)
   local function writeHotkeySection(keyId)
     local keyDisabled = config_parse.isBblHotkeyDisabled(lines, keyId)
+    local slots = {}
+    local hasActivePath = false
+    for entryIdx = 1, maxEntries do
+      local path, pathDisabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
+      slots[entryIdx] = { path = path, pathDisabled = pathDisabled and true or false }
+      local pathText = tostring(path or ""):gsub("^%s+", ""):gsub("%s+$", "")
+      if (not keyDisabled) and path ~= nil and pathText ~= "" and (not pathDisabled) then
+        hasActivePath = true
+      end
+    end
+    local keyDisabledEffective = keyDisabled or (not hasActivePath)
     local name = config_parse.getBblHotkeyName(lines, keyId)
     local wrote = false
     if name ~= nil then
-      table.insert(out, { key = "NAME_" .. keyId, value = name, comment = keyDisabled and true or nil })
+      table.insert(out, { key = "NAME_" .. keyId, value = name, comment = keyDisabledEffective and true or nil })
       wrote = true
     end
     for entryIdx = 1, maxEntries do
-      local path, pathDisabled = config_parse.getBblHotkeyPath(lines, keyId, entryIdx)
+      local slot = slots[entryIdx] or {}
+      local path, pathDisabled = slot.path, slot.pathDisabled
       if path ~= nil then
         local pathIsDisabled = pathDisabled and true or false
-        local pathComment = keyDisabled and (pathIsDisabled and 2 or true) or (pathIsDisabled and true or nil)
+        local pathComment = keyDisabledEffective and (pathIsDisabled and 2 or true) or (pathIsDisabled and true or nil)
         table.insert(out, { key = "LK_" .. keyId .. "_E" .. entryIdx, value = path, comment = pathComment })
         local args = config_parse.getBblHotkeyArgs(lines, keyId, entryIdx)
         for _, arg in ipairs(args) do
           local argDisabled = (type(arg) == "table" and arg.disabled) and true or false
-          local argComment = keyDisabled and (argDisabled and 2 or true) or (argDisabled and true or nil)
+          local argComment = keyDisabledEffective and (argDisabled and 2 or true) or (argDisabled and true or nil)
           table.insert(out, { key = "ARG_" .. keyId .. "_E" .. entryIdx, value = arg.value, comment = argComment })
         end
         wrote = true
@@ -473,7 +485,8 @@ function config_parse.setBootKeyDisabled(lines, key, disabled)
       if disabled then
         entry.comment = entry.comment and 2 or true
       else
-        if entry.comment == 2 then entry.comment = true else entry.comment = nil end
+        -- Parent enable should restore all child paths/args as enabled.
+        entry.comment = nil
       end
     end
   end
@@ -1060,9 +1073,15 @@ function config_parse.setBblHotkeyDisabled(lines, keyId, disabled)
     if entry.key and keySet[entry.key] then
       touched = true
       if disabled then
-        entry.comment = entry.comment and 2 or true
+        if entry.key:match("^NAME_") then
+          entry.comment = true
+        else
+          -- Keep child slot lines explicitly disabled while parent is disabled.
+          entry.comment = 2
+        end
       else
-        if entry.comment == 2 then entry.comment = true else entry.comment = nil end
+        -- Parent enable should restore child slots as enabled for this hotkey.
+        entry.comment = nil
       end
     end
   end
@@ -1232,6 +1251,35 @@ function config_parse.setBblHotkeySlotDisabled(lines, keyId, entryIdx, disabled)
     end
     config_parse.setBblHotkeyArgs(lines, keyId, entryIdx, args)
     changed = true
+  end
+
+  return changed
+end
+
+-- When a hotkey parent is disabled, enabling one child slot should:
+-- 1) enable the parent and all child lines,
+-- 2) then keep only the selected slot enabled and disable other used slots.
+function config_parse.enableBblHotkeySlotFromDisabledParent(lines, keyId, entryIdx)
+  if not isValidBblEntryIdx(entryIdx) then return false end
+  local selected = config_parse.getBblHotkeySlot(lines, keyId, entryIdx)
+  if not (selected and selected.used) then return false end
+
+  local changed = false
+  if config_parse.isBblHotkeyDisabled(lines, keyId) then
+    if config_parse.setBblHotkeyDisabled(lines, keyId, false) then
+      changed = true
+    end
+  end
+
+  for i = 1, BBL_MAX_ENTRIES do
+    local slot = config_parse.getBblHotkeySlot(lines, keyId, i)
+    if slot and slot.used then
+      local shouldDisable = (i ~= entryIdx)
+      if (slot.disabled and true or false) ~= shouldDisable then
+        changed = true
+      end
+      config_parse.setBblHotkeySlotDisabled(lines, keyId, i, shouldDisable)
+    end
   end
 
   return changed
@@ -1533,6 +1581,17 @@ function config_parse.getMenuEntryName(lines, idx)
   return val
 end
 
+function config_parse.isMenuEntrySeparatorName(name)
+  local s = trim(tostring(name or ""))
+  return s:sub(1, 2) == "$!"
+end
+
+function config_parse.getMenuEntrySeparatorText(name)
+  if not config_parse.isMenuEntrySeparatorName(name) then return nil end
+  local s = trim(tostring(name or ""))
+  return trim(s:sub(3))
+end
+
 -- True if the menu entry at idx is commented (disabled).
 function config_parse.isMenuEntryDisabled(lines, idx)
   local _, commented = config_parse.getWithComment(lines, "name_OSDSYS_ITEM_" .. tostring(idx))
@@ -1540,8 +1599,8 @@ function config_parse.isMenuEntryDisabled(lines, idx)
 end
 
 -- Set all lines for this menu entry (name, path*, arg) to commented or not.
--- When disabling: use comment = 2 (##) for path/arg lines that were already commented (per-item disabled), so enabling the entry later restores their disabled state.
--- When enabling: uncomment only lines with comment == true; leave comment = true where comment == 2 (was double-disabled).
+-- When disabling: preserve child-disabled state by promoting already-commented child lines to ##.
+-- When enabling: clear comment markers so parent + all children are enabled immediately.
 function config_parse.setMenuEntryDisabled(lines, idx, disabled)
   local idxStr = tostring(idx)
   local nameKey = "name_OSDSYS_ITEM_" .. idxStr
@@ -1552,7 +1611,7 @@ function config_parse.setMenuEntryDisabled(lines, idx, disabled)
       if disabled then
         entry.comment = entry.comment and 2 or true                                  -- already commented (per-item) -> ## (2)
       else
-        if entry.comment == 2 then entry.comment = true else entry.comment = nil end -- ## -> keep commented; # -> uncomment
+        entry.comment = nil
       end
     end
   end
@@ -1754,6 +1813,39 @@ function config_parse.setPathDisabled(lines, idx, pathNum, disabled)
   end
 end
 
+-- When a menu-entry parent is disabled, enabling one child path should:
+-- 1) enable the parent and all child lines,
+-- 2) then keep only the selected path enabled and disable other defined paths.
+function config_parse.enableMenuEntryPathFromDisabledParent(lines, idx, pathNum)
+  local selectedPath = math.floor(tonumber(pathNum) or 0)
+  local paths = config_parse.getMenuEntryPaths(lines, idx)
+  if selectedPath < 1 or selectedPath > #paths then return false end
+
+  local changed = false
+  if config_parse.isMenuEntryDisabled(lines, idx) then
+    config_parse.setMenuEntryDisabled(lines, idx, false)
+    changed = true
+  end
+
+  for i = 1, #paths do
+    local shouldDisable = (i ~= selectedPath)
+    local item = paths[i] or {}
+    local currentDisabled = item.disabled and true or false
+    local currentComment = item.comment
+    local normalizedComment = (currentComment == 2) and 2 or (currentComment and true or nil)
+    local desiredComment = shouldDisable and true or nil
+    if currentDisabled ~= shouldDisable or normalizedComment ~= desiredComment then
+      changed = true
+    end
+    item.disabled = shouldDisable
+    item.comment = desiredComment
+    paths[i] = item
+  end
+
+  config_parse.setMenuEntryPaths(lines, idx, paths)
+  return changed
+end
+
 -- Set disabled state of one argument (1-based arg index). Menu entry only.
 -- When entry is disabled, use comment = 2 (##) so arg shows as individually disabled.
 function config_parse.setArgDisabled(lines, idx, argNum, disabled)
@@ -1867,21 +1959,34 @@ local function appendFreemcbootLaunchKeys(out, lines, maxEntries)
   end
   for _, keyId in ipairs(keys) do
     local keyDisabled = config_parse.isBblHotkeyDisabled(lines, keyId)
-    local added = false
+    local slots = {}
+    local hasActivePath = false
     for slot = 1, maxEntries do
       local path, disabled = config_parse.getBblHotkeyPath(lines, keyId, slot)
       if path ~= nil then
+        local slotDisabled = disabled and true or false
+        slots[slot] = { path = path, disabled = slotDisabled }
+        if trim(tostring(path or "")) ~= "" and (not slotDisabled) then
+          hasActivePath = true
+        end
+      end
+    end
+    local keyDisabledEffective = keyDisabled or (not hasActivePath)
+    local added = false
+    for slot = 1, maxEntries do
+      local slotInfo = slots[slot]
+      if slotInfo and slotInfo.path ~= nil then
         local saveKeyId = toFreemcbootKeyId(keyId)
         local comment = nil
-        if keyDisabled then
+        if keyDisabledEffective then
           -- Keep whole-key disabled state (#) and preserve per-slot disable markers (##).
-          comment = disabled and 2 or true
+          comment = slotInfo.disabled and 2 or true
         else
-          comment = disabled and true or nil
+          comment = slotInfo.disabled and true or nil
         end
         out[#out + 1] = {
           key = "LK_" .. tostring(saveKeyId) .. "_E" .. tostring(slot),
-          value = path or "",
+          value = slotInfo.path or "",
           comment = comment
         }
         added = true
@@ -1897,9 +2002,10 @@ end
 -- so globals are output by category with a separator after each category; then each menu entry block with a separator after each. No unknown keys.
 -- When categories is nil, globals are output in original order with no separators.
 -- includeArgs=false skips arg_OSDSYS_ITEM_* lines. maxEntries / maxPathsPerEntry apply per output order when provided.
-function config_parse.regenerateLines(lines, categories, includeArgs, maxEntries, maxPathsPerEntry)
+function config_parse.regenerateLines(lines, categories, includeArgs, maxEntries, maxPathsPerEntry, enableSeparators)
   local out = {}
   local allowArgs = includeArgs ~= false
+  local allowSeparators = enableSeparators == true
   local function addSep()
     table.insert(out, { comment = SEPARATOR })
   end
@@ -1932,30 +2038,43 @@ function config_parse.regenerateLines(lines, categories, includeArgs, maxEntries
       break
     end
     local idx = ent.idx
-    local disabled = ent.disabled
     local name = config_parse.getMenuEntryName(lines, idx) or ""
-    table.insert(out, { key = "name_OSDSYS_ITEM_" .. tostring(idx), value = name, comment = disabled })
+    local isSeparator = allowSeparators and config_parse.isMenuEntrySeparatorName(name)
     local paths = config_parse.getMenuEntryPaths(lines, idx)
-    local pathLimit = #paths
-    if type(maxPathsPerEntry) == "number" and maxPathsPerEntry >= 0 then
-      pathLimit = math.min(pathLimit, maxPathsPerEntry)
-    end
-    for i = 1, pathLimit do
+    local hasActivePath = false
+    for i = 1, #paths do
       local p = paths[i]
       local pv = type(p) == "table" and p.value or p
       local pc = type(p) == "table" and p.comment or nil
-      -- ## only when entry disabled AND path was individually disabled (comment == 2); else # or nil
-      local pcomment = disabled and (pc == 2 and 2 or true) or (pc and true or nil)
-      table.insert(out,
-        { key = "path" .. tostring(i) .. "_OSDSYS_ITEM_" .. tostring(idx), value = pv, comment = pcomment })
+      if trim(tostring(pv or "")) ~= "" and (not pc) then
+        hasActivePath = true
+        break
+      end
     end
-    if allowArgs then
-      local args = config_parse.getMenuEntryArgs(lines, idx)
-      for _, a in ipairs(args) do
-        local av = type(a) == "table" and a.value or a
-        local ac = type(a) == "table" and a.comment or nil
-        local acomment = disabled and (ac == 2 and 2 or true) or (ac and true or nil)
-        table.insert(out, { key = "arg_OSDSYS_ITEM_" .. tostring(idx), value = av, comment = acomment })
+    local disabled = ent.disabled or ((not isSeparator) and (not hasActivePath))
+    table.insert(out, { key = "name_OSDSYS_ITEM_" .. tostring(idx), value = name, comment = disabled })
+    if not isSeparator then
+      local pathLimit = #paths
+      if type(maxPathsPerEntry) == "number" and maxPathsPerEntry >= 0 then
+        pathLimit = math.min(pathLimit, maxPathsPerEntry)
+      end
+      for i = 1, pathLimit do
+        local p = paths[i]
+        local pv = type(p) == "table" and p.value or p
+        local pc = type(p) == "table" and p.comment or nil
+        -- ## only when entry disabled AND path was individually disabled (comment == 2); else # or nil
+        local pcomment = disabled and (pc == 2 and 2 or true) or (pc and true or nil)
+        table.insert(out,
+          { key = "path" .. tostring(i) .. "_OSDSYS_ITEM_" .. tostring(idx), value = pv, comment = pcomment })
+      end
+      if allowArgs then
+        local args = config_parse.getMenuEntryArgs(lines, idx)
+        for _, a in ipairs(args) do
+          local av = type(a) == "table" and a.value or a
+          local ac = type(a) == "table" and a.comment or nil
+          local acomment = disabled and (ac == 2 and 2 or true) or (ac and true or nil)
+          table.insert(out, { key = "arg_OSDSYS_ITEM_" .. tostring(idx), value = av, comment = acomment })
+        end
       end
     end
     addSep()
@@ -2071,7 +2190,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
 
   if fileType == "osdmenu_cnf" then
     normalizeMenuEntryArgsInPlace()
-    return config_parse.regenerateLines(lines, opt.osdmenu_cnf_categories or {})
+    return config_parse.regenerateLines(lines, opt.osdmenu_cnf_categories or {}, true, nil, nil, true)
   end
   if fileType == "freemcboot_cnf" then
     -- FMCB/FHDB do not support per-entry args, but normalize defensively if present.
@@ -2079,7 +2198,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
     local cats = opt.freemcboot_cnf_categories or opt.osdmenu_cnf_categories or {}
     local maxEntries = (type(opt.FMCB_MAX_ENTRIES) == "number" and opt.FMCB_MAX_ENTRIES) or 99
     local maxPathsPerEntry = (type(opt.FMCB_MAX_PATHS_PER_ENTRY) == "number" and opt.FMCB_MAX_PATHS_PER_ENTRY) or 3
-    local out = config_parse.regenerateLines(lines, cats, false, maxEntries, maxPathsPerEntry)
+    local out = config_parse.regenerateLines(lines, cats, false, maxEntries, maxPathsPerEntry, false)
     local cnfVersion = config_parse.get(lines, "CNF_version") or "1"
     table.insert(out, 1, { key = "CNF_version", value = cnfVersion })
     table.insert(out, 2, { comment = '# --------------------------------' })

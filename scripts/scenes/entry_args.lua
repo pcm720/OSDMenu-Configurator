@@ -62,6 +62,13 @@ local function run(ctx)
     bootKeyDisabledOverride = ctx.entryArgsBootKeyDisabledOverride and true or false
     bootKeyOpts = { keyDisabledOverride = bootKeyDisabledOverride }
   end
+  local parentArgsDisabled = false
+  if isBoot then
+    parentArgsDisabled = bootKeyDisabledOverride and true or false
+  else
+    parentArgsDisabled = (_.config_parse.isMenuEntryDisabled and _.config_parse.isMenuEntryDisabled(ctx.lines, ctx.entryIdx)) and
+        true or false
+  end
   local function buildPathsModel()
     local outPaths = isBoot and (_.config_parse.getBootPaths(ctx.lines, ctx.bootKey, bootKeyOpts) or {}) or
         _.config_parse.getMenuEntryPaths(ctx.lines, ctx.entryIdx)
@@ -180,6 +187,16 @@ local function run(ctx)
     setArgs(args2)
     local refreshed = getArgs()
     local udpValue = "-udpbd_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ctx.entryArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
+    return true
+  end
+
+  local function addUdpfsPair(ipValue)
+    local args2, ok = arg_presets.addUdpfsPair(getArgs(), ipValue)
+    if not ok then return false end
+    setArgs(args2)
+    local refreshed = getArgs()
+    local udpValue = "-udpfs_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
     ctx.entryArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
     return true
   end
@@ -332,6 +349,14 @@ local function run(ctx)
     end)
   end
 
+  local function openUdpfsIpInput()
+    openNewArgumentInput("UDPFS IP (x.x.x.x)", 15, function(val)
+      local ip = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
+      if ip ~= "" then addUdpfsPair(ip) end
+      ctx.state = "entry_args"
+    end)
+  end
+
   local function openTitleIdInput()
     openNewArgumentInput("TITLEID (up to 11 chars)", 11, function(val)
       local titleId = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -409,6 +434,10 @@ local function run(ctx)
               openUdpbdIpInput()
             elseif row.modeValue == "udpbd" and usedKnown.udpbd_ip ~= true then
               openUdpbdIpInput()
+            elseif row.kind == "udpfs_ip" then
+              openUdpfsIpInput()
+            elseif row.modeValue == "udpfs" and usedKnown.udpfs_ip ~= true then
+              openUdpfsIpInput()
             else
               addArgValue(row.value or "")
             end
@@ -463,7 +492,7 @@ local function run(ctx)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local col = (i == ctx.entryArgSel) and _.SELECTED_ENTRY or _.WHITE
-    if not isBoot and type(a) == "table" and a.disabled then
+    if type(a) == "table" and (parentArgsDisabled or a.disabled) then
       col = (i == ctx.entryArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.entryArgSel, label, col)
@@ -471,7 +500,8 @@ local function run(ctx)
 
   local hasSelection = (ctx.entryArgSel >= 1 and ctx.entryArgSel <= total)
   local canAddArg = (isBoot or not hasCdrom)
-  local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and args[ctx.entryArgSel].disabled
+  local selectedDisabled = hasSelection and type(args[ctx.entryArgSel]) == "table" and
+      (parentArgsDisabled or args[ctx.entryArgSel].disabled)
   local crossPad = (hasSelection or canAddArg) and "cross" or ""
   local crossLabel = ""
   if hasSelection then
@@ -492,7 +522,7 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = hasSelection and "triangle" or "",
+      pad = (hasSelection and (not parentArgsDisabled)) and "triangle" or "",
       label = hasSelection and
           (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
@@ -506,6 +536,7 @@ local function run(ctx)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, argHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
   local function toggleSelectedArgDisabled()
+    if parentArgsDisabled then return end
     if ctx.entryArgSel >= 1 and ctx.entryArgSel <= total and type(args[ctx.entryArgSel]) == "table" then
       if isBoot then
         _.config_parse.setBootArgDisabled(ctx.lines, ctx.bootKey, ctx.entryArgSel, not args[ctx.entryArgSel].disabled,

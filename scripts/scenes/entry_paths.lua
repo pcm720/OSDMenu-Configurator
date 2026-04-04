@@ -63,6 +63,13 @@ local function run(ctx)
     bootKeyDisabledOverride = ctx.entryPathsBootKeyDisabledOverride and true or false
     bootKeyOpts = { keyDisabledOverride = bootKeyDisabledOverride }
   end
+  local parentPathsDisabled = false
+  if isBoot then
+    parentPathsDisabled = bootKeyDisabledOverride and true or false
+  else
+    parentPathsDisabled = (_.config_parse.isMenuEntryDisabled and _.config_parse.isMenuEntryDisabled(ctx.lines, ctx.entryIdx)) and
+        true or false
+  end
   local paths = {}
   local hasArgsPaths = false
   local hasSpecialArgsPath = false
@@ -227,7 +234,7 @@ local function run(ctx)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local col = (i == ctx.entryPathSel) and _.SELECTED_ENTRY or _.WHITE
-    if i <= pathRows and type(paths[i]) == "table" and paths[i].disabled then
+    if i <= pathRows and type(paths[i]) == "table" and (parentPathsDisabled or paths[i].disabled) then
       col = (i == ctx.entryPathSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end
     if canMovePaths and ctx.entryPathGrab and i == ctx.entryPathSel and i <= pathRows then
@@ -237,7 +244,10 @@ local function run(ctx)
   end
   local hasPathSelection = (ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows)
   local argsRowSelected = isBoot and (hasArgsPaths or hasSpecialArgsPath) and ctx.entryPathSel == argsRow
-  local selectedPathDisabled = hasPathSelection and type(paths[ctx.entryPathSel]) == "table" and paths[ctx.entryPathSel].disabled
+  local selectedPathDisabled = hasPathSelection and type(paths[ctx.entryPathSel]) == "table" and
+      ((parentPathsDisabled or paths[ctx.entryPathSel].disabled) and true or false)
+  local canTogglePathDisabled = hasPathSelection and type(paths[ctx.entryPathSel]) == "table" and
+      ((not isBoot) or (not parentPathsDisabled))
   local crossLabel = ""
   if ctx.entryPathGrab then
     crossLabel = (_.menu_str.confirm_label or "Confirm")
@@ -259,8 +269,8 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = hasPathSelection and "triangle" or "",
-      label = hasPathSelection and
+      pad = canTogglePathDisabled and "triangle" or "",
+      label = canTogglePathDisabled and
           (selectedPathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
@@ -303,15 +313,27 @@ local function run(ctx)
     ctx.state = "path_picker"
   end
   local function toggleSelectedPathDisabled()
-    if ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table" then
-      if isBoot then
-        _.config_parse.setBootPathDisabled(ctx.lines, ctx.bootKey, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled,
-          bootKeyOpts)
-      else
-        _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, not paths[ctx.entryPathSel].disabled)
-      end
+    if not (ctx.entryPathSel >= 1 and ctx.entryPathSel <= pathRows and type(paths[ctx.entryPathSel]) == "table") then return end
+    local current = (parentPathsDisabled or (paths[ctx.entryPathSel].disabled and true or false)) and true or false
+    local target = not current
+    if isBoot then
+      if parentPathsDisabled then return end
+      _.config_parse.setBootPathDisabled(ctx.lines, ctx.bootKey, ctx.entryPathSel, target, bootKeyOpts)
       markConfigMutated()
+      return
     end
+    if parentPathsDisabled then
+      if not target then
+        local changed = _.config_parse.enableMenuEntryPathFromDisabledParent and
+            _.config_parse.enableMenuEntryPathFromDisabledParent(ctx.lines, ctx.entryIdx, ctx.entryPathSel)
+        if changed then
+          markConfigMutated()
+        end
+      end
+      return
+    end
+    _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, target)
+    markConfigMutated()
   end
   local function saveAndStay()
     ctx.saveSplash = nil

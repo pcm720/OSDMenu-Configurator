@@ -128,6 +128,8 @@ strings.menu_entries = {
   grab_label = "Move",
   grabbed_tag = "Move",
   insert_label = "Insert",
+  insert_separator_label = "Insert separator",
+  separator_suffix = "(separator)",
   remove_label = "Remove",
   save_config_label = "Save",
 }

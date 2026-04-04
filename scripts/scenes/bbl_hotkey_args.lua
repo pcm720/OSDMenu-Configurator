@@ -115,6 +115,16 @@ local function run(ctx)
     return true
   end
 
+  local function addUdpfsPair(ipValue)
+    local args2, ok = arg_presets.addUdpfsPair(getArgs(), ipValue, maxArgs)
+    if not ok then return false end
+    setArgs(args2)
+    local refreshed = getArgs()
+    local udpValue = "-udpfs_ip=" .. tostring(ipValue or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ctx.bblArgSel = findArgIndexByValue(refreshed, udpValue, #refreshed)
+    return true
+  end
+
   local args = getArgs()
   local total = #args
   local canMoveArgs = total > 1
@@ -247,6 +257,15 @@ local function run(ctx)
         ctx.state = "bbl_hotkey_args"
       end)
     end
+    local function openUdpfsIpInput()
+      openNewArgumentInput("UDPFS IP (x.x.x.x)", 15, function(val)
+        local ip = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
+        if ip ~= "" then
+          addUdpfsPair(ip)
+        end
+        ctx.state = "bbl_hotkey_args"
+      end)
+    end
     local function openTitleIdInput()
       openNewArgumentInput("TITLEID (up to 11 chars)", 11, function(val)
         local titleId = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -296,6 +315,10 @@ local function run(ctx)
               openUdpbdIpInput()
             elseif row.modeValue == "udpbd" and usedKnown.udpbd_ip ~= true then
               openUdpbdIpInput()
+            elseif row.kind == "udpfs_ip" then
+              openUdpfsIpInput()
+            elseif row.modeValue == "udpfs" and usedKnown.udpfs_ip ~= true then
+              openUdpfsIpInput()
             else
               addArgValue(row.value or "")
             end
@@ -342,6 +365,7 @@ local function run(ctx)
 
   local hasSelection = (total > 0 and ctx.bblArgSel >= 1 and ctx.bblArgSel <= total and args[ctx.bblArgSel])
   local canAddArg = ((not hasArgCap) or total < maxArgs)
+  local canToggleSelectedArg = hasSelection and (not keyDisabled)
   local selectedDisabled = hasSelection and args[ctx.bblArgSel].disabled
   local crossPad = (hasSelection or canAddArg) and "cross" or ""
   local crossLabel = ""
@@ -363,8 +387,8 @@ local function run(ctx)
       row = 1
     },
     {
-      pad = hasSelection and "triangle" or "",
-      label = hasSelection and
+      pad = canToggleSelectedArg and "triangle" or "",
+      label = canToggleSelectedArg and
           (selectedDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
       row = 1
     },
@@ -526,7 +550,7 @@ local function run(ctx)
   end
 
   local function toggleSelectedArgDisabled()
-    if total > 0 then
+    if total > 0 and not keyDisabled then
       _.config_parse.setBblHotkeyArgDisabled(ctx.lines, keyId, slot, ctx.bblArgSel, not args[ctx.bblArgSel].disabled)
       markConfigMutated()
     end
