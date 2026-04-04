@@ -1119,20 +1119,49 @@ function common.drawListScrollbar(_, opts)
   if scrollRows < 0 then scrollRows = 0 end
   if scrollRows > maxScroll then scrollRows = maxScroll end
 
-  local barHeight = math.floor((trackHeight * (visibleRows / totalRows)) + 0.5)
-  local minBarH = (_.scaleY and _.scaleY(6)) or 6
-  minBarH = math.max(2, math.floor(tonumber(opts and opts.minBarHeight) or minBarH))
-  if barHeight < minBarH then barHeight = minBarH end
-  if barHeight > trackHeight then barHeight = trackHeight end
+  local color = (opts and opts.color) or _.DIM or common.DIM
+  local trackX = math.floor(x + 0.5)
+  local trackY = math.floor(rowTopY + 0.5)
+  local trackW = math.max(1, barWidth)
+  local trackH = math.max(1, trackHeight)
 
-  local travel = math.max(0, trackHeight - barHeight)
-  local y = rowTopY
-  if travel > 0 and maxScroll > 0 then
-    y = rowTopY + math.floor(((scrollRows / maxScroll) * travel) + 0.5)
+  if trackW >= 2 and trackH >= 2 then
+    -- 1px perimeter around the full track (top of first row to bottom of last row).
+    _.Graphics.drawRect(trackX, trackY, trackW, 1, color)
+    _.Graphics.drawRect(trackX, trackY + trackH - 1, trackW, 1, color)
+    if trackH > 2 then
+      _.Graphics.drawRect(trackX, trackY + 1, 1, trackH - 2, color)
+      _.Graphics.drawRect(trackX + trackW - 1, trackY + 1, 1, trackH - 2, color)
+    end
+
+    local innerX = trackX + 1
+    local innerY = trackY + 1
+    local innerW = math.max(1, trackW - 2)
+    local innerH = math.max(1, trackH - 2)
+    local barHeight = math.floor((innerH * (visibleRows / totalRows)) + 0.5)
+    local minBarH = (_.scaleY and _.scaleY(6)) or 6
+    minBarH = math.max(2, math.floor(tonumber(opts and opts.minBarHeight) or minBarH))
+    if barHeight < minBarH then barHeight = minBarH end
+    if barHeight > innerH then barHeight = innerH end
+    local travel = math.max(0, innerH - barHeight)
+    local y = innerY
+    if travel > 0 and maxScroll > 0 then
+      y = innerY + math.floor(((scrollRows / maxScroll) * travel) + 0.5)
+    end
+    _.Graphics.drawRect(innerX, y, innerW, barHeight, color)
+    return
   end
 
-  _.Graphics.drawRect(math.floor(x + 0.5), math.floor(y + 0.5), barWidth, barHeight, (opts and opts.color) or _.DIM or
-    common.DIM)
+  -- Fallback for very tiny widths/heights.
+  local barHeight = math.floor((trackH * (visibleRows / totalRows)) + 0.5)
+  if barHeight < 1 then barHeight = 1 end
+  if barHeight > trackH then barHeight = trackH end
+  local travel = math.max(0, trackH - barHeight)
+  local y = trackY
+  if travel > 0 and maxScroll > 0 then
+    y = trackY + math.floor(((scrollRows / maxScroll) * travel) + 0.5)
+  end
+  _.Graphics.drawRect(trackX, y, trackW, barHeight, color)
 end
 
 -- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee
