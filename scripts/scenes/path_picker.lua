@@ -69,13 +69,26 @@ local function applyBblIrxPathAndReturn(ctx, val)
   return true
 end
 
--- Convert pfs path (pfs0:/ or pfs1:/...) to full partition path (hdd0:PART:pfs:...). Returns nil if not a pfs path.
+-- Convert pfs path (pfs0:/ or pfs1:/...) to full partition path (hdd0:PART:pfs:/...).
+-- Returns nil if not a pfs path.
 local function pfsToPartitionPath(pfsPath, partitionPath)
   if not pfsPath or not partitionPath then return nil end
-  local rest = pfsPath:match("^pfs[01]:/?(.*)$")
+  local part = tostring(partitionPath or "")
+  part = part:gsub("^%s+", ""):gsub("%s+$", "")
+  part = part:gsub("^(hdd%d):/+", "%1:")
+  local partFromPfs = part:match("^(hdd%d:[^:]+):pfs:.*$")
+  if partFromPfs then
+    part = partFromPfs
+  end
+  part = part:gsub("/+$", "")
+  local rest = tostring(pfsPath):match("^pfs[01]:(.*)$")
   if not rest then return nil end
-  if rest == "" then return partitionPath .. ":pfs:/" end
-  return partitionPath .. ":pfs:" .. rest
+  if rest == "" then
+    rest = "/"
+  else
+    rest = "/" .. rest:gsub("^/+", "")
+  end
+  return part .. ":pfs:" .. rest
 end
 
 -- IOP reset (mx4sio/mmce) unloads all device drivers; clear all loaded flags.

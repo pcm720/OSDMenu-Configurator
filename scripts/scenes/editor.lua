@@ -32,6 +32,9 @@ local function formatDisplayPath(_, pathVal)
   if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
   if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
   if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  if _.common and _.common.normalizePathForDisplay then
+    return _.common.normalizePathForDisplay(raw)
+  end
   return raw
 end
 
@@ -212,6 +215,9 @@ local function getEditorDisplayPath(ctx, rawPath)
         out = base .. rel
       end
     end
+  end
+  if ctx and ctx._ and ctx._.common and ctx._.common.normalizePathForDisplay then
+    out = ctx._.common.normalizePathForDisplay(out)
   end
 
   if ctx then
@@ -1244,6 +1250,9 @@ local function run(ctx)
         else
           valDisplay = raw
         end
+      elseif o.optType == "path" then
+        local raw = cachedGet(ctx.lines, o.key) or o.default or ""
+        valDisplay = formatDisplayPath(_, raw)
       else
         local multi = cachedGetMulti(ctx.lines, o.key)
         if multi and #multi > 1 then
@@ -1294,7 +1303,7 @@ local function run(ctx)
         if pathVal == nil then
           pathVal = ""
         end
-        local pathDisp = (pathVal ~= "" and pathVal) or _.common_str.not_set
+        local pathDisp = (pathVal ~= "" and formatDisplayPath(_, pathVal)) or _.common_str.not_set
         lab = "  " .. pathDisp
         if ctx.editorEsrPathGrab and i == ctx.optSel then
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab

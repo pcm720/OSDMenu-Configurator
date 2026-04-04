@@ -289,6 +289,7 @@ function file_selector.getHddPartitions(hddNum)
   for i = 1, #list do
     local e = list[i]
     local name = (e and (e.name or e.fileName)) or ""
+    name = tostring(name):gsub("^/+", ""):gsub("/+$", "")
     if name ~= "" and name ~= "." and name ~= ".." then
       local full = prefix .. name
       table.insert(out, { name = name, full = full })
