@@ -75,8 +75,19 @@ function arg_add_menu.run(ctx, opts)
   local title = opts.title or (_.menu_str.new_argument_prompt or "Add argument")
   local selectedRow = rows[ctx[selKey]]
   local desc = (selectedRow and selectedRow.desc) or (opts.descDefault or "")
+  local startY = _.MARGIN_Y + _.scaleY(50)
 
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, title, _.WHITE)
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = #rows,
+      visibleRows = maxVisible,
+      scrollRows = ctx[scrollKey],
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
+  end
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   local inUseSuffix = opts.inUseSuffix or " (in use)"
@@ -94,7 +105,7 @@ function arg_add_menu.run(ctx, opts)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
-    local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx[scrollKey] - 1) * _.LINE_H
+    local y = startY + (i - ctx[scrollKey] - 1) * _.LINE_H
     local col = disabled and (_.DIM_ENTRY or _.DIM) or ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE)
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx[selKey], label, col)
   end

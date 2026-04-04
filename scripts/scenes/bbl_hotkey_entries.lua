@@ -183,6 +183,17 @@ local function run(ctx)
   else
     ctx.bblEntryScroll = 0
   end
+  local startY = _.MARGIN_Y + _.scaleY(50)
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = #rows,
+      visibleRows = _.MAX_VISIBLE_LIST,
+      scrollRows = ctx.bblEntryScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
+  end
 
   local titleSuffix = "- Launch Key"
   if keyId == "AUTO" then
@@ -210,7 +221,7 @@ local function run(ctx)
 
   for i = ctx.bblEntryScroll + 1, math.min(ctx.bblEntryScroll + _.MAX_VISIBLE_LIST, #rows) do
     local row = rows[i]
-    local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.bblEntryScroll - 1) * _.LINE_H
+    local y = startY + (i - ctx.bblEntryScroll - 1) * _.LINE_H
     local col = (i == ctx.bblEntrySel) and _.SELECTED_ENTRY or _.WHITE
     local text = ""
     if row.kind == "name" then

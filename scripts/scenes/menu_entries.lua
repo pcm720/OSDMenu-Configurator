@@ -332,9 +332,7 @@ local function run(ctx)
   local maxEntries = (isFmcb and ((_.config_options and _.config_options.FMCB_MAX_ENTRIES) or 99)) or nil
   local canAddEntry = (not isFmcb) or (total < maxEntries)
 
-  local counterStr = (total == 0 and "0 / 0") or (tostring(ctx.entrySel) .. " / " .. tostring(total))
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.edit_menu_entries, _.WHITE)
-  _.drawText(_.font, _.drawMode, 540, _.MARGIN_Y, 0.9, counterStr, _.DIM)
 
   local maxVis = _.MAX_VISIBLE_LIST
   if total > maxVis then
@@ -342,6 +340,16 @@ local function run(ctx)
     ctx.entryScroll = math.max(0, math.min(ctx.entryScroll, total - maxVis))
   else
     ctx.entryScroll = 0
+  end
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = total,
+      visibleRows = maxVis,
+      scrollRows = ctx.entryScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
   end
 
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X

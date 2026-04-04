@@ -199,6 +199,17 @@ local function run(ctx)
   else
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, titleStr, _.WHITE)
   end
+  local startY = _.MARGIN_Y + _.scaleY(50)
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = total,
+      visibleRows = _.MAX_VISIBLE_LIST,
+      scrollRows = ctx.entryPathScroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
+  end
   local argsRow = pathRows + 1
   local argsRowIsSpecial = hasSpecialArgsPath and (not hasArgsPaths or #paths == 1)
   local function pathLabel(p)
@@ -213,7 +224,7 @@ local function run(ctx)
   end
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   for i = ctx.entryPathScroll + 1, math.min(ctx.entryPathScroll + _.MAX_VISIBLE_LIST, total) do
-    local y = _.MARGIN_Y + _.scaleY(50) + (i - ctx.entryPathScroll - 1) * _.LINE_H
+    local y = startY + (i - ctx.entryPathScroll - 1) * _.LINE_H
     local label
     if isBoot and (hasArgsPaths or hasSpecialArgsPath) and i == argsRow then
       if argsRowIsSpecial then

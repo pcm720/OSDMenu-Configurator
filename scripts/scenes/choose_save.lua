@@ -8,11 +8,22 @@ local function run(ctx)
   if ctx.saveSel > #choices then ctx.saveSel = #choices end
   local maxVis = _.MAX_VISIBLE
   local total = #choices
+  local startY = _.MARGIN_Y + _.scaleY(50)
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
   local scroll = 0
   if total > maxVis then
     scroll = ctx.saveSel - math.floor(maxVis / 2)
     scroll = math.max(0, math.min(scroll, total - maxVis))
+  end
+  if _.common and _.common.drawListScrollbar then
+    _.common.drawListScrollbar(_, {
+      totalRows = total,
+      visibleRows = maxVis,
+      scrollRows = scroll,
+      rowTopY = startY,
+      rowHeight = _.LINE_H,
+      color = _.DIM,
+    })
   end
   for i = scroll + 1, math.min(scroll + maxVis, total) do
     local p = choices[i] or ""
@@ -25,7 +36,7 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
-    local y = _.MARGIN_Y + _.scaleY(50) + (i - scroll - 1) * _.LINE_H
+    local y = startY + (i - scroll - 1) * _.LINE_H
     local col = (i == ctx.saveSel) and _.SELECTED_ENTRY or _.WHITE
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.saveSel, label, col)
   end

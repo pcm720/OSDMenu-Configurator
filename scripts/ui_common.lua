@@ -1095,6 +1095,46 @@ function common.centeredListScroll(sel, total, maxVisible)
   return scroll
 end
 
+-- Draw a right-side list scrollbar for overflowing row lists.
+-- opts: { totalRows, visibleRows, scrollRows, rowTopY, rowHeight, color, barWidth, x, minBarHeight }.
+function common.drawListScrollbar(_, opts)
+  if not (_ and _.Graphics and _.Graphics.drawRect) then return end
+  local totalRows = math.max(0, math.floor(tonumber(opts and opts.totalRows) or 0))
+  local visibleRows = math.max(0, math.floor(tonumber(opts and opts.visibleRows) or 0))
+  if visibleRows <= 0 or totalRows <= visibleRows then return end
+
+  local rowTopY = math.floor(tonumber(opts and opts.rowTopY) or 0)
+  local rowHeight = math.max(1, math.floor(tonumber(opts and opts.rowHeight) or (_.LINE_H or common.LINE_H)))
+  local trackHeight = math.max(1, visibleRows * rowHeight)
+
+  local defaultBarW = (_.scaleX and _.scaleX(8)) or 8
+  local barWidth = math.max(1, math.floor(tonumber(opts and opts.barWidth) or defaultBarW))
+  local x = tonumber(opts and opts.x)
+  if not x then
+    x = ((_.w or common.DEFAULT_W) - (_.MARGIN_X or common.MARGIN_X) - barWidth)
+  end
+
+  local maxScroll = math.max(0, totalRows - visibleRows)
+  local scrollRows = math.floor(tonumber(opts and opts.scrollRows) or 0)
+  if scrollRows < 0 then scrollRows = 0 end
+  if scrollRows > maxScroll then scrollRows = maxScroll end
+
+  local barHeight = math.floor((trackHeight * (visibleRows / totalRows)) + 0.5)
+  local minBarH = (_.scaleY and _.scaleY(6)) or 6
+  minBarH = math.max(2, math.floor(tonumber(opts and opts.minBarHeight) or minBarH))
+  if barHeight < minBarH then barHeight = minBarH end
+  if barHeight > trackHeight then barHeight = trackHeight end
+
+  local travel = math.max(0, trackHeight - barHeight)
+  local y = rowTopY
+  if travel > 0 and maxScroll > 0 then
+    y = rowTopY + math.floor(((scrollRows / maxScroll) * travel) + 0.5)
+  end
+
+  _.Graphics.drawRect(math.floor(x + 0.5), math.floor(y + 0.5), barWidth, barHeight, (opts and opts.color) or _.DIM or
+    common.DIM)
+end
+
 -- Return row text fitted to maxPixels. Selected rows use delayed horizontal marquee
 -- (hold at start, scroll right, hold at end, then repeat). Unselected rows are truncated.
 function common.fitListRowText(ctx, stateKey, font, text, maxPixels, scale, selected, opts)
