@@ -238,14 +238,19 @@ local function closeFailed(closeRes)
   return closeRes < 0
 end
 
-local function saveDbg(...)
-  if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
-  local parts = {}
-  for i = 1, select("#", ...) do
-    parts[#parts + 1] = tostring(select(i, ...))
+local function makeDebugLogger(flagName, prefix)
+  local flagKey = tostring(flagName or "")
+  local msgPrefix = tostring(prefix or "")
+  return function(...)
+    if flagKey ~= "" and _G and _G[flagKey] == false then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[#parts + 1] = tostring(select(i, ...))
+    end
+    print(msgPrefix .. table.concat(parts, " "))
   end
-  print("[save] " .. table.concat(parts, " "))
 end
+local saveDbg = makeDebugLogger("CONFIG_UI_SAVE_DEBUG", "[save] ")
 
 local function firstSemanticMismatch(a, b)
   local maxLen = math.max(#a, #b)

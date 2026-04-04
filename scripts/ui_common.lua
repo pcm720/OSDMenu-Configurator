@@ -168,6 +168,19 @@ function common.remapCrossCircleMask(mask)
   return out
 end
 
+function common.makeDebugLogger(flagName, prefix)
+  local flagKey = tostring(flagName or "")
+  local msgPrefix = tostring(prefix or "")
+  return function(...)
+    if flagKey ~= "" and _G and _G[flagKey] == false then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[#parts + 1] = tostring(select(i, ...))
+    end
+    print(msgPrefix .. table.concat(parts, " "))
+  end
+end
+
 local function getRuntimeFtPixelBase()
   local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
   if runtimePx > 0 then
@@ -580,6 +593,69 @@ function common.refreshConfigModified(ctx)
   return ctx.configModified
 end
 
+function common.getPathModuleType(path)
+  local p = tostring(path or ""):lower()
+  if p == "" then return nil end
+  if p:match("^massx:") then return "mx4sio" end
+  if p:match("^mmce%d:") then return "mmce" end
+  if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end
+  if p:match("^mass:") or p:match("^mass%d:") then return "usb" end
+  return nil
+end
+
+local function resolveSaveTargetModule(path)
+  local fromPath = common.getPathModuleType(path)
+  if fromPath then
+    return fromPath, path, "path"
+  end
+  if type(path) == "string" and path ~= "" and not path:find(":", 1, true) then
+    local startupCwd = (_G and _G.CONFIG_UI and _G.CONFIG_UI.startupCwd) or nil
+    if type(startupCwd) == "string" and startupCwd ~= "" then
+      local fromStartupCwd = common.getPathModuleType(startupCwd)
+      if fromStartupCwd then
+        return fromStartupCwd, startupCwd, "startupCwd"
+      end
+    end
+    if System and System.currentDirectory then
+      local okCwd, cwd = pcall(System.currentDirectory)
+      local cwdPath = okCwd and tostring(cwd or "") or ""
+      if cwdPath ~= "" then
+        local fromCwd = common.getPathModuleType(cwdPath)
+        if fromCwd then
+          return fromCwd, cwdPath, "cwd"
+        end
+      end
+    end
+  end
+  return nil, nil, nil
+end
+
+local function ensureSaveTargetDeviceReady(path, saveDbg)
+  if not (System and System.loadModules) then
+    return true, nil
+  end
+
+  local moduleType, sourcePath, sourceKind = resolveSaveTargetModule(path)
+  if not moduleType then
+    saveDbg("prepare skipped", "reason=no_device_module_match", "path=" .. tostring(path))
+    return true, nil
+  end
+
+  saveDbg("prepare target", "module=" .. tostring(moduleType), "source=" .. tostring(sourceKind),
+    "value=" .. tostring(sourcePath))
+  local ok, res = pcall(System.loadModules, moduleType)
+  if not ok then
+    saveDbg("prepare failed", "module=" .. tostring(moduleType), "error=" .. tostring(res))
+    return false, "failed to prepare device modules (" .. tostring(moduleType) .. ")"
+  end
+  if type(res) == "number" and res < 0 then
+    saveDbg("prepare failed", "module=" .. tostring(moduleType), "result=" .. tostring(res))
+    return false, "failed to prepare device modules (" .. tostring(moduleType) .. ")"
+  end
+  saveDbg("prepare done", "module=" .. tostring(moduleType), "result=" .. tostring(res))
+  return true, nil
+end
+
 function common.setCleanConfigSnapshot(ctx, opts)
   if not ctx then return false end
   opts = opts or {}
@@ -602,17 +678,14 @@ end
 
 -- Save config; for pfs0 (__sysconf) paths we mount, save, then unmount so ELF browsing does not break saving.
 function common.saveConfig(ctx, path, lines, createDir)
-  local function saveDbg(...)
-    if _G and _G.CONFIG_UI_SAVE_DEBUG == false then return end
-    local parts = {}
-    for i = 1, select("#", ...) do
-      parts[#parts + 1] = tostring(select(i, ...))
-    end
-    print("[save] " .. table.concat(parts, " "))
-  end
+  local saveDbg = common.makeDebugLogger("CONFIG_UI_SAVE_DEBUG", "[save] ")
 
   saveDbg("route begin", "context=" .. tostring(ctx and ctx.context), "fileType=" .. tostring(ctx and ctx.fileType),
     "path=" .. tostring(path), "createDir=" .. tostring(createDir))
+  local prepOk, prepErr = ensureSaveTargetDeviceReady(path, saveDbg)
+  if not prepOk then
+    return nil, prepErr
+  end
   local savePath = path
   local saveDir = createDir
   local mounted = nil
@@ -700,9 +773,7 @@ function common.listDirectoryElfOnly(path, file_selector)
   return common.listDirectoryFiltered(path, file_selector, { extensions = { ".elf" } })
 end
 
-local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 0x0010, 0x0040, 0x0080, 0x0020
-local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = 0x0400, 0x0800, 0x0100, 0x0200
-common.REPEATABLE_MASK = PAD_UP | PAD_DOWN
+common.REPEATABLE_MASK = common.PAD_UP | common.PAD_DOWN
 common.REPEAT_START_HZ = 3
 common.REPEAT_END_HZ = 12
 common.REPEAT_ACCEL_SECONDS = 4

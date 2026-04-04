@@ -225,11 +225,13 @@ end
 
 local STARTUP_CFG = loadStartupConfig()
 local NATIVE_VIDEO_MODE_SPEC = captureCurrentVideoModeSpec()
+local STARTUP_CWD = getStartupCwd()
 
 _G.CONFIG_UI = {
   common = common,
   config_parse = config_parse,
   startupConfig = STARTUP_CFG,
+  startupCwd = STARTUP_CWD,
   startupMainFilter = STARTUP_CFG.main_filter,
   startupDefaultLanguage = STARTUP_CFG.default_language,
   nativeVideoMode = NATIVE_VIDEO_MODE_SPEC,
