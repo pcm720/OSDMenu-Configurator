@@ -512,7 +512,7 @@ local function run(ctx)
         beginPathPickerForSlot(sel.slot, ((sel.data and sel.data.disabled) and true or false) or keyDisabled)
       else
         ctx.bblEntrySlot = sel.slot
-        ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+        ctx.bblEntryDetailSel = 1
         ctx.bblEntryDetailReturnState = "bbl_hotkey_entries"
         ctx.state = "bbl_hotkey_entry"
       end

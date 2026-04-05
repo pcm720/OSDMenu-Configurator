@@ -337,8 +337,8 @@ local function run(ctx)
       end
     end
     ctx.bblHotkeyKey = keyId
-    ctx.bblEntrySel = ctx.bblEntrySel or 1
-    ctx.bblEntryScroll = ctx.bblEntryScroll or 0
+    ctx.bblEntrySel = 1
+    ctx.bblEntryScroll = 0
     ctx.bblEntryFocusSlot = nil
     ctx.bblEntryListReturnState = "bbl_hotkeys"
     ctx.state = "bbl_hotkey_entries"

@@ -286,8 +286,8 @@ local function run(ctx)
     ctx.pathPickerInsertBelow = nil
     ctx.pathPickerSub = "device"
     ctx.pathList = _.file_selector.getDevices(pickerContext) or {}
-    ctx.pathPickerSel = ctx.pathPickerSel or 1
-    ctx.pathPickerScroll = ctx.pathPickerScroll or 0
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
     ctx.pathPickerContext = pickerContext
     ctx.pathPickerReturnState = "menu_entry_edit"
     ctx.state = "path_picker"
@@ -466,8 +466,8 @@ local function run(ctx)
       end
     elseif row.kind == "paths" then
       ctx.state = "entry_paths"
-      ctx.entryPathSel = ctx.entryPathSel or 1
-      ctx.entryPathScroll = ctx.entryPathScroll or 0
+      ctx.entryPathSel = 1
+      ctx.entryPathScroll = 0
     elseif row.kind == "launch_disc_options" then
       if hasCdromPathConflict then
         ctx.saveSplash = {
@@ -478,7 +478,7 @@ local function run(ctx)
           framesLeft = 120
         }
       else
-        ctx.cdromOptSel = ctx.cdromOptSel or 1
+        ctx.cdromOptSel = 1
         ctx.state = "entry_cdrom_options"
       end
     elseif row.kind == "arguments" then
@@ -488,8 +488,8 @@ local function run(ctx)
         ctx.entryArgAddScroll = 0
       end
       ctx.state = "entry_args"
-      ctx.entryArgSel = ctx.entryArgSel or 1
-      ctx.entryArgScroll = ctx.entryArgScroll or 0
+      ctx.entryArgSel = 1
+      ctx.entryArgScroll = 0
     end
   end
   if isFmcbEntry and (_.padEffective & _.PAD_SQUARE) ~= 0 then

@@ -285,7 +285,7 @@ local function run(ctx)
     refreshEntries()
     ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
     ctx.entryIdx = newIdx
-    ctx.entryEditSub = ctx.entryEditSub or 1
+    ctx.entryEditSub = 1
     confirmMoveState()
     if insertedIsSeparator then
       openSeparatorNameInput(newIdx)
@@ -309,7 +309,7 @@ local function run(ctx)
     refreshEntries()
     ctx.entrySel = (total == 0) and 1 or math.min(ctx.entrySel + 1, #ctx.entryList)
     ctx.entryIdx = newIdx
-    ctx.entryEditSub = ctx.entryEditSub or 1
+    ctx.entryEditSub = 1
     confirmMoveState()
     if not openSeparatorNameInput(newIdx) then
       ctx.state = "menu_entry_edit"
@@ -548,7 +548,7 @@ local function run(ctx)
         end
       end
       ctx.entryIdx = selectedIdx
-      ctx.entryEditSub = ctx.entryEditSub or 1
+      ctx.entryEditSub = 1
       ctx.state = "menu_entry_edit"
     elseif canAddEntry then
       insertBelowSelection(canAddEntry, total, true)

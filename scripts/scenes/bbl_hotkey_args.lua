@@ -207,8 +207,8 @@ local function run(ctx)
   local function reopenAddMenu()
     if hasArgCap and total >= maxArgs then return end
     ctx.bblArgAddMenu = true
-    ctx.bblArgAddSel = ctx.bblArgAddSel or 1
-    ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
+    ctx.bblArgAddSel = 1
+    ctx.bblArgAddScroll = 0
   end
 
   local function openGsmPicker(row)
@@ -461,8 +461,8 @@ local function run(ctx)
     if not canAddArg then return end
     confirmMoveState()
     ctx.bblArgAddMenu = true
-    ctx.bblArgAddSel = ctx.bblArgAddSel or 1
-    ctx.bblArgAddScroll = ctx.bblArgAddScroll or 0
+    ctx.bblArgAddSel = 1
+    ctx.bblArgAddScroll = 0
   end
 
   if ctx.bblArgActionsOpen then
