@@ -320,8 +320,8 @@ local function run(ctx)
     ctx.pathPickerInsertBelow = nil
     ctx.pathPickerSub = "device"
     ctx.pathList = _.file_selector.getDevices(pickerContext) or {}
-    ctx.pathPickerSel = ctx.pathPickerSel or 1
-    ctx.pathPickerScroll = ctx.pathPickerScroll or 0
+    ctx.pathPickerSel = 1
+    ctx.pathPickerScroll = 0
     ctx.pathPickerContext = pickerContext
     ctx.pathPickerReturnState = "entry_paths"
     ctx.state = "path_picker"
@@ -479,7 +479,7 @@ local function run(ctx)
     end
     if isBoot and (hasArgsPaths or hasSpecialArgsPath) and ctx.entryPathSel == argsRow then
       if argsRowIsSpecial then
-        ctx.cdromOptSel = ctx.cdromOptSel or 1
+        ctx.cdromOptSel = 1
         ctx.state = "entry_cdrom_options"
       else
         local args = _.config_parse.getBootArgs(ctx.lines, ctx.bootKey, bootKeyOpts) or {}
@@ -490,8 +490,8 @@ local function run(ctx)
         end
         ctx.entryArgsBootKeyDisabledTag = tostring(ctx.bootKey or "")
         ctx.entryArgsBootKeyDisabledOverride = bootKeyDisabledOverride and true or false
-        ctx.entryArgSel = ctx.entryArgSel or 1
-        ctx.entryArgScroll = ctx.entryArgScroll or 0
+        ctx.entryArgSel = 1
+        ctx.entryArgScroll = 0
         ctx.state = "entry_args"
       end
     elseif ctx.entryPathSel >= 1 and ctx.entryPathSel <= #paths then

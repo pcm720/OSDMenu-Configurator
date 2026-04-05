@@ -289,8 +289,8 @@ local function run(ctx)
       ctx.pathPickerContext = "path_only"
       ctx.pathPickerSub = "device"
       ctx.pathList = _.file_selector.getDevices("path_only") or {}
-      ctx.pathPickerSel = ctx.pathPickerSel or 1
-      ctx.pathPickerScroll = ctx.pathPickerScroll or 0
+      ctx.pathPickerSel = 1
+      ctx.pathPickerScroll = 0
       ctx.pathBrowsePath = nil
       ctx.pathPickerBootKey = nil
       ctx.pathPickerBootKeyDisabled = nil
@@ -311,8 +311,8 @@ local function run(ctx)
         ctx.bblArgAddSel = 1
         ctx.bblArgAddScroll = 0
       end
-      ctx.bblArgSel = ctx.bblArgSel or 1
-      ctx.bblArgScroll = ctx.bblArgScroll or 0
+      ctx.bblArgSel = 1
+      ctx.bblArgScroll = 0
       ctx.state = "bbl_hotkey_args"
     end
   end

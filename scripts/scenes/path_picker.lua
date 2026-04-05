@@ -397,6 +397,60 @@ local function getFirstEmptyPathIndex(paths)
   return nil
 end
 
+local function getManualPathPrefillValue(ctx)
+  if not ctx then return "" end
+  local _ = ctx._
+  local function asText(v)
+    if v == nil then return "" end
+    return tostring(v)
+  end
+  local editIdx = tonumber(ctx.pathPickerEditIdx)
+
+  -- Single-value path option edit (editor optType="path").
+  if ctx.editKey and ctx.lines and _.config_parse and _.config_parse.get then
+    local v = _.config_parse.get(ctx.lines, ctx.editKey)
+    if v ~= nil then
+      return asText(v)
+    end
+  end
+
+  -- Menu entry path edit.
+  if ctx.pathPickerForEntryIdx and ctx.lines and editIdx and editIdx >= 1 and _.config_parse and _.config_parse.getMenuEntryPaths then
+    local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx) or {}
+    local item = paths[editIdx]
+    local pv = type(item) == "table" and item.value or item
+    return asText(pv)
+  end
+
+  -- Boot key path edit.
+  if ctx.pathPickerBootKey and ctx.lines and editIdx and editIdx >= 1 and _.config_parse and _.config_parse.getBootPathEntries then
+    local paths = _.config_parse.getBootPathEntries(ctx.lines, ctx.pathPickerBootKey, bootKeyPickerOpts(ctx)) or {}
+    local item = paths[editIdx]
+    local pv = type(item) == "table" and item.value or item
+    return asText(pv)
+  end
+
+  -- BBL hotkey slot path edit.
+  if ctx.pathPickerBblHotkeyKey and ctx.pathPickerBblHotkeySlot and ctx.lines and _.config_parse and _.config_parse.getBblHotkeySlot then
+    local slotNum = tonumber(ctx.pathPickerBblHotkeySlot)
+    local slot = slotNum and _.config_parse.getBblHotkeySlot(ctx.lines, ctx.pathPickerBblHotkeyKey, slotNum) or nil
+    if slot and slot.pathExists then
+      return asText(slot.path)
+    end
+  end
+
+  -- BBL IRX path edit.
+  if ctx.pathPickerBblIrxIdx and ctx.lines and _.config_parse and _.config_parse.getBblIrxEntry then
+    local entryIdx = tonumber(ctx.pathPickerBblIrxIdx)
+    local v = entryIdx and _.config_parse.getBblIrxEntry(ctx.lines, entryIdx) or nil
+    if v ~= nil then
+      return asText(v)
+    end
+  end
+
+  return ""
+end
+
 local function setMenuEntryPathValue(paths, editIdx, val)
   if editIdx and editIdx >= 1 then
     local item = paths[editIdx]
@@ -1219,16 +1273,17 @@ local function run(ctx)
         if (_.padEffective & _.PAD_CROSS) ~= 0 then
           local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
           if includeManualEntry and selectedRawIdx == 1 then
+            local prefill = getManualPathPrefillValue(ctx)
             ctx.textInputTitleIdMode = nil
             ctx.textInputPrompt = _.path_str.enter_path_prompt
-            ctx.textInputValue = ""
+            ctx.textInputValue = prefill
             ctx.textInputMaxLen = 79
             ctx.textInputCallback = function(val)
               applyManualPath(ctx, val)
             end
             ctx.textInputReturnState = "path_picker"
             ctx.textInputGridSel = 1
-            ctx.textInputCursor = 1
+            ctx.textInputCursor = #ctx.textInputValue + 1
             ctx.textInputScroll = 1
             ctx.state = "text_input"
           else

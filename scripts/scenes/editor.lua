@@ -1114,14 +1114,14 @@ local function run(ctx)
       if actionKey == "_menu_entries" then
         ctx.state = "menu_entries"
         ctx.entryList = _.config_parse.getMenuEntryIndices(ctx.lines)
-        ctx.entrySel = ctx.entrySel or 1
-        ctx.entryScroll = ctx.entryScroll or 0
+        ctx.entrySel = 1
+        ctx.entryScroll = 0
       elseif actionKey == "_bbl_irx_entries" then
-        ctx.bblIrxSel = ctx.bblIrxSel or 1
-        ctx.bblIrxScroll = ctx.bblIrxScroll or 0
+        ctx.bblIrxSel = 1
+        ctx.bblIrxScroll = 0
         ctx.state = "bbl_irx_entries"
       elseif actionKey == "_bbl_hotkeys" then
-        ctx.bblHotkeySel = ctx.bblHotkeySel or 1
+        ctx.bblHotkeySel = 1
         ctx.state = "bbl_hotkeys"
       else
         local selectedCategoryIdx = ctx.optSel
@@ -2260,8 +2260,8 @@ local function run(ctx)
       elseif o.key == "_menu_entries" then
         ctx.state = "menu_entries"
         ctx.entryList = _.config_parse.getMenuEntryIndices(ctx.lines)
-        ctx.entrySel = ctx.entrySel or 1
-        ctx.entryScroll = ctx.entryScroll or 0
+        ctx.entrySel = 1
+        ctx.entryScroll = 0
       elseif o.key == "_bbl_irx_entries" then
         local irxEntries = (_.config_parse.getBblIrxEntryIndices and _.config_parse.getBblIrxEntryIndices(ctx.lines)) or {}
         local targetIrxIdx, targetIrxDisabled = nil, false
@@ -2313,17 +2313,17 @@ local function run(ctx)
             ctx.pathPickerReturnState = "bbl_irx_entries"
             ctx.state = "path_picker"
           else
-            ctx.bblIrxSel = ctx.bblIrxSel or 1
-            ctx.bblIrxScroll = ctx.bblIrxScroll or 0
+            ctx.bblIrxSel = 1
+            ctx.bblIrxScroll = 0
             ctx.state = "bbl_irx_entries"
           end
         else
-          ctx.bblIrxSel = ctx.bblIrxSel or 1
-          ctx.bblIrxScroll = ctx.bblIrxScroll or 0
+          ctx.bblIrxSel = 1
+          ctx.bblIrxScroll = 0
           ctx.state = "bbl_irx_entries"
         end
       elseif o.key == "_bbl_hotkeys" then
-        ctx.bblHotkeySel = ctx.bblHotkeySel or 1
+        ctx.bblHotkeySel = 1
         ctx.state = "bbl_hotkeys"
       elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
@@ -2355,7 +2355,7 @@ local function run(ctx)
             else
               ctx.pathPickerReturnState = "bbl_hotkey_entry"
               ctx.bblEntrySlot = slotNum
-              ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+              ctx.bblEntryDetailSel = 1
               ctx.bblEntryDetailReturnState = "editor"
             end
             ctx.pathPickerContext = "path_only"
@@ -2367,13 +2367,13 @@ local function run(ctx)
             ctx.state = "path_picker"
           else
             ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
-            ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+            ctx.bblEntryDetailSel = 1
             ctx.bblEntryDetailReturnState = "editor"
             ctx.state = "bbl_hotkey_entry"
           end
         else
           ctx.bblEntrySlot = tonumber(o.bblEntrySlot)
-          ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
+          ctx.bblEntryDetailSel = 1
           ctx.bblEntryDetailReturnState = "editor"
           ctx.state = "bbl_hotkey_entry"
         end
@@ -2425,8 +2425,8 @@ local function run(ctx)
         else
           ctx.bootKey = o.key
           ctx.entryIdx = nil
-          ctx.entryPathSel = ctx.entryPathSel or 1
-          ctx.entryPathScroll = ctx.entryPathScroll or 0
+          ctx.entryPathSel = 1
+          ctx.entryPathScroll = 0
           ctx.state = "entry_paths"
         end
       elseif o.optType == "path" then
@@ -2453,8 +2453,8 @@ local function run(ctx)
               ((o.key == "path_DKWDRV_ELF") and "mc_only" or ((ctx.context == "mbr") and "mbr" or "osdmenu")))
         ctx.pathPickerSub = "device"
         ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
-        ctx.pathPickerSel = ctx.pathPickerSel or 1
-        ctx.pathPickerScroll = ctx.pathPickerScroll or 0
+        ctx.pathPickerSel = 1
+        ctx.pathPickerScroll = 0
         ctx.state = "path_picker"
       end
     end

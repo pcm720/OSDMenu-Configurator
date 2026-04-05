@@ -326,8 +326,8 @@ local function run(ctx)
 
   local function reopenAddMenu()
     ctx.entryArgAddMenu = true
-    ctx.entryArgAddSel = ctx.entryArgAddSel or 1
-    ctx.entryArgAddScroll = ctx.entryArgAddScroll or 0
+    ctx.entryArgAddSel = 1
+    ctx.entryArgAddScroll = 0
   end
 
   local function openGsmPicker(row)
@@ -615,8 +615,8 @@ local function run(ctx)
     end
     confirmMoveState()
     ctx.entryArgAddMenu = true
-    ctx.entryArgAddSel = ctx.entryArgAddSel or 1
-    ctx.entryArgAddScroll = ctx.entryArgAddScroll or 0
+    ctx.entryArgAddSel = 1
+    ctx.entryArgAddScroll = 0
   end
 
   if ctx.entryArgsActionsOpen then
