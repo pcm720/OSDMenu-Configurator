@@ -162,7 +162,12 @@ function actions_menu.run(ctx, opts)
     moveSelection(1)
   end
 
-  local maxVisible = math.max(1, math.min(#rows, math.floor(tonumber(opts.maxVisible) or 8)))
+  local maxVisibleCap = math.max(1, math.floor(tonumber(opts.maxVisible) or 8))
+  local minVisible = math.max(1, math.floor(tonumber(opts.minVisible) or 1))
+  if minVisible > maxVisibleCap then
+    minVisible = maxVisibleCap
+  end
+  local maxVisible = math.max(minVisible, math.min(#rows, maxVisibleCap))
   ctx[scrollKey] = _.common.centeredListScroll(ctx[selKey], #rows, maxVisible)
   local closing = ctx[closingKey] == true
   local anim = tonumber(ctx[animKey])
@@ -250,6 +255,8 @@ function actions_menu.run(ctx, opts)
   local maxLabelWIntrinsic = 0
   local columnLayout = opts.columnLayout == true
   local columnGap = math.max(4, math.floor((tonumber(opts.columnGapPx) or (spaceW * 2)) + 0.5))
+  local columnMinWidths = (type(opts.columnMinWidths) == "table") and opts.columnMinWidths or nil
+  local minLabelIntrinsicW = tonumber(opts.minLabelIntrinsicW) or 0
   local columnIntrinsicW = {}
   local function rowColumnCount(row)
     if not row or type(row.columns) ~= "table" then return 0 end
@@ -260,6 +267,14 @@ function actions_menu.run(ctx, opts)
     return n
   end
   if columnLayout then
+    if columnMinWidths then
+      for c = 1, #columnMinWidths do
+        local forced = math.max(0, math.floor(tonumber(columnMinWidths[c]) or 0))
+        if forced > 0 and forced > (columnIntrinsicW[c] or 0) then
+          columnIntrinsicW[c] = forced
+        end
+      end
+    end
     for i = 1, #rows do
       local row = rows[i]
       local count = rowColumnCount(row)
@@ -289,6 +304,9 @@ function actions_menu.run(ctx, opts)
   for i = 1, #rows do
     local lw = rowIntrinsicWidth(rows[i])
     if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+  end
+  if minLabelIntrinsicW > maxLabelWIntrinsic then
+    maxLabelWIntrinsic = minLabelIntrinsicW
   end
   local hintGap = math.max(2, math.floor((((_.common and _.common.PAD_HINT_GAP) or 5) * textScale) + 0.5))
   local padX = math.floor((_.scaleY and _.scaleY(8) or 8) + 0.5)

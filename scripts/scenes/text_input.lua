@@ -241,6 +241,75 @@ local function buildBelTokenRows(profile, page)
   return out
 end
 
+local function rowColumnCount(columns)
+  if type(columns) ~= "table" then return 0 end
+  local n = #columns
+  while n > 0 and tostring(columns[n] or "") == "" do
+    n = n - 1
+  end
+  return n
+end
+
+local function buildBelMenuLayoutMetrics(_, profile)
+  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.75)
+  local rowScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+  local hintFont = (_.common and _.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
+  local function textWidth(text)
+    local s = tostring(text or "")
+    if _.common and _.common.calcTextWidth then
+      return _.common.calcTextWidth(hintFont, s, rowScale)
+    end
+    return math.floor((8 * rowScale) * #s)
+  end
+  local spaceW = textWidth(" ")
+  if spaceW < 1 then
+    local probeW = textWidth("M")
+    if probeW < 1 then probeW = math.floor((8 * rowScale) + 0.5) end
+    spaceW = math.max(2, math.floor((probeW * 0.32) + 0.5))
+  end
+  local columnGap = math.max(4, math.floor((spaceW * 2) + 0.5))
+  local columnMinWidths = {}
+
+  for p = 1, BEL_PAGE_COUNT do
+    local rows = buildBelTokenRows(profile, p)
+    for i = 1, #rows do
+      local cols = rows[i] and rows[i].columns
+      local count = rowColumnCount(cols)
+      for c = 1, count do
+        local w = textWidth(tostring(cols[c] or ""))
+        if w > (columnMinWidths[c] or 0) then
+          columnMinWidths[c] = w
+        end
+      end
+    end
+  end
+
+  local function rowIntrinsicWidth(row)
+    local cols = row and row.columns
+    local count = rowColumnCount(cols)
+    if count <= 0 then
+      return textWidth(row and row.label or "")
+    end
+    local total = 0
+    for c = 1, count do
+      total = total + (columnMinWidths[c] or 0)
+      if c < count then total = total + columnGap end
+    end
+    return total
+  end
+
+  local maxIntrinsicW = 0
+  for p = 1, BEL_PAGE_COUNT do
+    local rows = buildBelTokenRows(profile, p)
+    for i = 1, #rows do
+      local w = rowIntrinsicWidth(rows[i])
+      if w > maxIntrinsicW then maxIntrinsicW = w end
+    end
+  end
+
+  return columnMinWidths, maxIntrinsicW
+end
+
 local function drawBelWarning(_, text, scale, totalWidth, color)
   local drawColor = _.WHITE or color or _.DIM
   local textScale = 0.75
@@ -314,6 +383,57 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
+local function getTextInputBackspaceHoldRepeatMask(ctx, _)
+  if not (Pads and Pads.get) then
+    return 0
+  end
+  local backspaceMask = (_.PAD_SQUARE or 0)
+  if backspaceMask == 0 then
+    return 0
+  end
+  local rawPad = Pads.get(0)
+  local heldMask = rawPad & backspaceMask
+  local prevHeldMask = tonumber(ctx.textInputBackspacePrevHeldMask) or 0
+  local repeatMask = 0
+  ctx.textInputBackspacePrevHeldMask = heldMask
+  ctx.textInputBackspaceHoldFrames = tonumber(ctx.textInputBackspaceHoldFrames) or 0
+  ctx.textInputBackspaceHoldCountdown = tonumber(ctx.textInputBackspaceHoldCountdown) or 0
+
+  if heldMask ~= 0 then
+    local nominalFps = 60
+    if Screen and Screen.getMode then
+      local mode = Screen.getMode()
+      if mode and tonumber(mode.height) == 512 then
+        nominalFps = 50
+      end
+    end
+    local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
+    if prevHeldMask == 0 or prevHeldMask ~= heldMask then
+      -- Initial delete already comes from padJust in _.padEffective.
+      ctx.textInputBackspaceHoldFrames = 0
+      ctx.textInputBackspaceHoldCountdown = (_.common.getRepeatIntervalFrames and
+          _.common.getRepeatIntervalFrames(fps, 0)) or 1
+    else
+      ctx.textInputBackspaceHoldFrames = ctx.textInputBackspaceHoldFrames + 1
+      local targetInterval = (_.common.getRepeatIntervalFrames and
+          _.common.getRepeatIntervalFrames(fps, ctx.textInputBackspaceHoldFrames)) or 1
+      if ctx.textInputBackspaceHoldCountdown > targetInterval then
+        ctx.textInputBackspaceHoldCountdown = targetInterval
+      end
+      ctx.textInputBackspaceHoldCountdown = ctx.textInputBackspaceHoldCountdown - 1
+      if ctx.textInputBackspaceHoldCountdown <= 0 then
+        repeatMask = heldMask
+        ctx.textInputBackspaceHoldCountdown = targetInterval
+      end
+    end
+  else
+    ctx.textInputBackspaceHoldFrames = 0
+    ctx.textInputBackspaceHoldCountdown = 0
+  end
+
+  return repeatMask
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.textInputCallback then
@@ -324,6 +444,10 @@ local function run(ctx)
     ctx.textInputBelRowsProfile = nil
     ctx.textInputBelRowsPage = nil
     ctx.textInputBelPage = nil
+    ctx.textInputBelColumnMinWidths = nil
+    ctx.textInputBelMinIntrinsicW = nil
+    ctx.textInputBelLayoutProfile = nil
+    ctx.textInputBelLayoutScale = nil
     ctx._textInputBelBaselineCallback = nil
     ctx.textInputBelBaseline = nil
     ctx.textInputAllowBelAdd = nil
@@ -333,6 +457,9 @@ local function run(ctx)
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
+    ctx.textInputBackspacePrevHeldMask = nil
+    ctx.textInputBackspaceHoldFrames = nil
+    ctx.textInputBackspaceHoldCountdown = nil
     ctx.state = "editor"; return
   end
   if ctx._textInputBelBaselineCallback ~= ctx.textInputCallback then
@@ -491,6 +618,15 @@ local function run(ctx)
     local belProfile = belProfileFromContext(ctx)
     local belPage = clampBelPage(ctx.textInputBelPage)
     ctx.textInputBelPage = belPage
+    local uiScale = tonumber(ctx.uiScale) or 1
+    if type(ctx.textInputBelColumnMinWidths) ~= "table" or ctx.textInputBelLayoutProfile ~= belProfile or
+        ctx.textInputBelLayoutScale ~= uiScale then
+      local colMinW, maxIntrinsicW = buildBelMenuLayoutMetrics(_, belProfile)
+      ctx.textInputBelColumnMinWidths = colMinW
+      ctx.textInputBelMinIntrinsicW = maxIntrinsicW
+      ctx.textInputBelLayoutProfile = belProfile
+      ctx.textInputBelLayoutScale = uiScale
+    end
     if type(ctx.textInputBelRows) ~= "table" or ctx.textInputBelRowsProfile ~= belProfile or
         ctx.textInputBelRowsPage ~= belPage then
       ctx.textInputBelRows = buildBelTokenRows(belProfile, belPage)
@@ -499,12 +635,15 @@ local function run(ctx)
     end
     local belRows = ctx.textInputBelRows
     local pageLabel = "Page " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT)
+    local belMenuMaxVisible = 8
     local handled = actions_menu.run(ctx, {
       openKey = "textInputBelMenuOpen",
       selKey = "textInputBelMenuSel",
       scrollKey = "textInputBelMenuScroll",
       rowStateKeyPrefix = "text_input_bel_row_",
       columnLayout = true,
+      columnMinWidths = ctx.textInputBelColumnMinWidths,
+      minLabelIntrinsicW = ctx.textInputBelMinIntrinsicW,
       titleOverride = glyphKeyLabel .. " " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT),
       anchorPad = "square",
       anchorLabel = pageLabel,
@@ -520,7 +659,8 @@ local function run(ctx)
         return true
       end,
       rows = belRows,
-      maxVisible = 8,
+      maxVisible = belMenuMaxVisible,
+      minVisible = belMenuMaxVisible,
       closeOnSelect = true,
       onSelect = function(row)
         local token = row and row.token
@@ -549,6 +689,9 @@ local function run(ctx)
       ctx.textInputCursorPrevHeldMask = nil
       ctx.textInputCursorHoldFrames = nil
       ctx.textInputCursorHoldCountdown = nil
+      ctx.textInputBackspacePrevHeldMask = nil
+      ctx.textInputBackspaceHoldFrames = nil
+      ctx.textInputBackspaceHoldCountdown = nil
       return
     end
   end
@@ -640,9 +783,16 @@ local function run(ctx)
     ctx.textInputBelRowsProfile = nil
     ctx.textInputBelRowsPage = nil
     ctx.textInputBelPage = nil
+    ctx.textInputBelColumnMinWidths = nil
+    ctx.textInputBelMinIntrinsicW = nil
+    ctx.textInputBelLayoutProfile = nil
+    ctx.textInputBelLayoutScale = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
+    ctx.textInputBackspacePrevHeldMask = nil
+    ctx.textInputBackspaceHoldFrames = nil
+    ctx.textInputBackspaceHoldCountdown = nil
     -- Callback sets ctx.state (e.g. applyManualPath -> entry_paths); do not overwrite
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -660,16 +810,24 @@ local function run(ctx)
     ctx.textInputBelRowsProfile = nil
     ctx.textInputBelRowsPage = nil
     ctx.textInputBelPage = nil
+    ctx.textInputBelColumnMinWidths = nil
+    ctx.textInputBelMinIntrinsicW = nil
+    ctx.textInputBelLayoutProfile = nil
+    ctx.textInputBelLayoutScale = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
+    ctx.textInputBackspacePrevHeldMask = nil
+    ctx.textInputBackspaceHoldFrames = nil
+    ctx.textInputBackspaceHoldCountdown = nil
     ctx.state = ctx.textInputReturnState or "menu_entry_edit"
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and not ctx.textInputTitleIdMode then
     ctx.textInputShift = not ctx
         .textInputShift
   end
-  if (_.padEffective & _.PAD_SQUARE) ~= 0 then
+  local backspaceMask = _.padEffective | getTextInputBackspaceHoldRepeatMask(ctx, _)
+  if (backspaceMask & _.PAD_SQUARE) ~= 0 then
     if ctx.textInputCursor > 1 then
       ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 2) ..
           ctx.textInputValue:sub(ctx.textInputCursor)
