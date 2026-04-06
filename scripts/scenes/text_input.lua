@@ -90,17 +90,17 @@ local BEL_COLOR_TOKENS = {
 }
 
 local BEL_SYMBOLS_PS2_ROM = {
-  { code = "o000", desc = "Down Shafted Arrow" },
-  { code = "o001", desc = "Right Shafted Arrow" },
-  { code = "o002", desc = "Left Arrow" },
-  { code = "o003", desc = "Right Arrow" },
-  { code = "o004", desc = "Registered Trademark" },
-  { code = "o005", desc = "Registered Trademark (small)" },
-  { code = "o006", desc = "Up Arrow" },
-  { code = "o007", desc = "Down Arrow" },
-  { code = "o008", desc = "Left Arrow" },
-  { code = "o009", desc = "Right Arrow" },
-  { code = "o010", desc = "Up Button" },
+  { code = "o000", desc = "Down Shafted Arrow", preview = "↓|" },
+  { code = "o001", desc = "Right Shafted Arrow", preview = "→|" },
+  { code = "o002", desc = "Left Arrow", preview = "←" },
+  { code = "o003", desc = "Right Arrow", preview = "→" },
+  { code = "o004", desc = "Registered Trademark", preview = "®" },
+  { code = "o005", desc = "Registered Trademark (small)", preview = "®" },
+  { code = "o006", desc = "Up Arrow", preview = "↑" },
+  { code = "o007", desc = "Down Arrow", preview = "↓" },
+  { code = "o008", desc = "Left Arrow", preview = "←" },
+  { code = "o009", desc = "Right Arrow", preview = "→" },
+  { code = "o010", desc = "Up Button", preview = "[↑]" },
   { code = "o011", desc = "Down Button" },
   { code = "o012", desc = "Left Button" },
   { code = "o013", desc = "Right Button" },
@@ -183,7 +183,7 @@ local function buildBelTokenRows(profile)
     local token = BEL .. tostring(t.code)
     out[#out + 1] = {
       id = "token_" .. tostring(t.code),
-      label = token .. "  " .. tostring(t.desc or ""),
+      label = tostring(t.code) .. "  " .. tostring(t.desc or ""),
       token = token,
     }
   end
@@ -192,9 +192,11 @@ local function buildBelTokenRows(profile)
   for i = 1, #symRows do
     local t = symRows[i]
     local token = BEL .. tostring(t.code)
+    local preview = tostring(t.preview or "")
+    local labelPrefix = (preview ~= "") and (preview .. "  ") or ""
     out[#out + 1] = {
       id = "token_" .. tostring(t.code),
-      label = token .. "  " .. tostring(t.desc or ""),
+      label = labelPrefix .. tostring(t.code) .. "  " .. tostring(t.desc or ""),
       token = token,
     }
   end
