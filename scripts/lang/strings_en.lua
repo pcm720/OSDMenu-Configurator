@@ -32,6 +32,8 @@ strings.main = {
   main_credits_built_using = "Built Using:",
   main_credits_thanks_to = "Thanks to:",
   main_credits_translators = "Translators:",
+  main_credits_language_spanish = "Spanish",
+  main_credits_language_portuguese = "Portuguese",
   main_exit_hint_items = { { pad = "cross", label = "Yes" }, { pad = "circle", label = "No" } },
   no_memory_card = "No memory card found",
   insert_mc = "Insert a memory card and try again",

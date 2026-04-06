@@ -108,14 +108,45 @@ local function run(ctx)
   local rows = ctx.textInputTitleIdMode and (_.KEYBOARD_ROWS_TITLE_ID or _.KEYBOARD_ROWS_SHIFTED) or
       (ctx.textInputShift and _.KEYBOARD_ROWS_SHIFTED or _.KEYBOARD_ROWS)
   local keyList = {}
-  for _, row in ipairs(rows) do for i = 1, #row do table.insert(keyList, row:sub(i, i)) end end
-  if not ctx.textInputTitleIdMode then table.insert(keyList, " ") end
-  local rowLen = ctx.textInputTitleIdMode and { 10, 10, 9, 7 } or { 12, 12, 11, 10 }
+  local rowLen = {}
+  local rowStart = {}
+  local rowCount = #rows
+  local running = 1
+  for r = 1, rowCount do
+    local row = rows[r] or ""
+    rowStart[r] = running
+    rowLen[r] = #row
+    for i = 1, #row do
+      keyList[#keyList + 1] = row:sub(i, i)
+    end
+    running = running + rowLen[r]
+  end
+  local spaceIdx = nil
+  if not ctx.textInputTitleIdMode then
+    spaceIdx = running
+    rowStart[rowCount + 1] = spaceIdx
+    rowLen[rowCount + 1] = 1
+    keyList[#keyList + 1] = " "
+  end
+  local maxRow = rowCount + ((spaceIdx ~= nil) and 1 or 0)
   if ctx.textInputGridSel < 1 then ctx.textInputGridSel = 1 end
   if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = #keyList end
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = 0.7
+  local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
+      { 0, 0.5, 0.85, 1.2 }
+  local minOffset = 0
+  local maxExtent = 0
+  for r = 1, rowCount do
+    local off = tonumber(rowOffsets[r]) or 0
+    if r == 1 or off < minOffset then minOffset = off end
+    local extent = off + (rowLen[r] or 0)
+    if extent > maxExtent then maxExtent = extent end
+  end
+  local keyboardBlockW = math.max(_.KEY_WIDTH, (maxExtent - minOffset) * _.KEY_WIDTH)
+  local keyboardLeft = _.KEYBOARD_CENTER_X - keyboardBlockW / 2 - (minOffset * _.KEY_WIDTH)
+
   local function drawKey(kx, ky, w, h, label, sel)
     local bg = sel and _.KEY_BG_SEL or _.KEY_BG
     local border = sel and _.KEY_BORDER_SEL or _.KEY_BORDER
@@ -129,10 +160,9 @@ local function run(ctx)
     local textY = math.floor(ky + (h - _.KEY_LH) / 2) - 2
     _.drawText(_.font, _.drawMode, textX, textY, keyScale, label, sel and _.HIGHLIGHT or _.WHITE)
   end
-  local rowStart = ctx.textInputTitleIdMode and { 1, 11, 21, 30 } or { 1, 13, 25, 36 }
-  for r = 1, 4 do
+  for r = 1, rowCount do
     local n = rowLen[r]
-    local startX = _.KEYBOARD_CENTER_X - (n * _.KEY_WIDTH) / 2
+    local startX = keyboardLeft + (tonumber(rowOffsets[r]) or 0) * _.KEY_WIDTH
     for col = 1, n do
       local idx = rowStart[r] + col - 1
       local kx = math.floor(startX + (col - 1) * _.KEY_WIDTH + _.KEY_GAP / 2)
@@ -141,23 +171,24 @@ local function run(ctx)
       drawKey(kx, ky, kw, kh, ch, idx == ctx.textInputGridSel)
     end
   end
-  if not ctx.textInputTitleIdMode then
-    local specY = keyY + 4 * _.KEY_H
+  if spaceIdx then
+    local specY = keyY + rowCount * _.KEY_H
     local specSlotW = _.KEY_WIDTH * 2.2
     local spaceW = math.floor(specSlotW * 2 - _.KEY_GAP)
     local specStartX = _.KEYBOARD_CENTER_X - spaceW / 2
     local ky = math.floor(specY + _.KEY_GAP / 2)
-    drawKey(specStartX, ky, spaceW, kh, "", 46 == ctx.textInputGridSel)
+    drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
   end
-  rowStart = ctx.textInputTitleIdMode and { 1, 11, 21, 30 } or { 1, 13, 25, 36, 46 }
-  local rowSize = ctx.textInputTitleIdMode and { 10, 10, 9, 7 } or { 12, 12, 11, 10, 1 }
-  local maxRow = ctx.textInputTitleIdMode and 4 or 5
+  local rowSize = rowLen
   local function rowOf(s)
-    if ctx.textInputTitleIdMode then
-      if s <= 10 then return 1 elseif s <= 20 then return 2 elseif s <= 29 then return 3 else return 4 end
-    else
-      if s <= 12 then return 1 elseif s <= 24 then return 2 elseif s <= 35 then return 3 elseif s <= 45 then return 4 else return 5 end
+    for r = 1, maxRow do
+      local start = rowStart[r]
+      local size = rowSize[r] or 0
+      if start and size > 0 and s >= start and s < (start + size) then
+        return r
+      end
     end
+    return 1
   end
   if (_.padEffective & _.PAD_LEFT) ~= 0 then
     ctx.textInputGridSel = ctx.textInputGridSel - 1; if ctx.textInputGridSel < 1 then ctx.textInputGridSel = #keyList end
@@ -171,8 +202,8 @@ local function run(ctx)
       local colInRow = ctx.textInputGridSel - rowStart[r] + 1
       local prevSize = rowSize[r - 1]
       ctx.textInputGridSel = rowStart[r - 1] + math.min(colInRow, prevSize) - 1
-    elseif r == 1 and not ctx.textInputTitleIdMode then
-      ctx.textInputGridSel = 46
+    elseif r == 1 and spaceIdx then
+      ctx.textInputGridSel = spaceIdx
     end
   end
   if (_.padEffective & _.PAD_DOWN) ~= 0 then
@@ -181,7 +212,7 @@ local function run(ctx)
       local colInRow = ctx.textInputGridSel - rowStart[r] + 1
       local nextSize = rowSize[r + 1]
       ctx.textInputGridSel = rowStart[r + 1] + math.min(colInRow, nextSize) - 1
-    elseif r == maxRow and not ctx.textInputTitleIdMode then
+    elseif r == maxRow and spaceIdx then
       local colInRow = ctx.textInputGridSel - rowStart[r] + 1
       ctx.textInputGridSel = rowStart[1] + math.min(colInRow, rowSize[1]) - 1
     end
@@ -192,19 +223,11 @@ local function run(ctx)
       ctx.textInputCursor + 1)
   end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    if ctx.textInputGridSel <= 45 then
-      local ch = keyList[ctx.textInputGridSel]
-      if ch and #ctx.textInputValue < ctx.textInputMaxLen then
-        ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 1) ..
-            ch .. ctx.textInputValue:sub(ctx.textInputCursor)
-        ctx.textInputCursor = ctx.textInputCursor + 1
-      end
-    elseif not ctx.textInputTitleIdMode and ctx.textInputGridSel == 46 then
-      if #ctx.textInputValue < ctx.textInputMaxLen then
-        ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 1) ..
-            " " .. ctx.textInputValue:sub(ctx.textInputCursor)
-        ctx.textInputCursor = ctx.textInputCursor + 1
-      end
+    local ch = keyList[ctx.textInputGridSel]
+    if ch and #ctx.textInputValue < ctx.textInputMaxLen then
+      ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 1) ..
+          ch .. ctx.textInputValue:sub(ctx.textInputCursor)
+      ctx.textInputCursor = ctx.textInputCursor + 1
     end
   end
   if (_.padEffective & _.PAD_START) ~= 0 then

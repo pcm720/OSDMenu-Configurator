@@ -359,7 +359,8 @@ local OSD_VISUAL_COORD_KEYS = {
   OSDSYS_version_y = true,
 }
 
--- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig).
+-- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig),
+-- with visual coordinate values kept inside configured editor bounds.
 local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_menu_x = "320",
   OSDSYS_menu_y = "110",
@@ -369,7 +370,8 @@ local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_version_y = "-1",
 }
 
--- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments.
+-- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments,
+-- with visual coordinate values kept inside configured editor bounds.
 local OSD_VISUAL_PS2_DEFAULTS = {
   OSDSYS_menu_x = "430",
   OSDSYS_menu_y = "110",
@@ -660,6 +662,8 @@ end
 local function resolveIntBounds(opt, currentNum)
   local minV = tonumber(opt and opt.min)
   local maxV = tonumber(opt and opt.max)
+  local hasExplicitMin = (opt and opt.min ~= nil)
+  local hasExplicitMax = (opt and opt.max ~= nil)
   if minV == nil then minV = 0 end
   if maxV == nil then maxV = 9999 end
 
@@ -677,8 +681,14 @@ local function resolveIntBounds(opt, currentNum)
   end
 
   local defNum = tonumber(opt and opt.default or nil)
-  if defNum and defNum < minV then minV = defNum end
-  if currentNum and currentNum < minV then minV = currentNum end
+  if (not hasExplicitMin) then
+    if defNum and defNum < minV then minV = defNum end
+    if currentNum and currentNum < minV then minV = currentNum end
+  end
+  if (not hasExplicitMax) then
+    if defNum and defNum > maxV then maxV = defNum end
+    if currentNum and currentNum > maxV then maxV = currentNum end
+  end
   if maxV < minV then maxV = minV end
   return minV, maxV
 end

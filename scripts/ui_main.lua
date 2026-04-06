@@ -168,6 +168,8 @@ local function getCreditsHintLabel(main_str)
 end
 
 local function buildMainCreditsLines(main_str)
+  local spanishLabel = main_str.main_credits_language_spanish or "Spanish"
+  local portugueseLabel = main_str.main_credits_language_portuguese or "Portuguese"
   return {
     main_str.main_credits_built_using or "Built Using:",
     "-Enceladus",
@@ -176,8 +178,8 @@ local function buildMainCreditsLines(main_str)
     "-R3Z3N",
     "-Berion",
     main_str.main_credits_translators or "Translators:",
-    "-VizoR: Spanish",
-    "-nuno: Portugese",
+    "-VizoR: " .. tostring(spanishLabel),
+    "-nuno: " .. tostring(portugueseLabel),
   }
 end
 
