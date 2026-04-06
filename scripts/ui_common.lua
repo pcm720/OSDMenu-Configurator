@@ -188,6 +188,7 @@ end
 function common.normalizePathForDisplay(path)
   local raw = tostring(path or "")
   if raw == "" then return raw end
+  raw = raw:gsub("\\", "/")
 
   local dev, part, rest = raw:match("^(hdd%d):/?([^:/]+):pfs:(.*)$")
   if dev and part then
@@ -724,7 +725,7 @@ function common.saveConfig(ctx, path, lines, createDir)
   local mounted = nil
 
   local function splitHddPartitionPath(p)
-    local s = tostring(p or "")
+    local s = tostring(p or ""):gsub("\\", "/")
     local part, rest = s:match("^(hdd%d:[^:]+):pfs:(.*)$")
     if not part then
       -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
