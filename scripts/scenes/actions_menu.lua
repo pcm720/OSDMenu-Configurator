@@ -288,10 +288,12 @@ function actions_menu.run(ctx, opts)
 
   local rowLabelX = anchorActionLabelX
   local rowMarkerX = rowLabelX - markerW - spaceW
-  local maxLabelW = (boxX + boxW) - padX - rowLabelX
+  local barWidth = (_.scaleX and _.scaleX(8)) or 8
+  local scrollbarGap = math.max(2, math.floor((_.scaleX and _.scaleX(3) or 3) + 0.5))
+  local reserveScrollbar = (#rows > maxVisible) and (barWidth + scrollbarGap) or 0
+  local maxLabelW = (boxX + boxW) - padX - reserveScrollbar - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
   if _.common and _.common.drawListScrollbar then
-    local barWidth = (_.scaleX and _.scaleX(8)) or 8
     _.common.drawListScrollbar(_, {
       totalRows = #rows,
       visibleRows = maxVisible,

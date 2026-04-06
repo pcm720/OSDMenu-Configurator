@@ -180,20 +180,22 @@ local function buildBelTokenRows(profile)
   out[#out + 1] = { id = "header_colors", label = "Colors", enabled = false }
   for i = 1, #BEL_COLOR_TOKENS do
     local t = BEL_COLOR_TOKENS[i]
+    local token = BEL .. tostring(t.code)
     out[#out + 1] = {
       id = "token_" .. tostring(t.code),
-      label = "\\a" .. tostring(t.code) .. "  " .. tostring(t.desc or ""),
-      token = BEL .. tostring(t.code),
+      label = token .. "  " .. tostring(t.desc or ""),
+      token = token,
     }
   end
 
   out[#out + 1] = { id = "header_symbols", label = symHeader, enabled = false }
   for i = 1, #symRows do
     local t = symRows[i]
+    local token = BEL .. tostring(t.code)
     out[#out + 1] = {
       id = "token_" .. tostring(t.code),
-      label = "\\a" .. tostring(t.code) .. "  " .. tostring(t.desc or ""),
-      token = BEL .. tostring(t.code),
+      label = token .. "  " .. tostring(t.desc or ""),
+      token = token,
     }
   end
   return out
