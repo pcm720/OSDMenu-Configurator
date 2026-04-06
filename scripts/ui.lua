@@ -21,8 +21,51 @@ local function getStartupCwd()
   return nil
 end
 
+local function splitHddPartitionPath(path)
+  local s = tostring(path or ""):gsub("\\", "/")
+  local part, rest = s:match("^(hdd%d:[^:]+):pfs:(.*)$")
+  if not part then
+    -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
+    part, rest = s:match("^(hdd%d:[^/:]+)(/.*)$")
+  end
+  if not part then return nil, nil end
+  if not rest or rest == "" then rest = "/" end
+  if rest:sub(1, 1) ~= "/" then rest = "/" .. rest end
+  return part, rest
+end
+
+local function beginStartupPathAccess(path)
+  local resolved = (common.resolvePathForAccess and common.resolvePathForAccess(path)) or tostring(path or "")
+  local moduleType = common.getPathModuleType and common.getPathModuleType(resolved)
+  if moduleType and System and System.loadModules then
+    pcall(System.loadModules, moduleType)
+  end
+
+  local part, rest = splitHddPartitionPath(resolved)
+  if part and rest then
+    if System and System.fileXioMount then
+      pcall(System.fileXioMount, "pfs0:", part)
+      return "pfs0:", "pfs0:" .. rest, resolved
+    end
+    return nil, resolved, resolved
+  end
+  if resolved:match("^pfs0:/") and System and System.fileXioMount then
+    pcall(System.fileXioMount, "pfs0:", "hdd0:__sysconf")
+    return "pfs0:", resolved, resolved
+  end
+  return nil, resolved, resolved
+end
+
+local function endStartupPathAccess(mounted)
+  if mounted and System and System.fileXioUmount then
+    pcall(System.fileXioUmount, mounted)
+  end
+end
+
 local function startupFileExists(path)
-  local ok, exists = pcall(doesFileExist, path)
+  local mounted, accessPath = beginStartupPathAccess(path)
+  local ok, exists = pcall(doesFileExist, accessPath or path)
+  endStartupPathAccess(mounted)
   return ok and exists == true
 end
 
@@ -63,13 +106,15 @@ local function loadStartupConfig()
     return cfg
   end
 
-  local lines, err = config_parse.load(cfgPath)
+  local mounted, accessPath, resolvedPath = beginStartupPathAccess(cfgPath)
+  local lines, err = config_parse.load(accessPath or cfgPath)
+  endStartupPathAccess(mounted)
   if not lines then
     print("ui: failed loading startup config r3configurator.cnf: " .. tostring(err))
     return cfg
   end
 
-  cfg.path = cfgPath
+  cfg.path = resolvedPath or cfgPath
   local kv = {}
   for i = 1, #(lines or {}) do
     local e = lines[i]
