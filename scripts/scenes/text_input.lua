@@ -105,13 +105,12 @@ local BEL_SYMBOLS_PS2_ROM = {
   { code = "o012", desc = "Left Button", preview = "[←]" },
   { code = "o013", desc = "Right Button", preview = "[→]" },
   { code = "o014", desc = "Repeat", preview = "↻" },
-  { code = "o015", desc = "Up/Down Arrows", preview = "↕" },
+  { code = "o015", desc = "Up/Down Arrows (small)", preview = "↕" },
   { code = "o016", desc = "(PS2)", preview = "(PS2)" },
-  { code = "o017", desc = "(PS2), cut off", preview = "(PS2" },
+  { code = "o017", desc = "(PS2), but off", preview = "S2)" },
   { code = "o018", desc = "Stop", preview = "■" },
-  { code = "o019", desc = "Daylight Savings(?)", preview = "☀" },
-  { code = "o020", desc = "Up/Down Arrows (again?)", preview = "↕" },
-  { code = "o021", desc = "Up/Down Arrows (again)", preview = "↕" },
+  { code = "o019", desc = "Daylight Savings", preview = "☀" },
+  { code = "o020", desc = "Up/Down Arrows (bigger)", preview = "↕" },
 }
 
 local BEL_SYMBOLS_HDDOSD = {
@@ -184,6 +183,7 @@ local function buildBelTokenRows(profile)
     out[#out + 1] = {
       id = "token_" .. tostring(t.code),
       label = tostring(t.code) .. "  " .. tostring(t.desc or ""),
+      columns = { tostring(t.code), "", tostring(t.desc or "") },
       token = token,
     }
   end
@@ -193,10 +193,12 @@ local function buildBelTokenRows(profile)
     local t = symRows[i]
     local token = BEL .. tostring(t.code)
     local preview = tostring(t.preview or "")
-    local labelPrefix = (preview ~= "") and (preview .. "  ") or ""
     out[#out + 1] = {
       id = "token_" .. tostring(t.code),
-      label = labelPrefix .. tostring(t.code) .. "  " .. tostring(t.desc or ""),
+      label = tostring(t.code) ..
+          ((preview ~= "") and ("  " .. preview) or "") ..
+          "  " .. tostring(t.desc or ""),
+      columns = { tostring(t.code), preview, tostring(t.desc or "") },
       token = token,
     }
   end
@@ -452,6 +454,7 @@ local function run(ctx)
       selKey = "textInputBelMenuSel",
       scrollKey = "textInputBelMenuScroll",
       rowStateKeyPrefix = "text_input_bel_row_",
+      columnLayout = true,
       anchorPad = "square",
       anchorLabel = glyphKeyLabel,
       rows = belRows,

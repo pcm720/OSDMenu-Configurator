@@ -99,6 +99,7 @@ local function normalizeRows(rows)
         id = id,
         label = tostring(row.label or ""),
         enabled = (row.enabled ~= false),
+        columns = (type(row.columns) == "table") and row.columns or nil,
         raw = row,
       }
       if id:lower() == "remove" then
@@ -207,8 +208,46 @@ function actions_menu.run(ctx, opts)
     markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5))
   end
   local maxLabelWIntrinsic = 0
+  local columnLayout = opts.columnLayout == true
+  local columnGap = math.max(4, math.floor((tonumber(opts.columnGapPx) or (spaceW * 2)) + 0.5))
+  local columnIntrinsicW = {}
+  local function rowColumnCount(row)
+    if not row or type(row.columns) ~= "table" then return 0 end
+    local n = #row.columns
+    while n > 0 and tostring(row.columns[n] or "") == "" do
+      n = n - 1
+    end
+    return n
+  end
+  if columnLayout then
+    for i = 1, #rows do
+      local row = rows[i]
+      local count = rowColumnCount(row)
+      for c = 1, count do
+        local cw = textWidth(tostring(row.columns[c] or ""))
+        if cw > (columnIntrinsicW[c] or 0) then
+          columnIntrinsicW[c] = cw
+        end
+      end
+    end
+  end
+  local function rowIntrinsicWidth(row)
+    if not (columnLayout and row and type(row.columns) == "table") then
+      return textWidth(row and row.label or "")
+    end
+    local count = rowColumnCount(row)
+    if count <= 0 then
+      return textWidth(row and row.label or "")
+    end
+    local total = 0
+    for c = 1, count do
+      total = total + (columnIntrinsicW[c] or 0)
+      if c < count then total = total + columnGap end
+    end
+    return total
+  end
   for i = 1, #rows do
-    local lw = textWidth(rows[i] and rows[i].label or "")
+    local lw = rowIntrinsicWidth(rows[i])
     if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
   end
   local hintGap = math.max(2, math.floor((((_.common and _.common.PAD_HINT_GAP) or 5) * textScale) + 0.5))
@@ -309,18 +348,50 @@ function actions_menu.run(ctx, opts)
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
-    local label = row.label
-    if _.common.fitListRowText then
-      label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
-        i == ctx[selKey])
-    elseif _.common.truncateTextToWidth then
-      label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
-    end
     local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
     if i == ctx[selKey] then
       _.drawText(hintFont, _.drawMode, rowMarkerX, y, rowScale, ">", col, textH)
     end
-    _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
+    if columnLayout and type(row.columns) == "table" and #row.columns > 0 then
+      local count = rowColumnCount(row)
+      if count <= 0 then
+        local label = row.label
+        if _.common.fitListRowText then
+          label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
+            i == ctx[selKey])
+        elseif _.common.truncateTextToWidth then
+          label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+        end
+        _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
+      else
+        local cx = rowLabelX
+        for c = 1, count do
+          local raw = tostring(row.columns[c] or "")
+          local colMaxW = (c < count) and (columnIntrinsicW[c] or textWidth(raw)) or
+              math.max(1, (rowLabelX + maxLabelW) - cx)
+          local txt = raw
+          if _.common and _.common.truncateTextToWidth then
+            txt = _.common.truncateTextToWidth(hintFont, txt, colMaxW, rowScale)
+          end
+          _.drawText(hintFont, _.drawMode, cx, y, rowScale, txt, col, textH)
+          if c < count then
+            cx = cx + (columnIntrinsicW[c] or 0) + columnGap
+            if cx > (rowLabelX + maxLabelW) then
+              break
+            end
+          end
+        end
+      end
+    else
+      local label = row.label
+      if _.common.fitListRowText then
+        label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
+          i == ctx[selKey])
+      elseif _.common.truncateTextToWidth then
+        label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+      end
+      _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
+    end
   end
 
   local hintItems = buildOverlayHints(_, opts.hints, anchorPad, anchorLabel)
