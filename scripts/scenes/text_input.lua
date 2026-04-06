@@ -223,6 +223,57 @@ local function drawBelWarning(_, text, scale, totalWidth, color)
   _.common.drawText(hintFont, _.drawMode, textX, textY, drawScale, msg, drawColor, textH)
 end
 
+local function getTextInputCursorHoldRepeatMask(ctx, _)
+  if not (Pads and Pads.get) then
+    return 0
+  end
+  local l1r1Mask = (_.PAD_L1 or 0) | (_.PAD_R1 or 0)
+  if l1r1Mask == 0 then
+    return 0
+  end
+  local rawPad = Pads.get(0)
+  local heldMask = rawPad & l1r1Mask
+  local prevHeldMask = tonumber(ctx.textInputCursorPrevHeldMask) or 0
+  local repeatMask = 0
+  ctx.textInputCursorPrevHeldMask = heldMask
+  ctx.textInputCursorHoldFrames = tonumber(ctx.textInputCursorHoldFrames) or 0
+  ctx.textInputCursorHoldCountdown = tonumber(ctx.textInputCursorHoldCountdown) or 0
+
+  if heldMask ~= 0 then
+    local nominalFps = 60
+    if Screen and Screen.getMode then
+      local mode = Screen.getMode()
+      if mode and tonumber(mode.height) == 512 then
+        nominalFps = 50
+      end
+    end
+    local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
+    if prevHeldMask == 0 or prevHeldMask ~= heldMask then
+      -- Initial move already comes from padJust in _.padEffective.
+      ctx.textInputCursorHoldFrames = 0
+      ctx.textInputCursorHoldCountdown = (_.common.getRepeatIntervalFrames and
+          _.common.getRepeatIntervalFrames(fps, 0)) or 1
+    else
+      ctx.textInputCursorHoldFrames = ctx.textInputCursorHoldFrames + 1
+      local targetInterval = (_.common.getRepeatIntervalFrames and
+          _.common.getRepeatIntervalFrames(fps, ctx.textInputCursorHoldFrames)) or 1
+      if ctx.textInputCursorHoldCountdown > targetInterval then
+        ctx.textInputCursorHoldCountdown = targetInterval
+      end
+      ctx.textInputCursorHoldCountdown = ctx.textInputCursorHoldCountdown - 1
+      if ctx.textInputCursorHoldCountdown <= 0 then
+        repeatMask = heldMask
+        ctx.textInputCursorHoldCountdown = targetInterval
+      end
+    end
+  else
+    ctx.textInputCursorHoldFrames = 0
+    ctx.textInputCursorHoldCountdown = 0
+  end
+
+  return repeatMask
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.textInputCallback then
@@ -235,6 +286,9 @@ local function run(ctx)
     ctx.textInputEnableBelKey = nil
     ctx.textInputBelProfile = nil
     ctx.textInputHidePipeBackslash = nil
+    ctx.textInputCursorPrevHeldMask = nil
+    ctx.textInputCursorHoldFrames = nil
+    ctx.textInputCursorHoldCountdown = nil
     ctx.state = "editor"; return
   end
   if ctx._textInputBelBaselineCallback ~= ctx.textInputCallback then
@@ -398,7 +452,6 @@ local function run(ctx)
       rowStateKeyPrefix = "text_input_bel_row_",
       anchorPad = "square",
       anchorLabel = glyphKeyLabel,
-      titleOverride = "Insert Advanced Control",
       rows = belRows,
       maxVisible = 8,
       closeOnSelect = true,
@@ -422,6 +475,9 @@ local function run(ctx)
       },
     })
     if handled then
+      ctx.textInputCursorPrevHeldMask = nil
+      ctx.textInputCursorHoldFrames = nil
+      ctx.textInputCursorHoldCountdown = nil
       return
     end
   end
@@ -463,8 +519,9 @@ local function run(ctx)
       ctx.textInputGridSel = rowStart[1] + math.min(colInRow, rowSize[1]) - 1
     end
   end
-  if (_.padEffective & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
-  if (_.padEffective & _.PAD_R1) ~= 0 then
+  local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
+  if (cursorMoveMask & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
+  if (cursorMoveMask & _.PAD_R1) ~= 0 then
     ctx.textInputCursor = math.min(#ctx.textInputValue + 1,
       ctx.textInputCursor + 1)
   end
@@ -507,6 +564,9 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
+    ctx.textInputCursorPrevHeldMask = nil
+    ctx.textInputCursorHoldFrames = nil
+    ctx.textInputCursorHoldCountdown = nil
     -- Callback sets ctx.state (e.g. applyManualPath -> entry_paths); do not overwrite
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -520,6 +580,9 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
+    ctx.textInputCursorPrevHeldMask = nil
+    ctx.textInputCursorHoldFrames = nil
+    ctx.textInputCursorHoldCountdown = nil
     ctx.state = ctx.textInputReturnState or "menu_entry_edit"
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and not ctx.textInputTitleIdMode then
