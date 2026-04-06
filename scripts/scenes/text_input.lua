@@ -661,7 +661,7 @@ local function run(ctx)
       rows = belRows,
       maxVisible = belMenuMaxVisible,
       minVisible = belMenuMaxVisible,
-      closeOnSelect = true,
+      closeOnSelect = false,
       onSelect = function(row)
         local token = row and row.token
         if token and #ctx.textInputValue + #token <= ctx.textInputMaxLen then
