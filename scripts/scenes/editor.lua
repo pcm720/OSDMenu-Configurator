@@ -2252,11 +2252,18 @@ local function run(ctx)
       elseif o.optType == "color" then
         startInlineColorEdit(ctx, _, o)
       elseif o.optType == "text" or o.optType == "string" then
+        local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
+        local allowBelKey = (o.key == "OSDSYS_left_cursor" or o.key == "OSDSYS_right_cursor" or
+          o.key == "OSDSYS_menu_top_delimiter" or o.key == "OSDSYS_menu_bottom_delimiter")
         ctx.textInputTitleIdMode = nil
         ctx.textInputPrompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
             o.label or _.common_str.enter_text
         ctx.textInputValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         ctx.textInputMaxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
+        ctx.textInputEnableBelKey = allowBelKey and true or nil
+        ctx.textInputBelProfile = allowBelKey and belProfile or nil
+        ctx.textInputAllowBelAdd = allowBelKey and true or nil
+        ctx.textInputHidePipeBackslash = nil
         ctx.textInputCallback = function(val)
           setConfigValue(ctx, _, o.key, val or "")
           markConfigMutated(ctx)

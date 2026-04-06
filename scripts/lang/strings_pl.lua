@@ -379,6 +379,8 @@ strings.cdrom_options = {
 strings.text_input = {
   hint_items = { { pad = "cross", label = "Zatwierdź", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Gotowe", row = 1 }, { pad = "triangle", label = "Caps", row = 1 }, { pad = "circle", label = "Anuluj", row = 1 }, { pad = "L1", label = "Lewo", row = 2 }, { pad = "R1", label = "Prawo", row = 2 } },
   hint_items_title_id = { { pad = "cross", label = "Zatwierdź", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Gotowe", row = 1 }, { pad = "circle", label = "Anuluj", row = 1 }, { pad = "L1", label = "Lewo", row = 2 }, { pad = "R1", label = "Prawo", row = 2 } },
+  glyphs_key_label = "Glify",
+  advanced_glyphs_warning = "Zaawansowane glify, używaj ostrożnie",
 }
 
 return strings
