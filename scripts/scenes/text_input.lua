@@ -75,6 +75,7 @@ local GLYPH_KEY_LABEL_FALLBACK = "Glyphs"
 -- Match current helper-text scale, but keep it decoupled for future tuning.
 local GLYPH_KEY_LABEL_SCALE = 0.7
 local GLYPH_KEY_GAP_SLOTS = 0.5
+local BEL_PAGE_COUNT = 3
 
 local BEL_COLOR_TOKENS = {
   { code = "c0", desc = "White" },
@@ -85,7 +86,7 @@ local BEL_COLOR_TOKENS = {
   { code = "c5", desc = "Cyan" },
   { code = "c6", desc = "Red" },
   { code = "c7", desc = "Grey" },
-  { code = "c8", desc = "Grey1" },
+  { code = "c8", desc = "Light Grey" },
   { code = "c9", desc = "Green" },
 }
 
@@ -140,6 +141,15 @@ local BEL_SYMBOLS_HDDOSD = {
   { code = "o023", desc = "Warning Icon" },
 }
 
+local BEL_TUNABLE_TOKENS = {
+  { code = "r#.##", insert = "r", preview = "□r", desc = "Font scale (0.50-1.50, reset r0.00)" },
+  { code = "y+##", insert = "y+", preview = "□y+", desc = "Y offset + (range unknown)" },
+  { code = "y-##", insert = "y-", preview = "□y-", desc = "Y offset - (range unknown)" },
+  { code = "p##", insert = "p", preview = "□p", desc = "Letter spacing (reset p00)" },
+  { code = "a###", insert = "a", preview = "□a", desc = "Transparency (000-128?)" },
+  { code = "w#", insert = "w", preview = "□w", desc = "Horizontal scale (0-9, reset w1)" },
+}
+
 local function countBelChars(s)
   local _, n = tostring(s or ""):gsub(BEL, "")
   return n or 0
@@ -171,36 +181,62 @@ local function belProfileFromContext(ctx)
   return "ps2rom"
 end
 
-local function buildBelTokenRows(profile)
+local function clampBelPage(page)
+  local p = tonumber(page) or 1
+  p = math.floor(p)
+  if p < 1 then p = 1 end
+  if p > BEL_PAGE_COUNT then p = BEL_PAGE_COUNT end
+  return p
+end
+
+local function buildBelTokenRows(profile, page)
+  page = clampBelPage(page)
   local out = {}
   local symHeader = (profile == "hddosd") and "Symbols (HDDOSD Browser 2.00)" or "Symbols (PS2 ROM OSD)"
   local symRows = (profile == "hddosd") and BEL_SYMBOLS_HDDOSD or BEL_SYMBOLS_PS2_ROM
 
-  out[#out + 1] = { id = "header_colors", label = "Colors", enabled = false }
-  for i = 1, #BEL_COLOR_TOKENS do
-    local t = BEL_COLOR_TOKENS[i]
-    local token = BEL .. tostring(t.code)
-    out[#out + 1] = {
-      id = "token_" .. tostring(t.code),
-      label = tostring(t.code) .. "  " .. tostring(t.desc or ""),
-      columns = { tostring(t.code), "", tostring(t.desc or "") },
-      token = token,
-    }
-  end
-
-  out[#out + 1] = { id = "header_symbols", label = symHeader, enabled = false }
-  for i = 1, #symRows do
-    local t = symRows[i]
-    local token = BEL .. tostring(t.code)
-    local preview = tostring(t.preview or "")
-    out[#out + 1] = {
-      id = "token_" .. tostring(t.code),
-      label = tostring(t.code) ..
-          ((preview ~= "") and ("  " .. preview) or "") ..
-          "  " .. tostring(t.desc or ""),
-      columns = { tostring(t.code), preview, tostring(t.desc or "") },
-      token = token,
-    }
+  if page == 1 then
+    out[#out + 1] = { id = "header_colors", label = "Colors", enabled = false }
+    for i = 1, #BEL_COLOR_TOKENS do
+      local t = BEL_COLOR_TOKENS[i]
+      local token = BEL .. tostring(t.code)
+      out[#out + 1] = {
+        id = "token_" .. tostring(t.code),
+        label = tostring(t.code) .. "  " .. tostring(t.desc or ""),
+        columns = { tostring(t.code), "", tostring(t.desc or "") },
+        token = token,
+      }
+    end
+  elseif page == 2 then
+    out[#out + 1] = { id = "header_symbols", label = symHeader, enabled = false }
+    for i = 1, #symRows do
+      local t = symRows[i]
+      local token = BEL .. tostring(t.code)
+      local preview = tostring(t.preview or "")
+      out[#out + 1] = {
+        id = "token_" .. tostring(t.code),
+        label = tostring(t.code) ..
+            ((preview ~= "") and ("  " .. preview) or "") ..
+            "  " .. tostring(t.desc or ""),
+        columns = { tostring(t.code), preview, tostring(t.desc or "") },
+        token = token,
+      }
+    end
+  else
+    out[#out + 1] = { id = "header_tunables", label = "Tunables", enabled = false }
+    for i = 1, #BEL_TUNABLE_TOKENS do
+      local t = BEL_TUNABLE_TOKENS[i]
+      local token = BEL .. tostring(t.insert or "")
+      local preview = tostring(t.preview or "")
+      out[#out + 1] = {
+        id = "token_tunable_" .. tostring(i),
+        label = tostring(t.code or "") ..
+            ((preview ~= "") and ("  " .. preview) or "") ..
+            "  " .. tostring(t.desc or ""),
+        columns = { tostring(t.code or ""), preview, tostring(t.desc or "") },
+        token = token,
+      }
+    end
   end
   return out
 end
@@ -286,6 +322,8 @@ local function run(ctx)
     ctx.textInputBelMenuScroll = nil
     ctx.textInputBelRows = nil
     ctx.textInputBelRowsProfile = nil
+    ctx.textInputBelRowsPage = nil
+    ctx.textInputBelPage = nil
     ctx._textInputBelBaselineCallback = nil
     ctx.textInputBelBaseline = nil
     ctx.textInputAllowBelAdd = nil
@@ -451,19 +489,36 @@ local function run(ctx)
 
   if ctx.textInputBelMenuOpen then
     local belProfile = belProfileFromContext(ctx)
-    if type(ctx.textInputBelRows) ~= "table" or ctx.textInputBelRowsProfile ~= belProfile then
-      ctx.textInputBelRows = buildBelTokenRows(belProfile)
+    local belPage = clampBelPage(ctx.textInputBelPage)
+    ctx.textInputBelPage = belPage
+    if type(ctx.textInputBelRows) ~= "table" or ctx.textInputBelRowsProfile ~= belProfile or
+        ctx.textInputBelRowsPage ~= belPage then
+      ctx.textInputBelRows = buildBelTokenRows(belProfile, belPage)
       ctx.textInputBelRowsProfile = belProfile
+      ctx.textInputBelRowsPage = belPage
     end
     local belRows = ctx.textInputBelRows
+    local pageLabel = "Page " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT)
     local handled = actions_menu.run(ctx, {
       openKey = "textInputBelMenuOpen",
       selKey = "textInputBelMenuSel",
       scrollKey = "textInputBelMenuScroll",
       rowStateKeyPrefix = "text_input_bel_row_",
       columnLayout = true,
+      titleOverride = glyphKeyLabel .. " " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT),
       anchorPad = "square",
-      anchorLabel = glyphKeyLabel,
+      anchorLabel = pageLabel,
+      onAnchorPress = function()
+        local nextPage = belPage + 1
+        if nextPage > BEL_PAGE_COUNT then nextPage = 1 end
+        ctx.textInputBelPage = nextPage
+        ctx.textInputBelRows = nil
+        ctx.textInputBelRowsProfile = nil
+        ctx.textInputBelRowsPage = nil
+        ctx.textInputBelMenuSel = 1
+        ctx.textInputBelMenuScroll = 0
+        return true
+      end,
       rows = belRows,
       maxVisible = 8,
       closeOnSelect = true,
@@ -481,10 +536,12 @@ local function run(ctx)
         ctx.textInputBelMenuScroll = nil
         ctx.textInputBelRows = nil
         ctx.textInputBelRowsProfile = nil
+        ctx.textInputBelRowsPage = nil
+        ctx.textInputBelPage = nil
       end,
       hints = {
         { pad = "cross", label = "Insert", row = 1 },
-        { pad = "square", label = "Close", row = 1 },
+        { pad = "square", label = "Page", row = 1 },
         { pad = "circle", label = "Cancel", row = 1 },
       },
     })
@@ -544,6 +601,7 @@ local function run(ctx)
     local sk = specialKeys[selIdx]
     if sk and sk.kind == "bel" then
       ctx.textInputBelMenuOpen = true
+      ctx.textInputBelPage = 1
       ctx.textInputBelMenuSel = ctx.textInputBelMenuSel or 1
       ctx.textInputBelMenuScroll = ctx.textInputBelMenuScroll or 0
     elseif sk and sk.kind == "space" then
@@ -580,6 +638,8 @@ local function run(ctx)
     ctx.textInputBelMenuScroll = nil
     ctx.textInputBelRows = nil
     ctx.textInputBelRowsProfile = nil
+    ctx.textInputBelRowsPage = nil
+    ctx.textInputBelPage = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
@@ -598,6 +658,8 @@ local function run(ctx)
     ctx.textInputBelMenuScroll = nil
     ctx.textInputBelRows = nil
     ctx.textInputBelRowsProfile = nil
+    ctx.textInputBelRowsPage = nil
+    ctx.textInputBelPage = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil

@@ -410,7 +410,17 @@ function actions_menu.run(ctx, opts)
           local colMaxW = (c < count) and (columnIntrinsicW[c] or textWidth(raw)) or
               math.max(1, (rowLabelX + maxLabelW) - cx)
           local txt = raw
-          if _.common and _.common.truncateTextToWidth then
+          if _.common and _.common.fitListRowText then
+            txt = _.common.fitListRowText(
+              ctx,
+              rowStateKeyPrefix .. tostring(i) .. "_col_" .. tostring(c),
+              hintFont,
+              txt,
+              colMaxW,
+              rowScale,
+              i == ctx[selKey]
+            )
+          elseif _.common and _.common.truncateTextToWidth then
             txt = truncateCached(txt, colMaxW, tostring(i) .. "|" .. tostring(c))
           end
           _.drawText(hintFont, _.drawMode, cx, y, rowScale, txt, col, textH)
@@ -464,10 +474,23 @@ function actions_menu.run(ctx, opts)
       end
     end
 
-    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (anchorPadMask and (_.padEffective & anchorPadMask) ~= 0) then
+    local circlePressed = (_.padEffective & _.PAD_CIRCLE) ~= 0
+    local anchorPressed = anchorPadMask and (_.padEffective & anchorPadMask) ~= 0
+    if circlePressed then
       ctx[closingKey] = true
       if ctx[animKey] < 0.001 then
         ctx[animKey] = 1
+      end
+    elseif anchorPressed then
+      local handled = false
+      if type(opts.onAnchorPress) == "function" then
+        handled = opts.onAnchorPress() == true
+      end
+      if not handled then
+        ctx[closingKey] = true
+        if ctx[animKey] < 0.001 then
+          ctx[animKey] = 1
+        end
       end
     end
   end
