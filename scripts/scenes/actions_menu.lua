@@ -81,11 +81,15 @@ local function buildOverlayHints(_, incoming, anchorPad, anchorLabel)
 end
 
 local function closeMenu(ctx, opts)
-  ctx[opts.openKey] = nil
+  local openKey = tostring(opts.openKey or "actionsMenuOpen")
+  ctx[openKey] = nil
   ctx[opts.selKey] = nil
   ctx[opts.scrollKey] = nil
-  ctx[tostring(opts.openKey or "actionsMenuOpen") .. "_anim"] = nil
-  ctx[tostring(opts.openKey or "actionsMenuOpen") .. "_closing"] = nil
+  ctx[openKey .. "_anim"] = nil
+  ctx[openKey .. "_closing"] = nil
+  -- Drop per-menu text/layout caches when closed.
+  ctx[openKey .. "_text_width_cache"] = nil
+  ctx[openKey .. "_truncate_cache"] = nil
 end
 
 local function normalizeRows(rows)
@@ -188,12 +192,48 @@ function actions_menu.run(ctx, opts)
   local textH = (_.common and _.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
       math.max(10, math.floor(((_.common and _.common.FT_PIXEL_H or 18) * textScale) + 0.5))
 
+  local widthCacheKey = tostring(openKey) .. "_text_width_cache"
+  local widthCache = ctx[widthCacheKey]
+  if type(widthCache) ~= "table" then
+    widthCache = {}
+    ctx[widthCacheKey] = widthCache
+  end
+  local rowScaleTag = string.format("%.3f", rowScale)
   local function textWidth(text)
-    if _.common and _.common.calcTextWidth then
-      return _.common.calcTextWidth(hintFont, tostring(text or ""), rowScale)
-    end
     local s = tostring(text or "")
-    return math.floor((8 * rowScale) * #s)
+    local cacheKey = rowScaleTag .. "\0" .. s
+    local cached = widthCache[cacheKey]
+    if cached ~= nil then
+      return cached
+    end
+    if _.common and _.common.calcTextWidth then
+      local w = _.common.calcTextWidth(hintFont, s, rowScale)
+      widthCache[cacheKey] = w
+      return w
+    end
+    local w = math.floor((8 * rowScale) * #s)
+    widthCache[cacheKey] = w
+    return w
+  end
+  local truncCacheKey = tostring(openKey) .. "_truncate_cache"
+  local truncCache = ctx[truncCacheKey]
+  if type(truncCache) ~= "table" then
+    truncCache = {}
+    ctx[truncCacheKey] = truncCache
+  end
+  local function truncateCached(text, maxWidth, cacheSuffix)
+    local raw = tostring(text or "")
+    local key = rowScaleTag .. "|" .. tostring(maxWidth) .. "|" .. tostring(cacheSuffix or "") .. "|" .. raw
+    local cached = truncCache[key]
+    if cached ~= nil then
+      return cached
+    end
+    local out = raw
+    if _.common and _.common.truncateTextToWidth then
+      out = _.common.truncateTextToWidth(hintFont, raw, maxWidth, rowScale)
+    end
+    truncCache[key] = out
+    return out
   end
 
   local titleW = hasTitle and textWidth(title) or 0
@@ -360,7 +400,7 @@ function actions_menu.run(ctx, opts)
           label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
             i == ctx[selKey])
         elseif _.common.truncateTextToWidth then
-          label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+          label = truncateCached(label, maxLabelW, "fallback|" .. tostring(i))
         end
         _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
       else
@@ -371,7 +411,7 @@ function actions_menu.run(ctx, opts)
               math.max(1, (rowLabelX + maxLabelW) - cx)
           local txt = raw
           if _.common and _.common.truncateTextToWidth then
-            txt = _.common.truncateTextToWidth(hintFont, txt, colMaxW, rowScale)
+            txt = truncateCached(txt, colMaxW, tostring(i) .. "|" .. tostring(c))
           end
           _.drawText(hintFont, _.drawMode, cx, y, rowScale, txt, col, textH)
           if c < count then
@@ -388,7 +428,7 @@ function actions_menu.run(ctx, opts)
         label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
           i == ctx[selKey])
       elseif _.common.truncateTextToWidth then
-        label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
+        label = truncateCached(label, maxLabelW, "label|" .. tostring(i))
       end
       _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
     end

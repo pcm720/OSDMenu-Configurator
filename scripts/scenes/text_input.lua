@@ -106,8 +106,8 @@ local BEL_SYMBOLS_PS2_ROM = {
   { code = "o013", desc = "Right Button", preview = "[→]" },
   { code = "o014", desc = "Repeat", preview = "↻" },
   { code = "o015", desc = "Up/Down Arrows (small)", preview = "↕" },
-  { code = "o016", desc = "(PS2)", preview = "(PS2)" },
-  { code = "o017", desc = "(PS2), but off", preview = "S2)" },
+  { code = "o016", desc = "PS2", preview = "PS2" },
+  { code = "o017", desc = "PS2 cutoff", preview = "S2" },
   { code = "o018", desc = "Stop", preview = "■" },
   { code = "o019", desc = "Daylight Savings", preview = "☀" },
   { code = "o020", desc = "Up/Down Arrows (bigger)", preview = "↕" },
@@ -284,6 +284,8 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
+    ctx.textInputBelRows = nil
+    ctx.textInputBelRowsProfile = nil
     ctx._textInputBelBaselineCallback = nil
     ctx.textInputBelBaseline = nil
     ctx.textInputAllowBelAdd = nil
@@ -448,7 +450,12 @@ local function run(ctx)
   end
 
   if ctx.textInputBelMenuOpen then
-    local belRows = buildBelTokenRows(belProfileFromContext(ctx))
+    local belProfile = belProfileFromContext(ctx)
+    if type(ctx.textInputBelRows) ~= "table" or ctx.textInputBelRowsProfile ~= belProfile then
+      ctx.textInputBelRows = buildBelTokenRows(belProfile)
+      ctx.textInputBelRowsProfile = belProfile
+    end
+    local belRows = ctx.textInputBelRows
     local handled = actions_menu.run(ctx, {
       openKey = "textInputBelMenuOpen",
       selKey = "textInputBelMenuSel",
@@ -472,6 +479,8 @@ local function run(ctx)
         ctx.textInputBelMenuOpen = nil
         ctx.textInputBelMenuSel = nil
         ctx.textInputBelMenuScroll = nil
+        ctx.textInputBelRows = nil
+        ctx.textInputBelRowsProfile = nil
       end,
       hints = {
         { pad = "cross", label = "Insert", row = 1 },
@@ -569,6 +578,8 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
+    ctx.textInputBelRows = nil
+    ctx.textInputBelRowsProfile = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
@@ -585,6 +596,8 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
+    ctx.textInputBelRows = nil
+    ctx.textInputBelRowsProfile = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
