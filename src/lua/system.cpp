@@ -28,19 +28,25 @@ void lua_set_root(char *path) {
     boot_path = (char *)"";
     return;
   }
-  char *end = strrchr(path, '/');
+  char normalized[512];
+  const char *src = ps2_normalize_path(path);
+  snprintf(normalized, sizeof(normalized), "%s", src ? src : path);
+
+  char *end = strrchr(normalized, '/');
   if (end)
     *end = '\0';
-  printf("lua_system: setting Lua root path to %s\n", path);
-  boot_path = strdup(path);
-  if (end)
-    *end = '/';
+
+  printf("lua_system: setting Lua root path to %s\n", normalized);
+  boot_path = strdup(normalized);
 }
 
 static int lua_getCurrentDirectory(lua_State *L) {
   char path[256];
   getcwd(path, 256);
-  lua_pushstring(L, path);
+  {
+    const char *normalized = ps2_normalize_path(path);
+    lua_pushstring(L, normalized ? normalized : path);
+  }
 
   return 1;
 }

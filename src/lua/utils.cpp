@@ -17,6 +17,12 @@ char *ps2_normalize_path(char *path_name) {
     return (char *)out;
   }
   snprintf(out, sizeof(out), "%s", path_name);
+  // Normalize separators first so mixed "\/" paths are treated consistently.
+  for (i = 0; out[i]; i++) {
+    if (out[i] == '\\')
+      out[i] = '/';
+  }
+
   // Then append "/" to make the rest easier
   strncat(out, "/", sizeof(out) - strlen(out) - 1);
 
