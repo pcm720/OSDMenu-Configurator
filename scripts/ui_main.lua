@@ -563,11 +563,12 @@ local function mapPartitionPathToMountedPfs(path)
 end
 
 local function beginPathAccess(path)
-  local moduleType = common.getPathModuleType and common.getPathModuleType(path)
+  local resolvedPath = (common.resolvePathForAccess and common.resolvePathForAccess(path)) or path
+  local moduleType = common.getPathModuleType and common.getPathModuleType(resolvedPath)
   if moduleType and System and System.loadModules then
     pcall(System.loadModules, moduleType)
   end
-  local part, mapped = mapPartitionPathToMountedPfs(path)
+  local part, mapped = mapPartitionPathToMountedPfs(resolvedPath)
   if part and mapped then
     local mounted = nil
     if System and System.fileXioMount then
@@ -577,11 +578,11 @@ local function beginPathAccess(path)
     return mounted, mapped
   end
   local mounted = nil
-  if path and path:match("^pfs0:/") and System and System.fileXioMount then
+  if resolvedPath and resolvedPath:match("^pfs0:/") and System and System.fileXioMount then
     pcall(System.fileXioMount, "pfs0:", "hdd0:__sysconf")
     mounted = "pfs0:"
   end
-  return mounted, path
+  return mounted, resolvedPath
 end
 
 local function endPathAccess(mounted)

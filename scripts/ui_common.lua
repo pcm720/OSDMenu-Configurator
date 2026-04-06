@@ -215,6 +215,44 @@ function common.normalizePathForDisplay(path)
   return raw
 end
 
+local function isDeviceAbsolutePath(path)
+  local p = tostring(path or "")
+  if p == "" then return false end
+  if p:match("^[%w_]+:") then return true end
+  if p:sub(1, 1) == "/" then return true end
+  return false
+end
+
+function common.resolvePathForAccess(path)
+  local raw = tostring(path or "")
+  if raw == "" then return raw end
+  local p = raw:gsub("\\", "/")
+  if isDeviceAbsolutePath(p) then
+    return p
+  end
+  if p:sub(1, 2) == "./" then
+    p = p:sub(3)
+  end
+
+  local base = (_G and _G.CONFIG_UI and _G.CONFIG_UI.startupCwd) or nil
+  if type(base) ~= "string" or base == "" then
+    if System and System.currentDirectory then
+      local okCwd, cwd = pcall(System.currentDirectory)
+      if okCwd and type(cwd) == "string" and cwd ~= "" then
+        base = cwd
+      end
+    end
+  end
+  base = tostring(base or ""):gsub("\\", "/")
+  if base ~= "" and isDeviceAbsolutePath(base) then
+    if base:sub(-1) ~= "/" then
+      base = base .. "/"
+    end
+    return base .. p
+  end
+  return p
+end
+
 local function getRuntimeFtPixelBase()
   local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
   if runtimePx > 0 then
@@ -713,15 +751,18 @@ end
 -- Save config; for pfs0 (__sysconf) paths we mount, save, then unmount so ELF browsing does not break saving.
 function common.saveConfig(ctx, path, lines, createDir)
   local saveDbg = common.makeDebugLogger("CONFIG_UI_SAVE_DEBUG", "[save] ")
+  local resolvedPath = common.resolvePathForAccess(path)
+  local resolvedDir = common.resolvePathForAccess(createDir)
 
   saveDbg("route begin", "context=" .. tostring(ctx and ctx.context), "fileType=" .. tostring(ctx and ctx.fileType),
-    "path=" .. tostring(path), "createDir=" .. tostring(createDir))
-  local prepOk, prepErr = ensureSaveTargetDeviceReady(path, saveDbg)
+    "path=" .. tostring(path), "resolvedPath=" .. tostring(resolvedPath),
+    "createDir=" .. tostring(createDir), "resolvedDir=" .. tostring(resolvedDir))
+  local prepOk, prepErr = ensureSaveTargetDeviceReady(resolvedPath, saveDbg)
   if not prepOk then
     return nil, prepErr
   end
-  local savePath = path
-  local saveDir = createDir
+  local savePath = resolvedPath
+  local saveDir = resolvedDir
   local mounted = nil
 
   local function splitHddPartitionPath(p)
@@ -737,7 +778,7 @@ function common.saveConfig(ctx, path, lines, createDir)
     return part, rest
   end
 
-  local part, rest = splitHddPartitionPath(path)
+  local part, rest = splitHddPartitionPath(resolvedPath)
   if part and rest then
     savePath = "pfs0:" .. rest
     saveDbg("route partition", "part=" .. tostring(part), "savePath=" .. tostring(savePath))
