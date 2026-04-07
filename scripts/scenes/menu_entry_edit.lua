@@ -380,28 +380,6 @@ local function run(ctx)
     end
   end
 
-  local function saveAndStay()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
-    local path = ctx.currentPath or (locations and locations[1])
-    if path and path ~= "" then
-      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-      local parentDir = path:match("^(.+)/[^/]+$")
-      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-      if ok then
-        ctx.currentPath = path
-        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-      else
-        ctx.saveSplash = {
-          kind = "failed",
-          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-          framesLeft = 120
-        }
-      end
-    else
-      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-    end
-  end
   if (_.padEffective & _.PAD_UP) ~= 0 then
     if isFmcbEntry and ctx.fmcbEntryPathGrab then
       swapSelectedPath(-1)
@@ -423,6 +401,7 @@ local function run(ctx)
     end
     local row = subRows[ctx.entryEditSub]
     if row.kind == "name" then
+      local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
       ctx.textInputTitleIdMode = nil
       ctx.textInputPrompt = _.menu_str.entry_name_prompt
       local currentNameRaw = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
@@ -435,6 +414,10 @@ local function run(ctx)
       if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
       ctx.textInputValue = currentNameDisplay
       ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+      _.common.configureBelTextInput(ctx, {
+        allow = allowBelKey,
+        context = ctx.context,
+      })
       ctx.textInputCallback = function(val)
         local saveVal = val or ""
         if editingSeparator and saveVal:sub(1, 2) ~= "$!" then
@@ -495,9 +478,7 @@ local function run(ctx)
   if isFmcbEntry and (_.padEffective & _.PAD_SQUARE) ~= 0 then
     local row = subRows[ctx.entryEditSub]
     if row and row.kind == "path" and canOpenFmcbPathActions(row) then
-      ctx.fmcbEntryPathActionsOpen = true
-      ctx.fmcbEntryPathActionsSel = ctx.fmcbEntryPathActionsSel or 1
-      ctx.fmcbEntryPathActionsScroll = ctx.fmcbEntryPathActionsScroll or 0
+      _.common.openActionsMenu(ctx, "fmcbEntryPathActionsOpen", "fmcbEntryPathActionsSel", "fmcbEntryPathActionsScroll")
     end
   end
   if isFmcbEntry and (not ctx.fmcbEntryPathGrab) and (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
@@ -507,7 +488,7 @@ local function run(ctx)
     end
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    saveAndStay()
+    _.common.saveCurrentConfig(ctx)
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if isFmcbEntry and ctx.fmcbEntryPathGrab then

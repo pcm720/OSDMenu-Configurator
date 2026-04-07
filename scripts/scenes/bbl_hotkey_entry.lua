@@ -1,14 +1,5 @@
 --[[ Per-slot editor for one BBL hotkey entry (path + args). ]]
 
-local function findHintLabel(items, pad, fallback)
-  for _, item in ipairs(items or {}) do
-    if item.pad == pad and item.label and item.label ~= "" then
-      return item.label
-    end
-  end
-  return fallback
-end
-
 local function getTextWidth(font, label)
   if not label or label == "" then return 0 end
   if font and Font and Font.ftCalcDimensions then
@@ -21,57 +12,12 @@ local function getTextWidth(font, label)
 end
 
 local function findWidestHintLabel(_, itemsA, itemsB, pad, fallback)
-  local labelA = findHintLabel(itemsA, pad, fallback)
-  local labelB = findHintLabel(itemsB, pad, fallback)
+  local labelA = _.common.findHintLabel(itemsA, pad, fallback)
+  local labelB = _.common.findHintLabel(itemsB, pad, fallback)
   if getTextWidth(_.font, labelA) >= getTextWidth(_.font, labelB) then
     return labelA
   end
   return labelB
-end
-
-local function drawPadTitle(_, keyId, suffix)
-  local tail = tostring(suffix or "")
-  if keyId == "AUTO" then
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, "AUTOBOOT" .. tail, _.WHITE)
-    return
-  end
-
-  local icon = _.common.getPadIcon and _.common.getPadIcon(keyId) or nil
-  local baseIconW = _.common.PAD_ICON_W or 26
-  local baseIconH = _.common.PAD_ICON_H or 26
-  local textH = (_.common and _.common.FT_PIXEL_H) or 18
-  local iconH = math.min(baseIconH, textH)
-  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
-  local iconGap = 8
-  local iconY = _.MARGIN_Y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
-
-  if icon then
-    if _.Graphics.drawScaleImage then
-      _.Graphics.drawScaleImage(icon, _.MARGIN_X, iconY, iconW, iconH)
-    else
-      _.Graphics.drawImage(icon, _.MARGIN_X, iconY)
-    end
-  end
-  _.drawText(_.font, _.drawMode, _.MARGIN_X + iconW + iconGap, _.MARGIN_Y, 1, tail, _.WHITE)
-end
-
-local function trimPathValue(pathVal)
-  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local function formatDisplayPath(_, pathVal)
-  local raw = tostring(pathVal or "")
-  local up = trimPathValue(raw):upper()
-  local p = _.path_str or {}
-  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
-  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
-  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
-  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
-  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
-  if _.common and _.common.normalizePathForDisplay then
-    return _.common.normalizePathForDisplay(raw)
-  end
-  return raw
 end
 
 local function run(ctx)
@@ -101,11 +47,11 @@ local function run(ctx)
   if ctx.bblEntryDetailSel < 1 then ctx.bblEntryDetailSel = 1 end
   if ctx.bblEntryDetailSel > #rows then ctx.bblEntryDetailSel = #rows end
 
-  drawPadTitle(_, keyId, " - E" .. tostring(slot))
+  _.common.drawHotkeyTitle(_, keyId, " - E" .. tostring(slot))
 
   local pathDisp = _.common_str.not_set
   if data.path ~= "" then
-    pathDisp = formatDisplayPath(_, data.path)
+    pathDisp = _.common.formatDisplayPathWithCommands(_, data.path)
   elseif data.pathExists then
     pathDisp = _.common_str.empty
   end
@@ -205,29 +151,6 @@ local function run(ctx)
 
   local canRemoveSlot = canRemoveCurrentSlot()
 
-  local function saveAndStay()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
-    local path = ctx.currentPath or (locations and locations[1])
-    if path and path ~= "" then
-      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-      local parentDir = path:match("^(.+)/[^/]+$")
-      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-      if ok then
-        ctx.currentPath = path
-        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-      else
-        ctx.saveSplash = {
-          kind = "failed",
-          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-          framesLeft = 120
-        }
-      end
-    else
-      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-    end
-  end
-
   if rows[ctx.bblEntryDetailSel] == "path" then
     local enableHint = _.menu_str.paths_hint_items_with_enable or _.menu_str.paths_hint_items
     local disableHint = _.menu_str.paths_hint_items_with_disable or _.menu_str.paths_hint_items
@@ -237,18 +160,18 @@ local function run(ctx)
     local toggleLayoutLabel = findWidestHintLabel(_, enableHint, disableHint, "triangle",
       effectivePathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"))
     hint = {
-      { pad = "cross", label = findHintLabel(baseHint, "cross", (_.menu_str.edit_label or "Edit")), row = 1 },
+      { pad = "cross", label = _.common.findHintLabel(baseHint, "cross", (_.menu_str.edit_label or "Edit")), row = 1 },
       {
         pad = canTogglePathDisabled and "triangle" or "",
         label = canTogglePathDisabled and
-            findHintLabel(baseHint, "triangle",
+            _.common.findHintLabel(baseHint, "triangle",
               effectivePathDisabled and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable")) or "",
         layoutLabel = toggleLayoutLabel,
         row = 1
       },
       {
         pad = canRemoveSlot and "square" or "",
-        label = canRemoveSlot and findHintLabel(baseHint, "square", (_.menu_str.remove_label or "Remove")) or "",
+        label = canRemoveSlot and _.common.findHintLabel(baseHint, "square", (_.menu_str.remove_label or "Remove")) or "",
         row = 1
       },
       {
@@ -256,7 +179,7 @@ local function run(ctx)
         label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
         row = 1
       },
-      { pad = "circle", label = findHintLabel(baseHint, "circle", (_.menu_str.back_label or "Back")), row = 1 },
+      { pad = "circle", label = _.common.findHintLabel(baseHint, "circle", (_.menu_str.back_label or "Back")), row = 1 },
     }
   else
     hint = {
@@ -348,7 +271,7 @@ local function run(ctx)
     ctx.state = returnState
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    saveAndStay()
+    _.common.saveCurrentConfig(ctx)
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

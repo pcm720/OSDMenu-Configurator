@@ -32,6 +32,8 @@ strings.main = {
   main_credits_built_using = "Zbudowano przy użyciu:",
   main_credits_thanks_to = "Podziękowania:",
   main_credits_translators = "Tłumacze:",
+  main_credits_language_spanish = "Hiszpański",
+  main_credits_language_portuguese = "Portugalski",
   main_exit_hint_items = { { pad = "cross", label = "Tak" }, { pad = "circle", label = "Nie" } },
   no_memory_card = "Nie znaleziono karty pamięci",
   insert_mc = "Włóż kartę pamięci i spróbuj ponownie",
@@ -377,6 +379,8 @@ strings.cdrom_options = {
 strings.text_input = {
   hint_items = { { pad = "cross", label = "Zatwierdź", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Gotowe", row = 1 }, { pad = "triangle", label = "Caps", row = 1 }, { pad = "circle", label = "Anuluj", row = 1 }, { pad = "L1", label = "Lewo", row = 2 }, { pad = "R1", label = "Prawo", row = 2 } },
   hint_items_title_id = { { pad = "cross", label = "Zatwierdź", row = 1 }, { pad = "square", label = "Backspace", row = 1 }, { pad = "start", label = "Gotowe", row = 1 }, { pad = "circle", label = "Anuluj", row = 1 }, { pad = "L1", label = "Lewo", row = 2 }, { pad = "R1", label = "Prawo", row = 2 } },
+  glyphs_key_label = "Glify",
+  advanced_glyphs_warning = "Zaawansowane glify, używaj ostrożnie",
 }
 
 return strings

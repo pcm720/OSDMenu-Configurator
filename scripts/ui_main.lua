@@ -59,20 +59,67 @@ local function buildLanguageDisplayNames(files)
   return names
 end
 
--- Build list of lang files (scripts/lang/strings_*.lua) for L1/R1 cycle; only when not CWD override.
-if not cwdOverride and System and System.listDirectory then
+local function buildLanguageFileList()
   local list = {}
-  local okList, listRaw = pcall(System.listDirectory, "/scripts/lang")
-  if okList and type(listRaw) == "table" then
+  local seen = {}
+
+  local function addFileName(fileName)
+    if type(fileName) ~= "string" then return end
+    if not fileName:match("^strings_(%w+)%.lua$") then return end
+    if seen[fileName] then return end
+    seen[fileName] = true
+    list[#list + 1] = fileName
+  end
+
+  local function scanDirectory(dirPath)
+    if not (System and System.listDirectory) then return end
+    local okList, listRaw = pcall(System.listDirectory, dirPath)
+    if not okList or type(listRaw) ~= "table" then return end
     for i = 1, #listRaw do
       local e = listRaw[i]
-      local name = (e and e.name) or ""
-      if name:match("^strings_(%w+)%.lua$") and not (e and e.directory) then
-        table.insert(list, name)
+      local name = nil
+      local isDir = false
+      if type(e) == "table" then
+        name = e.name
+        isDir = (e.directory == true)
+      elseif type(e) == "string" then
+        name = e
+      end
+      if (not isDir) and type(name) == "string" then
+        addFileName(name)
       end
     end
-    table.sort(list)
   end
+
+  -- Try both relative and absolute paths to support VFS and direct FS launches.
+  scanDirectory("scripts/lang")
+  scanDirectory("/scripts/lang")
+
+  if #list == 0 then
+    -- Fallback: probe known language files through VFS-aware loadfile path.
+    local known = {
+      "strings_en.lua",
+      "strings_de.lua",
+      "strings_es.lua",
+      "strings_fr.lua",
+      "strings_pl.lua",
+      "strings_pt.lua",
+    }
+    for i = 1, #known do
+      local file = known[i]
+      if tryLoadStrings("scripts/lang/" .. file) then
+        addFileName(file)
+      end
+    end
+  end
+
+  table.sort(list)
+  return list
+end
+
+-- Build list of lang files (scripts/lang/strings_*.lua) for language cycle; only when not CWD override.
+if not cwdOverride then
+  local list = buildLanguageFileList()
   _G.CONFIG_UI.langFiles = list
   _G.CONFIG_UI.langDisplayNames = buildLanguageDisplayNames(list)
   local idx = 1
@@ -121,15 +168,6 @@ local function countTrue(list)
   return n
 end
 
-local function findHintLabel(items, pad, fallback)
-  for _, item in ipairs(items or {}) do
-    if item.pad == pad and item.label and item.label ~= "" then
-      return item.label
-    end
-  end
-  return fallback
-end
-
 local function getLanguageDisplayName(idx)
   local names = C.langDisplayNames
   if names and names[idx] and names[idx] ~= "" then
@@ -145,7 +183,7 @@ end
 
 local function getLanguageHintLabel(main_str)
   local baseHint = main_str.main_hint_items_with_lang or main_str.main_hint_items or {}
-  local raw = findHintLabel(baseHint, "L1", findHintLabel(baseHint, "R1", "Language"))
+  local raw = common.findHintLabel(baseHint, "L1", common.findHintLabel(baseHint, "R1", "Language"))
   local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
   cleaned = cleaned:gsub("%s*[%+%-]$", "")
   if cleaned == "" then cleaned = "Language" end
@@ -161,13 +199,15 @@ end
 
 local function getCreditsHintLabel(main_str)
   local baseHint = main_str.main_hint_items or {}
-  local raw = main_str.main_credits or findHintLabel(baseHint, "triangle", "Credits")
+  local raw = main_str.main_credits or common.findHintLabel(baseHint, "triangle", "Credits")
   local cleaned = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
   if cleaned == "" then cleaned = "Credits" end
   return cleaned
 end
 
 local function buildMainCreditsLines(main_str)
+  local spanishLabel = main_str.main_credits_language_spanish or "Spanish"
+  local portugueseLabel = main_str.main_credits_language_portuguese or "Portuguese"
   return {
     main_str.main_credits_built_using or "Built Using:",
     "-Enceladus",
@@ -176,8 +216,8 @@ local function buildMainCreditsLines(main_str)
     "-R3Z3N",
     "-Berion",
     main_str.main_credits_translators or "Translators:",
-    "-VizoR: Spanish",
-    "-nuno: Portugese",
+    "-ViZoR: " .. tostring(spanishLabel),
+    "-nuno: " .. tostring(portugueseLabel),
   }
 end
 
@@ -185,8 +225,8 @@ local CREDITS_HEADING_BLUE = Color.new(0x36, 0x51, 0x72, 0x80)
 
 local function buildMainBaseHintItems(main_str)
   local baseHint = main_str.main_hint_items or {}
-  local enterLabel = findHintLabel(baseHint, "cross", "Enter")
-  local exitLabel = findHintLabel(baseHint, "circle", findHintLabel(baseHint, "start", "Exit"))
+  local enterLabel = common.findHintLabel(baseHint, "cross", "Enter")
+  local exitLabel = common.findHintLabel(baseHint, "circle", common.findHintLabel(baseHint, "start", "Exit"))
   local settingsLabel = getSettingsHintLabel(main_str)
   local creditsLabel = getCreditsHintLabel(main_str)
   local out = {
@@ -200,9 +240,9 @@ end
 
 local function buildMainLanguageOverlayHintItems(main_str)
   local base = main_str.cross_select_circle_back_items or {}
-  local selectLabel = findHintLabel(base, "cross", "Enter")
+  local selectLabel = common.findHintLabel(base, "cross", "Enter")
   local cancelLabel = (strings and strings.menu_entries and strings.menu_entries.cancel_label) or
-      findHintLabel(base, "circle", "Cancel")
+      common.findHintLabel(base, "circle", "Cancel")
   local languageLabel = getLanguageHintLabel(main_str)
   return {
     { pad = "cross", label = selectLabel, row = 1 },
@@ -214,7 +254,7 @@ end
 local function buildMainCreditsOverlayHintItems(main_str)
   local base = main_str.cross_select_circle_back_items or {}
   local cancelLabel = (strings and strings.menu_entries and strings.menu_entries.cancel_label) or
-      findHintLabel(base, "circle", "Back")
+      common.findHintLabel(base, "circle", "Back")
   local creditsLabel = getCreditsHintLabel(main_str)
   return {
     { pad = "triangle", label = creditsLabel, row = 1 },
@@ -379,7 +419,7 @@ local function buildMainEntries(main_str)
     logoKey = "hosdmenu",
     context = "hosdmenu",
     fileType = "osdmenu_cnf",
-    state = "open",
+    state = "select_config",
   })
   if C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled() then
     addEntry({
@@ -424,8 +464,8 @@ local function applyLanguageFileIndex(s, idx)
   local files = C.langFiles
   if not files or #files < 1 then return false end
   local target = common.clampListSelection(idx or (C.langIndex or 1), #files)
-  local okLoad, newStrings = pcall(dofile, "scripts/lang/" .. files[target])
-  if okLoad and newStrings and type(newStrings) == "table" then
+  local newStrings = tryLoadStrings("scripts/lang/" .. files[target])
+  if newStrings and type(newStrings) == "table" then
     C.strings = newStrings
     C.langIndex = target
     if _G.CONFIG_UI then
@@ -468,16 +508,26 @@ end
 C.applyLanguageCode = applyLanguageCode
 
 local function isBblContext(context)
+  if common and common.isBblContext then
+    return common.isBblContext(context)
+  end
   return context == "ps2bbl" or context == "psxbbl"
 end
 
 local function nextStateAfterMcSelection(s)
+  if common and common.getNextStateAfterMcSelection then
+    return common.getNextStateAfterMcSelection(s and s.context or nil)
+  end
   if isBblContext(s.context) then return "select_config" end
   if s.context == "osdmenu" then return "select_config" end
+  if s.context == "hosdmenu" then return "select_config" end
   return "open"
 end
 
 local function getOpenParentState(s)
+  if common and common.getOpenParentState then
+    return common.getOpenParentState(s and s.context or nil, s and s.fileType or nil)
+  end
   if isBblContext(s.context) then
     return "select_config"
   end
@@ -487,6 +537,11 @@ local function getOpenParentState(s)
     end
   end
   if s.context == "osdmenu" then
+    if s.fileType == "osdmenu_cnf" or s.fileType == "osdgsm_cnf" then
+      return "select_config"
+    end
+  end
+  if s.context == "hosdmenu" then
     if s.fileType == "osdmenu_cnf" or s.fileType == "osdgsm_cnf" then
       return "select_config"
     end
@@ -548,53 +603,10 @@ local function initEmptyLinesForFileType(s, reason)
     "lineCount=" .. tostring(#(s.lines or {})))
 end
 
-local function mapPartitionPathToMountedPfs(path)
-  if not path then return nil, nil end
-  local raw = tostring(path):gsub("\\", "/")
-  local part, rest = raw:match("^(hdd%d:[^:]+):pfs:(.*)$")
-  if not part then
-    -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
-    part, rest = raw:match("^(hdd%d:[^/:]+)(/.*)$")
-  end
-  if not part then return nil, nil end
-  if not rest or rest == "" then rest = "/" end
-  if rest:sub(1, 1) ~= "/" then rest = "/" .. rest end
-  return part, "pfs0:" .. rest
-end
-
-local function beginPathAccess(path)
-  local resolvedPath = (common.resolvePathForAccess and common.resolvePathForAccess(path)) or path
-  local moduleType = common.getPathModuleType and common.getPathModuleType(resolvedPath)
-  if moduleType and System and System.loadModules then
-    pcall(System.loadModules, moduleType)
-  end
-  local part, mapped = mapPartitionPathToMountedPfs(resolvedPath)
-  if part and mapped then
-    local mounted = nil
-    if System and System.fileXioMount then
-      pcall(System.fileXioMount, "pfs0:", part)
-      mounted = "pfs0:"
-    end
-    return mounted, mapped
-  end
-  local mounted = nil
-  if resolvedPath and resolvedPath:match("^pfs0:/") and System and System.fileXioMount then
-    pcall(System.fileXioMount, "pfs0:", "hdd0:__sysconf")
-    mounted = "pfs0:"
-  end
-  return mounted, resolvedPath
-end
-
-local function endPathAccess(mounted)
-  if mounted and System and System.fileXioUmount then
-    pcall(System.fileXioUmount, mounted)
-  end
-end
-
 local function pathExists(path)
-  local mounted, accessPath = beginPathAccess(path)
+  local mounted, accessPath = common.beginPathAccess(path)
   local ok = common.tryOpen(accessPath or path)
-  endPathAccess(mounted)
+  common.endPathAccess(mounted)
   openDbg("exists", "path=" .. tostring(path), "accessPath=" .. tostring(accessPath or path), "result=" .. tostring(ok))
   return ok
 end
@@ -610,11 +622,11 @@ local function findExistingPathsWithDeviceAccess(locations)
 end
 
 local function loadLinesWithDeviceAccess(path)
-  local mounted, accessPath = beginPathAccess(path)
+  local mounted, accessPath = common.beginPathAccess(path)
   openDbg("load begin", "path=" .. tostring(path), "accessPath=" .. tostring(accessPath or path),
     "mounted=" .. tostring(mounted))
   local ok, lines, err = pcall(config_parse.load, accessPath or path)
-  endPathAccess(mounted)
+  common.endPathAccess(mounted)
   if ok and lines then
     openDbg("load success", "path=" .. tostring(path), "entries=" .. tostring(#(lines or {})))
     return lines
@@ -1428,7 +1440,7 @@ local function runSelectConfig(s, pad)
   local sc = s.scaleY or function(y) return y end
   local SE = common.SELECTED_ENTRY
 
-  if s.context == "osdmenu" then
+  if s.context == "osdmenu" or s.context == "hosdmenu" then
     local options = {
       { label = main_str.select_config_osdmenu_cnf or "OSDMENU.CNF", fileType = "osdmenu_cnf" },
       { label = main_str.select_config_osdgsm_cnf or "OSDGSM.CNF", fileType = "osdgsm_cnf" },
@@ -1467,9 +1479,13 @@ local function runSelectConfig(s, pad)
       end
     end
     if (pad & PAD_CIRCLE) ~= 0 then
-      local slots = getPresentMcSlotsCached(s)
-      if type(slots) == "table" and #slots > 1 then
-        s.state = "choose_mc"
+      if s.context == "osdmenu" then
+        local slots = getPresentMcSlotsCached(s)
+        if type(slots) == "table" and #slots > 1 then
+          s.state = "choose_mc"
+        else
+          s.state = "main"
+        end
       else
         s.state = "main"
       end

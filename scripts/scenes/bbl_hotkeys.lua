@@ -261,29 +261,6 @@ local function run(ctx)
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-  local function saveAndStay()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
-    local path = ctx.currentPath or (locations and locations[1])
-    if path and path ~= "" then
-      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-      local parentDir = path:match("^(.+)/[^/]+$")
-      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-      if ok then
-        ctx.currentPath = path
-        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-      else
-        ctx.saveSplash = {
-          kind = "failed",
-          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-          framesLeft = 120
-        }
-      end
-    else
-      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-    end
-  end
-
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.bblHotkeySel = ctx.bblHotkeySel - 1
     if ctx.bblHotkeySel < 1 then ctx.bblHotkeySel = #hotkeys end
@@ -360,7 +337,7 @@ local function run(ctx)
     end
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    saveAndStay()
+    _.common.saveCurrentConfig(ctx)
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.state = "editor"

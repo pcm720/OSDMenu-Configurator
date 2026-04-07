@@ -28,10 +28,12 @@ strings.main = {
   main_select_language = "Sprache waehlen",
   main_settings = "Einstellungen",
   main_select_language_title = "Sprache waehlen:",
-  main_credits = "Credits",
+  main_credits = "Danksagungen",
   main_credits_built_using = "Erstellt mit:",
   main_credits_thanks_to = "Dank an:",
   main_credits_translators = "Uebersetzer:",
+  main_credits_language_spanish = "Spanisch",
+  main_credits_language_portuguese = "Portugiesisch",
   main_exit_hint_items = { { pad = "cross", label = "Ja" }, { pad = "circle", label = "Nein" } },
   no_memory_card = "Keine Speicherkarte gefunden",
   insert_mc = "Lege eine Speicherkarte ein und versuche es erneut",
@@ -152,7 +154,7 @@ strings.path_picker = {
   bbl_cmd_cdvd_label = "Disc starten",
   bbl_cmd_cdvd_no_logo_label = "Disc starten, PS2-Logo ueberspringen",
   bbl_cmd_osdsys_label = "OSDSYS",
-  bbl_cmd_credits_label = "Credits",
+  bbl_cmd_credits_label = "Danksagungen",
   bbl_cmd_hddchecker_label = "HDD pruefen",
   enter_path_prompt = "Pfad eingeben",
   inactive_items_separator = "-- Elemente unten sind bereits verwendet oder muessen E1 sein --",
@@ -376,6 +378,8 @@ strings.cdrom_options = {
 strings.text_input = {
   hint_items = { { pad = "cross", label = "Bestaet.", row = 1 }, { pad = "square", label = "Loeschen", row = 1 }, { pad = "start", label = "Fertig", row = 1 }, { pad = "triangle", label = "Grossschr.", row = 1 }, { pad = "circle", label = "Abbrechen", row = 1 }, { pad = "L1", label = "Links", row = 2 }, { pad = "R1", label = "Rechts", row = 2 } },
   hint_items_title_id = { { pad = "cross", label = "Bestaet.", row = 1 }, { pad = "square", label = "Loeschen", row = 1 }, { pad = "start", label = "Fertig", row = 1 }, { pad = "circle", label = "Abbrechen", row = 1 }, { pad = "L1", label = "Links", row = 2 }, { pad = "R1", label = "Rechts", row = 2 } },
+  glyphs_key_label = "Glyphen",
+  advanced_glyphs_warning = "Erweiterte Glyphen, mit Vorsicht verwenden",
 }
 
 return strings

@@ -28,10 +28,12 @@ strings.main = {
   main_select_language = "Choisir la langue",
   main_settings = "Reglages",
   main_select_language_title = "Choisir la langue :",
-  main_credits = "Credits",
+  main_credits = "Crédits",
   main_credits_built_using = "Construit avec :",
   main_credits_thanks_to = "Remerciements :",
   main_credits_translators = "Traducteurs :",
+  main_credits_language_spanish = "Espagnol",
+  main_credits_language_portuguese = "Portugais",
   main_exit_hint_items = { { pad = "cross", label = "Oui" }, { pad = "circle", label = "Non" } },
   no_memory_card = "Aucune carte memoire detectee",
   insert_mc = "Inserez une carte memoire et reessayez",
@@ -152,7 +154,7 @@ strings.path_picker = {
   bbl_cmd_cdvd_label = "Lancer le disque",
   bbl_cmd_cdvd_no_logo_label = "Lancer le disque, ignorer le logo PS2",
   bbl_cmd_osdsys_label = "OSDSYS",
-  bbl_cmd_credits_label = "Credits",
+  bbl_cmd_credits_label = "Crédits",
   bbl_cmd_hddchecker_label = "Verifier le HDD",
   enter_path_prompt = "Saisir le chemin",
   inactive_items_separator = "-- Les elements ci-dessous sont deja utilises ou doivent etre E1 --",
@@ -376,6 +378,8 @@ strings.cdrom_options = {
 strings.text_input = {
   hint_items = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "start", label = "Termine", row = 1 }, { pad = "triangle", label = "Majusc.", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
   hint_items_title_id = { { pad = "cross", label = "Entrer", row = 1 }, { pad = "square", label = "Effacer", row = 1 }, { pad = "start", label = "Termine", row = 1 }, { pad = "circle", label = "Annuler", row = 1 }, { pad = "L1", label = "Gauche", row = 2 }, { pad = "R1", label = "Droite", row = 2 } },
+  glyphs_key_label = "Glyphes",
+  advanced_glyphs_warning = "Glyphes avances, utiliser avec prudence",
 }
 
 return strings

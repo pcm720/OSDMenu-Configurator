@@ -2,36 +2,6 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
-local function getBootPadName(key)
-  if key == "boot_start" then return "start" end
-  if key == "boot_triangle" then return "triangle" end
-  if key == "boot_circle" then return "circle" end
-  if key == "boot_cross" then return "cross" end
-  if key == "boot_square" then return "square" end
-  return nil
-end
-
-local function drawBootTitle(_, bootKey, titleLabel)
-  local padName = getBootPadName(bootKey)
-  local icon = padName and _.common.getPadIcon and _.common.getPadIcon(padName) or nil
-  local baseIconW = _.common.PAD_ICON_W or 26
-  local baseIconH = _.common.PAD_ICON_H or 26
-  local textH = (_.common and _.common.FT_PIXEL_H) or 18
-  local iconH = math.min(baseIconH, textH)
-  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
-  local iconGap = 8
-  local iconY = _.MARGIN_Y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
-
-  if icon then
-    if _.Graphics.drawScaleImage then
-      _.Graphics.drawScaleImage(icon, _.MARGIN_X, iconY, iconW, iconH)
-    else
-      _.Graphics.drawImage(icon, _.MARGIN_X, iconY)
-    end
-  end
-  _.drawText(_.font, _.drawMode, _.MARGIN_X + iconW + iconGap, _.MARGIN_Y, 1, "- " .. titleLabel, _.WHITE)
-end
-
 local function run(ctx)
   local _ = ctx._
   local function isE1LockedPath(pathVal)
@@ -195,7 +165,7 @@ local function run(ctx)
     titleStr = string.format(_.menu_str.paths_for_entry_title, name, ctx.entryIdx)
   end
   if isBoot then
-    drawBootTitle(_, ctx.bootKey, titleStr)
+    _.common.drawBootTitle(_, ctx.bootKey, titleStr)
   else
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, titleStr, _.WHITE)
   end
@@ -349,28 +319,6 @@ local function run(ctx)
     _.config_parse.setPathDisabled(ctx.lines, ctx.entryIdx, ctx.entryPathSel, target)
     markConfigMutated()
   end
-  local function saveAndStay()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
-    local path = ctx.currentPath or (locations and locations[1])
-    if path and path ~= "" then
-      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-      local parentDir = path:match("^(.+)/[^/]+$")
-      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-      if ok then
-        ctx.currentPath = path
-        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-      else
-        ctx.saveSplash = {
-          kind = "failed",
-          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-          framesLeft = 120
-        }
-      end
-    else
-      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-    end
-  end
   local function removeSelectedPath()
     if not hasPathSelection then return end
     refreshPaths()
@@ -503,12 +451,10 @@ local function run(ctx)
     end
   end
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    ctx.entryPathsActionsOpen = true
-    ctx.entryPathsActionsSel = ctx.entryPathsActionsSel or 1
-    ctx.entryPathsActionsScroll = ctx.entryPathsActionsScroll or 0
+    _.common.openActionsMenu(ctx, "entryPathsActionsOpen", "entryPathsActionsSel", "entryPathsActionsScroll")
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    saveAndStay()
+    _.common.saveCurrentConfig(ctx)
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.entryPathGrab then

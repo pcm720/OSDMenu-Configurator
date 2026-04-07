@@ -2,29 +2,14 @@
 
 local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
-local function trimPathValue(pathVal)
-  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local function formatDisplayPath(_, pathVal)
-  local raw = tostring(pathVal or "")
-  local up = trimPathValue(raw):upper()
-  local p = _.path_str or {}
-  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
-  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
-  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
-  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
-  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
-  if _.common and _.common.normalizePathForDisplay then
-    return _.common.normalizePathForDisplay(raw)
-  end
-  return raw
-end
-
-local function isE1ExclusivePath(pathVal, isFmcb)
-  local p = trimPathValue(pathVal)
+local function isE1ExclusivePath(commonRef, pathVal, isFmcb)
+  local p = (commonRef and commonRef.trimPathValue and commonRef.trimPathValue(pathVal)) or
+      tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
   if p == "" then return false end
   if p:lower() == "cdrom" then return true end
+  if commonRef and commonRef.isBblSpecialExclusivePath and commonRef.isBblSpecialExclusivePath(p) then
+    return true
+  end
   local up = p:upper()
   if up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER" then
     return true
@@ -117,7 +102,8 @@ local function run(ctx)
   local rows = rowsCache.rows or {}
   local usedCount = tonumber(rowsCache.usedCount) or 0
   local e1Slot = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, 1) or nil
-  local e1LocksAdditionalPaths = (e1Slot and e1Slot.pathExists and isE1ExclusivePath(e1Slot.path, isFmcb)) and true or false
+  local e1LocksAdditionalPaths = (e1Slot and e1Slot.pathExists and isE1ExclusivePath(_.common, e1Slot.path, isFmcb)) and
+      true or false
   local function isEntryBlockedByE1(row)
     return row and row.kind == "entry" and e1LocksAdditionalPaths and (tonumber(row.slot) or 0) > 1
   end
@@ -237,7 +223,7 @@ local function run(ctx)
       local slot = row.data
       local p = _.common_str.not_set
       if slot.path ~= "" then
-        p = formatDisplayPath(_, slot.path)
+        p = _.common.formatDisplayPathWithCommands(_, slot.path)
       elseif slot.pathExists then
         p = _.common_str.empty
       end
@@ -376,29 +362,6 @@ local function run(ctx)
     local inserted = _.config_parse.getBblHotkeySlot and _.config_parse.getBblHotkeySlot(ctx.lines, keyId, newSlot) or nil
     local inheritedDisabled = (inserted and inserted.disabled) or keyDisabled
     beginPathPickerForSlot(newSlot, inheritedDisabled, isFmcb and "bbl_hotkey_entries" or "bbl_hotkey_entry")
-  end
-
-  local function saveAndStay()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
-    local path = ctx.currentPath or (locations and locations[1])
-    if path and path ~= "" then
-      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-      local parentDir = path:match("^(.+)/[^/]+$")
-      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-      if ok then
-        ctx.currentPath = path
-        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-      else
-        ctx.saveSplash = {
-          kind = "failed",
-          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-          framesLeft = 120
-        }
-      end
-    else
-      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-    end
   end
 
   local function removeSelectedEntry()
@@ -540,12 +503,10 @@ local function run(ctx)
     toggleSelectedEntryDisabled()
   end
   if canOpenActions and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    ctx.bblEntryActionsOpen = true
-    ctx.bblEntryActionsSel = ctx.bblEntryActionsSel or 1
-    ctx.bblEntryActionsScroll = ctx.bblEntryActionsScroll or 0
+    _.common.openActionsMenu(ctx, "bblEntryActionsOpen", "bblEntryActionsSel", "bblEntryActionsScroll")
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    saveAndStay()
+    _.common.saveCurrentConfig(ctx)
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if ctx.bblEntryGrab then

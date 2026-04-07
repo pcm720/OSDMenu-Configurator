@@ -181,6 +181,186 @@ function common.makeDebugLogger(flagName, prefix)
   end
 end
 
+function common.findHintLabel(items, pad, fallback)
+  local target = tostring(pad or ""):lower()
+  for i = 1, #(items or {}) do
+    local item = items[i]
+    local itemPad = tostring(item and item.pad or ""):lower()
+    local label = tostring(item and item.label or "")
+    if itemPad == target and label ~= "" then
+      return label
+    end
+  end
+  return fallback
+end
+
+function common.withStartHintVisibility(items, showStart)
+  if showStart then return items end
+  local out = {}
+  for i = 1, #(items or {}) do
+    local item = items[i]
+    if item and item.pad ~= "start" then
+      out[#out + 1] = item
+    else
+      out[#out + 1] = { pad = "", label = "", row = item and item.row or 1 }
+    end
+  end
+  return out
+end
+
+function common.bootKeyToPadName(key)
+  if key == "boot_start" then return "start" end
+  if key == "boot_triangle" then return "triangle" end
+  if key == "boot_circle" then return "circle" end
+  if key == "boot_cross" then return "cross" end
+  if key == "boot_square" then return "square" end
+  return nil
+end
+
+function common.isBblContext(context)
+  return context == "ps2bbl" or context == "psxbbl"
+end
+
+function common.isOsdConfigFileType(fileType)
+  return fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf"
+end
+
+function common.getNextStateAfterMcSelection(context)
+  if common.isBblContext(context) then return "select_config" end
+  if context == "osdmenu" or context == "hosdmenu" then return "select_config" end
+  return "open"
+end
+
+function common.getOpenParentState(context, fileType)
+  if common.isBblContext(context) then
+    return "select_config"
+  end
+  if (context == "freemcboot" or context == "freehddboot") and fileType == "freemcboot_cnf" then
+    return "select_config"
+  end
+  if (context == "osdmenu" or context == "hosdmenu") and common.isOsdConfigFileType(fileType) then
+    return "select_config"
+  end
+  return "main"
+end
+
+function common.getEditorBackState(context, fileType, getPresentMcSlots)
+  if common.isBblContext(context) then
+    return "select_config"
+  end
+  if context == "hosdmenu" and common.isOsdConfigFileType(fileType) then
+    return "select_config"
+  end
+  if context == "osdmenu" or context == "freemcboot" then
+    if common.isOsdConfigFileType(fileType) or fileType == "freemcboot_cnf" then
+      local slots = (type(getPresentMcSlots) == "function" and getPresentMcSlots()) or {}
+      if type(slots) == "table" and #slots > 1 then
+        return "choose_mc"
+      end
+      return "main"
+    end
+  end
+  return "main"
+end
+
+function common.configureBelTextInput(ctx, opts)
+  if not ctx then return end
+  opts = opts or {}
+  local allowBel = (opts.allow == true)
+  local profile = opts.profile
+  if profile == nil then
+    local context = tostring(opts.context or ctx.context or ""):lower()
+    profile = ((context == "freehddboot") or (context == "hosdmenu")) and "hddosd" or "ps2rom"
+  end
+
+  ctx.textInputEnableBelKey = allowBel and true or nil
+  ctx.textInputBelProfile = allowBel and tostring(profile or "ps2rom") or nil
+  ctx.textInputAllowBelAdd = allowBel and true or nil
+
+  if opts.hidePipeBackslash ~= nil then
+    ctx.textInputHidePipeBackslash = (opts.hidePipeBackslash == true) and true or nil
+  else
+    ctx.textInputHidePipeBackslash = nil
+  end
+end
+
+function common.drawPadTitle(_, padName, titleText, opts)
+  if type(_) ~= "table" then return end
+  opts = opts or {}
+  local x = tonumber(opts.x) or _.MARGIN_X or 0
+  local y = tonumber(opts.y) or _.MARGIN_Y or 0
+  local lineH = tonumber(opts.lineH) or _.LINE_H or 26
+  local gap = tonumber(opts.gap) or 8
+  local scale = tonumber(opts.scale) or 1
+  local color = opts.color or _.WHITE
+  local label = tostring(titleText or "")
+
+  local icon = padName and common.getPadIcon and common.getPadIcon(padName) or nil
+  local baseIconW = common.PAD_ICON_W or 26
+  local baseIconH = common.PAD_ICON_H or 26
+  local textH = common.FT_PIXEL_H or 18
+  local iconH = math.min(baseIconH, textH)
+  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
+  local iconY = y + math.floor((lineH - iconH) / 2)
+
+  if icon then
+    if _.Graphics and _.Graphics.drawScaleImage then
+      _.Graphics.drawScaleImage(icon, x, iconY, iconW, iconH)
+    elseif _.Graphics and _.Graphics.drawImage then
+      _.Graphics.drawImage(icon, x, iconY)
+    end
+  end
+
+  local textX = x + iconW + gap
+  if _.drawText then
+    _.drawText(_.font, _.drawMode, textX, y, scale, label, color)
+  end
+end
+
+function common.drawBootTitle(_, bootKey, titleLabel)
+  local padName = common.bootKeyToPadName(bootKey)
+  common.drawPadTitle(_, padName, "- " .. tostring(titleLabel or ""))
+end
+
+function common.drawHotkeyTitle(_, keyId, suffix)
+  local tail = tostring(suffix or "")
+  if keyId == "AUTO" then
+    if _ and _.drawText then
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, "AUTOBOOT" .. tail, _.WHITE)
+    end
+    return
+  end
+  common.drawPadTitle(_, keyId, tail)
+end
+
+function common.formatDisplayPathWithCommands(_, pathVal)
+  local raw = tostring(pathVal or "")
+  local up = raw:gsub("^%s+", ""):gsub("%s+$", ""):upper()
+  local p = (_ and _.path_str) or {}
+  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
+  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
+  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
+  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
+  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  if common.normalizePathForDisplay then
+    return common.normalizePathForDisplay(raw)
+  end
+  return raw
+end
+
+function common.trimPathValue(pathVal)
+  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+function common.pathTokenUpper(pathVal)
+  return common.trimPathValue(pathVal):upper()
+end
+
+function common.isBblSpecialExclusivePath(pathVal)
+  local up = common.pathTokenUpper(pathVal)
+  return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
+end
+
 -- Canonicalize HDD APA/PFS display paths:
 -- - hdd0:PART:pfs:foo   -> hdd0:PART:pfs:/foo
 -- - hdd0:/PART/dir/file -> hdd0:PART:pfs:/dir/file
@@ -251,6 +431,61 @@ function common.resolvePathForAccess(path)
     return base .. p
   end
   return p
+end
+
+function common.mapPartitionPathToMountedPfs(path)
+  if not path then return nil, nil end
+  local raw = tostring(path):gsub("\\", "/")
+  local part, rest = raw:match("^(hdd%d:[^:]+):pfs:(.*)$")
+  if not part then
+    -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
+    part, rest = raw:match("^(hdd%d:[^/:]+)(/.*)$")
+  end
+  if not part then return nil, nil end
+  if not rest or rest == "" then rest = "/" end
+  if rest:sub(1, 1) ~= "/" then rest = "/" .. rest end
+  return part, "pfs0:" .. rest
+end
+
+function common.beginPathAccess(path, opts)
+  opts = opts or {}
+  local resolvedPath = common.resolvePathForAccess(path)
+  local loadModule = (opts.loadModule ~= false)
+  local mountPartition = (opts.mountPartition ~= false)
+
+  if loadModule then
+    local moduleType = common.getPathModuleType and common.getPathModuleType(resolvedPath)
+    if moduleType and System and System.loadModules then
+      pcall(System.loadModules, moduleType)
+    end
+  end
+
+  if not mountPartition then
+    return nil, resolvedPath, nil
+  end
+
+  local part, mapped = common.mapPartitionPathToMountedPfs(resolvedPath)
+  if part and mapped then
+    local mounted = nil
+    if System and System.fileXioMount then
+      pcall(System.fileXioMount, "pfs0:", part)
+      mounted = "pfs0:"
+    end
+    return mounted, mapped, part
+  end
+
+  local mounted = nil
+  if resolvedPath and resolvedPath:match("^pfs0:/") and System and System.fileXioMount then
+    pcall(System.fileXioMount, "pfs0:", "hdd0:__sysconf")
+    mounted = "pfs0:"
+  end
+  return mounted, resolvedPath, nil
+end
+
+function common.endPathAccess(mounted)
+  if mounted and System and System.fileXioUmount then
+    pcall(System.fileXioUmount, mounted)
+  end
 end
 
 local function getRuntimeFtPixelBase()
@@ -500,11 +735,96 @@ function common.buildEditorHintItems(selOpt, hintEditItems, getDefaultFn, enumHi
   return out
 end
 
--- Keyboard: full QWERTY rows 1-=, q-], a-', z-/
-common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./" }
-common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "ZXCVBNM<>?" }
+-- Open an actions overlay with consistent state key initialization.
+function common.openActionsMenu(ctx, openKey, selKey, scrollKey, opts)
+  if not ctx then return end
+  local openStateKey = tostring(openKey or "actionsMenuOpen")
+  local selStateKey = tostring(selKey or "actionsMenuSel")
+  local scrollStateKey = tostring(scrollKey or "actionsMenuScroll")
+  opts = opts or {}
+
+  ctx[openStateKey] = true
+  if ctx[selStateKey] == nil then
+    ctx[selStateKey] = tonumber(opts.defaultSel) or 1
+  end
+  if ctx[scrollStateKey] == nil then
+    ctx[scrollStateKey] = tonumber(opts.defaultScroll) or 0
+  end
+end
+
+function common.drawCenteredPromptModal(_, promptText, opts)
+  if type(_) ~= "table" then return end
+  opts = opts or {}
+  local prompt = tostring(promptText or "")
+  local padX = tonumber(opts.padX) or 24
+  local padY = tonumber(opts.padY) or 14
+  local lineH = _.LINE_H or common.LINE_H
+  local maxTextW = math.max(80, (_.w or common.DEFAULT_W) - (((_.MARGIN_X or common.MARGIN_X) * 2) + (padX * 2)))
+  if common.truncateTextToWidth then
+    prompt = common.truncateTextToWidth(_.font, prompt, maxTextW, 1)
+  end
+  local textW = (common.calcTextWidth and common.calcTextWidth(_.font, prompt, 1)) or (#prompt * 14)
+  local boxW = textW + (padX * 2)
+  local boxH = lineH + (padY * 2)
+  local boxX = math.floor(((_.w or common.DEFAULT_W) - boxW) / 2)
+  local boxY = math.floor(((_.h or common.DEFAULT_H) - boxH) / 2)
+  local bg = opts.bgColor or (Color and Color.new and Color.new(40, 40, 48, 110)) or common.DIM
+  if _.Graphics and _.Graphics.drawRect then
+    _.Graphics.drawRect(boxX, boxY, boxW, boxH, bg)
+  end
+  local textX = boxX + math.floor((boxW - textW) / 2)
+  local textY = boxY + math.floor((boxH - lineH) / 2)
+  if common.drawText then
+    common.drawText(_.font, _.drawMode, textX, textY, 1, prompt, _.WHITE or common.WHITE)
+  end
+end
+
+-- Shared leave-save prompt flow for editor-like scenes.
+-- opts: { onSave, onDiscard, onCancel, drawPrompt(ctx, _, prompt), prompt }
+function common.handleLeaveSavePrompt(ctx, opts)
+  if not (ctx and ctx.editorLeavePrompt) then
+    return false
+  end
+  local _ = ctx._
+  if type(_) ~= "table" then
+    return false
+  end
+  opts = opts or {}
+  local prompt = tostring(opts.prompt or (_.editor_str and _.editor_str.leave_save_prompt) or
+    "Save changes before leaving?")
+  if type(opts.drawPrompt) == "function" then
+    opts.drawPrompt(ctx, _, prompt)
+  else
+    common.drawCenteredPromptModal(_, prompt)
+  end
+  common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM,
+    _.w - 2 * _.MARGIN_X)
+  if (_.padEffective & _.PAD_CROSS) ~= 0 then
+    ctx.editorLeavePrompt = nil
+    if type(opts.onSave) == "function" then
+      opts.onSave()
+    end
+  elseif (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
+    ctx.editorLeavePrompt = nil
+    if type(opts.onDiscard) == "function" then
+      opts.onDiscard()
+    end
+  elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    ctx.editorLeavePrompt = nil
+    if type(opts.onCancel) == "function" then
+      opts.onCancel()
+    end
+  end
+  return true
+end
+
+-- Keyboard: full QWERTY rows 1-=, q-\ , a-', z-/
+common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]\\", "asdfghjkl;'", "zxcvbnm,./" }
+common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?" }
 -- Title ID only: digits + uppercase letters, no shift (e.g. eGSM AAAA_000.00). No symbols.
 common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
+common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.5, 0.85, 1.2 }
+common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.5, 0.85, 1.2 }
 common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y = 320, 220
 common.KEY_WIDTH, common.KEY_HEIGHT = 34, 26
 common.KEY_GAP = 2
@@ -537,14 +857,6 @@ function common.getPresentMcSlots()
   if common.tryOpen("mc0:/") then table.insert(out, 0) end
   if common.tryOpen("mc1:/") then table.insert(out, 1) end
   table.sort(out)
-  return out
-end
-
-function common.findExistingPaths(locations)
-  local out = {}
-  for _, p in ipairs(locations) do
-    if common.tryOpen(p) then table.insert(out, p) end
-  end
   return out
 end
 
@@ -761,43 +1073,26 @@ function common.saveConfig(ctx, path, lines, createDir)
   if not prepOk then
     return nil, prepErr
   end
-  local savePath = resolvedPath
+  local mounted, savePath, mountedPartition = common.beginPathAccess(resolvedPath, {
+    loadModule = false,
+    mountPartition = true,
+  })
   local saveDir = resolvedDir
-  local mounted = nil
 
-  local function splitHddPartitionPath(p)
-    local s = tostring(p or ""):gsub("\\", "/")
-    local part, rest = s:match("^(hdd%d:[^:]+):pfs:(.*)$")
-    if not part then
-      -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
-      part, rest = s:match("^(hdd%d:[^/:]+)(/.*)$")
+  if saveDir and saveDir ~= "" and mountedPartition then
+    local dirPart, mappedDir = common.mapPartitionPathToMountedPfs(saveDir)
+    if dirPart and dirPart == mountedPartition and mappedDir then
+      saveDir = mappedDir
     end
-    if not part then return nil, nil end
-    if rest == "" then rest = "/" end
-    if rest:sub(1, 1) ~= "/" then rest = "/" .. rest end
-    return part, rest
   end
 
-  local part, rest = splitHddPartitionPath(resolvedPath)
-  if part and rest then
-    savePath = "pfs0:" .. rest
-    saveDbg("route partition", "part=" .. tostring(part), "savePath=" .. tostring(savePath))
-    if saveDir and saveDir ~= "" then
-      local dPart, dRest = splitHddPartitionPath(saveDir)
-      if dPart and dPart == part and dRest then
-        saveDir = "pfs0:" .. dRest
-      end
-    end
-    if System and System.fileXioMount then
-      saveDbg("mount", "pfs0:", "<-", tostring(part))
-      System.fileXioMount("pfs0:", part)
-      mounted = "pfs0:"
-    end
-  elseif savePath and savePath:match("^pfs0:/") then
-    if System and System.fileXioMount then
-      saveDbg("mount", "pfs0:", "<-", "hdd0:__sysconf")
-      System.fileXioMount("pfs0:", "hdd0:__sysconf")
-      mounted = "pfs0:"
+  if mounted then
+    if mountedPartition then
+      saveDbg("mount", tostring(mounted), "<-", tostring(mountedPartition))
+    elseif savePath and savePath:match("^pfs0:/") then
+      saveDbg("mount", tostring(mounted), "<-", "hdd0:__sysconf")
+    else
+      saveDbg("mount", tostring(mounted))
     end
   end
   saveDbg("dispatch", "savePath=" .. tostring(savePath), "saveDir=" .. tostring(saveDir))
@@ -806,11 +1101,107 @@ function common.saveConfig(ctx, path, lines, createDir)
     common.markConfigSaved(ctx, lines)
   end
   saveDbg("dispatch result", "ok=" .. tostring(ok), "err=" .. tostring(err))
-  if mounted and System and System.fileXioUmount then
+  if mounted then
     saveDbg("umount", tostring(mounted))
-    System.fileXioUmount(mounted)
+    common.endPathAccess(mounted)
   end
   return ok, err
+end
+
+function common.regenerateLinesForSave(ctx)
+  if not ctx then return end
+  local _ = ctx._
+  if not (_ and _.config_parse and _.config_parse.regenerateForSave) then return end
+  ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+end
+
+-- Shared save flow used by multiple editor scenes.
+-- opts:
+--  allowChoose: boolean (default false)
+--  chooseSaveState: default "choose_save"
+--  locationFileType/locationContext/chosenMcSlot/locations/getLocations
+--  regenerateBeforeSave: default true
+--  beforeChooseSave(locations), beforeSave(path), afterSave(path)
+--  noSaveLocationMessage, errorDetail(err), savedFrames, failedFrames
+function common.saveCurrentConfig(ctx, opts)
+  if not ctx then return nil, "no_context" end
+  opts = opts or {}
+  local _ = ctx._
+  if not _ then return nil, "no_frame_context" end
+
+  ctx.saveSplash = nil
+
+  local locations = opts.locations
+  if type(locations) ~= "table" then
+    local resolver = opts.getLocations or _.getLocations
+    if type(resolver) == "function" then
+      local locContext = opts.locationContext or ctx.context
+      local locFileType = opts.locationFileType or ctx.fileType
+      local locSlot = (opts.chosenMcSlot ~= nil) and opts.chosenMcSlot or ctx.chosenMcSlot
+      locations = resolver(locContext, locFileType, locSlot) or {}
+    else
+      locations = {}
+    end
+  end
+
+  if opts.allowChoose and #locations >= 2 then
+    if type(opts.beforeChooseSave) == "function" then
+      opts.beforeChooseSave(locations)
+    end
+    ctx.saveChoices = locations
+    ctx.saveSel = ctx.saveSel or 1
+    ctx.state = opts.chooseSaveState or "choose_save"
+    return true, "choose_save"
+  end
+
+  local path = opts.path
+  if type(path) ~= "string" or path == "" then
+    path = ctx.currentPath or (locations and locations[1])
+  end
+  if type(path) ~= "string" or path == "" then
+    local noSaveLocation = opts.noSaveLocationMessage or (_.editor_str and _.editor_str.no_save_location) or
+        "No save location"
+    ctx.saveSplash = { kind = "failed", detail = noSaveLocation, framesLeft = opts.failedFrames or 120 }
+    return nil, "no_save_location"
+  end
+
+  local regenBeforeSave = (opts.regenerateBeforeSave ~= false)
+  if regenBeforeSave then
+    common.regenerateLinesForSave(ctx)
+  end
+  if type(opts.beforeSave) == "function" then
+    opts.beforeSave(path)
+  end
+
+  local parentDir = opts.createDir
+  if parentDir == nil then
+    parentDir = path:match("^(.+)/[^/]+$")
+  end
+  local ok, err = common.saveConfig(ctx, path, opts.lines or ctx.lines, parentDir)
+  if ok then
+    if opts.setCurrentPath ~= false then
+      ctx.currentPath = path
+    end
+    if opts.markUnmodified ~= false then
+      ctx.configModified = false
+    end
+    if type(opts.afterSave) == "function" then
+      opts.afterSave(path)
+    end
+    ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = opts.savedFrames or 60 }
+    return true
+  end
+
+  local detail = nil
+  if type(opts.errorDetail) == "function" then
+    detail = opts.errorDetail(err)
+  end
+  if detail == nil or detail == "" then
+    detail = (common.localizeParseError and _.editor_str and common.localizeParseError(err, _.editor_str)) or
+        (_.editor_str and _.editor_str.save_failed) or tostring(err or "Save failed")
+  end
+  ctx.saveSplash = { kind = "failed", detail = detail, framesLeft = opts.failedFrames or 120 }
+  return nil, err
 end
 
 function common.listDirectoryFiltered(path, file_selector, opts)
@@ -890,6 +1281,62 @@ function common.getRepeatIntervalFrames(fps, heldFrames)
   local hz = startHz + ((endHz - startHz) * t)
   if hz < 0.1 then hz = 0.1 end
   return math.max(1, math.floor((safeFps / hz) + 0.5))
+end
+
+-- Generic hold-to-repeat helper for one action key.
+-- Returns true when action should trigger this frame.
+function common.consumeHeldRepeat(ctx, repeatKey, isHeld, opts)
+  if not ctx or not repeatKey then
+    return isHeld and true or false
+  end
+  local held = isHeld and true or false
+  local store = ctx._holdRepeatStates
+  if type(store) ~= "table" then
+    store = {}
+    ctx._holdRepeatStates = store
+  end
+  local key = tostring(repeatKey)
+  local st = store[key]
+  if type(st) ~= "table" then
+    st = { wasHeld = false, heldFrames = 0, countdown = 0 }
+    store[key] = st
+  end
+  if not held then
+    st.wasHeld = false
+    st.heldFrames = 0
+    st.countdown = 0
+    return false
+  end
+
+  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local fps = common.getRepeatFps(ctx, nominalFps)
+  local speed = tonumber(opts and opts.speed) or 1
+  if speed <= 0 then speed = 1 end
+
+  local function intervalForFrame(frame)
+    local base = common.getRepeatIntervalFrames(fps, frame)
+    if speed == 1 then return base end
+    return math.max(1, math.floor((base / speed) + 0.5))
+  end
+
+  if not st.wasHeld then
+    st.wasHeld = true
+    st.heldFrames = 0
+    st.countdown = intervalForFrame(0)
+    return true
+  end
+
+  st.heldFrames = st.heldFrames + 1
+  local targetInterval = intervalForFrame(st.heldFrames)
+  if st.countdown > targetInterval then
+    st.countdown = targetInterval
+  end
+  st.countdown = st.countdown - 1
+  if st.countdown <= 0 then
+    st.countdown = targetInterval
+    return true
+  end
+  return false
 end
 
 -- Update ctx with layout values from current screen mode (for scene runner).
@@ -1066,6 +1513,8 @@ end
 -- opts: { prompt, value, maxLen, callback, returnState, titleIdMode, gridSel, cursor, scroll, clearArgEditIdx, argEditIdx }
 function common.beginTextInput(ctx, opts)
   if not ctx or type(opts) ~= "table" then return end
+  -- Reset per-key held-repeat state so each text-input session starts clean.
+  ctx._holdRepeatStates = nil
   if opts.clearArgEditIdx then
     ctx.argEditIdx = nil
   end
