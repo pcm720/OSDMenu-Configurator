@@ -423,6 +423,8 @@ local function run(ctx)
     end
     local row = subRows[ctx.entryEditSub]
     if row.kind == "name" then
+      local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
+      local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
       ctx.textInputTitleIdMode = nil
       ctx.textInputPrompt = _.menu_str.entry_name_prompt
       local currentNameRaw = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
@@ -435,6 +437,10 @@ local function run(ctx)
       if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
       ctx.textInputValue = currentNameDisplay
       ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+      ctx.textInputEnableBelKey = allowBelKey and true or nil
+      ctx.textInputBelProfile = allowBelKey and belProfile or nil
+      ctx.textInputAllowBelAdd = allowBelKey and true or nil
+      ctx.textInputHidePipeBackslash = nil
       ctx.textInputCallback = function(val)
         local saveVal = val or ""
         if editingSeparator and saveVal:sub(1, 2) ~= "$!" then

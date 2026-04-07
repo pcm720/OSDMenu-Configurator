@@ -81,11 +81,15 @@ local function buildOverlayHints(_, incoming, anchorPad, anchorLabel)
 end
 
 local function closeMenu(ctx, opts)
-  ctx[opts.openKey] = nil
+  local openKey = tostring(opts.openKey or "actionsMenuOpen")
+  ctx[openKey] = nil
   ctx[opts.selKey] = nil
   ctx[opts.scrollKey] = nil
-  ctx[tostring(opts.openKey or "actionsMenuOpen") .. "_anim"] = nil
-  ctx[tostring(opts.openKey or "actionsMenuOpen") .. "_closing"] = nil
+  ctx[openKey .. "_anim"] = nil
+  ctx[openKey .. "_closing"] = nil
+  -- Drop per-menu text/layout caches when closed.
+  ctx[openKey .. "_text_width_cache"] = nil
+  ctx[openKey .. "_truncate_cache"] = nil
 end
 
 local function normalizeRows(rows)
@@ -99,6 +103,7 @@ local function normalizeRows(rows)
         id = id,
         label = tostring(row.label or ""),
         enabled = (row.enabled ~= false),
+        columns = (type(row.columns) == "table") and row.columns or nil,
         raw = row,
       }
       if id:lower() == "remove" then
@@ -157,7 +162,12 @@ function actions_menu.run(ctx, opts)
     moveSelection(1)
   end
 
-  local maxVisible = math.max(1, math.min(#rows, math.floor(tonumber(opts.maxVisible) or 8)))
+  local maxVisibleCap = math.max(1, math.floor(tonumber(opts.maxVisible) or 8))
+  local minVisible = math.max(1, math.floor(tonumber(opts.minVisible) or 1))
+  if minVisible > maxVisibleCap then
+    minVisible = maxVisibleCap
+  end
+  local maxVisible = math.max(minVisible, math.min(#rows, maxVisibleCap))
   ctx[scrollKey] = _.common.centeredListScroll(ctx[selKey], #rows, maxVisible)
   local closing = ctx[closingKey] == true
   local anim = tonumber(ctx[animKey])
@@ -187,12 +197,48 @@ function actions_menu.run(ctx, opts)
   local textH = (_.common and _.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
       math.max(10, math.floor(((_.common and _.common.FT_PIXEL_H or 18) * textScale) + 0.5))
 
+  local widthCacheKey = tostring(openKey) .. "_text_width_cache"
+  local widthCache = ctx[widthCacheKey]
+  if type(widthCache) ~= "table" then
+    widthCache = {}
+    ctx[widthCacheKey] = widthCache
+  end
+  local rowScaleTag = string.format("%.3f", rowScale)
   local function textWidth(text)
-    if _.common and _.common.calcTextWidth then
-      return _.common.calcTextWidth(hintFont, tostring(text or ""), rowScale)
-    end
     local s = tostring(text or "")
-    return math.floor((8 * rowScale) * #s)
+    local cacheKey = rowScaleTag .. "\0" .. s
+    local cached = widthCache[cacheKey]
+    if cached ~= nil then
+      return cached
+    end
+    if _.common and _.common.calcTextWidth then
+      local w = _.common.calcTextWidth(hintFont, s, rowScale)
+      widthCache[cacheKey] = w
+      return w
+    end
+    local w = math.floor((8 * rowScale) * #s)
+    widthCache[cacheKey] = w
+    return w
+  end
+  local truncCacheKey = tostring(openKey) .. "_truncate_cache"
+  local truncCache = ctx[truncCacheKey]
+  if type(truncCache) ~= "table" then
+    truncCache = {}
+    ctx[truncCacheKey] = truncCache
+  end
+  local function truncateCached(text, maxWidth, cacheSuffix)
+    local raw = tostring(text or "")
+    local key = rowScaleTag .. "|" .. tostring(maxWidth) .. "|" .. tostring(cacheSuffix or "") .. "|" .. raw
+    local cached = truncCache[key]
+    if cached ~= nil then
+      return cached
+    end
+    local out = raw
+    if _.common and _.common.truncateTextToWidth then
+      out = _.common.truncateTextToWidth(hintFont, raw, maxWidth, rowScale)
+    end
+    truncCache[key] = out
+    return out
   end
 
   local titleW = hasTitle and textWidth(title) or 0
@@ -207,9 +253,60 @@ function actions_menu.run(ctx, opts)
     markerW = math.max(2, math.floor((spaceW * 1.2) + 0.5))
   end
   local maxLabelWIntrinsic = 0
+  local columnLayout = opts.columnLayout == true
+  local columnGap = math.max(4, math.floor((tonumber(opts.columnGapPx) or (spaceW * 2)) + 0.5))
+  local columnMinWidths = (type(opts.columnMinWidths) == "table") and opts.columnMinWidths or nil
+  local minLabelIntrinsicW = tonumber(opts.minLabelIntrinsicW) or 0
+  local columnIntrinsicW = {}
+  local function rowColumnCount(row)
+    if not row or type(row.columns) ~= "table" then return 0 end
+    local n = #row.columns
+    while n > 0 and tostring(row.columns[n] or "") == "" do
+      n = n - 1
+    end
+    return n
+  end
+  if columnLayout then
+    if columnMinWidths then
+      for c = 1, #columnMinWidths do
+        local forced = math.max(0, math.floor(tonumber(columnMinWidths[c]) or 0))
+        if forced > 0 and forced > (columnIntrinsicW[c] or 0) then
+          columnIntrinsicW[c] = forced
+        end
+      end
+    end
+    for i = 1, #rows do
+      local row = rows[i]
+      local count = rowColumnCount(row)
+      for c = 1, count do
+        local cw = textWidth(tostring(row.columns[c] or ""))
+        if cw > (columnIntrinsicW[c] or 0) then
+          columnIntrinsicW[c] = cw
+        end
+      end
+    end
+  end
+  local function rowIntrinsicWidth(row)
+    if not (columnLayout and row and type(row.columns) == "table") then
+      return textWidth(row and row.label or "")
+    end
+    local count = rowColumnCount(row)
+    if count <= 0 then
+      return textWidth(row and row.label or "")
+    end
+    local total = 0
+    for c = 1, count do
+      total = total + (columnIntrinsicW[c] or 0)
+      if c < count then total = total + columnGap end
+    end
+    return total
+  end
   for i = 1, #rows do
-    local lw = textWidth(rows[i] and rows[i].label or "")
+    local lw = rowIntrinsicWidth(rows[i])
     if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
+  end
+  if minLabelIntrinsicW > maxLabelWIntrinsic then
+    maxLabelWIntrinsic = minLabelIntrinsicW
   end
   local hintGap = math.max(2, math.floor((((_.common and _.common.PAD_HINT_GAP) or 5) * textScale) + 0.5))
   local padX = math.floor((_.scaleY and _.scaleY(8) or 8) + 0.5)
@@ -288,10 +385,12 @@ function actions_menu.run(ctx, opts)
 
   local rowLabelX = anchorActionLabelX
   local rowMarkerX = rowLabelX - markerW - spaceW
-  local maxLabelW = (boxX + boxW) - padX - rowLabelX
+  local barWidth = (_.scaleX and _.scaleX(8)) or 8
+  local scrollbarGap = math.max(2, math.floor((_.scaleX and _.scaleX(3) or 3) + 0.5))
+  local reserveScrollbar = (#rows > maxVisible) and (barWidth + scrollbarGap) or 0
+  local maxLabelW = (boxX + boxW) - padX - reserveScrollbar - rowLabelX
   if maxLabelW < 1 then maxLabelW = 1 end
   if _.common and _.common.drawListScrollbar then
-    local barWidth = (_.scaleX and _.scaleX(8)) or 8
     _.common.drawListScrollbar(_, {
       totalRows = #rows,
       visibleRows = maxVisible,
@@ -307,18 +406,61 @@ function actions_menu.run(ctx, opts)
   for i = ctx[scrollKey] + 1, math.min(ctx[scrollKey] + maxVisible, #rows) do
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
-    local label = row.label
-    if _.common.fitListRowText then
-      label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
-        i == ctx[selKey])
-    elseif _.common.truncateTextToWidth then
-      label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
-    end
     local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
+    local marqueeActive = (i == ctx[selKey]) or (row.raw and row.raw.forceTicker == true)
     if i == ctx[selKey] then
       _.drawText(hintFont, _.drawMode, rowMarkerX, y, rowScale, ">", col, textH)
     end
-    _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
+    if columnLayout and type(row.columns) == "table" and #row.columns > 0 then
+      local count = rowColumnCount(row)
+      if count <= 0 then
+        local label = row.label
+        if _.common.fitListRowText then
+          label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
+            marqueeActive)
+        elseif _.common.truncateTextToWidth then
+          label = truncateCached(label, maxLabelW, "fallback|" .. tostring(i))
+        end
+        _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
+      else
+        local cx = rowLabelX
+        for c = 1, count do
+          local raw = tostring(row.columns[c] or "")
+          local colMaxW = (c < count) and (columnIntrinsicW[c] or textWidth(raw)) or
+              math.max(1, (rowLabelX + maxLabelW) - cx)
+          local txt = raw
+          if _.common and _.common.fitListRowText then
+            txt = _.common.fitListRowText(
+              ctx,
+              rowStateKeyPrefix .. tostring(i) .. "_col_" .. tostring(c),
+              hintFont,
+              txt,
+              colMaxW,
+              rowScale,
+              marqueeActive
+            )
+          elseif _.common and _.common.truncateTextToWidth then
+            txt = truncateCached(txt, colMaxW, tostring(i) .. "|" .. tostring(c))
+          end
+          _.drawText(hintFont, _.drawMode, cx, y, rowScale, txt, col, textH)
+          if c < count then
+            cx = cx + (columnIntrinsicW[c] or 0) + columnGap
+            if cx > (rowLabelX + maxLabelW) then
+              break
+            end
+          end
+        end
+      end
+    else
+      local label = row.label
+      if _.common.fitListRowText then
+        label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
+          marqueeActive)
+      elseif _.common.truncateTextToWidth then
+        label = truncateCached(label, maxLabelW, "label|" .. tostring(i))
+      end
+      _.drawText(hintFont, _.drawMode, rowLabelX, y, rowScale, label, col, textH)
+    end
   end
 
   local hintItems = buildOverlayHints(_, opts.hints, anchorPad, anchorLabel)
@@ -351,10 +493,23 @@ function actions_menu.run(ctx, opts)
       end
     end
 
-    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (anchorPadMask and (_.padEffective & anchorPadMask) ~= 0) then
+    local circlePressed = (_.padEffective & _.PAD_CIRCLE) ~= 0
+    local anchorPressed = anchorPadMask and (_.padEffective & anchorPadMask) ~= 0
+    if circlePressed then
       ctx[closingKey] = true
       if ctx[animKey] < 0.001 then
         ctx[animKey] = 1
+      end
+    elseif anchorPressed then
+      local handled = false
+      if type(opts.onAnchorPress) == "function" then
+        handled = opts.onAnchorPress() == true
+      end
+      if not handled then
+        ctx[closingKey] = true
+        if ctx[animKey] < 0.001 then
+          ctx[animKey] = 1
+        end
       end
     end
   end

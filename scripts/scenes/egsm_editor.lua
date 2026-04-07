@@ -7,6 +7,9 @@ local function getEgsmBackState(ctx)
   if context == "ps2bbl" or context == "psxbbl" then
     return "select_config"
   end
+  if context == "hosdmenu" then
+    return "select_config"
+  end
   if context == "osdmenu" or context == "freemcboot" then
     local common = ctx and ctx._ and ctx._.common or nil
     local slots = (common and common.getPresentMcSlots and common.getPresentMcSlots()) or {}
@@ -155,11 +158,13 @@ local function run(ctx)
   hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
-  if (_.padEffective & _.PAD_UP) ~= 0 then
-    ctx.egsmSel = ctx.egsmSel - 1; if ctx.egsmSel < 1 then ctx.egsmSel = total end
-  end
-  if (_.padEffective & _.PAD_DOWN) ~= 0 then
-    ctx.egsmSel = ctx.egsmSel + 1; if ctx.egsmSel > total then ctx.egsmSel = 1 end
+  if not ctx.egsmActionsOpen then
+    if (_.padEffective & _.PAD_UP) ~= 0 then
+      ctx.egsmSel = ctx.egsmSel - 1; if ctx.egsmSel < 1 then ctx.egsmSel = total end
+    end
+    if (_.padEffective & _.PAD_DOWN) ~= 0 then
+      ctx.egsmSel = ctx.egsmSel + 1; if ctx.egsmSel > total then ctx.egsmSel = 1 end
+    end
   end
 
   local function toggleSelectedEgsmDisabled()
@@ -173,7 +178,7 @@ local function run(ctx)
     end
   end
 
-  if (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
+  if (not ctx.egsmActionsOpen) and ((_.padEffective & _.PAD_TRIANGLE) ~= 0) then
     toggleSelectedEgsmDisabled()
   end
 

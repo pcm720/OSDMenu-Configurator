@@ -168,6 +168,8 @@ local function getCreditsHintLabel(main_str)
 end
 
 local function buildMainCreditsLines(main_str)
+  local spanishLabel = main_str.main_credits_language_spanish or "Spanish"
+  local portugueseLabel = main_str.main_credits_language_portuguese or "Portuguese"
   return {
     main_str.main_credits_built_using or "Built Using:",
     "-Enceladus",
@@ -176,8 +178,8 @@ local function buildMainCreditsLines(main_str)
     "-R3Z3N",
     "-Berion",
     main_str.main_credits_translators or "Translators:",
-    "-VizoR: Spanish",
-    "-nuno: Portugese",
+    "-VizoR: " .. tostring(spanishLabel),
+    "-nuno: " .. tostring(portugueseLabel),
   }
 end
 
@@ -379,7 +381,7 @@ local function buildMainEntries(main_str)
     logoKey = "hosdmenu",
     context = "hosdmenu",
     fileType = "osdmenu_cnf",
-    state = "open",
+    state = "select_config",
   })
   if C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled() then
     addEntry({
@@ -474,6 +476,7 @@ end
 local function nextStateAfterMcSelection(s)
   if isBblContext(s.context) then return "select_config" end
   if s.context == "osdmenu" then return "select_config" end
+  if s.context == "hosdmenu" then return "select_config" end
   return "open"
 end
 
@@ -487,6 +490,11 @@ local function getOpenParentState(s)
     end
   end
   if s.context == "osdmenu" then
+    if s.fileType == "osdmenu_cnf" or s.fileType == "osdgsm_cnf" then
+      return "select_config"
+    end
+  end
+  if s.context == "hosdmenu" then
     if s.fileType == "osdmenu_cnf" or s.fileType == "osdgsm_cnf" then
       return "select_config"
     end
@@ -1428,7 +1436,7 @@ local function runSelectConfig(s, pad)
   local sc = s.scaleY or function(y) return y end
   local SE = common.SELECTED_ENTRY
 
-  if s.context == "osdmenu" then
+  if s.context == "osdmenu" or s.context == "hosdmenu" then
     local options = {
       { label = main_str.select_config_osdmenu_cnf or "OSDMENU.CNF", fileType = "osdmenu_cnf" },
       { label = main_str.select_config_osdgsm_cnf or "OSDGSM.CNF", fileType = "osdgsm_cnf" },
@@ -1467,9 +1475,13 @@ local function runSelectConfig(s, pad)
       end
     end
     if (pad & PAD_CIRCLE) ~= 0 then
-      local slots = getPresentMcSlotsCached(s)
-      if type(slots) == "table" and #slots > 1 then
-        s.state = "choose_mc"
+      if s.context == "osdmenu" then
+        local slots = getPresentMcSlotsCached(s)
+        if type(slots) == "table" and #slots > 1 then
+          s.state = "choose_mc"
+        else
+          s.state = "main"
+        end
       else
         s.state = "main"
       end
@@ -1479,10 +1491,21 @@ local function runSelectConfig(s, pad)
 
   if s.context == "freemcboot" or s.context == "freehddboot" then
     local options = buildFreemcbootSourceOptions(s, s.context)
+    local function openFreemcbootKnownPath(pick)
+      if not pick or pick.action ~= "known_paths" then return false end
+      local paths = pick.paths or {}
+      local targetPath = paths[1]
+      if type(targetPath) ~= "string" or targetPath == "" then return false end
+      clearLoadChoiceState(s)
+      s.currentPath = targetPath
+      s.openExplicitPath = true
+      s.state = "open"
+      return true
+    end
     if s.pendingKnownPathPick then
       local pendingPick = s.pendingKnownPathPick
       s.pendingKnownPathPick = nil
-      if applyKnownPathPick(s, pendingPick, main_str) then
+      if openFreemcbootKnownPath(pendingPick) then
         return
       end
     end
@@ -1515,7 +1538,7 @@ local function runSelectConfig(s, pad)
           s.initHddPhase = "load"
           return
         end
-        applyKnownPathPick(s, pick, main_str)
+        openFreemcbootKnownPath(pick)
       end
     end
 

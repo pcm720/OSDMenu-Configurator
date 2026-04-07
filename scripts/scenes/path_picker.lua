@@ -1278,6 +1278,10 @@ local function run(ctx)
             ctx.textInputPrompt = _.path_str.enter_path_prompt
             ctx.textInputValue = prefill
             ctx.textInputMaxLen = 79
+            ctx.textInputEnableBelKey = nil
+            ctx.textInputBelProfile = nil
+            ctx.textInputAllowBelAdd = nil
+            ctx.textInputHidePipeBackslash = true
             ctx.textInputCallback = function(val)
               applyManualPath(ctx, val)
             end

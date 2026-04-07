@@ -6,6 +6,24 @@ local COMPAT_LABELS = { "compat_none", "compat_1", "compat_2", "compat_3" }
 local NUM_VIDEO_OPTS = 5                                                                                  -- fp1, fp2, 1080ix1, 1080ix2, 1080ix3
 local NUM_COMPAT_OPTS = 4
 
+local function findHintLabel(items, padName)
+  local target = tostring(padName or ""):lower()
+  for i = 1, #(items or {}) do
+    local item = items[i]
+    if tostring(item and item.pad or ""):lower() == target then
+      local lbl = tostring(item and item.label or "")
+      if lbl ~= "" then return lbl end
+    end
+  end
+  return nil
+end
+
+local function resolveDoneLabel(_)
+  local fromTextInput = findHintLabel(_ and _.text_str and _.text_str.hint_items, "start")
+  if fromTextInput and fromTextInput ~= "" then return fromTextInput end
+  return "Done"
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.lines then
@@ -40,36 +58,6 @@ local function run(ctx)
   local videoOpts = _.config_parse.getEgsmVideoOptions()
   local compatOpts = _.config_parse.getEgsmCompatOptions()
   local hasVideo = (ctx.egsmVideoIdx and ctx.egsmVideoIdx > 1)
-
-  local function saveAndStay()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, "osdgsm_cnf", ctx.chosenMcSlot)
-    if #locations >= 2 then
-      ctx.saveChoices = locations
-      ctx.saveSel = ctx.saveSel or 1
-      ctx.state = "choose_save"
-    else
-      local path = ctx.currentPath or (locations and locations[1])
-      if path and path ~= "" then
-        ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-        local parentDir = path:match("^(.+)/[^/]+$")
-        local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-        if ok then
-          ctx.currentPath = path
-          ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-          ctx.configModified = false
-        else
-          ctx.saveSplash = {
-            kind = "failed",
-            detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-            framesLeft = 120
-          }
-        end
-      else
-        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-      end
-    end
-  end
 
   local titleLabel = ctx.egsmEditDefault and _.strings.egsm.default_label or (ctx.egsmEditTitleId or "")
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1,
@@ -132,16 +120,12 @@ local function run(ctx)
   end
 
   local baseHints = _.strings.egsm.value_edit_hint or {}
-  local crossLabel = (baseHints[1] and baseHints[1].label) or "Select"
-  local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
+  local crossLabel = findHintLabel(baseHints, "cross") or "Select"
+  local cancelLabel = (_.menu_str.cancel_label or "Cancel")
   local valueEditHints = {
     { pad = "cross", label = crossLabel, row = 1 },
-    {
-      pad = ctx.configModified and "start" or "",
-      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
-      row = 1
-    },
-    { pad = "circle", label = backLabel, row = 1 },
+    { pad = "start", label = resolveDoneLabel(_), row = 1 },
+    { pad = "circle", label = cancelLabel, row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, valueEditHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
 
@@ -155,32 +139,29 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    local commented = ctx.egsmEditCommented and true or false
     if ctx.egsmValueSel >= 1 and ctx.egsmValueSel <= NUM_VIDEO_OPTS then
       local vi = ctx.egsmValueSel + 1 -- sel 1..5 -> EGSM_VIDEO index 2..6
       ctx.egsmVideoIdx = vi
-      local val = _.config_parse.buildEgsmValue(ctx.egsmVideoIdx, ctx.egsmCompatIdx)
-      if ctx.egsmEditDefault then
-        _.config_parse.setEgsmDefault(ctx.lines, val, commented)
-      else
-        _.config_parse.setEgsmEntry(ctx.lines, ctx.egsmEditTitleId, val, commented)
-      end
-      ctx.configModified = true
     elseif ctx.egsmValueSel > NUM_VIDEO_OPTS and ctx.egsmValueSel <= total and hasVideo then
       local ci = ctx.egsmValueSel - NUM_VIDEO_OPTS -- sel 6..9 -> compat index 1..4
       ctx.egsmCompatIdx = ci
-      local val = _.config_parse.buildEgsmValue(ctx.egsmVideoIdx, ctx.egsmCompatIdx)
-      if ctx.egsmEditDefault then
-        _.config_parse.setEgsmDefault(ctx.lines, val, commented)
-      else
-        _.config_parse.setEgsmEntry(ctx.lines, ctx.egsmEditTitleId, val, commented)
-      end
-      ctx.configModified = true
     end
   end
 
-  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    saveAndStay()
+  if (_.padEffective & _.PAD_START) ~= 0 then
+    local commented = ctx.egsmEditCommented and true or false
+    local val = _.config_parse.buildEgsmValue(ctx.egsmVideoIdx, ctx.egsmCompatIdx)
+    if ctx.egsmEditDefault then
+      _.config_parse.setEgsmDefault(ctx.lines, val, commented)
+    else
+      _.config_parse.setEgsmEntry(ctx.lines, ctx.egsmEditTitleId, val, commented)
+    end
+    _.common.refreshConfigModified(ctx)
+    ctx.egsmVideoIdx = nil
+    ctx.egsmCompatIdx = nil
+    ctx.egsmEditDefault = nil
+    ctx.egsmEditTitleId = nil
+    ctx.state = "egsm_editor"
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

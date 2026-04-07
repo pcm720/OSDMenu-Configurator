@@ -97,6 +97,11 @@ local function getEditorBackState(ctx)
   if context == "ps2bbl" or context == "psxbbl" then
     return "select_config"
   end
+  if context == "hosdmenu" then
+    if fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf" then
+      return "select_config"
+    end
+  end
   if context == "osdmenu" or context == "freemcboot" then
     if fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf" or fileType == "freemcboot_cnf" then
       local common = ctx and ctx._ and ctx._.common or nil
@@ -359,7 +364,8 @@ local OSD_VISUAL_COORD_KEYS = {
   OSDSYS_version_y = true,
 }
 
--- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig).
+-- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig),
+-- with visual coordinate values kept inside configured editor bounds.
 local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_menu_x = "320",
   OSDSYS_menu_y = "110",
@@ -369,7 +375,8 @@ local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_version_y = "-1",
 }
 
--- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments.
+-- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments,
+-- with visual coordinate values kept inside configured editor bounds.
 local OSD_VISUAL_PS2_DEFAULTS = {
   OSDSYS_menu_x = "430",
   OSDSYS_menu_y = "110",
@@ -660,6 +667,8 @@ end
 local function resolveIntBounds(opt, currentNum)
   local minV = tonumber(opt and opt.min)
   local maxV = tonumber(opt and opt.max)
+  local hasExplicitMin = (opt and opt.min ~= nil)
+  local hasExplicitMax = (opt and opt.max ~= nil)
   if minV == nil then minV = 0 end
   if maxV == nil then maxV = 9999 end
 
@@ -677,8 +686,14 @@ local function resolveIntBounds(opt, currentNum)
   end
 
   local defNum = tonumber(opt and opt.default or nil)
-  if defNum and defNum < minV then minV = defNum end
-  if currentNum and currentNum < minV then minV = currentNum end
+  if (not hasExplicitMin) then
+    if defNum and defNum < minV then minV = defNum end
+    if currentNum and currentNum < minV then minV = currentNum end
+  end
+  if (not hasExplicitMax) then
+    if defNum and defNum > maxV then maxV = defNum end
+    if currentNum and currentNum > maxV then maxV = currentNum end
+  end
   if maxV < minV then maxV = minV end
   return minV, maxV
 end
@@ -2242,11 +2257,18 @@ local function run(ctx)
       elseif o.optType == "color" then
         startInlineColorEdit(ctx, _, o)
       elseif o.optType == "text" or o.optType == "string" then
+        local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
+        local allowBelKey = (o.key == "OSDSYS_left_cursor" or o.key == "OSDSYS_right_cursor" or
+          o.key == "OSDSYS_menu_top_delimiter" or o.key == "OSDSYS_menu_bottom_delimiter")
         ctx.textInputTitleIdMode = nil
         ctx.textInputPrompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
             o.label or _.common_str.enter_text
         ctx.textInputValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         ctx.textInputMaxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
+        ctx.textInputEnableBelKey = allowBelKey and true or nil
+        ctx.textInputBelProfile = allowBelKey and belProfile or nil
+        ctx.textInputAllowBelAdd = allowBelKey and true or nil
+        ctx.textInputHidePipeBackslash = nil
         ctx.textInputCallback = function(val)
           setConfigValue(ctx, _, o.key, val or "")
           markConfigMutated(ctx)

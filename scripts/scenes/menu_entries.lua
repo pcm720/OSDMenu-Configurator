@@ -245,10 +245,16 @@ local function run(ctx)
       currentNameDisplay = _.config_parse.getMenuEntrySeparatorText(currentNameRaw) or ""
     end
     if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
+    local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
+    local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
     ctx.textInputTitleIdMode = nil
     ctx.textInputPrompt = _.menu_str.entry_name_prompt
     ctx.textInputValue = currentNameDisplay
     ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+    ctx.textInputEnableBelKey = allowBelKey and true or nil
+    ctx.textInputBelProfile = allowBelKey and belProfile or nil
+    ctx.textInputAllowBelAdd = allowBelKey and true or nil
+    ctx.textInputHidePipeBackslash = nil
     ctx.textInputCallback = function(val)
       local nameText = tostring(val or "")
       if nameText:sub(1, 2) == "$!" then
