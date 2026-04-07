@@ -339,10 +339,18 @@ local function isSlideLikeSceneTransition(_, transitionType)
   return t == "slide" or t == "whip_pan"
 end
 
+local function isInSceneDissolveTransition(_, transitionType)
+  local t = transitionType
+  if _.common and _.common.normalizeSceneTransitionType then
+    t = _.common.normalizeSceneTransitionType(t)
+  end
+  return t == "cross_dissolve"
+end
+
 local function playSceneTransitionOutIfEnabled(ctx, _)
   if not (_.common and (_.common.playSceneTransitionOnCurrentFrame or _.common.beginSceneTransitionIn)) then return end
   local t, f = getSceneTransitionConfig(_)
-  if isSlideLikeSceneTransition(_, t) and _.common.beginSceneTransitionIn then
+  if (isSlideLikeSceneTransition(_, t) or isInSceneDissolveTransition(_, t)) and _.common.beginSceneTransitionIn then
     _.common.beginSceneTransitionIn(ctx, t, f, { direction = "out" })
     return
   end

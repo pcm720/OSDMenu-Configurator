@@ -315,6 +315,15 @@ local function getSceneDrawOffsetX()
   return math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
 end
 
+local function getSceneDrawAlpha()
+  local runtime = _G and _G.CONFIG_UI
+  local a = tonumber(runtime and runtime.sceneDrawAlpha)
+  if not a then return 1 end
+  if a < 0 then return 0 end
+  if a > 1 then return 1 end
+  return a
+end
+
 local function installSceneDrawOffsetGraphicsProxy()
   local runtime = _G and _G.CONFIG_UI
   if type(runtime) ~= "table" then return end
@@ -324,35 +333,93 @@ local function installSceneDrawOffsetGraphicsProxy()
   runtime.rawGraphics = runtime.rawGraphics or rawGraphics
   rawGraphics = runtime.rawGraphics
   local wrappedCache = {}
+  local unpackFn = table.unpack or unpack
+
+  local function applySceneAlphaToColor(color)
+    if type(color) ~= "number" then return color end
+    local drawAlpha = getSceneDrawAlpha()
+    if drawAlpha >= 0.999 then return color end
+    local base = math.floor(color)
+    local a = (base >> 24) & 0xFF
+    local scaledA = math.floor(a * drawAlpha + 0.5)
+    if scaledA < 0 then scaledA = 0 end
+    if scaledA > 0x80 then scaledA = 0x80 end
+    return (base & 0x00FFFFFF) | ((scaledA & 0xFF) << 24)
+  end
 
   local function wrapDrawFn(name, fn)
     if name == "drawRect" or name == "drawPixel" or name == "drawCircle" then
       return function(x, y, ...)
-        return fn((tonumber(x) or 0) + getSceneDrawOffsetX(), y, ...)
+        local args = { ... }
+        if name == "drawRect" and type(args[3]) == "number" then
+          args[3] = applySceneAlphaToColor(args[3])
+        elseif name == "drawPixel" and type(args[1]) == "number" then
+          args[1] = applySceneAlphaToColor(args[1])
+        elseif name == "drawCircle" and type(args[2]) == "number" then
+          args[2] = applySceneAlphaToColor(args[2])
+        end
+        return fn((tonumber(x) or 0) + getSceneDrawOffsetX(), y, unpackFn(args))
       end
     elseif name == "drawLine" then
       return function(x1, y1, x2, y2, ...)
+        local args = { ... }
+        if type(args[1]) == "number" then
+          args[1] = applySceneAlphaToColor(args[1])
+        end
         local dx = getSceneDrawOffsetX()
-        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, ...)
+        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, unpackFn(args))
       end
     elseif name == "drawTriangle" then
       return function(x1, y1, x2, y2, x3, y3, ...)
+        local args = { ... }
+        for i = 1, math.min(3, #args) do
+          if type(args[i]) == "number" then
+            args[i] = applySceneAlphaToColor(args[i])
+          end
+        end
         local dx = getSceneDrawOffsetX()
-        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3, ...)
+        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3,
+          unpackFn(args))
       end
     elseif name == "drawQuad" then
       return function(x1, y1, x2, y2, x3, y3, x4, y4, ...)
+        local args = { ... }
+        for i = 1, math.min(4, #args) do
+          if type(args[i]) == "number" then
+            args[i] = applySceneAlphaToColor(args[i])
+          end
+        end
         local dx = getSceneDrawOffsetX()
         return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3,
-          (tonumber(x4) or 0) + dx, y4, ...)
+          (tonumber(x4) or 0) + dx, y4, unpackFn(args))
       end
     elseif name == "drawImage" or name == "drawScaleImage" or name == "drawRotateImage" or name == "drawImageExtended" then
       return function(image, x, y, ...)
-        return fn(image, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, ...)
+        local args = { ... }
+        local colorIdxByFn = {
+          drawImage = 1,
+          drawScaleImage = 3,
+          drawRotateImage = 2,
+          drawImageExtended = 8,
+        }
+        local ci = colorIdxByFn[name]
+        if ci then
+          if type(args[ci]) == "number" then
+            args[ci] = applySceneAlphaToColor(args[ci])
+          elseif getSceneDrawAlpha() < 0.999 then
+            args[ci] = applySceneAlphaToColor(0x80808080)
+          end
+        end
+        return fn(image, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, unpackFn(args))
       end
     elseif name == "drawPartialImage" then
-      return function(image, sx, sy, sw, sh, x, y, ...)
-        return fn(image, sx, sy, sw, sh, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, ...)
+      return function(image, x, y, startx, starty, endx, endy, color)
+        if type(color) == "number" then
+          color = applySceneAlphaToColor(color)
+        elseif getSceneDrawAlpha() < 0.999 then
+          color = applySceneAlphaToColor(0x80808080)
+        end
+        return fn(image, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, startx, starty, endx, endy, color)
       end
     end
     return fn
@@ -816,7 +883,9 @@ local function mainLoop()
   local function runOneFrame(c)
     syncFromS(c)
     refreshRuntimeColorAliases()
-    Screen.clear(BLACK)
+    if not common.shouldSkipSceneClearForTransition(c) then
+      Screen.clear(BLACK)
+    end
     common.runLayout(c)
     common.applySceneDrawOffsetForCurrentFrame(c)
     local w = c.w or common.DEFAULT_W
@@ -1093,6 +1162,11 @@ local function mainLoop()
       return
     end
     local transitionType, transitionFrames = getSceneTransitionRuntime()
+    if common.normalizeSceneTransitionType and common.normalizeSceneTransitionType(transitionType) == "cross_dissolve" then
+      c.sceneTransitionIn = nil
+      common.beginSceneTransitionIn(c, transitionType, transitionFrames, { direction = direction })
+      return
+    end
     if direction == "out" then
       c.sceneTransitionIn = nil
       if isSlideLikeSceneTransition(transitionType) then
