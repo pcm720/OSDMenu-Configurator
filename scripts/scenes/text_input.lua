@@ -229,6 +229,12 @@ local function buildBelTokenRows(profile, page)
         token = token,
       }
     end
+    out[#out + 1] = {
+      id = "footer_symbols_sample",
+      label = "o000-o999 exist. The above is a small sample.",
+      columns = { "", "", "o000-o999 exist. The above is a small sample." },
+      enabled = false,
+    }
   else
     out[#out + 1] = { id = "header_tunables", label = "Tunables", enabled = false }
     for i = 1, #BEL_TUNABLE_TOKENS do
