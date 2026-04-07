@@ -269,7 +269,19 @@ local function rowColumnCount(columns)
   return n
 end
 
-local function buildBelMenuLayoutMetrics(_, profile)
+local function ensureBelRowsByPage(ctx, profile)
+  if type(ctx.textInputBelRowsByPage) ~= "table" or ctx.textInputBelRowsProfile ~= profile then
+    local rowsByPage = {}
+    for p = 1, BEL_PAGE_COUNT do
+      rowsByPage[p] = buildBelTokenRows(profile, p)
+    end
+    ctx.textInputBelRowsByPage = rowsByPage
+    ctx.textInputBelRowsProfile = profile
+  end
+  return ctx.textInputBelRowsByPage
+end
+
+local function buildBelMenuLayoutMetrics(_, rowsByPage)
   local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.75)
   local rowScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
   local hintFont = (_.common and _.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
@@ -290,7 +302,7 @@ local function buildBelMenuLayoutMetrics(_, profile)
   local columnMinWidths = {}
 
   for p = 1, BEL_PAGE_COUNT do
-    local rows = buildBelTokenRows(profile, p)
+    local rows = (type(rowsByPage) == "table" and rowsByPage[p]) or {}
     for i = 1, #rows do
       local cols = rows[i] and rows[i].columns
       local count = rowColumnCount(cols)
@@ -319,7 +331,7 @@ local function buildBelMenuLayoutMetrics(_, profile)
 
   local maxIntrinsicW = 0
   for p = 1, BEL_PAGE_COUNT do
-    local rows = buildBelTokenRows(profile, p)
+    local rows = (type(rowsByPage) == "table" and rowsByPage[p]) or {}
     for i = 1, #rows do
       local w = rowIntrinsicWidth(rows[i])
       if w > maxIntrinsicW then maxIntrinsicW = w end
@@ -513,9 +525,8 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
-    ctx.textInputBelRows = nil
+    ctx.textInputBelRowsByPage = nil
     ctx.textInputBelRowsProfile = nil
-    ctx.textInputBelRowsPage = nil
     ctx.textInputBelPage = nil
     ctx.textInputBelColumnMinWidths = nil
     ctx.textInputBelMinIntrinsicW = nil
@@ -694,32 +705,30 @@ local function run(ctx)
     local belProfile = belProfileFromContext(ctx)
     local belPage = clampBelPage(ctx.textInputBelPage)
     ctx.textInputBelPage = belPage
+    local belRowsByPage = ensureBelRowsByPage(ctx, belProfile)
     local uiScale = tonumber(ctx.uiScale) or 1
     if type(ctx.textInputBelColumnMinWidths) ~= "table" or ctx.textInputBelLayoutProfile ~= belProfile or
         ctx.textInputBelLayoutScale ~= uiScale then
-      local colMinW, maxIntrinsicW = buildBelMenuLayoutMetrics(_, belProfile)
+      local colMinW, maxIntrinsicW = buildBelMenuLayoutMetrics(_, belRowsByPage)
       ctx.textInputBelColumnMinWidths = colMinW
       ctx.textInputBelMinIntrinsicW = maxIntrinsicW
       ctx.textInputBelLayoutProfile = belProfile
       ctx.textInputBelLayoutScale = uiScale
     end
-    if type(ctx.textInputBelRows) ~= "table" or ctx.textInputBelRowsProfile ~= belProfile or
-        ctx.textInputBelRowsPage ~= belPage then
-      ctx.textInputBelRows = buildBelTokenRows(belProfile, belPage)
-      ctx.textInputBelRowsProfile = belProfile
-      ctx.textInputBelRowsPage = belPage
-    end
-    local belRows = ctx.textInputBelRows
+    local belRows = belRowsByPage[belPage] or {}
     local pageLabel = "Page " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT)
     local belMenuMaxVisible = 8
     local handled = actions_menu.run(ctx, {
       openKey = "textInputBelMenuOpen",
       selKey = "textInputBelMenuSel",
       scrollKey = "textInputBelMenuScroll",
+      cacheRows = true,
+      cacheHints = true,
       rowStateKeyPrefix = "text_input_bel_row_",
       columnLayout = true,
       columnMinWidths = ctx.textInputBelColumnMinWidths,
       minLabelIntrinsicW = ctx.textInputBelMinIntrinsicW,
+      skipIntrinsicMeasure = true,
       titleOverride = glyphKeyLabel .. " " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT),
       anchorPad = "square",
       anchorSpanSlots = 3,
@@ -729,9 +738,6 @@ local function run(ctx)
         local nextPage = belPage + 1
         if nextPage > BEL_PAGE_COUNT then nextPage = 1 end
         ctx.textInputBelPage = nextPage
-        ctx.textInputBelRows = nil
-        ctx.textInputBelRowsProfile = nil
-        ctx.textInputBelRowsPage = nil
         ctx.textInputBelMenuSel = 1
         ctx.textInputBelMenuScroll = 0
         return true
@@ -752,9 +758,6 @@ local function run(ctx)
         ctx.textInputBelMenuOpen = nil
         ctx.textInputBelMenuSel = nil
         ctx.textInputBelMenuScroll = nil
-        ctx.textInputBelRows = nil
-        ctx.textInputBelRowsProfile = nil
-        ctx.textInputBelRowsPage = nil
         ctx.textInputBelPage = nil
       end,
       hints = {
@@ -861,9 +864,8 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
-    ctx.textInputBelRows = nil
+    ctx.textInputBelRowsByPage = nil
     ctx.textInputBelRowsProfile = nil
-    ctx.textInputBelRowsPage = nil
     ctx.textInputBelPage = nil
     ctx.textInputBelColumnMinWidths = nil
     ctx.textInputBelMinIntrinsicW = nil
@@ -891,9 +893,8 @@ local function run(ctx)
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
-    ctx.textInputBelRows = nil
+    ctx.textInputBelRowsByPage = nil
     ctx.textInputBelRowsProfile = nil
-    ctx.textInputBelRowsPage = nil
     ctx.textInputBelPage = nil
     ctx.textInputBelColumnMinWidths = nil
     ctx.textInputBelMinIntrinsicW = nil

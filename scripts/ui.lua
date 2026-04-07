@@ -898,7 +898,8 @@ local function mainLoop()
       _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
-    if c.drawBackgroundLayer then
+    if c.drawBackgroundLayer and
+        (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(c) ~= false) then
       c.drawBackgroundLayer(c)
     end
     local HINT_Y = c.HINT_Y

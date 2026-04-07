@@ -84,8 +84,11 @@ local function closeMenu(ctx, opts)
   ctx[opts.openKey] = nil
   ctx[opts.selKey] = nil
   ctx[opts.scrollKey] = nil
-  ctx[tostring(opts.openKey or "actionsMenuOpen") .. "_anim"] = nil
-  ctx[tostring(opts.openKey or "actionsMenuOpen") .. "_closing"] = nil
+  local openKeyName = tostring(opts.openKey or "actionsMenuOpen")
+  ctx[openKeyName .. "_anim"] = nil
+  ctx[openKeyName .. "_closing"] = nil
+  ctx[openKeyName .. "_rowsCache"] = nil
+  ctx[openKeyName .. "_hintsCache"] = nil
 end
 
 local function normalizeRows(rows)
@@ -129,7 +132,27 @@ function actions_menu.run(ctx, opts)
 
   local selKey = opts.selKey or "actionsMenuSel"
   local scrollKey = opts.scrollKey or "actionsMenuScroll"
-  local rows = normalizeRows(opts.rows or {})
+  local sourceRows = opts.rows or {}
+  local rows = nil
+  if opts.cacheRows == true then
+    -- Same strategy as cached repeat FPS: build once for this open session,
+    -- then reuse to avoid per-frame allocations and GC jitter.
+    local rowsCacheKey = tostring(openKey) .. "_rowsCache"
+    local cache = ctx[rowsCacheKey]
+    local sourceLen = #sourceRows
+    if type(cache) == "table" and cache.source == sourceRows and cache.sourceLen == sourceLen and type(cache.rows) == "table" then
+      rows = cache.rows
+    else
+      rows = normalizeRows(sourceRows)
+      ctx[rowsCacheKey] = {
+        source = sourceRows,
+        sourceLen = sourceLen,
+        rows = rows,
+      }
+    end
+  else
+    rows = normalizeRows(sourceRows)
+  end
 
   if #rows == 0 then
     closeMenu(ctx, { openKey = openKey, selKey = selKey, scrollKey = scrollKey })
@@ -246,14 +269,17 @@ function actions_menu.run(ctx, opts)
     end
     return textWidth(row and row.label or "")
   end
-  local maxLabelWIntrinsic = 0
-  for i = 1, #rows do
-    local lw = rowIntrinsicWidth(rows[i])
-    if lw > maxLabelWIntrinsic then maxLabelWIntrinsic = lw end
-  end
-  local minLabelIntrinsicW = tonumber(opts.minLabelIntrinsicW) or 0
-  if minLabelIntrinsicW > maxLabelWIntrinsic then
-    maxLabelWIntrinsic = math.floor(minLabelIntrinsicW + 0.5)
+  local maxLabelWIntrinsic = tonumber(opts.minLabelIntrinsicW) or 0
+  local skipMeasure = (opts.skipIntrinsicMeasure == true) and maxLabelWIntrinsic > 0
+  if not skipMeasure then
+    local measuredMax = 0
+    for i = 1, #rows do
+      local lw = rowIntrinsicWidth(rows[i])
+      if lw > measuredMax then measuredMax = lw end
+    end
+    if measuredMax > maxLabelWIntrinsic then
+      maxLabelWIntrinsic = measuredMax
+    end
   end
   local hintGap = math.max(2, math.floor((((_.common and _.common.PAD_HINT_GAP) or 5) * textScale) + 0.5))
   local padX = math.floor((_.scaleY and _.scaleY(8) or 8) + 0.5)
@@ -400,7 +426,26 @@ function actions_menu.run(ctx, opts)
     end
   end
 
-  local hintItems = buildOverlayHints(_, opts.hints, anchorPad, anchorLabel)
+  local hintItems = nil
+  if opts.cacheHints == true then
+    local hintsCacheKey = tostring(openKey) .. "_hintsCache"
+    local cache = ctx[hintsCacheKey]
+    local incomingHints = opts.hints
+    if type(cache) == "table" and cache.incoming == incomingHints and cache.anchorPad == anchorPad and
+        cache.anchorLabel == anchorLabel and type(cache.items) == "table" then
+      hintItems = cache.items
+    else
+      hintItems = buildOverlayHints(_, incomingHints, anchorPad, anchorLabel)
+      ctx[hintsCacheKey] = {
+        incoming = incomingHints,
+        anchorPad = anchorPad,
+        anchorLabel = anchorLabel,
+        items = hintItems,
+      }
+    end
+  else
+    hintItems = buildOverlayHints(_, opts.hints, anchorPad, anchorLabel)
+  end
   if _.Graphics and _.Graphics.drawRect then
     local hintBg = (_.common and _.common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
     local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * 0.75 + 0.5))
