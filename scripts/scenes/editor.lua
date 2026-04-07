@@ -266,6 +266,15 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
     applyR3ConfiguratorVideoModeLive(value)
     return
   end
+  if rawKey == "scene_transition" or rawKey == "scene_transition_frames" then
+    local runtime = _G.CONFIG_UI
+    if runtime and runtime.setSceneTransitionConfig then
+      local transitionType = _.config_parse.get(ctx.lines, "scene_transition") or runtime.sceneTransitionType
+      local transitionFrames = _.config_parse.get(ctx.lines, "scene_transition_frames") or runtime.sceneTransitionFrames
+      pcall(runtime.setSceneTransitionConfig, transitionType, transitionFrames)
+    end
+    return
+  end
   if rawKey == "default_language" then
     local runtime = _G.CONFIG_UI
     if runtime and runtime.applyLanguageCode then

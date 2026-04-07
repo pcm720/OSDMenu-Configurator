@@ -1377,6 +1377,197 @@ function common.computeVisibleRows(ctx, startY, rowH, fallback, opts)
   return math.max(1, math.floor(tonumber(fallback) or 1))
 end
 
+local function clamp01(v)
+  local n = tonumber(v) or 0
+  if n < 0 then return 0 end
+  if n > 1 then return 1 end
+  return n
+end
+
+function common.normalizeSceneTransitionType(raw)
+  local value = tostring(raw or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  value = value:gsub("%s+", "_")
+  if value == "crossdissolve" or value == "dissolve" then value = "cross_dissolve" end
+  if value == "cross-dissolve" then value = "cross_dissolve" end
+  if value == "whippan" then value = "whip_pan" end
+  if value == "whip-pan" then value = "whip_pan" end
+  if value == "cut" or value == "slide" or value == "fade" or value == "cross_dissolve" or value == "whip_pan" or
+      value == "zoom" then
+    return value
+  end
+  return common.SCENE_TRANSITION_DEFAULT_TYPE
+end
+
+function common.normalizeSceneTransitionFrames(raw)
+  local n = math.floor(tonumber(raw) or common.SCENE_TRANSITION_DEFAULT_FRAMES)
+  local minFrames = tonumber(common.SCENE_TRANSITION_MIN_FRAMES) or 1
+  local maxFrames = tonumber(common.SCENE_TRANSITION_MAX_FRAMES) or 120
+  if n < minFrames then n = minFrames end
+  if n > maxFrames then n = maxFrames end
+  return n
+end
+
+function common.shouldRunSceneTransition(transitionType, transitionFrames)
+  local t = common.normalizeSceneTransitionType(transitionType)
+  local frames = common.normalizeSceneTransitionFrames(transitionFrames)
+  return t ~= "cut" and frames >= 1
+end
+
+local function getTransitionScreenSize(ctx)
+  local w = tonumber(ctx and ctx.w)
+  local h = tonumber(ctx and ctx.h)
+  if w and h and w > 0 and h > 0 then
+    return math.floor(w), math.floor(h)
+  end
+  local mode = (Screen and Screen.getMode) and Screen.getMode() or nil
+  local mw = tonumber(mode and mode.width) or common.DEFAULT_W
+  local mh = tonumber(mode and mode.height) or common.DEFAULT_H
+  return math.floor(mw), math.floor(mh)
+end
+
+local function drawRectSafe(x, y, w, h, color)
+  if not (Graphics and Graphics.drawRect) then return end
+  local rw = math.floor(tonumber(w) or 0)
+  local rh = math.floor(tonumber(h) or 0)
+  if rw <= 0 or rh <= 0 then return end
+  Graphics.drawRect(math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0), rw, rh, color)
+end
+
+function common.drawSceneTransitionOverlay(ctx, spec)
+  if not (spec and Graphics and Graphics.drawRect and Color and Color.new) then return end
+  local phase = tostring(spec.phase or "in")
+  local t = clamp01(spec.progress)
+  local transitionType = common.normalizeSceneTransitionType(spec.type)
+  if transitionType == "cut" then return end
+
+  local cover = (phase == "in") and (1 - t) or t
+  cover = clamp01(cover)
+  if cover <= 0 then return end
+
+  local w, h = getTransitionScreenSize(ctx)
+  local maxAlpha = 0x80
+  local baseAlpha = math.floor(maxAlpha * cover + 0.5)
+  local frame = math.max(0, math.floor(tonumber(spec.frame) or 0))
+
+  if transitionType == "fade" then
+    drawRectSafe(0, 0, w, h, Color.new(0, 0, 0, baseAlpha))
+    return
+  end
+
+  if transitionType == "cross_dissolve" then
+    local mainAlpha = math.floor((maxAlpha * 0.78) * cover + 0.5)
+    drawRectSafe(0, 0, w, h, Color.new(0, 0, 0, mainAlpha))
+    local stripeStep = 3
+    local stripeAlpha = math.floor((maxAlpha * 0.55) * cover + 0.5)
+    local offset = frame % stripeStep
+    for y = offset, h - 1, stripeStep do
+      drawRectSafe(0, y, w, 1, Color.new(0, 0, 0, stripeAlpha))
+    end
+    return
+  end
+
+  if transitionType == "slide" or transitionType == "whip_pan" then
+    local wipeW = math.floor((w * cover) + 0.5)
+    drawRectSafe(0, 0, wipeW, h, Color.new(0, 0, 0, baseAlpha))
+    if transitionType == "whip_pan" and wipeW > 0 then
+      local edgeW = math.max(3, math.floor(w * 0.03))
+      local edgeX = wipeW - edgeW
+      drawRectSafe(edgeX, 0, edgeW, h, Color.new(28, 28, 34, math.min(maxAlpha, baseAlpha + 18)))
+      drawRectSafe(edgeX + math.floor(edgeW * 0.6), 0, math.max(2, math.floor(edgeW * 0.25)), h,
+        Color.new(200, 200, 200, math.floor(baseAlpha * 0.35 + 0.5)))
+    end
+    return
+  end
+
+  if transitionType == "zoom" then
+    local visibleScale = 1 - cover
+    if visibleScale < 0 then visibleScale = 0 end
+    local visibleW = math.floor((w * visibleScale) + 0.5)
+    local visibleH = math.floor((h * visibleScale) + 0.5)
+    local left = math.floor((w - visibleW) / 2)
+    local top = math.floor((h - visibleH) / 2)
+    local alpha = math.floor((maxAlpha * math.min(1, cover * 1.1)) + 0.5)
+    drawRectSafe(0, 0, w, top, Color.new(0, 0, 0, alpha))
+    drawRectSafe(0, top + visibleH, w, h - (top + visibleH), Color.new(0, 0, 0, alpha))
+    drawRectSafe(0, top, left, visibleH, Color.new(0, 0, 0, alpha))
+    drawRectSafe(left + visibleW, top, w - (left + visibleW), visibleH, Color.new(0, 0, 0, alpha))
+    return
+  end
+
+  -- Fallback: fade behavior.
+  drawRectSafe(0, 0, w, h, Color.new(0, 0, 0, baseAlpha))
+end
+
+function common.beginSceneTransitionIn(ctx, transitionType, transitionFrames)
+  if not ctx then return end
+  local t = common.normalizeSceneTransitionType(transitionType)
+  local frames = common.normalizeSceneTransitionFrames(transitionFrames)
+  if not common.shouldRunSceneTransition(t, frames) then
+    ctx.sceneTransitionIn = nil
+    return
+  end
+  ctx.sceneTransitionIn = {
+    type = t,
+    frames = frames,
+    frame = 0,
+  }
+end
+
+function common.isSceneTransitionInActive(ctx)
+  local tr = ctx and ctx.sceneTransitionIn
+  if type(tr) ~= "table" then return false end
+  if not common.shouldRunSceneTransition(tr.type, tr.frames) then return false end
+  return (tonumber(tr.frame) or 0) < (tonumber(tr.frames) or 0)
+end
+
+function common.shouldBlockInputForSceneTransition(ctx)
+  return common.isSceneTransitionInActive(ctx)
+end
+
+function common.drawAndAdvanceSceneTransitionIn(ctx)
+  if not common.isSceneTransitionInActive(ctx) then
+    if ctx then ctx.sceneTransitionIn = nil end
+    return
+  end
+  local tr = ctx.sceneTransitionIn
+  local frames = common.normalizeSceneTransitionFrames(tr.frames)
+  local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
+  local denom = math.max(1, frames - 1)
+  local progress = clamp01(frame / denom)
+  common.drawSceneTransitionOverlay(ctx, {
+    phase = "in",
+    type = tr.type,
+    progress = progress,
+    frame = frame,
+    frames = frames,
+  })
+  frame = frame + 1
+  if frame >= frames then
+    ctx.sceneTransitionIn = nil
+  else
+    tr.frame = frame
+  end
+end
+
+function common.playSceneTransitionOnCurrentFrame(ctx, phase, transitionType, transitionFrames)
+  local t = common.normalizeSceneTransitionType(transitionType)
+  local frames = common.normalizeSceneTransitionFrames(transitionFrames)
+  if not common.shouldRunSceneTransition(t, frames) then return end
+  local p = (tostring(phase or "out") == "in") and "in" or "out"
+  for i = 1, frames do
+    local progress = clamp01(i / frames)
+    common.drawSceneTransitionOverlay(ctx, {
+      phase = p,
+      type = t,
+      progress = progress,
+      frame = i,
+      frames = frames,
+    })
+    Screen.waitVblankStart()
+    Screen.flip()
+  end
+end
+
 function common.runLayout(ctx)
   local vmode = Screen.getMode()
   local w = (vmode and vmode.width) or common.DEFAULT_W
@@ -1457,10 +1648,12 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     if ctx and ctx.drawBackgroundLayer then
       ctx.drawBackgroundLayer(ctx)
     end
-    local padEffective = common.getPadEffective(ctx)
+    local rawPadEffective = common.getPadEffective(ctx)
+    local padEffective = common.shouldBlockInputForSceneTransition(ctx) and 0 or rawPadEffective
     ctx._lastPadEffective = padEffective
     runHandler(ctx, padEffective)
     common.refreshConfigModified(ctx)
+    common.drawAndAdvanceSceneTransitionIn(ctx)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end

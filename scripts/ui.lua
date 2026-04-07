@@ -97,6 +97,8 @@ local function loadStartupConfig()
     video_mode = nil,
     swap_buttons = nil,
     default_language = nil,
+    scene_transition = nil,
+    scene_transition_frames = nil,
     main_filter = nil,
     colors = {},
   }
@@ -136,6 +138,24 @@ local function loadStartupConfig()
   local lang = trimString(kv.default_language):lower()
   if lang ~= "" and lang:match("^[%a][%w_]*$") then
     cfg.default_language = lang
+  end
+
+  local transitionType = trimString(kv.scene_transition)
+  if transitionType ~= "" then
+    if common.normalizeSceneTransitionType then
+      cfg.scene_transition = common.normalizeSceneTransitionType(transitionType)
+    else
+      cfg.scene_transition = transitionType:lower()
+    end
+  end
+
+  local transitionFrames = trimString(kv.scene_transition_frames)
+  if transitionFrames ~= "" then
+    if common.normalizeSceneTransitionFrames then
+      cfg.scene_transition_frames = common.normalizeSceneTransitionFrames(transitionFrames)
+    else
+      cfg.scene_transition_frames = math.floor(tonumber(transitionFrames) or 10)
+    end
   end
 
   local showKeyToId = {
@@ -279,6 +299,12 @@ _G.CONFIG_UI = {
   startupCwd = STARTUP_CWD,
   startupMainFilter = STARTUP_CFG.main_filter,
   startupDefaultLanguage = STARTUP_CFG.default_language,
+  startupSceneTransitionType = STARTUP_CFG.scene_transition,
+  startupSceneTransitionFrames = STARTUP_CFG.scene_transition_frames,
+  sceneTransitionType = (common.normalizeSceneTransitionType and common.normalizeSceneTransitionType(STARTUP_CFG.scene_transition)) or
+      (STARTUP_CFG.scene_transition or common.SCENE_TRANSITION_DEFAULT_TYPE),
+  sceneTransitionFrames = (common.normalizeSceneTransitionFrames and common.normalizeSceneTransitionFrames(STARTUP_CFG.scene_transition_frames)) or
+      (STARTUP_CFG.scene_transition_frames or common.SCENE_TRANSITION_DEFAULT_FRAMES),
   nativeVideoMode = NATIVE_VIDEO_MODE_SPEC,
   applyVideoModeSpec = applyVideoModeSpec,
   getVideoModeSpecForKey = getVideoModeSpecForKey,
@@ -417,6 +443,38 @@ local function applyStartupColorsCnf()
     print("ui: startup colors override from r3configurator.cnf (" .. tostring(applied) .. " key(s) applied)")
   else
     print("ui: startup colors override from r3configurator.cnf (no valid keys found)")
+  end
+end
+
+local function setSceneTransitionRuntime(transitionType, transitionFrames)
+  local runtime = _G.CONFIG_UI or {}
+  local normalizedType = (common.normalizeSceneTransitionType and common.normalizeSceneTransitionType(transitionType)) or
+      tostring(transitionType or common.SCENE_TRANSITION_DEFAULT_TYPE)
+  local normalizedFrames = (common.normalizeSceneTransitionFrames and common.normalizeSceneTransitionFrames(transitionFrames)) or
+      math.floor(tonumber(transitionFrames) or common.SCENE_TRANSITION_DEFAULT_FRAMES)
+  runtime.sceneTransitionType = normalizedType
+  runtime.sceneTransitionFrames = normalizedFrames
+  _G.CONFIG_UI = runtime
+  return normalizedType, normalizedFrames
+end
+
+local function getSceneTransitionRuntime()
+  local runtime = _G.CONFIG_UI or {}
+  local transitionType = runtime.sceneTransitionType
+  local transitionFrames = runtime.sceneTransitionFrames
+  transitionType, transitionFrames = setSceneTransitionRuntime(transitionType, transitionFrames)
+  return transitionType, transitionFrames
+end
+
+local function applyStartupSceneTransitionCnf()
+  local transitionType = STARTUP_CFG and STARTUP_CFG.scene_transition or nil
+  local transitionFrames = STARTUP_CFG and STARTUP_CFG.scene_transition_frames or nil
+  local normalizedType, normalizedFrames = setSceneTransitionRuntime(transitionType, transitionFrames)
+  _G.CONFIG_UI.setSceneTransitionConfig = setSceneTransitionRuntime
+  _G.CONFIG_UI.getSceneTransitionConfig = getSceneTransitionRuntime
+  if STARTUP_CFG and STARTUP_CFG.path then
+    print("ui: scene transitions from r3configurator.cnf (type=" .. tostring(normalizedType) .. ", frames=" ..
+      tostring(normalizedFrames) .. ")")
   end
 end
 
@@ -726,7 +784,9 @@ local function mainLoop()
     c.holdFrameCount = holdFrameCount
     c.holdRepeatCountdown = holdRepeatCountdown
     c.holdRepeatFps = holdRepeatFps
-    local padEffective = common.getPadEffective(c)
+    local rawPadEffective = common.getPadEffective(c)
+    local padEffective = common.shouldBlockInputForSceneTransition(c) and 0 or rawPadEffective
+    c._lastPadEffective = padEffective
     prevPad = c.prevPad or prevPad
     holdFrameCount = c.holdFrameCount or 0
     holdRepeatCountdown = c.holdRepeatCountdown or 0
@@ -914,6 +974,7 @@ local function mainLoop()
 
     common.refreshConfigModified(c)
     common.drawSaveSplash(c)
+    common.drawAndAdvanceSceneTransitionIn(c)
     syncFromS(c)
     if padEffective ~= 0 then
       c._inputEpoch = (c._inputEpoch or 0) + 1
@@ -926,6 +987,34 @@ local function mainLoop()
     Screen.flip()
     return c.state, c
   end
+
+  local function getSceneTransitionDirectionFromPad(padMask)
+    local mask = tonumber(padMask) or 0
+    if (mask & PAD_CIRCLE) ~= 0 then
+      return "out"
+    end
+    if (mask & PAD_CROSS) ~= 0 then
+      return "in"
+    end
+    return nil
+  end
+
+  local function runSceneTransitionOnStateChange(c, prevScene, nextScene)
+    if not c then return end
+    if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
+    local direction = getSceneTransitionDirectionFromPad(c._lastPadEffective)
+    if not direction then
+      return
+    end
+    local transitionType, transitionFrames = getSceneTransitionRuntime()
+    if direction == "out" then
+      c.sceneTransitionIn = nil
+      common.playSceneTransitionOnCurrentFrame(c, "out", transitionType, transitionFrames)
+    else
+      common.beginSceneTransitionIn(c, transitionType, transitionFrames)
+    end
+  end
+
   local sceneNames = { "main", "choose_mc", "select_config", "initHdd", "open", "choose_load", "editor", "choose_save",
     "menu_entries", "menu_entry_edit", "entry_cdrom_options", "entry_paths", "entry_args", "bbl_hotkeys",
     "bbl_irx_entries",
@@ -953,13 +1042,16 @@ local function mainLoop()
   while currentScene do
     local scene = scenes[currentScene]
     if not scene or not scene.run then break end
+    local prevScene = currentScene
     local nextScene, newCtx = scene.run(ctx)
     ctx = newCtx
+    runSceneTransitionOnStateChange(ctx, prevScene, nextScene)
     currentScene = nextScene
   end
 end
 
 applyStartupVideoModeCnf()
 applyStartupSwapButtonsCnf()
+applyStartupSceneTransitionCnf()
 applyStartupColorsCnf()
 return mainLoop()
