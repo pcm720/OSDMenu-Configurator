@@ -312,6 +312,45 @@ local function setConfigValue(ctx, _, key, value)
   applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
 end
 
+local function getSceneTransitionConfig(_)
+  local runtime = _G.CONFIG_UI or {}
+  local t = runtime.sceneTransitionType
+  local f = runtime.sceneTransitionFrames
+  if _.common and _.common.normalizeSceneTransitionType then
+    t = _.common.normalizeSceneTransitionType(t)
+  end
+  if _.common and _.common.normalizeSceneTransitionFrames then
+    f = _.common.normalizeSceneTransitionFrames(f)
+  end
+  return t, f
+end
+
+local function beginSceneTransitionInIfEnabled(ctx, _)
+  if not (_.common and _.common.beginSceneTransitionIn) then return end
+  local t, f = getSceneTransitionConfig(_)
+  _.common.beginSceneTransitionIn(ctx, t, f, { direction = "in" })
+end
+
+local function isSlideLikeSceneTransition(_, transitionType)
+  local t = transitionType
+  if _.common and _.common.normalizeSceneTransitionType then
+    t = _.common.normalizeSceneTransitionType(t)
+  end
+  return t == "slide" or t == "whip_pan"
+end
+
+local function playSceneTransitionOutIfEnabled(ctx, _)
+  if not (_.common and (_.common.playSceneTransitionOnCurrentFrame or _.common.beginSceneTransitionIn)) then return end
+  local t, f = getSceneTransitionConfig(_)
+  if isSlideLikeSceneTransition(_, t) and _.common.beginSceneTransitionIn then
+    _.common.beginSceneTransitionIn(ctx, t, f, { direction = "out" })
+    return
+  end
+  if _.common.playSceneTransitionOnCurrentFrame then
+    _.common.playSceneTransitionOnCurrentFrame(ctx, "out", t, f)
+  end
+end
+
 local function markConfigMutated(ctx, recomputeDirty)
   if not ctx then return end
   ctx.editorFrameParseCache = nil
@@ -1064,6 +1103,7 @@ local function run(ctx)
           ctx.optSel = 1
         end
         ctx.optScroll = ctx.optScroll or 0
+        beginSceneTransitionInIfEnabled(ctx, _)
       end
     end
     if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -2493,6 +2533,7 @@ local function run(ctx)
     ctx.editorR3ColorPresetScroll = nil
     ctx.editorR3ColorPresetKey = nil
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
+      playSceneTransitionOutIfEnabled(ctx, _)
       setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx
       ctx.editorCategoryIdx = 0

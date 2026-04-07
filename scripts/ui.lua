@@ -309,6 +309,83 @@ _G.CONFIG_UI = {
   applyVideoModeSpec = applyVideoModeSpec,
   getVideoModeSpecForKey = getVideoModeSpecForKey,
 }
+
+local function getSceneDrawOffsetX()
+  local runtime = _G and _G.CONFIG_UI
+  return math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
+end
+
+local function installSceneDrawOffsetGraphicsProxy()
+  local runtime = _G and _G.CONFIG_UI
+  if type(runtime) ~= "table" then return end
+  if runtime.sceneDrawOffsetGraphicsProxyInstalled then return end
+  local rawGraphics = Graphics
+  if type(rawGraphics) ~= "table" then return end
+  runtime.rawGraphics = runtime.rawGraphics or rawGraphics
+  rawGraphics = runtime.rawGraphics
+  local wrappedCache = {}
+
+  local function wrapDrawFn(name, fn)
+    if name == "drawRect" or name == "drawPixel" or name == "drawCircle" then
+      return function(x, y, ...)
+        return fn((tonumber(x) or 0) + getSceneDrawOffsetX(), y, ...)
+      end
+    elseif name == "drawLine" then
+      return function(x1, y1, x2, y2, ...)
+        local dx = getSceneDrawOffsetX()
+        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, ...)
+      end
+    elseif name == "drawTriangle" then
+      return function(x1, y1, x2, y2, x3, y3, ...)
+        local dx = getSceneDrawOffsetX()
+        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3, ...)
+      end
+    elseif name == "drawQuad" then
+      return function(x1, y1, x2, y2, x3, y3, x4, y4, ...)
+        local dx = getSceneDrawOffsetX()
+        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3,
+          (tonumber(x4) or 0) + dx, y4, ...)
+      end
+    elseif name == "drawImage" or name == "drawScaleImage" or name == "drawRotateImage" or name == "drawImageExtended" then
+      return function(image, x, y, ...)
+        return fn(image, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, ...)
+      end
+    elseif name == "drawPartialImage" then
+      return function(image, sx, sy, sw, sh, x, y, ...)
+        return fn(image, sx, sy, sw, sh, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, ...)
+      end
+    end
+    return fn
+  end
+
+  local proxy = {}
+  setmetatable(proxy, {
+    __index = function(_, key)
+      local cached = wrappedCache[key]
+      if cached ~= nil then return cached end
+      local value = rawGraphics[key]
+      if type(value) ~= "function" then
+        wrappedCache[key] = value
+        return value
+      end
+      local wrapped = wrapDrawFn(key, value)
+      wrappedCache[key] = wrapped
+      return wrapped
+    end,
+    __newindex = function(_, key, value)
+      rawGraphics[key] = value
+      wrappedCache[key] = nil
+    end,
+    __pairs = function()
+      return pairs(rawGraphics)
+    end,
+  })
+  Graphics = proxy
+  runtime.sceneDrawOffsetGraphicsProxyInstalled = true
+  runtime.sceneDrawOffsetGraphicsProxy = proxy
+end
+
+installSceneDrawOffsetGraphicsProxy()
 local main = dofile("scripts/ui_main.lua")
 local file_selector = dofile("scripts/file_selector.lua")
 local config_options = dofile("scripts/options.lua")
@@ -741,6 +818,7 @@ local function mainLoop()
     refreshRuntimeColorAliases()
     Screen.clear(BLACK)
     common.runLayout(c)
+    common.applySceneDrawOffsetForCurrentFrame(c)
     local w = c.w or common.DEFAULT_W
     local h = c.h or common.DEFAULT_H
     local uiScale = c.uiScale or 1
@@ -999,6 +1077,14 @@ local function mainLoop()
     return nil
   end
 
+  local function isSlideLikeSceneTransition(transitionType)
+    local t = transitionType
+    if common.normalizeSceneTransitionType then
+      t = common.normalizeSceneTransitionType(t)
+    end
+    return t == "slide" or t == "whip_pan"
+  end
+
   local function runSceneTransitionOnStateChange(c, prevScene, nextScene)
     if not c then return end
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
@@ -1009,9 +1095,13 @@ local function mainLoop()
     local transitionType, transitionFrames = getSceneTransitionRuntime()
     if direction == "out" then
       c.sceneTransitionIn = nil
-      common.playSceneTransitionOnCurrentFrame(c, "out", transitionType, transitionFrames)
+      if isSlideLikeSceneTransition(transitionType) then
+        common.beginSceneTransitionIn(c, transitionType, transitionFrames, { direction = "out" })
+      else
+        common.playSceneTransitionOnCurrentFrame(c, "out", transitionType, transitionFrames)
+      end
     else
-      common.beginSceneTransitionIn(c, transitionType, transitionFrames)
+      common.beginSceneTransitionIn(c, transitionType, transitionFrames, { direction = "in" })
     end
   end
 

@@ -1384,6 +1384,40 @@ local function clamp01(v)
   return n
 end
 
+local function easeInOutCubic(t)
+  local x = clamp01(t)
+  if x < 0.5 then
+    return 4 * x * x * x
+  end
+  local a = (-2 * x + 2)
+  return 1 - ((a * a * a) / 2)
+end
+
+local function easeOutQuart(t)
+  local x = clamp01(t)
+  local a = 1 - x
+  return 1 - (a * a * a * a)
+end
+
+local function applySceneMotionCurve(transitionType, progress)
+  local t = common.normalizeSceneTransitionType(transitionType)
+  if t == "slide" then
+    return easeInOutCubic(progress)
+  end
+  if t == "whip_pan" then
+    return easeOutQuart(progress)
+  end
+  return clamp01(progress)
+end
+
+local function getRawGraphics()
+  local runtime = _G and _G.CONFIG_UI
+  if runtime and runtime.rawGraphics then
+    return runtime.rawGraphics
+  end
+  return Graphics
+end
+
 function common.normalizeSceneTransitionType(raw)
   local value = tostring(raw or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
   value = value:gsub("%s+", "_")
@@ -1426,11 +1460,12 @@ local function getTransitionScreenSize(ctx)
 end
 
 local function drawRectSafe(x, y, w, h, color)
-  if not (Graphics and Graphics.drawRect) then return end
+  local gfx = getRawGraphics()
+  if not (gfx and gfx.drawRect) then return end
   local rw = math.floor(tonumber(w) or 0)
   local rh = math.floor(tonumber(h) or 0)
   if rw <= 0 or rh <= 0 then return end
-  Graphics.drawRect(math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0), rw, rh, color)
+  gfx.drawRect(math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0), rw, rh, color)
 end
 
 function common.drawSceneTransitionOverlay(ctx, spec)
@@ -1446,7 +1481,10 @@ function common.drawSceneTransitionOverlay(ctx, spec)
 
   local w, h = getTransitionScreenSize(ctx)
   local maxAlpha = 0x80
-  local baseAlpha = math.floor(maxAlpha * cover + 0.5)
+  local baseAlpha = maxAlpha
+  if transitionType == "fade" or transitionType == "cross_dissolve" then
+    baseAlpha = math.floor(maxAlpha * cover + 0.5)
+  end
   local frame = math.max(0, math.floor(tonumber(spec.frame) or 0))
 
   if transitionType == "fade" then
@@ -1468,25 +1506,38 @@ function common.drawSceneTransitionOverlay(ctx, spec)
 
   if transitionType == "slide" or transitionType == "whip_pan" then
     local wipeW = math.floor((w * cover) + 0.5)
-    drawRectSafe(0, 0, wipeW, h, Color.new(0, 0, 0, baseAlpha))
+    local maskX = 0
+    if phase == "out" then
+      -- Back/cancel: grow cover from right so direction opposes forward reveal.
+      maskX = w - wipeW
+    end
+    drawRectSafe(maskX, 0, wipeW, h, Color.new(0, 0, 0, baseAlpha))
     if transitionType == "whip_pan" and wipeW > 0 then
       local edgeW = math.max(3, math.floor(w * 0.03))
-      local edgeX = wipeW - edgeW
+      local edgeX = maskX + wipeW - edgeW
+      if phase == "out" then
+        edgeX = maskX
+      end
       drawRectSafe(edgeX, 0, edgeW, h, Color.new(28, 28, 34, math.min(maxAlpha, baseAlpha + 18)))
-      drawRectSafe(edgeX + math.floor(edgeW * 0.6), 0, math.max(2, math.floor(edgeW * 0.25)), h,
+      local streakX = edgeX + math.floor(edgeW * 0.6)
+      if phase == "out" then
+        streakX = edgeX + math.max(0, edgeW - math.max(2, math.floor(edgeW * 0.25)))
+      end
+      drawRectSafe(streakX, 0, math.max(2, math.floor(edgeW * 0.25)), h,
         Color.new(200, 200, 200, math.floor(baseAlpha * 0.35 + 0.5)))
     end
     return
   end
 
   if transitionType == "zoom" then
-    local visibleScale = 1 - cover
+    local zoomCover = easeInOutCubic(cover)
+    local visibleScale = 1 - zoomCover
     if visibleScale < 0 then visibleScale = 0 end
     local visibleW = math.floor((w * visibleScale) + 0.5)
     local visibleH = math.floor((h * visibleScale) + 0.5)
     local left = math.floor((w - visibleW) / 2)
     local top = math.floor((h - visibleH) / 2)
-    local alpha = math.floor((maxAlpha * math.min(1, cover * 1.1)) + 0.5)
+    local alpha = maxAlpha
     drawRectSafe(0, 0, w, top, Color.new(0, 0, 0, alpha))
     drawRectSafe(0, top + visibleH, w, h - (top + visibleH), Color.new(0, 0, 0, alpha))
     drawRectSafe(0, top, left, visibleH, Color.new(0, 0, 0, alpha))
@@ -1498,7 +1549,57 @@ function common.drawSceneTransitionOverlay(ctx, spec)
   drawRectSafe(0, 0, w, h, Color.new(0, 0, 0, baseAlpha))
 end
 
-function common.beginSceneTransitionIn(ctx, transitionType, transitionFrames)
+local function isSceneSlideTransition(t)
+  local n = common.normalizeSceneTransitionType(t)
+  return n == "slide" or n == "whip_pan"
+end
+
+local function drawWhipPanOverlay(ctx, transitionDirection, progress, frame)
+  local w, h = getTransitionScreenSize(ctx)
+  local runtime = _G and _G.CONFIG_UI
+  local offsetX = math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
+  local movingRight = (tostring(transitionDirection or "in") == "out") or
+      (tostring(transitionDirection or "in") == "back")
+  local edgeX = movingRight and (offsetX + w) or offsetX
+  local motionStrength = clamp01(1 - progress)
+  local trailW = math.max(20, math.floor((w * 0.04) + (w * 0.16 * motionStrength)))
+  local bands = 7
+  local bandW = math.max(2, math.floor(trailW / bands))
+
+  for i = 0, bands - 1 do
+    local falloff = 1 - (i / math.max(1, bands - 1))
+    local alpha = math.floor((0x34 * motionStrength * falloff) + 0.5)
+    if alpha > 0 then
+      local x
+      if movingRight then
+        x = edgeX - trailW + (i * bandW)
+      else
+        x = edgeX + (i * bandW)
+      end
+      drawRectSafe(x, 0, bandW, h, Color.new(26, 26, 32, alpha))
+    end
+  end
+
+  local edgeAlpha = math.floor((0x54 * (0.35 + 0.65 * motionStrength)) + 0.5)
+  if edgeAlpha > 0 then
+    local edgeW = math.max(2, math.floor(w * 0.004))
+    local x = movingRight and (edgeX - edgeW) or edgeX
+    drawRectSafe(x, 0, edgeW, h, Color.new(208, 208, 216, edgeAlpha))
+  end
+
+  local streakAlpha = math.floor((0x2A * motionStrength) + 0.5)
+  if streakAlpha > 0 then
+    local rowStep = 13
+    local startY = ((math.max(0, math.floor(frame or 0)) * 5) % rowStep)
+    local streakW = math.max(8, math.floor(trailW * 0.45))
+    for y = startY, h - 1, rowStep do
+      local x = movingRight and (edgeX - streakW) or edgeX
+      drawRectSafe(x, y, streakW, 1, Color.new(180, 180, 192, streakAlpha))
+    end
+  end
+end
+
+function common.beginSceneTransitionIn(ctx, transitionType, transitionFrames, opts)
   if not ctx then return end
   local t = common.normalizeSceneTransitionType(transitionType)
   local frames = common.normalizeSceneTransitionFrames(transitionFrames)
@@ -1510,6 +1611,7 @@ function common.beginSceneTransitionIn(ctx, transitionType, transitionFrames)
     type = t,
     frames = frames,
     frame = 0,
+    direction = (opts and tostring(opts.direction or "")) or "in",
   }
 end
 
@@ -1524,26 +1626,66 @@ function common.shouldBlockInputForSceneTransition(ctx)
   return common.isSceneTransitionInActive(ctx)
 end
 
+function common.applySceneDrawOffsetForCurrentFrame(ctx)
+  local runtime = _G and _G.CONFIG_UI
+  if runtime then
+    runtime.sceneDrawOffsetX = 0
+  end
+  if not common.isSceneTransitionInActive(ctx) then
+    return 0
+  end
+  local tr = ctx.sceneTransitionIn
+  if not isSceneSlideTransition(tr.type) then
+    return 0
+  end
+  local frames = common.normalizeSceneTransitionFrames(tr.frames)
+  local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
+  local denom = math.max(1, frames - 1)
+  local progress = clamp01(frame / denom)
+  local curved = applySceneMotionCurve(tr.type, progress)
+  local w, _h = getTransitionScreenSize(ctx)
+  local remaining = math.floor(((1 - curved) * w) + 0.5)
+  local direction = tostring(tr.direction or "in")
+  local offsetX = remaining
+  if direction == "out" or direction == "back" then
+    offsetX = -remaining
+  end
+  if runtime then
+    runtime.sceneDrawOffsetX = offsetX
+  end
+  return offsetX
+end
+
 function common.drawAndAdvanceSceneTransitionIn(ctx)
   if not common.isSceneTransitionInActive(ctx) then
     if ctx then ctx.sceneTransitionIn = nil end
+    local runtime = _G and _G.CONFIG_UI
+    if runtime then runtime.sceneDrawOffsetX = 0 end
     return
   end
   local tr = ctx.sceneTransitionIn
   local frames = common.normalizeSceneTransitionFrames(tr.frames)
   local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
-  local denom = math.max(1, frames - 1)
-  local progress = clamp01(frame / denom)
-  common.drawSceneTransitionOverlay(ctx, {
-    phase = "in",
-    type = tr.type,
-    progress = progress,
-    frame = frame,
-    frames = frames,
-  })
+  if tr.type == "whip_pan" then
+    local denom = math.max(1, frames - 1)
+    local progress = clamp01(frame / denom)
+    drawWhipPanOverlay(ctx, tr.direction, progress, frame)
+  elseif not isSceneSlideTransition(tr.type) then
+    local denom = math.max(1, frames - 1)
+    local progress = clamp01(frame / denom)
+    common.drawSceneTransitionOverlay(ctx, {
+      phase = "in",
+      type = tr.type,
+      progress = progress,
+      frame = frame,
+      frames = frames,
+    })
+  end
   frame = frame + 1
   if frame >= frames then
     ctx.sceneTransitionIn = nil
+    local runtime = _G and _G.CONFIG_UI
+    if runtime then runtime.sceneDrawOffsetX = 0 end
   else
     tr.frame = frame
   end
@@ -1553,6 +1695,11 @@ function common.playSceneTransitionOnCurrentFrame(ctx, phase, transitionType, tr
   local t = common.normalizeSceneTransitionType(transitionType)
   local frames = common.normalizeSceneTransitionFrames(transitionFrames)
   if not common.shouldRunSceneTransition(t, frames) then return end
+  if isSceneSlideTransition(t) then
+    return
+  end
+  local runtime = _G and _G.CONFIG_UI
+  if runtime then runtime.sceneDrawOffsetX = 0 end
   local p = (tostring(phase or "out") == "in") and "in" or "out"
   for i = 1, frames do
     local progress = clamp01(i / frames)
@@ -1625,6 +1772,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
     Screen.clear(common.BGCOLOR)
     common.runLayout(ctx)
+    common.applySceneDrawOffsetForCurrentFrame(ctx)
     local uiScale = (ctx and tonumber(ctx.uiScale)) or 1
     local scaleX = (ctx and ctx.scaleX) or function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
     local scaleY = (ctx and ctx.scaleY) or function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
@@ -2023,7 +2171,10 @@ end
 
 function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   local c = color or common.WHITE
-  local ix, iy = math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0)
+  local runtime = _G and _G.CONFIG_UI
+  local offsetX = math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
+  local ix = math.floor((tonumber(x) or 0) + offsetX)
+  local iy = math.floor(tonumber(y) or 0)
   local s = text or ""
   if mode == "fmPrint" then
     Font.fmPrint(ix, iy, scale, s, c)
