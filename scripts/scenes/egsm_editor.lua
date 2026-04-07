@@ -7,6 +7,9 @@ local function getEgsmBackState(ctx)
   if context == "ps2bbl" or context == "psxbbl" then
     return "select_config"
   end
+  if context == "hosdmenu" then
+    return "select_config"
+  end
   if context == "osdmenu" or context == "freemcboot" then
     local common = ctx and ctx._ and ctx._.common or nil
     local slots = (common and common.getPresentMcSlots and common.getPresentMcSlots()) or {}

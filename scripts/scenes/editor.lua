@@ -97,6 +97,11 @@ local function getEditorBackState(ctx)
   if context == "ps2bbl" or context == "psxbbl" then
     return "select_config"
   end
+  if context == "hosdmenu" then
+    if fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf" then
+      return "select_config"
+    end
+  end
   if context == "osdmenu" or context == "freemcboot" then
     if fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf" or fileType == "freemcboot_cnf" then
       local common = ctx and ctx._ and ctx._.common or nil
