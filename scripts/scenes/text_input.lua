@@ -217,7 +217,6 @@ local function buildBelTokenRows(profile, page)
     out[#out + 1] = {
       id = "footer_colors_sample",
       label = "c#/c## Many undocumented. The above is a small sample.",
-      columns = { "c#/c## Many undocumented. The above is a small sample." },
       enabled = false,
       forceTicker = true,
     }
@@ -239,7 +238,6 @@ local function buildBelTokenRows(profile, page)
     out[#out + 1] = {
       id = "footer_symbols_sample",
       label = "o000-o999 exist. The above is a small sample.",
-      columns = { "o000-o999 exist. The above is a small sample." },
       enabled = false,
       forceTicker = true,
     }
