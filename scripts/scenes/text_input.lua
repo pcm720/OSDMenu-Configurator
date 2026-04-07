@@ -196,6 +196,13 @@ local function buildBelTokenRows(profile, page)
   local symRows = (profile == "hddosd") and BEL_SYMBOLS_HDDOSD or BEL_SYMBOLS_PS2_ROM
 
   if page == 1 then
+    out[#out + 1] = { id = "header_manual", label = "Manual", enabled = false }
+    out[#out + 1] = {
+      id = "token_manual_bel",
+      label = "BEL  □  Insert BEL...",
+      columns = { "BEL", "□", "Insert BEL..." },
+      token = BEL,
+    }
     out[#out + 1] = { id = "header_colors", label = "Colors", enabled = false }
     for i = 1, #BEL_COLOR_TOKENS do
       local t = BEL_COLOR_TOKENS[i]
