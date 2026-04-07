@@ -322,6 +322,8 @@ strings.options_r3configurator = {
   show_hosdmenu = { label = "Pokaż HOSDMenu", desc = "Pokaż HOSDMenu na stronie głównej." },
   show_ps2bbl = { label = "Pokaż PS2BBL", desc = "Pokaż PS2BBL na stronie głównej." },
   show_psxbbl = { label = "Pokaż PSXBBL", desc = "Pokaż PSXBBL na stronie głównej." },
+  scene_transition = { label = "Przejście sceny", desc = "Styl przejścia między scenami (potwierdź/edytuj = wejście, anuluj/wstecz = wyjście)." },
+  scene_transition_frames = { label = "Klatki przejścia", desc = "Prędkość przejścia w klatkach (większa wartość = wolniej)." },
   cross = { label = "Kolor KRZYŻYK", desc = "Kolor tekstu pomocy KRZYŻYK." },
   square = { label = "Kolor KWADRAT", desc = "Kolor tekstu pomocy KWADRAT." },
   triangle = { label = "Kolor TRÓJKĄT", desc = "Kolor tekstu pomocy TRÓJKĄT." },

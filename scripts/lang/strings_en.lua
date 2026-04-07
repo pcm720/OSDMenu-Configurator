@@ -322,6 +322,8 @@ strings.options_r3configurator = {
   show_hosdmenu = { label = "Show HOSDMenu", desc = "Show HOSDMenu on main page." },
   show_ps2bbl = { label = "Show PS2BBL", desc = "Show PS2BBL on main page." },
   show_psxbbl = { label = "Show PSXBBL", desc = "Show PSXBBL on main page." },
+  scene_transition = { label = "Scene transition", desc = "Transition style for scene changes (confirm/edit = in, cancel/back = out)." },
+  scene_transition_frames = { label = "Transition frames", desc = "Transition speed in frames (higher is slower)." },
   cross = { label = "Cross color", desc = "Cross helper text color." },
   square = { label = "Square color", desc = "Square helper text color." },
   triangle = { label = "Triangle color", desc = "Triangle helper text color." },
