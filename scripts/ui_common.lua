@@ -1640,8 +1640,9 @@ function common.applySceneDrawOffsetForCurrentFrame(ctx)
   end
   local frames = common.normalizeSceneTransitionFrames(tr.frames)
   local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
-  local denom = math.max(1, frames - 1)
-  local progress = clamp01(frame / denom)
+  -- Use a 1-based step for slide-like motion so the very first transition frame
+  -- already shows incoming content (avoids an initial fully blank frame).
+  local progress = clamp01((frame + 1) / math.max(1, frames))
   local curved = applySceneMotionCurve(tr.type, progress)
   local w, _h = getTransitionScreenSize(ctx)
   local remaining = math.floor(((1 - curved) * w) + 0.5)
@@ -1667,8 +1668,7 @@ function common.drawAndAdvanceSceneTransitionIn(ctx)
   local frames = common.normalizeSceneTransitionFrames(tr.frames)
   local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
   if tr.type == "whip_pan" then
-    local denom = math.max(1, frames - 1)
-    local progress = clamp01(frame / denom)
+    local progress = clamp01((frame + 1) / math.max(1, frames))
     drawWhipPanOverlay(ctx, tr.direction, progress, frame)
   elseif not isSceneSlideTransition(tr.type) then
     local denom = math.max(1, frames - 1)
