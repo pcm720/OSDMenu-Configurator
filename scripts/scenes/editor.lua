@@ -972,12 +972,15 @@ local function run(ctx)
     categories = _.config_options.psxbbl_ini_categories or {}
   end
 
+  -- Keep interactive rows anchored to the same Y slots between category and child option pages.
+  local editorListStartY = _.MARGIN_Y + _.scaleY(50)
+
   if isCategorizedFile and ctx.editorCategoryIdx == 0 then
     local cats = categories
     local maxVis = _.MAX_VISIBLE
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #cats)
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #cats, maxVis)
-    local startY = _.MARGIN_Y + _.scaleY(50)
+    local startY = editorListStartY
     if _.common and _.common.drawListScrollbar then
       _.common.drawListScrollbar(_, {
         totalRows = #cats,
@@ -1062,8 +1065,7 @@ local function run(ctx)
       end
     end
   elseif ctx.optList and #ctx.optList > 0 then
-    local listOffsetY = isR3ConfiguratorFile(ctx) and 50 or 58
-    local startY = _.MARGIN_Y + _.scaleY(listOffsetY)
+    local startY = editorListStartY
     local maxVisFallback = isR3ConfiguratorFile(ctx) and math.max(_.MAX_VISIBLE or 0, 12) or _.MAX_VISIBLE
     local maxVis = maxVisFallback
     if _.common and _.common.computeVisibleRows then
