@@ -375,13 +375,14 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
         nominalFps = 50
       end
     end
-    local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
+      local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
       ctx.textInputCursorHoldFrames = 0
       ctx.textInputCursorHoldCountdown = (_.common.getRepeatIntervalFrames and
           _.common.getRepeatIntervalFrames(fps, 0)) or 1
     else
+      local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       ctx.textInputCursorHoldFrames = ctx.textInputCursorHoldFrames + 1
       local targetInterval = (_.common.getRepeatIntervalFrames and
           _.common.getRepeatIntervalFrames(fps, ctx.textInputCursorHoldFrames)) or 1
@@ -426,13 +427,14 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
         nominalFps = 50
       end
     end
-    local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
+      local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial delete already comes from padJust in _.padEffective.
       ctx.textInputBackspaceHoldFrames = 0
       ctx.textInputBackspaceHoldCountdown = (_.common.getRepeatIntervalFrames and
           _.common.getRepeatIntervalFrames(fps, 0)) or 1
     else
+      local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       ctx.textInputBackspaceHoldFrames = ctx.textInputBackspaceHoldFrames + 1
       local targetInterval = (_.common.getRepeatIntervalFrames and
           _.common.getRepeatIntervalFrames(fps, ctx.textInputBackspaceHoldFrames)) or 1
@@ -477,13 +479,14 @@ local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
         nominalFps = 50
       end
     end
-    local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
+      local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
       ctx.textInputGridHorizontalHoldFrames = 0
       ctx.textInputGridHorizontalHoldCountdown = (_.common.getRepeatIntervalFrames and
           _.common.getRepeatIntervalFrames(fps, 0)) or 1
     else
+      local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       ctx.textInputGridHorizontalHoldFrames = ctx.textInputGridHorizontalHoldFrames + 1
       local targetInterval = (_.common.getRepeatIntervalFrames and
           _.common.getRepeatIntervalFrames(fps, ctx.textInputGridHorizontalHoldFrames)) or 1

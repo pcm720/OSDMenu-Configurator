@@ -1245,13 +1245,16 @@ common.REPEAT_END_HZ = 12
 common.REPEAT_ACCEL_SECONDS = 4
 common.REPEAT_FPS_SAMPLE_WINDOW = 8
 
-function common.getRepeatFps(ctx, nominalFps)
+function common.getRepeatFps(ctx, nominalFps, opts)
   local fallback = math.max(1, tonumber(nominalFps) or 60)
   if not ctx then
     return fallback
   end
 
   local cached = tonumber(ctx.holdRepeatFps) or 0
+  if opts and opts.forceRefresh == true then
+    cached = 0
+  end
   if cached <= 0 and Screen and Screen.getFPS then
     local sampleWindow = math.max(1, math.floor(tonumber(common.REPEAT_FPS_SAMPLE_WINDOW) or 8))
     local measured = tonumber(Screen.getFPS(sampleWindow))
@@ -1468,7 +1471,6 @@ function common.getPadEffective(ctx)
   local prevPad = ctx.prevPad or 0
   local padJust = pad & ~prevPad
   local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
-  local fps = common.getRepeatFps(ctx, nominalFps)
   ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
   ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
@@ -1476,10 +1478,12 @@ function common.getPadEffective(ctx)
   local prevHeldMask = prevPad & common.REPEATABLE_MASK
   if heldMask ~= 0 then
     if prevHeldMask == 0 then
+      local fps = common.getRepeatFps(ctx, nominalFps)
       -- New hold starts now: first repeat at start-rate interval.
       ctx.holdFrameCount = 0
       ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, 0)
     else
+      local fps = common.getRepeatFps(ctx, nominalFps)
       ctx.holdFrameCount = ctx.holdFrameCount + 1
       local targetInterval = common.getRepeatIntervalFrames(fps, ctx.holdFrameCount)
       if ctx.holdRepeatCountdown > targetInterval then
