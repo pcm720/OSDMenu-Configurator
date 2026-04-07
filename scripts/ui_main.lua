@@ -1404,6 +1404,7 @@ local function applyKnownPathPick(s, pick, main_str, opts)
   if not pick or pick.action ~= "known_paths" then return false end
   opts = opts or {}
   local includeBrowseIni = (opts.includeBrowseIni == true)
+  local directOpenSingle = (opts.directOpenSingle == true)
   s.loadChoices = {}
   s.loadPathExists = {}
   local paths = pick.paths or {}
@@ -1421,6 +1422,17 @@ local function applyKnownPathPick(s, pick, main_str, opts)
       browseDeviceType = pick.browseDeviceType,
     }
     s.loadPathExists[#s.loadPathExists + 1] = false
+  end
+  if directOpenSingle and (not includeBrowseIni) and #s.loadChoices == 1 then
+    local directPath = s.loadChoices[1]
+    if type(directPath) == "string" and directPath ~= "" then
+      clearLoadChoiceState(s)
+      clearPathPickerState(s)
+      s.currentPath = directPath
+      s.openExplicitPath = true
+      s.state = "open"
+      return true
+    end
   end
   s.loadAllowCreate = true
   s.loadSel = 1
@@ -1498,7 +1510,7 @@ local function runSelectConfig(s, pad)
     if s.pendingKnownPathPick then
       local pendingPick = s.pendingKnownPathPick
       s.pendingKnownPathPick = nil
-      if applyKnownPathPick(s, pendingPick, main_str) then
+      if applyKnownPathPick(s, pendingPick, main_str, { directOpenSingle = true }) then
         return
       end
     end
@@ -1531,7 +1543,7 @@ local function runSelectConfig(s, pad)
           s.initHddPhase = "load"
           return
         end
-        applyKnownPathPick(s, pick, main_str)
+        applyKnownPathPick(s, pick, main_str, { directOpenSingle = true })
       end
     end
 

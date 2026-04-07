@@ -309,8 +309,9 @@ function actions_menu.run(ctx, opts)
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
     local label = row.label
     if _.common.fitListRowText then
+      local shouldTicker = (i == ctx[selKey]) or (row.raw and row.raw.forceTicker == true)
       label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
-        i == ctx[selKey])
+        shouldTicker)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
     end
@@ -351,7 +352,12 @@ function actions_menu.run(ctx, opts)
       end
     end
 
-    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (anchorPadMask and (_.padEffective & anchorPadMask) ~= 0) then
+    local anchorPressed = anchorPadMask and ((_.padEffective & anchorPadMask) ~= 0)
+    local anchorHandled = false
+    if anchorPressed and type(opts.onAnchorPress) == "function" then
+      anchorHandled = (opts.onAnchorPress(rows[ctx[selKey]] and rows[ctx[selKey]].raw, ctx[selKey], ctx) == true)
+    end
+    if (_.padEffective & _.PAD_CIRCLE) ~= 0 or (anchorPressed and not anchorHandled) then
       ctx[closingKey] = true
       if ctx[animKey] < 0.001 then
         ctx[animKey] = 1
