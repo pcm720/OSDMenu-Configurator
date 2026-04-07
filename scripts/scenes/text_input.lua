@@ -434,6 +434,57 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
+local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+  if not (Pads and Pads.get) then
+    return 0
+  end
+  local lrMask = (_.PAD_LEFT or 0) | (_.PAD_RIGHT or 0)
+  if lrMask == 0 then
+    return 0
+  end
+  local rawPad = Pads.get(0)
+  local heldMask = rawPad & lrMask
+  local prevHeldMask = tonumber(ctx.textInputGridHorizontalPrevHeldMask) or 0
+  local repeatMask = 0
+  ctx.textInputGridHorizontalPrevHeldMask = heldMask
+  ctx.textInputGridHorizontalHoldFrames = tonumber(ctx.textInputGridHorizontalHoldFrames) or 0
+  ctx.textInputGridHorizontalHoldCountdown = tonumber(ctx.textInputGridHorizontalHoldCountdown) or 0
+
+  if heldMask ~= 0 then
+    local nominalFps = 60
+    if Screen and Screen.getMode then
+      local mode = Screen.getMode()
+      if mode and tonumber(mode.height) == 512 then
+        nominalFps = 50
+      end
+    end
+    local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
+    if prevHeldMask == 0 or prevHeldMask ~= heldMask then
+      -- Initial move already comes from padJust in _.padEffective.
+      ctx.textInputGridHorizontalHoldFrames = 0
+      ctx.textInputGridHorizontalHoldCountdown = (_.common.getRepeatIntervalFrames and
+          _.common.getRepeatIntervalFrames(fps, 0)) or 1
+    else
+      ctx.textInputGridHorizontalHoldFrames = ctx.textInputGridHorizontalHoldFrames + 1
+      local targetInterval = (_.common.getRepeatIntervalFrames and
+          _.common.getRepeatIntervalFrames(fps, ctx.textInputGridHorizontalHoldFrames)) or 1
+      if ctx.textInputGridHorizontalHoldCountdown > targetInterval then
+        ctx.textInputGridHorizontalHoldCountdown = targetInterval
+      end
+      ctx.textInputGridHorizontalHoldCountdown = ctx.textInputGridHorizontalHoldCountdown - 1
+      if ctx.textInputGridHorizontalHoldCountdown <= 0 then
+        repeatMask = heldMask
+        ctx.textInputGridHorizontalHoldCountdown = targetInterval
+      end
+    end
+  else
+    ctx.textInputGridHorizontalHoldFrames = 0
+    ctx.textInputGridHorizontalHoldCountdown = 0
+  end
+
+  return repeatMask
+end
+
 local function run(ctx)
   local _ = ctx._
   if not ctx.textInputCallback then
@@ -460,6 +511,9 @@ local function run(ctx)
     ctx.textInputBackspacePrevHeldMask = nil
     ctx.textInputBackspaceHoldFrames = nil
     ctx.textInputBackspaceHoldCountdown = nil
+    ctx.textInputGridHorizontalPrevHeldMask = nil
+    ctx.textInputGridHorizontalHoldFrames = nil
+    ctx.textInputGridHorizontalHoldCountdown = nil
     ctx.state = "editor"; return
   end
   if ctx._textInputBelBaselineCallback ~= ctx.textInputCallback then
@@ -692,6 +746,9 @@ local function run(ctx)
       ctx.textInputBackspacePrevHeldMask = nil
       ctx.textInputBackspaceHoldFrames = nil
       ctx.textInputBackspaceHoldCountdown = nil
+      ctx.textInputGridHorizontalPrevHeldMask = nil
+      ctx.textInputGridHorizontalHoldFrames = nil
+      ctx.textInputGridHorizontalHoldCountdown = nil
       return
     end
   end
@@ -706,10 +763,11 @@ local function run(ctx)
     end
     return 1
   end
-  if (_.padEffective & _.PAD_LEFT) ~= 0 then
+  local gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+  if (gridHorizontalMask & _.PAD_LEFT) ~= 0 then
     ctx.textInputGridSel = ctx.textInputGridSel - 1; if ctx.textInputGridSel < 1 then ctx.textInputGridSel = #keyList end
   end
-  if (_.padEffective & _.PAD_RIGHT) ~= 0 then
+  if (gridHorizontalMask & _.PAD_RIGHT) ~= 0 then
     ctx.textInputGridSel = ctx.textInputGridSel + 1; if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = 1 end
   end
   if (_.padEffective & _.PAD_UP) ~= 0 then
@@ -793,6 +851,9 @@ local function run(ctx)
     ctx.textInputBackspacePrevHeldMask = nil
     ctx.textInputBackspaceHoldFrames = nil
     ctx.textInputBackspaceHoldCountdown = nil
+    ctx.textInputGridHorizontalPrevHeldMask = nil
+    ctx.textInputGridHorizontalHoldFrames = nil
+    ctx.textInputGridHorizontalHoldCountdown = nil
     -- Callback sets ctx.state (e.g. applyManualPath -> entry_paths); do not overwrite
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -820,6 +881,9 @@ local function run(ctx)
     ctx.textInputBackspacePrevHeldMask = nil
     ctx.textInputBackspaceHoldFrames = nil
     ctx.textInputBackspaceHoldCountdown = nil
+    ctx.textInputGridHorizontalPrevHeldMask = nil
+    ctx.textInputGridHorizontalHoldFrames = nil
+    ctx.textInputGridHorizontalHoldCountdown = nil
     ctx.state = ctx.textInputReturnState or "menu_entry_edit"
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and not ctx.textInputTitleIdMode then
