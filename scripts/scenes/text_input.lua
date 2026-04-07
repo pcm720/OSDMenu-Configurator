@@ -719,6 +719,7 @@ local function run(ctx)
       minLabelIntrinsicW = ctx.textInputBelMinIntrinsicW,
       titleOverride = glyphKeyLabel .. " " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT),
       anchorPad = "square",
+      anchorSpanSlots = 3,
       anchorLabel = pageLabel,
       onAnchorPress = function()
         local nextPage = belPage + 1

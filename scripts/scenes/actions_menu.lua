@@ -280,21 +280,22 @@ function actions_menu.run(ctx, opts)
     return 2
   end
   local anchorSlotIndex = slotIndexForPad(anchorPad)
-  local nextSlotIndex = math.min(5, anchorSlotIndex + 1)
+  local anchorSpanSlots = math.max(1, math.floor(tonumber(opts.anchorSpanSlots) or 1))
+  local targetSlotIndex = math.min(5, anchorSlotIndex + anchorSpanSlots)
   local anchorSlotLeft = hintXEff + ((anchorSlotIndex - 1) * slotW)
   local anchorSlotCenter = anchorSlotLeft + (slotW / 2)
-  local nextSlotLeft = hintXEff + ((nextSlotIndex - 1) * slotW)
-  local nextSlotCenter = nextSlotLeft + (slotW / 2)
+  local targetSlotLeft = hintXEff + ((targetSlotIndex - 1) * slotW)
+  local targetSlotCenter = targetSlotLeft + (slotW / 2)
   local hintIconScale = 0.6
   local hintIconW = math.max(10, math.floor((((_.common and _.common.PAD_ICON_W) or 26) * hintIconScale) + 0.5))
   local anchorButtonLeft = math.floor(anchorSlotCenter - (hintIconW / 2))
-  local nextButtonLeft = math.floor(nextSlotCenter - (hintIconW / 2))
+  local targetButtonLeft = math.floor(targetSlotCenter - (hintIconW / 2))
   local anchorActionLabelX = anchorButtonLeft + hintIconW + hintGap
 
-  -- Keep the overlay right edge near the next button, with a small visual gap.
+  -- Keep the overlay right edge near the configured target button, with a small visual gap.
   local rightGap = math.max(3, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
   local boxX = anchorButtonLeft
-  local targetRightX = nextButtonLeft - rightGap
+  local targetRightX = targetButtonLeft - rightGap
   local desiredToStartW = math.floor(targetRightX - boxX + 0.5)
   if desiredToStartW < 90 then desiredToStartW = 90 end
   local contentW = math.max(90, math.floor(((anchorActionLabelX - boxX) + maxLabelWIntrinsic + padX) + 0.5))
