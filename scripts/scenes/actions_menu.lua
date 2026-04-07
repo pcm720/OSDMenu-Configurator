@@ -407,6 +407,7 @@ function actions_menu.run(ctx, opts)
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
     local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
+    local marqueeActive = (i == ctx[selKey]) or (row.raw and row.raw.forceTicker == true)
     if i == ctx[selKey] then
       _.drawText(hintFont, _.drawMode, rowMarkerX, y, rowScale, ">", col, textH)
     end
@@ -416,7 +417,7 @@ function actions_menu.run(ctx, opts)
         local label = row.label
         if _.common.fitListRowText then
           label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
-            i == ctx[selKey])
+            marqueeActive)
         elseif _.common.truncateTextToWidth then
           label = truncateCached(label, maxLabelW, "fallback|" .. tostring(i))
         end
@@ -436,7 +437,7 @@ function actions_menu.run(ctx, opts)
               txt,
               colMaxW,
               rowScale,
-              i == ctx[selKey]
+              marqueeActive
             )
           elseif _.common and _.common.truncateTextToWidth then
             txt = truncateCached(txt, colMaxW, tostring(i) .. "|" .. tostring(c))
@@ -454,7 +455,7 @@ function actions_menu.run(ctx, opts)
       local label = row.label
       if _.common.fitListRowText then
         label = _.common.fitListRowText(ctx, rowStateKeyPrefix .. tostring(i), hintFont, label, maxLabelW, rowScale,
-          i == ctx[selKey])
+          marqueeActive)
       elseif _.common.truncateTextToWidth then
         label = truncateCached(label, maxLabelW, "label|" .. tostring(i))
       end
