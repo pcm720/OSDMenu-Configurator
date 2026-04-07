@@ -1405,9 +1405,20 @@ local function applyKnownPathPick(s, pick, main_str, opts)
   opts = opts or {}
   local includeBrowseIni = (opts.includeBrowseIni == true)
   local directOpenSingle = (opts.directOpenSingle == true)
+  local paths = pick.paths or {}
+  if directOpenSingle and (not includeBrowseIni) and #paths == 1 then
+    local directPath = paths[1]
+    if type(directPath) == "string" and directPath ~= "" then
+      clearLoadChoiceState(s)
+      clearPathPickerState(s)
+      s.currentPath = directPath
+      s.openExplicitPath = true
+      s.state = "open"
+      return true
+    end
+  end
   s.loadChoices = {}
   s.loadPathExists = {}
-  local paths = pick.paths or {}
   for i = 1, #paths do
     local p = paths[i]
     s.loadChoices[#s.loadChoices + 1] = p
@@ -1422,17 +1433,6 @@ local function applyKnownPathPick(s, pick, main_str, opts)
       browseDeviceType = pick.browseDeviceType,
     }
     s.loadPathExists[#s.loadPathExists + 1] = false
-  end
-  if directOpenSingle and (not includeBrowseIni) and #s.loadChoices == 1 then
-    local directPath = s.loadChoices[1]
-    if type(directPath) == "string" and directPath ~= "" then
-      clearLoadChoiceState(s)
-      clearPathPickerState(s)
-      s.currentPath = directPath
-      s.openExplicitPath = true
-      s.state = "open"
-      return true
-    end
   end
   s.loadAllowCreate = true
   s.loadSel = 1
