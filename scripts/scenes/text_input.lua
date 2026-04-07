@@ -720,6 +720,7 @@ local function run(ctx)
       titleOverride = glyphKeyLabel .. " " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT),
       anchorPad = "square",
       anchorSpanSlots = 3,
+      forceAnchorSpanWidth = true,
       anchorLabel = pageLabel,
       onAnchorPress = function()
         local nextPage = belPage + 1

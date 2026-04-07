@@ -299,7 +299,13 @@ function actions_menu.run(ctx, opts)
   local desiredToStartW = math.floor(targetRightX - boxX + 0.5)
   if desiredToStartW < 90 then desiredToStartW = 90 end
   local contentW = math.max(90, math.floor(((anchorActionLabelX - boxX) + maxLabelWIntrinsic + padX) + 0.5))
-  local boxW = math.max(desiredToStartW, contentW)
+  local forceAnchorSpanWidth = (opts.forceAnchorSpanWidth == true)
+  local boxW
+  if forceAnchorSpanWidth then
+    boxW = desiredToStartW
+  else
+    boxW = math.max(desiredToStartW, contentW)
+  end
   local maxBoxWAtX = (_.w or 640) - (_.MARGIN_X or 0) - boxX
   if boxW > maxBoxWAtX then boxW = maxBoxWAtX end
 
