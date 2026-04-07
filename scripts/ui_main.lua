@@ -1481,10 +1481,21 @@ local function runSelectConfig(s, pad)
 
   if s.context == "freemcboot" or s.context == "freehddboot" then
     local options = buildFreemcbootSourceOptions(s, s.context)
+    local function openFreemcbootKnownPath(pick)
+      if not pick or pick.action ~= "known_paths" then return false end
+      local paths = pick.paths or {}
+      local targetPath = paths[1]
+      if type(targetPath) ~= "string" or targetPath == "" then return false end
+      clearLoadChoiceState(s)
+      s.currentPath = targetPath
+      s.openExplicitPath = true
+      s.state = "open"
+      return true
+    end
     if s.pendingKnownPathPick then
       local pendingPick = s.pendingKnownPathPick
       s.pendingKnownPathPick = nil
-      if applyKnownPathPick(s, pendingPick, main_str) then
+      if openFreemcbootKnownPath(pendingPick) then
         return
       end
     end
@@ -1517,7 +1528,7 @@ local function runSelectConfig(s, pad)
           s.initHddPhase = "load"
           return
         end
-        applyKnownPathPick(s, pick, main_str)
+        openFreemcbootKnownPath(pick)
       end
     end
 
