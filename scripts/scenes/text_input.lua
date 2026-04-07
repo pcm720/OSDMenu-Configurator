@@ -214,6 +214,12 @@ local function buildBelTokenRows(profile, page)
         token = token,
       }
     end
+    out[#out + 1] = {
+      id = "footer_colors_sample",
+      label = "c#/c## Many undocumented. The above is a small sample.",
+      columns = { "", "", "c#/c## Many undocumented. The above is a small sample." },
+      enabled = false,
+    }
   elseif page == 2 then
     out[#out + 1] = { id = "header_symbols", label = symHeader, enabled = false }
     for i = 1, #symRows do
