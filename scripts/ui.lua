@@ -851,22 +851,22 @@ local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
 local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_STRETCH_RANGE = 0.80
-local OVERLAY_LOGO_PSEUDO_YAW_SQUEEZE = 0.42
-local OVERLAY_LOGO_PSEUDO_PITCH_SQUEEZE = 0.34
-local OVERLAY_LOGO_SCALE_MIN = 0.25
-local OVERLAY_LOGO_SCALE_MAX = 2.40
-local OVERLAY_LOGO_STICK_DEBUG = true
-local OVERLAY_LOGO_STICK_DEBUG_EVERY_FRAMES = 20
+local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
+local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
+local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
+local OVERLAY_LOGO_SCALE_MAX_ABS = 2.40
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
 end
 
-local function clampf(v, lo, hi)
+local function clampSignedAbs(v, minAbs, maxAbs)
   local n = tonumber(v) or 0
-  if n < lo then return lo end
-  if n > hi then return hi end
-  return n
+  local sign = (n < 0) and -1 or 1
+  local a = math.abs(n)
+  if a < minAbs then a = minAbs end
+  if a > maxAbs then a = maxAbs end
+  return sign * a
 end
 
 local function normalizeStickAxis(raw)
@@ -919,29 +919,7 @@ local function readStickNormalized(getFn)
   return normalizeStickAxis(rawX), normalizeStickAxis(rawY), true, rawX, rawY
 end
 
-local function shouldLogOverlayStickDebug(ctx)
-  if not OVERLAY_LOGO_STICK_DEBUG then return false end
-  local frame = (tonumber(ctx._overlayLogoStickDebugFrame) or 0) + 1
-  ctx._overlayLogoStickDebugFrame = frame
-  if OVERLAY_LOGO_STICK_DEBUG_EVERY_FRAMES <= 1 then return true end
-  return (frame % OVERLAY_LOGO_STICK_DEBUG_EVERY_FRAMES) == 0
-end
-
-local function logOverlayStickDebug(ctx, info)
-  if not shouldLogOverlayStickDebug(ctx) then return end
-  local function b(v) return v and "1" or "0" end
-  local function f(v) return string.format("%.2f", tonumber(v) or 0) end
-  print(string.format(
-    "[logo-stick] mode=%s typeOk=%s analog=%s leftOk=%s rightOk=%s lRaw=(%d,%d) rRaw=(%d,%d) lNorm=(%s,%s) rNorm=(%s,%s) scale=(%s,%s) reason=%s",
-    tostring(info.mode), b(info.typeOk), b(info.analog), b(info.leftOk), b(info.rightOk),
-    tonumber(info.lRawX) or 0, tonumber(info.lRawY) or 0,
-    tonumber(info.rRawX) or 0, tonumber(info.rRawY) or 0,
-    f(info.lx), f(info.ly), f(info.rx), f(info.ry),
-    f(info.sx), f(info.sy), tostring(info.reason or "ok")
-  ))
-end
-
-local function getOverlayLogoAnalogScale(ctx)
+local function getOverlayLogoAnalogTransform(ctx)
   local state = ctx._overlayLogoAnalogState
   if type(state) ~= "table" then
     state = { lx = 0, ly = 0, rx = 0, ry = 0 }
@@ -950,42 +928,29 @@ local function getOverlayLogoAnalogScale(ctx)
 
   local mode, typeOk = getPadTypeMode()
   local analogCapable = isPadAnalogCapable(mode, typeOk)
-  -- Do not hard-block by mode alone: some environments report non-type values
-  -- here even when analog stick readings are valid.
+  if not analogCapable then
+    state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    return 1, 1, 0
+  end
 
   local lx, ly, leftOk, lRawX, lRawY = readStickNormalized(Pads and Pads.getLeftStick)
   local rx, ry, rightOk, rRawX, rRawY = readStickNormalized(Pads and Pads.getRightStick)
   if not leftOk and not rightOk then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    logOverlayStickDebug(ctx, {
-      mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
-      lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
-      lx = lx, ly = ly, rx = rx, ry = ry, sx = 1, sy = 1, reason = "stick_read_failed",
-    })
-    return 1, 1
+    return 1, 1, 0
   end
 
   local invalidSignature = (math.abs(lRawX) >= 126 and math.abs(lRawY) >= 126 and
       math.abs(rRawX) >= 126 and math.abs(rRawY) >= 126)
   if invalidSignature then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    logOverlayStickDebug(ctx, {
-      mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
-      lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
-      lx = lx, ly = ly, rx = rx, ry = ry, sx = 1, sy = 1, reason = "invalid_signature",
-    })
-    return 1, 1
+    return 1, 1, 0
   end
 
-  -- Centered sticks should produce exact identity (no residual drift/tilt).
+  -- Centered sticks should produce exact identity (no residual drift/tilt/roll).
   if lx == 0 and ly == 0 and rx == 0 and ry == 0 then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    logOverlayStickDebug(ctx, {
-      mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
-      lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
-      lx = lx, ly = ly, rx = rx, ry = ry, sx = 1, sy = 1, reason = "centered_identity",
-    })
-    return 1, 1
+    return 1, 1, 0
   end
 
   local smooth = OVERLAY_LOGO_STICK_SMOOTH
@@ -994,24 +959,32 @@ local function getOverlayLogoAnalogScale(ctx)
   state.rx = (tonumber(state.rx) or 0) + (rx - (tonumber(state.rx) or 0)) * smooth
   state.ry = (tonumber(state.ry) or 0) + (ry - (tonumber(state.ry) or 0)) * smooth
 
-  -- Left stick provides pseudo-3D tilt (yaw/pitch squeeze around center).
-  local yaw = state.lx
-  local pitch = -(state.ly)
-  local tiltScaleX = 1 - (math.abs(yaw) * OVERLAY_LOGO_PSEUDO_YAW_SQUEEZE)
-  local tiltScaleY = 1 - (math.abs(pitch) * OVERLAY_LOGO_PSEUDO_PITCH_SQUEEZE)
+  -- Center-origin pseudo-3D orientation from left stick:
+  -- X -> yaw [-180, +180], Y -> pitch [-180, +180], plus roll from stick angle.
+  local yawDeg = (state.lx or 0) * OVERLAY_LOGO_ROTATION_MAX_DEG
+  local pitchDeg = (-(state.ly or 0)) * OVERLAY_LOGO_ROTATION_MAX_DEG
+  local yawCos = math.cos(math.rad(yawDeg))
+  local pitchCos = math.cos(math.rad(pitchDeg))
+  if math.abs(yawCos) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
+    yawCos = (yawCos < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
+  end
+  if math.abs(pitchCos) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
+    pitchCos = (pitchCos < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
+  end
 
   -- Right stick provides fun direct stretch controls.
   local stretchScaleX = 1 + (state.rx * OVERLAY_LOGO_STRETCH_RANGE)
   local stretchScaleY = 1 + ((-state.ry) * OVERLAY_LOGO_STRETCH_RANGE)
 
-  local sx = clampf(tiltScaleX * stretchScaleX, OVERLAY_LOGO_SCALE_MIN, OVERLAY_LOGO_SCALE_MAX)
-  local sy = clampf(tiltScaleY * stretchScaleY, OVERLAY_LOGO_SCALE_MIN, OVERLAY_LOGO_SCALE_MAX)
-  logOverlayStickDebug(ctx, {
-    mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
-    lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
-    lx = lx, ly = ly, rx = rx, ry = ry, sx = sx, sy = sy, reason = "active",
-  })
-  return sx, sy
+  local sx = clampSignedAbs(yawCos * stretchScaleX, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
+  local sy = clampSignedAbs(pitchCos * stretchScaleY, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
+
+  local mag = math.sqrt((state.lx * state.lx) + (state.ly * state.ly))
+  if mag > 1 then mag = 1 end
+  local rollDeg = math.deg(math.atan2(-(state.ly or 0), state.lx or 0)) * mag
+  local rollRad = math.rad(rollDeg)
+
+  return sx, sy, rollRad
 end
 
 flushOverlayLogoCache = function()
@@ -1096,16 +1069,27 @@ local function drawSelectionOverlayLogo(ctx)
   if isR3SettingsScene then
     scale = math.min(scale, OVERLAY_LOGO_R3_TITLE_SCALE)
   end
-  local analogScaleX, analogScaleY = getOverlayLogoAnalogScale(ctx)
-  local dw = math.max(1, math.floor(iw * scale * analogScaleX + 0.5))
-  local dh = math.max(1, math.floor(ih * scale * analogScaleY + 0.5))
-  local x = math.floor((sw - dw) / 2)
-  local y = math.floor((sh - dh) / 2)
+  local analogScaleX, analogScaleY, analogRoll = getOverlayLogoAnalogTransform(ctx)
+  local baseW = math.max(1, math.floor(iw * scale + 0.5))
+  local baseH = math.max(1, math.floor(ih * scale + 0.5))
+  local drawW = baseW * analogScaleX
+  local drawH = baseH * analogScaleY
+  local cx = math.floor((sw / 2) + 0.5)
+  local cy = math.floor((sh / 2) + 0.5)
+  local color = getOverlayLogoColor(key)
 
-  if Graphics.drawScaleImage then
-    Graphics.drawScaleImage(tex, x, y, dw, dh, getOverlayLogoColor(key))
+  if Graphics.drawImageExtended then
+    Graphics.drawImageExtended(tex, cx, cy, 0, 0, iw, ih, drawW, drawH, analogRoll or 0, color)
+  elseif Graphics.drawScaleImage then
+    local dw = math.max(1, math.floor(math.abs(drawW) + 0.5))
+    local dh = math.max(1, math.floor(math.abs(drawH) + 0.5))
+    local x = math.floor((sw - dw) / 2)
+    local y = math.floor((sh - dh) / 2)
+    Graphics.drawScaleImage(tex, x, y, dw, dh, color)
   else
-    Graphics.drawImage(tex, x, y, getOverlayLogoColor(key))
+    local x = math.floor((sw - iw) / 2)
+    local y = math.floor((sh - ih) / 2)
+    Graphics.drawImage(tex, x, y, color)
   end
 end
 
