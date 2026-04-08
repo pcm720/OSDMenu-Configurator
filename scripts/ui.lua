@@ -851,7 +851,6 @@ local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
 local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_STRETCH_RANGE = 0.80
-local OVERLAY_LOGO_CAMERA_DISTANCE = 1.0
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
@@ -868,26 +867,6 @@ local function clampSignedAbs(v, minAbs, maxAbs)
   if a < minAbs then a = minAbs end
   if a > maxAbs then a = maxAbs end
   return sign * a
-end
-
-local function safeAtan2(y, x)
-  local yy = tonumber(y) or 0
-  local xx = tonumber(x) or 0
-  if math and type(math.atan2) == "function" then
-    return math.atan2(yy, xx)
-  end
-  if math and type(math.atan) == "function" then
-    local ok, v = pcall(math.atan, yy, xx)
-    if ok and type(v) == "number" then return v end
-    if xx > 0 then return math.atan(yy / xx) end
-    if xx < 0 then
-      if yy >= 0 then return math.atan(yy / xx) + math.pi end
-      return math.atan(yy / xx) - math.pi
-    end
-    if yy > 0 then return math.pi / 2 end
-    if yy < 0 then return -math.pi / 2 end
-  end
-  return 0
 end
 
 local function normalizeStickAxis(raw)
@@ -947,20 +926,18 @@ local function getOverlayLogoAnalogTransform(ctx)
   state.ry = (tonumber(state.ry) or 0) + (ry - (tonumber(state.ry) or 0)) * smooth
 
   -- Camera-orbit model (left stick):
-  -- treat the logo as fixed at origin, camera on a sphere of fixed radius.
-  -- Stick direction chooses orbit direction; magnitude chooses arc distance.
-  local orbitMag = math.sqrt((state.lx * state.lx) + (state.ly * state.ly))
-  if orbitMag > 1 then orbitMag = 1 end
-  local orbitTheta = safeAtan2(-(state.ly or 0), state.lx or 0)
-  local orbitArc = orbitMag * math.rad(OVERLAY_LOGO_ROTATION_MAX_DEG)
-  local sinArc = math.sin(orbitArc)
-  local camX = OVERLAY_LOGO_CAMERA_DISTANCE * sinArc * math.cos(orbitTheta)
-  local camY = OVERLAY_LOGO_CAMERA_DISTANCE * sinArc * math.sin(orbitTheta)
-  local camZ = OVERLAY_LOGO_CAMERA_DISTANCE * math.cos(orbitArc)
+  -- Yaw (left/right) and pitch (up/down) move the viewpoint along the sphere.
+  -- This keeps horizontal and vertical perspective independent:
+  -- left/right does not invert vertically, up/down does not invert horizontally.
+  local yawRad = math.rad((state.lx or 0) * OVERLAY_LOGO_ROTATION_MAX_DEG)
+  local pitchRad = math.rad((-(state.ly or 0)) * OVERLAY_LOGO_ROTATION_MAX_DEG)
+  -- Camera position on sphere is conceptual here:
+  -- x = R*sin(yaw)*cos(pitch), y = R*sin(pitch), z = R*cos(yaw)*cos(pitch)
+  -- We intentionally keep axis-decoupled visual mapping below for predictable UX.
 
-  -- Approximate viewpoint-induced foreshortening from orbit angles.
-  local yawCos = math.cos(safeAtan2(camX, camZ))
-  local pitchCos = math.cos(safeAtan2(camY, camZ))
+  -- Use decoupled foreshortening so each axis behaves as expected to users.
+  local yawCos = math.cos(yawRad)
+  local pitchCos = math.cos(pitchRad)
   if math.abs(yawCos) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
     yawCos = (yawCos < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
   end
