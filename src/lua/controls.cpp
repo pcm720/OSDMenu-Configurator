@@ -68,6 +68,13 @@ static int lua_getleft(lua_State *L) {
   if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1))
     padRead(port, 0, &buttons);
 
+  int mode = padInfoMode(port, 0, PAD_MODECURID, 0);
+  if (mode == PAD_TYPE_DIGITAL) {
+    lua_pushinteger(L, 0);
+    lua_pushinteger(L, 0);
+    return 2;
+  }
+
   lua_pushinteger(L, buttons.ljoy_h - 127);
   lua_pushinteger(L, buttons.ljoy_v - 127);
   return 2;
@@ -93,6 +100,13 @@ static int lua_getright(lua_State *L) {
 
   if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1))
     padRead(port, 0, &buttons);
+
+  int mode = padInfoMode(port, 0, PAD_MODECURID, 0);
+  if (mode == PAD_TYPE_DIGITAL) {
+    lua_pushinteger(L, 0);
+    lua_pushinteger(L, 0);
+    return 2;
+  }
 
   lua_pushinteger(L, buttons.rjoy_h - 127);
   lua_pushinteger(L, buttons.rjoy_v - 127);
