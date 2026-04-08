@@ -589,7 +589,7 @@ config_options.r3configurator_cnf = {
     optType = "int",
     default = "10",
     min = 1,
-    max = 120,
+    max = 60,
     label = "Transition frames",
     desc = "Transition speed in frames (higher is slower).",
   },

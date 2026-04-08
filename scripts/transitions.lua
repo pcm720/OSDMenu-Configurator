@@ -73,7 +73,7 @@ function transitions.install(common)
   function common.normalizeSceneTransitionFrames(raw)
     local n = math.floor(tonumber(raw) or common.SCENE_TRANSITION_DEFAULT_FRAMES)
     local minFrames = tonumber(common.SCENE_TRANSITION_MIN_FRAMES) or 1
-    local maxFrames = tonumber(common.SCENE_TRANSITION_MAX_FRAMES) or 120
+    local maxFrames = tonumber(common.SCENE_TRANSITION_MAX_FRAMES) or 60
     if n < minFrames then n = minFrames end
     if n > maxFrames then n = maxFrames end
     return n

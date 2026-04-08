@@ -70,7 +70,7 @@ common.LIST_BOTTOM_CLEAR_ROWS      = 1 -- keep at least one full blank selectabl
 common.SCENE_TRANSITION_DEFAULT_TYPE = "cut"
 common.SCENE_TRANSITION_DEFAULT_FRAMES = 10
 common.SCENE_TRANSITION_MIN_FRAMES = 1
-common.SCENE_TRANSITION_MAX_FRAMES = 120
+common.SCENE_TRANSITION_MAX_FRAMES = 60
 
 -- Hint-row geometry tuning (single-row 5-slot layout).
 common.PAD_HINT_DEFAULT_WIDTH      = 560

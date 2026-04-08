@@ -154,7 +154,10 @@ local function loadStartupConfig()
     if common.normalizeSceneTransitionFrames then
       cfg.scene_transition_frames = common.normalizeSceneTransitionFrames(transitionFrames)
     else
-      cfg.scene_transition_frames = math.floor(tonumber(transitionFrames) or 10)
+      local n = math.floor(tonumber(transitionFrames) or 10)
+      if n < 1 then n = 1 end
+      if n > 60 then n = 60 end
+      cfg.scene_transition_frames = n
     end
   end
 
@@ -704,6 +707,10 @@ local function setSceneTransitionRuntime(transitionType, transitionFrames)
       tostring(transitionType or common.SCENE_TRANSITION_DEFAULT_TYPE)
   local normalizedFrames = (common.normalizeSceneTransitionFrames and common.normalizeSceneTransitionFrames(transitionFrames)) or
       math.floor(tonumber(transitionFrames) or common.SCENE_TRANSITION_DEFAULT_FRAMES)
+  if not (common.normalizeSceneTransitionFrames) then
+    if normalizedFrames < 1 then normalizedFrames = 1 end
+    if normalizedFrames > 60 then normalizedFrames = 60 end
+  end
   runtime.sceneTransitionType = normalizedType
   runtime.sceneTransitionFrames = normalizedFrames
   _G.CONFIG_UI = runtime

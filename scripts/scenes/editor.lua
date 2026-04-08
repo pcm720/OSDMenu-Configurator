@@ -148,6 +148,47 @@ local function isR3ConfiguratorFile(ctx)
   return ctx and ctx.fileType == "r3configurator_cnf"
 end
 
+local function isSceneTransitionEnumOption(opt)
+  return opt and tostring(opt.key or "") == "scene_transition"
+end
+
+local function isBlockedSceneTransitionEnumValue(ctx, opt, value)
+  if not isR3ConfiguratorFile(ctx) then return false end
+  if not isSceneTransitionEnumOption(opt) then return false end
+  local v = tostring(value or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  return v == "cut"
+end
+
+local function findEnumIndex(enumVals, value)
+  local list = enumVals or {}
+  for i, v in ipairs(list) do
+    if v == value then return i end
+  end
+  return 0
+end
+
+local function cycleEnumIndex(ctx, opt, currentIndex, step, allowUnset)
+  local values = opt and opt.enumVals or nil
+  local count = values and #values or 0
+  if count <= 0 then return currentIndex end
+  local minIdx = allowUnset and 0 or 1
+  local idx = tonumber(currentIndex) or minIdx
+  local dir = (tonumber(step) or 0) < 0 and -1 or 1
+  local span = count + (allowUnset and 1 or 0)
+  for _scan = 1, span do
+    idx = idx + dir
+    if idx < minIdx then idx = count end
+    if idx > count then idx = minIdx end
+    if idx == 0 then
+      return idx
+    end
+    if not isBlockedSceneTransitionEnumValue(ctx, opt, values[idx]) then
+      return idx
+    end
+  end
+  return currentIndex
+end
+
 local function isDeviceAbsolutePath(path)
   local p = tostring(path or "")
   if p == "" then return false end
@@ -308,8 +349,20 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
 end
 
 local function setConfigValue(ctx, _, key, value)
-  _.config_parse.set(ctx.lines, key, tostring(value or ""))
-  applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
+  local outValue = value
+  local rawKey = tostring(key or "")
+  if isR3ConfiguratorFile(ctx) and rawKey == "scene_transition_frames" then
+    if _.common and _.common.normalizeSceneTransitionFrames then
+      outValue = _.common.normalizeSceneTransitionFrames(value)
+    else
+      local n = math.floor(tonumber(value) or 10)
+      if n < 1 then n = 1 end
+      if n > 60 then n = 60 end
+      outValue = n
+    end
+  end
+  _.config_parse.set(ctx.lines, key, tostring(outValue or ""))
+  applyR3ConfiguratorRuntimeOverride(ctx, _, key, outValue)
 end
 
 local function getSceneTransitionConfig(_)
@@ -1165,6 +1218,7 @@ local function run(ctx)
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       lab = prettifyBblGlobalLabel(ctx, o, lab)
       local valDisplay
+      local forceDimValue = false
       if o.optType == "header" or o.optType == "action" then
         valDisplay = ""
       elseif o.optType == "color" then
@@ -1213,6 +1267,7 @@ local function run(ctx)
         end
       elseif o.optType == "enum" then
         local raw = cachedGet(ctx.lines, o.key) or o.default or ""
+        forceDimValue = isBlockedSceneTransitionEnumValue(ctx, o, raw)
         if raw ~= "" and o.enumDisplayMap and o.enumDisplayMap[raw] then
           valDisplay = o.enumDisplayMap[raw]
         else
@@ -1367,7 +1422,7 @@ local function run(ctx)
         drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
       elseif valDisplay then
         if valDisplay ~= "" then
-          local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set) and _.DIM or
+          local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or forceDimValue) and _.DIM or
               ((i == ctx.optSel) and _.WHITE or _.GRAY)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
           local drawVal
@@ -2078,25 +2133,18 @@ local function run(ctx)
       if o.optType == "enum" and o.enumVals and #o.enumVals > 0 then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         local allowUnset = (o.default == "")
-        local idx = 0
+        local idx
         if cur == "" then
           idx = allowUnset and 0 or 1
         else
-          for ei, v in ipairs(o.enumVals) do
-            if v == cur then
-              idx = ei; break
-            end
-          end
+          idx = findEnumIndex(o.enumVals, cur)
           if idx == 0 then idx = 1 end
         end
         if (_.padEffective & _.PAD_LEFT) ~= 0 then
-          idx = idx - 1
-          if idx < 0 then idx = #o.enumVals end
-          if idx == 0 and not allowUnset then idx = #o.enumVals end
+          idx = cycleEnumIndex(ctx, o, idx, -1, allowUnset)
         end
         if (_.padEffective & _.PAD_RIGHT) ~= 0 then
-          idx = idx + 1
-          if idx > #o.enumVals then idx = (allowUnset and 0 or 1) end
+          idx = cycleEnumIndex(ctx, o, idx, 1, allowUnset)
         end
         setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
         markConfigMutated(ctx)
@@ -2186,16 +2234,16 @@ local function run(ctx)
             (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language")) or
             (ctx.fileType == "r3configurator_cnf")) then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
-        local idx = 0
-        for ei, v in ipairs(o.enumVals) do
-          if v == cur then
-            idx = ei
-            break
-          end
+        local allowUnset = (o.default == "")
+        local idx
+        if cur == "" then
+          idx = allowUnset and 0 or 1
+        else
+          idx = findEnumIndex(o.enumVals, cur)
+          if idx == 0 then idx = 1 end
         end
-        idx = idx + 1
-        if idx > #o.enumVals then idx = 1 end
-        setConfigValue(ctx, _, o.key, o.enumVals[idx])
+        idx = cycleEnumIndex(ctx, o, idx, 1, allowUnset)
+        setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
         markConfigMutated(ctx)
       elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
