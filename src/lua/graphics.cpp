@@ -357,6 +357,29 @@ static int lua_drawimg_part(lua_State *L) {
   return 0;
 }
 
+static int lua_drawimg_quad(lua_State *L) {
+  int argc = lua_gettop(L);
+  if (argc != 9 && argc != 10)
+    return luaL_error(L, "wrong number of arguments");
+  GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
+  float x1 = (float)luaL_checknumber(L, 2);
+  float y1 = (float)luaL_checknumber(L, 3);
+  float x2 = (float)luaL_checknumber(L, 4);
+  float y2 = (float)luaL_checknumber(L, 5);
+  float x3 = (float)luaL_checknumber(L, 6);
+  float y3 = (float)luaL_checknumber(L, 7);
+  float x4 = (float)luaL_checknumber(L, 8);
+  float y4 = (float)luaL_checknumber(L, 9);
+  Color color = 0x80808080;
+  if (argc == 10)
+    color = (Color)luaL_checknumber(L, 10);
+
+  drawImageQuad(source, x1, y1, x2, y2, x3, y3, x4, y4, color);
+  return 0;
+}
+
 static int lua_drawimg_full(lua_State *L) {
   int argc = lua_gettop(L);
   if (argc != 10 && argc != 11)
@@ -598,6 +621,7 @@ static const luaL_Reg Graphics_functions[] = {{"drawPixel", lua_pixel},
                                               {"drawRotateImage", lua_drawimg_rotate},
                                               {"drawScaleImage", lua_drawimg_scale},
                                               {"drawPartialImage", lua_drawimg_part},
+                                              {"drawImageQuad", lua_drawimg_quad},
                                               {"drawImageExtended", lua_drawimg_full},
                                               {"setImageFilters", lua_filters},
                                               {"getImageWidth", lua_width},

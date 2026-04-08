@@ -87,6 +87,7 @@ GSTEXTURE *load_image(const char *path, bool delayed);
 void drawImage(GSTEXTURE *source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, Color color);
 void drawImageRotate(GSTEXTURE *source, float x, float y, float width, float height, float startx, float starty, float endx, float endy, float angle,
                      Color color);
+void drawImageQuad(GSTEXTURE *source, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, Color color);
 
 void drawPixel(float x, float y, Color color);
 void drawLine(float x, float y, float x2, float y2, Color color);

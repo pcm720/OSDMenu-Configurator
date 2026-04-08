@@ -853,6 +853,8 @@ local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_STRETCH_RANGE = 0.80
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_DIRECTIONAL_BIAS = 0.30
+local OVERLAY_LOGO_CAMERA_DISTANCE = 2.20
+local OVERLAY_LOGO_CAMERA_MIN_DENOM = 0.20
 local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MAX_ABS = 2.40
@@ -904,20 +906,20 @@ local function getOverlayLogoAnalogTransform(ctx)
   local rx, ry, rightOk, rRawX, rRawY = readStickNormalized(Pads and Pads.getRightStick)
   if not leftOk and not rightOk then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0
+    return 1, 1, 0, 0, 0, 1, 1
   end
 
   local invalidSignature = (math.abs(lRawX) >= 126 and math.abs(lRawY) >= 126 and
       math.abs(rRawX) >= 126 and math.abs(rRawY) >= 126)
   if invalidSignature then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0
+    return 1, 1, 0, 0, 0, 1, 1
   end
 
   -- Centered sticks should produce exact identity (no residual drift/tilt/roll).
   if lx == 0 and ly == 0 and rx == 0 and ry == 0 then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0
+    return 1, 1, 0, 0, 0, 1, 1
   end
 
   local smooth = OVERLAY_LOGO_STICK_SMOOTH
@@ -958,7 +960,55 @@ local function getOverlayLogoAnalogTransform(ctx)
   local sy = clampSignedAbs(pitchPerspective * stretchScaleY, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
 
   -- Camera orbit does not roll around view axis by default.
-  return sx, sy, 0
+  return sx, sy, 0, yawRad, pitchRad, stretchScaleX, stretchScaleY
+end
+
+local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, stretchX, stretchY)
+  local hw = tonumber(halfW) or 0
+  local hh = tonumber(halfH) or 0
+  if hw <= 0 or hh <= 0 then return nil end
+
+  local cam = tonumber(OVERLAY_LOGO_CAMERA_DISTANCE) or 2.20
+  local minDen = tonumber(OVERLAY_LOGO_CAMERA_MIN_DENOM) or 0.20
+  if cam < 0.10 then cam = 0.10 end
+  if minDen < 0.05 then minDen = 0.05 end
+
+  local cyaw, syaw = math.cos(yawRad or 0), math.sin(yawRad or 0)
+  local cpitch, spitch = math.cos(pitchRad or 0), math.sin(pitchRad or 0)
+
+  local aspectY = hh / math.max(hw, 0.0001)
+  local sx = tonumber(stretchX) or 1
+  local sy = tonumber(stretchY) or 1
+
+  local unit = hw
+
+  local function project(px, py)
+    local x = px
+    local y = py
+    local z = 0
+
+    -- Rotate around Y (yaw), then X (pitch), around logo center/origin.
+    local x1 = (x * cyaw) + (z * syaw)
+    local z1 = (-x * syaw) + (z * cyaw)
+    local y2 = (y * cpitch) - (z1 * spitch)
+    local z2 = (y * spitch) + (z1 * cpitch)
+
+    -- Simple perspective projection with denominator guard.
+    local denom = cam + z2
+    if denom < minDen then denom = minDen end
+    local p = cam / denom
+
+    return cx + (x1 * unit * p), cy + (y2 * unit * p)
+  end
+
+  local ux = sx
+  local uy = aspectY * sy
+
+  local ulx, uly = project(-ux, -uy)
+  local blx, bly = project(-ux, uy)
+  local urx, ury = project(ux, -uy)
+  local brx, bry = project(ux, uy)
+  return ulx, uly, blx, bly, urx, ury, brx, bry
 end
 
 flushOverlayLogoCache = function()
@@ -1043,14 +1093,26 @@ local function drawSelectionOverlayLogo(ctx)
   if isR3SettingsScene then
     scale = math.min(scale, OVERLAY_LOGO_R3_TITLE_SCALE)
   end
-  local analogScaleX, analogScaleY, analogRoll = getOverlayLogoAnalogTransform(ctx)
+  local analogScaleX, analogScaleY, analogRoll, yawRad, pitchRad, stretchScaleX, stretchScaleY =
+      getOverlayLogoAnalogTransform(ctx)
   local baseW = math.max(1, math.floor(iw * scale + 0.5))
   local baseH = math.max(1, math.floor(ih * scale + 0.5))
+  local halfW = baseW * 0.5
+  local halfH = baseH * 0.5
   local drawW = baseW * analogScaleX
   local drawH = baseH * analogScaleY
   local cx = math.floor((sw / 2) + 0.5)
   local cy = math.floor((sh / 2) + 0.5)
   local color = getOverlayLogoColor(key)
+
+  if Graphics.drawImageQuad then
+    local ulx, uly, blx, bly, urx, ury, brx, bry =
+        projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, stretchScaleX, stretchScaleY)
+    if ulx and uly and blx and bly and urx and ury and brx and bry then
+      Graphics.drawImageQuad(tex, ulx, uly, blx, bly, urx, ury, brx, bry, color)
+      return
+    end
+  end
 
   if Graphics.drawImageExtended then
     Graphics.drawImageExtended(tex, cx, cy, 0, 0, iw, ih, drawW, drawH, analogRoll or 0, color)
