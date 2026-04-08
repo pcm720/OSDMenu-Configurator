@@ -148,15 +148,29 @@ local function isR3ConfiguratorFile(ctx)
   return ctx and ctx.fileType == "r3configurator_cnf"
 end
 
-local function isSceneTransitionEnumOption(opt)
-  return opt and tostring(opt.key or "") == "scene_transition"
+local function isBlockedSceneTransitionEnumValue(ctx, opt, value)
+  return false
 end
 
-local function isBlockedSceneTransitionEnumValue(ctx, opt, value)
+local function getCurrentSceneTransitionType(ctx, _)
+  if not (ctx and _) then return "cut" end
+  local t = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, "scene_transition")) or "cut"
+  if tostring(t or "") == "" then
+    t = "cut"
+  end
+  if _.common and _.common.normalizeSceneTransitionType then
+    return _.common.normalizeSceneTransitionType(t)
+  end
+  return tostring(t or "cut"):lower():gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function isTemporarilyDisabledEditorOption(ctx, _, opt)
   if not isR3ConfiguratorFile(ctx) then return false end
-  if not isSceneTransitionEnumOption(opt) then return false end
-  local v = tostring(value or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
-  return v == "cut"
+  local key = tostring(opt and opt.key or "")
+  if key == "scene_transition_frames" then
+    return getCurrentSceneTransitionType(ctx, _) == "cut"
+  end
+  return false
 end
 
 local function findEnumIndex(enumVals, value)
@@ -1187,12 +1201,12 @@ local function run(ctx)
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #ctx.optList)
     if #ctx.optList > 0 then
       local currentOpt = ctx.optList[ctx.optSel]
-      if currentOpt and currentOpt.optType == "header" then
+      if currentOpt and (currentOpt.optType == "header" or isTemporarilyDisabledEditorOption(ctx, _, currentOpt)) then
         local idx = ctx.optSel
         for _scan = 1, #ctx.optList do
           idx = _.common.wrapListSelection(idx, #ctx.optList, 1)
           local candidate = ctx.optList[idx]
-          if candidate and candidate.optType ~= "header" then
+          if candidate and candidate.optType ~= "header" and not isTemporarilyDisabledEditorOption(ctx, _, candidate) then
             ctx.optSel = idx
             break
           end
@@ -1218,7 +1232,7 @@ local function run(ctx)
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       lab = prettifyBblGlobalLabel(ctx, o, lab)
       local valDisplay
-      local forceDimValue = false
+      local optionDisabled = isTemporarilyDisabledEditorOption(ctx, _, o)
       if o.optType == "header" or o.optType == "action" then
         valDisplay = ""
       elseif o.optType == "color" then
@@ -1267,7 +1281,6 @@ local function run(ctx)
         end
       elseif o.optType == "enum" then
         local raw = cachedGet(ctx.lines, o.key) or o.default or ""
-        forceDimValue = isBlockedSceneTransitionEnumValue(ctx, o, raw)
         if raw ~= "" and o.enumDisplayMap and o.enumDisplayMap[raw] then
           valDisplay = o.enumDisplayMap[raw]
         else
@@ -1362,6 +1375,9 @@ local function run(ctx)
       if o.optType == "boot_paths" and bootKeyDisabled then
         col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end
+      if optionDisabled then
+        col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      end
       if inlineAutoRow then
         local maxInlineW = (_.w or 640) - (_.MARGIN_X + 16) - (_.MARGIN_X + 8)
         if _.common.fitListRowText then
@@ -1422,7 +1438,7 @@ local function run(ctx)
         drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
       elseif valDisplay then
         if valDisplay ~= "" then
-          local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or forceDimValue) and _.DIM or
+          local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or optionDisabled) and _.DIM or
               ((i == ctx.optSel) and _.WHITE or _.GRAY)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
           local drawVal
@@ -2103,7 +2119,7 @@ local function run(ctx)
       for _scan = 1, count do
         idx = _.common.wrapListSelection(idx, count, step)
         local candidate = ctx.optList[idx]
-        if not (candidate and candidate.optType == "header") then
+        if candidate and candidate.optType ~= "header" and not isTemporarilyDisabledEditorOption(ctx, _, candidate) then
           ctx.optSel = idx
           return
         end
@@ -2130,7 +2146,7 @@ local function run(ctx)
     end
     if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT)) ~= 0 then
       local o = ctx.optList[ctx.optSel]
-      if o.optType == "enum" and o.enumVals and #o.enumVals > 0 then
+      if o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "enum" and o.enumVals and #o.enumVals > 0 then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         local allowUnset = (o.default == "")
         local idx
@@ -2148,11 +2164,11 @@ local function run(ctx)
         end
         setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
         markConfigMutated(ctx)
-      elseif o.optType == "bool" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
         markConfigMutated(ctx)
-      elseif o.optType == "int" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "int" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
         if not num then num = tonumber(o.default or "0") end
@@ -2181,7 +2197,7 @@ local function run(ctx)
           setConfigValue(ctx, _, o.key, tostring(math.floor(num)))
           markConfigMutated(ctx)
         end
-      elseif o.optType == "string" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "string" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
         if num then
@@ -2227,7 +2243,7 @@ local function run(ctx)
         return
       end
       local o = ctx.optList[ctx.optSel]
-      if o.optType == "enum" and o.enumVals and #o.enumVals > 0 and
+      if o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "enum" and o.enumVals and #o.enumVals > 0 and
           (((ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and
             (o.key == "VIDEO_MODE" or o.key == "LOGO_DISPLAY")) or
             (ctx.fileType == "osdmenu_cnf" and (o.key == "OSDSYS_video_mode" or o.key == "OSDSYS_region")) or
@@ -2245,19 +2261,19 @@ local function run(ctx)
         idx = cycleEnumIndex(ctx, o, idx, 1, allowUnset)
         setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
         markConfigMutated(ctx)
-      elseif o.optType == "bool" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
         markConfigMutated(ctx)
-      elseif o.optType == "int" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "int" then
         if isTimerDigitEditKey(o.key) then
           startTimerDigitEdit(ctx, _, o)
         else
           startIntDigitEdit(ctx, _, o)
         end
-      elseif o.optType == "color" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "color" then
         startInlineColorEdit(ctx, _, o)
-      elseif o.optType == "text" or o.optType == "string" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and (o.optType == "text" or o.optType == "string") then
         local allowBelKey = (o.key == "OSDSYS_left_cursor" or o.key == "OSDSYS_right_cursor" or
           o.key == "OSDSYS_menu_top_delimiter" or o.key == "OSDSYS_menu_bottom_delimiter")
         ctx.textInputTitleIdMode = nil
@@ -2279,12 +2295,12 @@ local function run(ctx)
         ctx.textInputCursor = #ctx.textInputValue + 1
         ctx.textInputScroll = 1
         ctx.state = "text_input"
-      elseif o.key == "_menu_entries" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_menu_entries" then
         ctx.state = "menu_entries"
         ctx.entryList = _.config_parse.getMenuEntryIndices(ctx.lines)
         ctx.entrySel = 1
         ctx.entryScroll = 0
-      elseif o.key == "_bbl_irx_entries" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_bbl_irx_entries" then
         local irxEntries = (_.config_parse.getBblIrxEntryIndices and _.config_parse.getBblIrxEntryIndices(ctx.lines)) or {}
         local targetIrxIdx, targetIrxDisabled = nil, false
         local hasUsableIrx = false
@@ -2344,10 +2360,10 @@ local function run(ctx)
           ctx.bblIrxScroll = 0
           ctx.state = "bbl_irx_entries"
         end
-      elseif o.key == "_bbl_hotkeys" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_bbl_hotkeys" then
         ctx.bblHotkeySel = 1
         ctx.state = "bbl_hotkeys"
-      elseif o.optType == "bbl_slot" and o.bblEntrySlot then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
         local isAutoKey = tostring(ctx.bblHotkeyKey or ""):upper() == "AUTO"
         local slotNum = tonumber(o.bblEntrySlot)
@@ -2399,7 +2415,7 @@ local function run(ctx)
           ctx.bblEntryDetailReturnState = "editor"
           ctx.state = "bbl_hotkey_entry"
         end
-      elseif o.optType == "boot_paths" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "boot_paths" then
         local bootEntries = (_.config_parse.getBootPathEntries and _.config_parse.getBootPathEntries(ctx.lines, o.key)) or {}
         local hasUsableBootPath = false
         for bi = 1, #bootEntries do
@@ -2451,7 +2467,7 @@ local function run(ctx)
           ctx.entryPathScroll = 0
           ctx.state = "entry_paths"
         end
-      elseif o.optType == "path" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "path" then
         ctx.editKey = o.key
         ctx.isAddPath = false
         ctx.addPathKey = nil
@@ -2525,7 +2541,7 @@ local function run(ctx)
         ctx.editorR3ColorPresetSel = ctx.editorR3ColorPresetSel or 1
         ctx.editorR3ColorPresetScroll = ctx.editorR3ColorPresetScroll or 0
         ctx.editorR3ColorPresetKey = o.key
-      elseif o and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
+      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
         local def = resetDefaultFn and resetDefaultFn(o.key)
         if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def, cachedGet) then
           setConfigValue(ctx, _, o.key, def)

@@ -1468,7 +1468,13 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     end
     if ctx and ctx.drawBackgroundLayer and
         (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(ctx) ~= false) then
-      ctx.drawBackgroundLayer(ctx)
+      if common.drawWithoutSceneTransform then
+        common.drawWithoutSceneTransform(function()
+          ctx.drawBackgroundLayer(ctx)
+        end)
+      else
+        ctx.drawBackgroundLayer(ctx)
+      end
     end
     local rawPadEffective = common.getPadEffective(ctx)
     local padEffective = common.shouldBlockInputForSceneTransition(ctx) and 0 or rawPadEffective

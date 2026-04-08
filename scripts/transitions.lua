@@ -63,7 +63,7 @@ function transitions.install(common)
     if value == "cross-dissolve" then value = "cross_dissolve" end
     if value == "whippan" then value = "whip_pan" end
     if value == "whip-pan" then value = "whip_pan" end
-    if value == "cut" or value == "slide" or value == "fade" or value == "cross_dissolve" or value == "whip_pan" or
+    if value == "cut" or value == "slide" or value == "cross_dissolve" or value == "whip_pan" or
         value == "zoom" then
       return value
     end
@@ -120,15 +120,10 @@ function transitions.install(common)
     local w, h = getTransitionScreenSize(ctx)
     local maxAlpha = 0x80
     local baseAlpha = maxAlpha
-    if transitionType == "fade" or transitionType == "cross_dissolve" then
+    if transitionType == "cross_dissolve" then
       baseAlpha = math.floor(maxAlpha * cover + 0.5)
     end
     local frame = math.max(0, math.floor(tonumber(spec.frame) or 0))
-
-    if transitionType == "fade" then
-      drawRectSafe(0, 0, w, h, Color.new(0, 0, 0, baseAlpha))
-      return
-    end
 
     if transitionType == "cross_dissolve" then
       local mainAlpha = math.floor((maxAlpha * 0.78) * cover + 0.5)
@@ -186,7 +181,7 @@ function transitions.install(common)
       return
     end
 
-    -- Fallback: fade behavior.
+    -- Fallback: generic mask behavior.
     drawRectSafe(0, 0, w, h, Color.new(0, 0, 0, baseAlpha))
   end
 
@@ -371,13 +366,43 @@ function transitions.install(common)
   end
 
   function common.shouldDrawBackgroundLayerForTransition(ctx)
-    -- Logos opt out of transition rendering entirely.
-    -- This avoids over-brightening in dissolve and keeps logo motion from
-    -- participating in slide/zoom/whip/fade effects.
-    if common.isSceneTransitionInActive(ctx) then
+    if not common.isSceneTransitionInActive(ctx) then
+      return true
+    end
+    local tr = ctx and ctx.sceneTransitionIn
+    local t = common.normalizeSceneTransitionType(tr and tr.type)
+    -- Cross dissolve preserves framebuffer (no clear), so redrawing logos
+    -- every frame would brighten them. Keep the preserved logo instead.
+    if t == "cross_dissolve" then
       return false
     end
     return true
+  end
+
+  function common.drawWithoutSceneTransform(drawFn)
+    if type(drawFn) ~= "function" then return nil end
+    local runtime = _G and _G.CONFIG_UI
+    if type(runtime) ~= "table" then
+      return drawFn()
+    end
+    local prevOffsetX = runtime.sceneDrawOffsetX
+    local prevAlpha = runtime.sceneDrawAlpha
+    local prevScale = runtime.sceneDrawScale
+    local prevCenterX = runtime.sceneDrawCenterX
+    local prevCenterY = runtime.sceneDrawCenterY
+    runtime.sceneDrawOffsetX = 0
+    runtime.sceneDrawAlpha = 1
+    runtime.sceneDrawScale = 1
+    local ok, r1, r2, r3, r4 = pcall(drawFn)
+    runtime.sceneDrawOffsetX = prevOffsetX
+    runtime.sceneDrawAlpha = prevAlpha
+    runtime.sceneDrawScale = prevScale
+    runtime.sceneDrawCenterX = prevCenterX
+    runtime.sceneDrawCenterY = prevCenterY
+    if not ok then
+      error(r1)
+    end
+    return r1, r2, r3, r4
   end
 
   function common.drawAndAdvanceSceneTransitionIn(ctx)
@@ -402,7 +427,7 @@ function transitions.install(common)
     elseif tr.type == "zoom" then
       -- Zoom transition is handled through sceneDrawScale in applySceneDrawOffsetForCurrentFrame.
     elseif not isSceneSlideTransition(tr.type) then
-      -- For incoming non-slide transitions (fade/cross_dissolve), start at step 1
+      -- For incoming non-slide transitions, start at step 1
       -- to avoid a fully blank first frame right after scene switch.
       local progress = clamp01((frame + 1) / math.max(1, frames))
       common.drawSceneTransitionOverlay(ctx, {

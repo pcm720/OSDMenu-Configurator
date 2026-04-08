@@ -1041,7 +1041,13 @@ local function mainLoop()
     end
     if c.drawBackgroundLayer and
         (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(c) ~= false) then
-      c.drawBackgroundLayer(c)
+      if common.drawWithoutSceneTransform then
+        common.drawWithoutSceneTransform(function()
+          c.drawBackgroundLayer(c)
+        end)
+      else
+        c.drawBackgroundLayer(c)
+      end
     end
     local HINT_Y = c.HINT_Y
     local DESC_Y_BOTTOM = c.DESC_Y_BOTTOM
