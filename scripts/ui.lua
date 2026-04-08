@@ -1365,6 +1365,197 @@ local function mainLoop()
     return t == "slide" or t == "whip_pan" or t == "zoom"
   end
 
+  local sceneSelectionSpecs = {
+    main = {
+      { field = "mainSel", top = 1 },
+    },
+    choose_mc = {
+      { field = "mcSel", top = 1 },
+    },
+    select_config = {
+      { kind = "select_config", top = 1 },
+    },
+    choose_load = {
+      { field = "loadSel", top = 1 },
+    },
+    editor = {
+      { field = "optSel", top = 1 },
+      { field = "optScroll", top = 0 },
+    },
+    choose_save = {
+      { field = "saveSel", top = 1 },
+    },
+    menu_entries = {
+      { field = "entrySel", top = 1 },
+      { field = "entryScroll", top = 0 },
+    },
+    menu_entry_edit = {
+      { field = "entryEditSub", top = 1 },
+    },
+    entry_cdrom_options = {
+      { field = "cdromOptSel", top = 1 },
+    },
+    entry_paths = {
+      { field = "entryPathSel", top = 1 },
+      { field = "entryPathScroll", top = 0 },
+    },
+    entry_args = {
+      { field = "entryArgSel", top = 1 },
+      { field = "entryArgScroll", top = 0 },
+    },
+    bbl_hotkeys = {
+      { field = "bblHotkeySel", top = 1 },
+      { field = "bblHotkeyScroll", top = 0 },
+    },
+    bbl_irx_entries = {
+      { field = "bblIrxSel", top = 1 },
+      { field = "bblIrxScroll", top = 0 },
+    },
+    bbl_hotkey_entries = {
+      { field = "bblEntrySel", top = 1 },
+      { field = "bblEntryScroll", top = 0 },
+    },
+    bbl_hotkey_entry = {
+      { field = "bblEntryDetailSel", top = 1 },
+    },
+    bbl_hotkey_args = {
+      { field = "bblArgSel", top = 1 },
+      { field = "bblArgScroll", top = 0 },
+    },
+    egsm_editor = {
+      { field = "egsmSel", top = 1 },
+    },
+    egsm_value_edit = {
+      { field = "egsmValueSel", top = 1 },
+    },
+    text_input = {
+      { field = "textInputGridSel", top = 1 },
+    },
+    path_picker = {
+      { field = "pathPickerSel", top = 1 },
+      { field = "pathPickerScroll", top = 0 },
+    },
+  }
+
+  local function getSelectConfigContextKey(c)
+    return c.context or "__none__"
+  end
+
+  local function getSceneSelectionStack(c)
+    if type(c._sceneSelectionStack) ~= "table" then
+      c._sceneSelectionStack = {}
+    end
+    return c._sceneSelectionStack
+  end
+
+  local function captureSceneSelectionSnapshot(c, sceneName)
+    local specs = sceneSelectionSpecs[sceneName]
+    if type(specs) ~= "table" then
+      return nil
+    end
+    local snap = { scene = sceneName, fields = {} }
+    local hasData = false
+    for i = 1, #specs do
+      local spec = specs[i]
+      if spec and spec.kind == "select_config" then
+        local byContext = c.selectConfigSelByContext
+        local ctxKey = getSelectConfigContextKey(c)
+        local sel = type(byContext) == "table" and byContext[ctxKey] or nil
+        if type(sel) == "number" then
+          snap.selectConfig = {
+            context = ctxKey,
+            sel = math.floor(sel),
+          }
+          hasData = true
+        end
+      elseif spec and spec.field then
+        local value = c[spec.field]
+        if type(value) == "number" then
+          snap.fields[spec.field] = value
+          hasData = true
+        end
+      end
+    end
+    if not hasData then
+      return nil
+    end
+    return snap
+  end
+
+  local function restoreSceneSelectionSnapshot(c, snap)
+    if type(snap) ~= "table" then
+      return
+    end
+    local fields = snap.fields
+    if type(fields) == "table" then
+      for field, value in pairs(fields) do
+        c[field] = value
+      end
+    end
+    local selectConfig = snap.selectConfig
+    if type(selectConfig) == "table" then
+      if type(c.selectConfigSelByContext) ~= "table" then
+        c.selectConfigSelByContext = {}
+      end
+      local ctxKey = selectConfig.context or getSelectConfigContextKey(c)
+      local sel = tonumber(selectConfig.sel) or 1
+      c.selectConfigSelByContext[ctxKey] = math.floor(sel)
+    end
+  end
+
+  local function resetSceneSelectionToTop(c, sceneName)
+    local specs = sceneSelectionSpecs[sceneName]
+    if type(specs) ~= "table" then
+      return
+    end
+    for i = 1, #specs do
+      local spec = specs[i]
+      if spec and spec.kind == "select_config" then
+        if type(c.selectConfigSelByContext) ~= "table" then
+          c.selectConfigSelByContext = {}
+        end
+        c.selectConfigSelByContext[getSelectConfigContextKey(c)] = tonumber(spec.top) or 1
+      elseif spec and spec.field then
+        c[spec.field] = tonumber(spec.top) or 1
+      end
+    end
+  end
+
+  local function rememberSceneSelectionBeforeForward(c, sceneName)
+    local snap = captureSceneSelectionSnapshot(c, sceneName)
+    if not snap then
+      return
+    end
+    local stack = getSceneSelectionStack(c)
+    stack[#stack + 1] = snap
+  end
+
+  local function restoreSceneSelectionOnBack(c, sceneName)
+    local stack = getSceneSelectionStack(c)
+    for i = #stack, 1, -1 do
+      local snap = stack[i]
+      if snap and snap.scene == sceneName then
+        restoreSceneSelectionSnapshot(c, snap)
+        for j = #stack, i, -1 do
+          stack[j] = nil
+        end
+        return
+      end
+    end
+  end
+
+  local function applySceneSelectionNavigationPolicy(c, prevScene, nextScene)
+    if not c then return end
+    if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
+    local direction = getSceneTransitionDirectionFromPad(c._lastPadEffective)
+    if direction == "out" then
+      restoreSceneSelectionOnBack(c, nextScene)
+    else
+      rememberSceneSelectionBeforeForward(c, prevScene)
+      resetSceneSelectionToTop(c, nextScene)
+    end
+  end
+
   local function runSceneTransitionOnStateChange(c, prevScene, nextScene)
     if not c then return end
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
@@ -1420,6 +1611,7 @@ local function mainLoop()
     local prevScene = currentScene
     local nextScene, newCtx = scene.run(ctx)
     ctx = newCtx
+    applySceneSelectionNavigationPolicy(ctx, prevScene, nextScene)
     runSceneTransitionOnStateChange(ctx, prevScene, nextScene)
     currentScene = nextScene
   end

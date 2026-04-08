@@ -254,17 +254,18 @@ function common.getEditorBackState(context, fileType, getPresentMcSlots)
   if common.isBblContext(context) then
     return "select_config"
   end
+  if (context == "freemcboot" or context == "freehddboot") and fileType == "freemcboot_cnf" then
+    return "select_config"
+  end
   if context == "hosdmenu" and common.isOsdConfigFileType(fileType) then
     return "select_config"
   end
-  if context == "osdmenu" or context == "freemcboot" then
-    if common.isOsdConfigFileType(fileType) or fileType == "freemcboot_cnf" then
-      local slots = (type(getPresentMcSlots) == "function" and getPresentMcSlots()) or {}
-      if type(slots) == "table" and #slots > 1 then
-        return "choose_mc"
-      end
-      return "main"
+  if context == "osdmenu" and common.isOsdConfigFileType(fileType) then
+    local slots = (type(getPresentMcSlots) == "function" and getPresentMcSlots()) or {}
+    if type(slots) == "table" and #slots > 1 then
+      return "choose_mc"
     end
+    return "main"
   end
   return "main"
 end

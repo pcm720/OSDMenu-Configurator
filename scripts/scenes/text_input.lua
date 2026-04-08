@@ -640,6 +640,10 @@ local function run(ctx)
   local keyScale = 0.7
   local glyphLabelW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, glyphKeyLabel, GLYPH_KEY_LABEL_SCALE))
       or math.floor(((_.KEY_CHAR_W or 8) * GLYPH_KEY_LABEL_SCALE) * #glyphKeyLabel)
+  -- Real hardware text metrics can run wider than measurement/fallback estimates.
+  -- Keep a safety margin so the Glyphs key always visually covers the label.
+  local glyphSafetyW = math.max(6, math.floor((_.KEY_CHAR_W or 8) * 0.9 + 0.5))
+  glyphLabelW = glyphLabelW + glyphSafetyW
   local glyphPadX = math.max(4, math.floor((_.KEY_WIDTH * 0.22) + 0.5))
   local glyphW = math.max(kw, glyphLabelW + (glyphPadX * 2))
   local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
