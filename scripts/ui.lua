@@ -1050,12 +1050,15 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
   local aspectY = hh / math.max(hw, 0.0001)
   local unit = hw
   local centerOffset = tonumber(depthOffset) or 0
-  local centerX = fwdX * centerOffset
-  local centerY = fwdY * centerOffset
-  local centerZ = fwdZ * centerOffset
+  -- Keep right-stick depth in world space (default view axis), not camera-forward.
+  -- This way left-stick orbit reveals a different camera path/radius feel instead
+  -- of the logo following the camera and appearing to only rotate around itself.
+  local centerX = 0
+  local centerY = 0
+  local centerZ = -centerOffset
 
   local function project(px, py)
-    -- Logo plane in world-space, centered at origin facing default camera.
+    -- Logo plane in world-space, centered at (0, 0, -depthOffset).
     local pX = centerX + px
     local pY = centerY + py
     local pZ = centerZ
