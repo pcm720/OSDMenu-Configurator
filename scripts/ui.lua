@@ -848,9 +848,78 @@ local OVERLAY_LOGO_OPACITY = 0.25 -- 75% transparent
 local OVERLAY_LOGO_OPACITY_R3 = 1.0 -- keep splash/title logo fully visible if selected
 local OVERLAY_LOGO_R3_TITLE_KEY = "__r3_title__"
 local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
+local OVERLAY_LOGO_STICK_DEADZONE = 14
+local OVERLAY_LOGO_STICK_SMOOTH = 0.22
+local OVERLAY_LOGO_STRETCH_RANGE = 0.80
+local OVERLAY_LOGO_PSEUDO_YAW_SQUEEZE = 0.42
+local OVERLAY_LOGO_PSEUDO_PITCH_SQUEEZE = 0.34
+local OVERLAY_LOGO_SCALE_MIN = 0.25
+local OVERLAY_LOGO_SCALE_MAX = 2.40
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
+end
+
+local function clampf(v, lo, hi)
+  local n = tonumber(v) or 0
+  if n < lo then return lo end
+  if n > hi then return hi end
+  return n
+end
+
+local function normalizeStickAxis(raw)
+  local v = tonumber(raw) or 0
+  local a = math.abs(v)
+  if a <= OVERLAY_LOGO_STICK_DEADZONE then return 0 end
+  local denom = 127 - OVERLAY_LOGO_STICK_DEADZONE
+  if denom <= 0 then return 0 end
+  local n = (a - OVERLAY_LOGO_STICK_DEADZONE) / denom
+  if n > 1 then n = 1 end
+  return (v < 0) and (-n) or n
+end
+
+local function getOverlayLogoAnalogScale(ctx)
+  local state = ctx._overlayLogoAnalogState
+  if type(state) ~= "table" then
+    state = { lx = 0, ly = 0, rx = 0, ry = 0 }
+    ctx._overlayLogoAnalogState = state
+  end
+
+  local lx, ly, rx, ry = 0, 0, 0, 0
+  if Pads and Pads.getLeftStick then
+    local ok, x, y = pcall(Pads.getLeftStick, 0)
+    if ok then
+      lx = normalizeStickAxis(x)
+      ly = normalizeStickAxis(y)
+    end
+  end
+  if Pads and Pads.getRightStick then
+    local ok, x, y = pcall(Pads.getRightStick, 0)
+    if ok then
+      rx = normalizeStickAxis(x)
+      ry = normalizeStickAxis(y)
+    end
+  end
+
+  local smooth = OVERLAY_LOGO_STICK_SMOOTH
+  state.lx = (tonumber(state.lx) or 0) + (lx - (tonumber(state.lx) or 0)) * smooth
+  state.ly = (tonumber(state.ly) or 0) + (ly - (tonumber(state.ly) or 0)) * smooth
+  state.rx = (tonumber(state.rx) or 0) + (rx - (tonumber(state.rx) or 0)) * smooth
+  state.ry = (tonumber(state.ry) or 0) + (ry - (tonumber(state.ry) or 0)) * smooth
+
+  -- Left stick provides pseudo-3D tilt (yaw/pitch squeeze around center).
+  local yaw = state.lx
+  local pitch = -(state.ly)
+  local tiltScaleX = 1 - (math.abs(yaw) * OVERLAY_LOGO_PSEUDO_YAW_SQUEEZE)
+  local tiltScaleY = 1 - (math.abs(pitch) * OVERLAY_LOGO_PSEUDO_PITCH_SQUEEZE)
+
+  -- Right stick provides fun direct stretch controls.
+  local stretchScaleX = 1 + (state.rx * OVERLAY_LOGO_STRETCH_RANGE)
+  local stretchScaleY = 1 + ((-state.ry) * OVERLAY_LOGO_STRETCH_RANGE)
+
+  local sx = clampf(tiltScaleX * stretchScaleX, OVERLAY_LOGO_SCALE_MIN, OVERLAY_LOGO_SCALE_MAX)
+  local sy = clampf(tiltScaleY * stretchScaleY, OVERLAY_LOGO_SCALE_MIN, OVERLAY_LOGO_SCALE_MAX)
+  return sx, sy
 end
 
 flushOverlayLogoCache = function()
@@ -935,8 +1004,9 @@ local function drawSelectionOverlayLogo(ctx)
   if isR3SettingsScene then
     scale = math.min(scale, OVERLAY_LOGO_R3_TITLE_SCALE)
   end
-  local dw = math.max(1, math.floor(iw * scale + 0.5))
-  local dh = math.max(1, math.floor(ih * scale + 0.5))
+  local analogScaleX, analogScaleY = getOverlayLogoAnalogScale(ctx)
+  local dw = math.max(1, math.floor(iw * scale * analogScaleX + 0.5))
+  local dh = math.max(1, math.floor(ih * scale * analogScaleY + 0.5))
   local x = math.floor((sw - dw) / 2)
   local y = math.floor((sh - dh) / 2)
 
