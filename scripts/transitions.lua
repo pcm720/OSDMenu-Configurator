@@ -319,8 +319,8 @@ function transitions.install(common)
         local curved = easeInOutCubic(progress)
         local direction = tostring(tr.direction or "in")
         -- Forward and back use opposite zoom directions while both settle at 1.0.
-        -- "in" starts much smaller; "out/back" starts much larger.
-        local startScale = (direction == "out" or direction == "back") and 1.80 or 0.20
+        -- "in" starts smaller; "out/back" starts much larger.
+        local startScale = (direction == "out" or direction == "back") and 1.80 or 0.40
         local scale = startScale + ((1 - startScale) * curved)
         if runtime then
           runtime.sceneDrawScale = scale
