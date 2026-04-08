@@ -869,6 +869,26 @@ local function clampSignedAbs(v, minAbs, maxAbs)
   return sign * a
 end
 
+local function safeAtan2(y, x)
+  local yy = tonumber(y) or 0
+  local xx = tonumber(x) or 0
+  if math and type(math.atan2) == "function" then
+    return math.atan2(yy, xx)
+  end
+  if math and type(math.atan) == "function" then
+    local ok, v = pcall(math.atan, yy, xx)
+    if ok and type(v) == "number" then return v end
+    if xx > 0 then return math.atan(yy / xx) end
+    if xx < 0 then
+      if yy >= 0 then return math.atan(yy / xx) + math.pi end
+      return math.atan(yy / xx) - math.pi
+    end
+    if yy > 0 then return math.pi / 2 end
+    if yy < 0 then return -math.pi / 2 end
+  end
+  return 0
+end
+
 local function normalizeStickAxis(raw)
   local v = tonumber(raw) or 0
   local a = math.abs(v)
@@ -947,7 +967,7 @@ local function getOverlayLogoAnalogTransform(ctx)
 
   local mag = math.sqrt((state.lx * state.lx) + (state.ly * state.ly))
   if mag > 1 then mag = 1 end
-  local rollDeg = math.deg(math.atan2(-(state.ly or 0), state.lx or 0)) * mag
+  local rollDeg = math.deg(safeAtan2(-(state.ly or 0), state.lx or 0)) * mag
   local rollRad = math.rad(rollDeg)
 
   return sx, sy, rollRad
