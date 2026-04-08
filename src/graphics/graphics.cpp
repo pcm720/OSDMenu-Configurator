@@ -479,6 +479,16 @@ void drawImageQuad(GSTEXTURE *source, float x1, float y1, float x2, float y2, fl
                           source->Width, source->Height, 1, color);
 }
 
+void drawImageQuadPartial(GSTEXTURE *source, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float startx,
+                          float starty, float endx, float endy, Color color) {
+  if (source->Delayed == true) {
+    gsKit_TexManager_bind(gsGlobal, source);
+  }
+  gsKit_set_texfilter(gsGlobal, source->Filter);
+  gsKit_prim_quad_texture(gsGlobal, source, x1, y1, startx, starty, x2, y2, startx, endy, x3, y3, endx, starty, x4, y4, endx, endy, 1,
+                          color);
+}
+
 void drawPixel(float x, float y, Color color) { gsKit_prim_point(gsGlobal, x, y, 1, color); }
 
 void drawLine(float x, float y, float x2, float y2, Color color) { gsKit_prim_line(gsGlobal, x, y, x2, y2, 1, color); }

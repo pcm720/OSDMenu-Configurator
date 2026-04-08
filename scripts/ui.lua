@@ -640,6 +640,29 @@ local function installSceneDrawOffsetGraphicsProxy()
         end
         return fn(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4)
       end
+    elseif name == "drawImageQuadPartial" then
+      return function(image, x1, y1, x2, y2, x3, y3, x4, y4, startx, starty, endx, endy, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x1, y1, x2, y2, x3, y3, x4, y4, startx, starty, endx, endy, color)
+          end
+          return fn(image, x1, y1, x2, y2, x3, y3, x4, y4, startx, starty, endx, endy)
+        end
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
+        elseif getSceneDrawAlpha() < 0.999 then
+          c = applySceneAlphaToColor(0x80808080)
+        end
+        local tx1, ty1 = transformScenePoint(x1, y1)
+        local tx2, ty2 = transformScenePoint(x2, y2)
+        local tx3, ty3 = transformScenePoint(x3, y3)
+        local tx4, ty4 = transformScenePoint(x4, y4)
+        if c ~= nil then
+          return fn(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, startx, starty, endx, endy, c)
+        end
+        return fn(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, startx, starty, endx, endy)
+      end
     end
     return fn
   end
@@ -875,7 +898,9 @@ local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_RADIUS_BASE = 3.00
-local OVERLAY_LOGO_DEPTH_RADIUS_FRACTION = 0.50
+local OVERLAY_LOGO_DEPTH_RADIUS_FRACTION = 0.40
+local OVERLAY_LOGO_WARP_COLS = 8
+local OVERLAY_LOGO_WARP_ROWS = 4
 local OVERLAY_LOGO_EFFECTIVE_MIN = 0.60
 local OVERLAY_LOGO_EFFECTIVE_MAX = 9.00
 local OVERLAY_LOGO_CAMERA_MIN_DENOM = 0.20
@@ -967,7 +992,7 @@ local function getOverlayLogoAnalogTransform(ctx)
   -- Right stick left/right is currently reserved (no-op).
   local baseRadius = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
   if baseRadius < 0.10 then baseRadius = 0.10 end
-  local depthFraction = tonumber(OVERLAY_LOGO_DEPTH_RADIUS_FRACTION) or 0.50
+  local depthFraction = tonumber(OVERLAY_LOGO_DEPTH_RADIUS_FRACTION) or 0.40
   if depthFraction < 0 then depthFraction = 0 end
   local depthLimit = baseRadius * depthFraction
   local depthOffset = (-(state.ry or 0)) * depthLimit
@@ -1078,7 +1103,7 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
   local urx, ury = project(ux, -uy)
   local brx, bry = project(ux, uy)
 
-  return ulx, uly, blx, bly, urx, ury, brx, bry
+  return ulx, uly, blx, bly, urx, ury, brx, bry, project, aspectY
 end
 
 flushOverlayLogoCache = function()
@@ -1176,9 +1201,35 @@ local function drawSelectionOverlayLogo(ctx)
   local color = getOverlayLogoColor(key)
 
   if Graphics.drawImageQuad then
-    local ulx, uly, blx, bly, urx, ury, brx, bry =
+    local ulx, uly, blx, bly, urx, ury, brx, bry, projectFn, aspectY =
         projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, depthOffset)
     if ulx and uly and blx and bly and urx and ury and brx and bry then
+      if Graphics.drawImageQuadPartial and projectFn and aspectY then
+        local cols = math.max(1, math.floor(tonumber(OVERLAY_LOGO_WARP_COLS) or 1))
+        local rows = math.max(1, math.floor(tonumber(OVERLAY_LOGO_WARP_ROWS) or 1))
+        if cols > 1 or rows > 1 then
+          local spanY = 2 * aspectY
+          for row = 0, rows - 1 do
+            local v0 = row / rows
+            local v1 = (row + 1) / rows
+            local py0 = (-aspectY) + (spanY * v0)
+            local py1 = (-aspectY) + (spanY * v1)
+            for col = 0, cols - 1 do
+              local u0 = col / cols
+              local u1 = (col + 1) / cols
+              local px0 = -1 + (2 * u0)
+              local px1 = -1 + (2 * u1)
+              local qx1, qy1 = projectFn(px0, py0)
+              local qx2, qy2 = projectFn(px0, py1)
+              local qx3, qy3 = projectFn(px1, py0)
+              local qx4, qy4 = projectFn(px1, py1)
+              Graphics.drawImageQuadPartial(tex, qx1, qy1, qx2, qy2, qx3, qy3, qx4, qy4, iw * u0, ih * v0, iw * u1,
+                ih * v1, color)
+            end
+          end
+          return
+        end
+      end
       Graphics.drawImageQuad(tex, ulx, uly, blx, bly, urx, ury, brx, bry, color)
       return
     end
