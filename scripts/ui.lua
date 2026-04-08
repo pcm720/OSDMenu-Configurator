@@ -880,33 +880,6 @@ local function normalizeStickAxis(raw)
   return (v < 0) and (-n) or n
 end
 
-local function getPadTypeMode()
-  if not (Pads and Pads.getType) then return nil, false end
-  local ok, t = pcall(Pads.getType, 0)
-  if not ok then
-    ok, t = pcall(Pads.getType)
-  end
-  if not ok then return nil, false end
-  return tonumber(t) or 0, true
-end
-
-local function isPadAnalogCapable(mode, hasType)
-  -- Be permissive: some environments return non-type values here.
-  if hasType ~= true then return true end
-  mode = tonumber(mode) or 0
-  if mode <= 0 then return true end
-  local analog = tonumber(PAD_TYPE_ANALOG)
-  local dualshock = tonumber(PAD_TYPE_DUALSHOCK)
-  if analog and dualshock then
-    return mode == analog or mode == dualshock
-  end
-  local digital = tonumber(PAD_TYPE_DIGITAL)
-  if digital then
-    return mode ~= digital
-  end
-  return true
-end
-
 local function readStickNormalized(getFn)
   if not getFn then return 0, 0, false, 0, 0 end
   local ok, x, y = pcall(getFn, 0)
@@ -924,13 +897,6 @@ local function getOverlayLogoAnalogTransform(ctx)
   if type(state) ~= "table" then
     state = { lx = 0, ly = 0, rx = 0, ry = 0 }
     ctx._overlayLogoAnalogState = state
-  end
-
-  local mode, typeOk = getPadTypeMode()
-  local analogCapable = isPadAnalogCapable(mode, typeOk)
-  if not analogCapable then
-    state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0
   end
 
   local lx, ly, leftOk, lRawX, lRawY = readStickNormalized(Pads and Pads.getLeftStick)
