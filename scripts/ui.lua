@@ -878,6 +878,36 @@ local function normalizeStickAxis(raw)
   return (v < 0) and (-n) or n
 end
 
+local function isPadAnalogCapable()
+  if not (Pads and Pads.getType) then return true end
+  local ok, t = pcall(Pads.getType, 0)
+  if not ok then
+    ok, t = pcall(Pads.getType)
+  end
+  if not ok then return true end
+  local mode = tonumber(t) or 0
+  local analog = tonumber(PAD_TYPE_ANALOG)
+  local dualshock = tonumber(PAD_TYPE_DUALSHOCK)
+  if analog and dualshock then
+    return mode == analog or mode == dualshock
+  end
+  local digital = tonumber(PAD_TYPE_DIGITAL)
+  if digital then
+    return mode ~= digital
+  end
+  return true
+end
+
+local function readStickNormalized(getFn)
+  if not getFn then return 0, 0, false end
+  local ok, x, y = pcall(getFn, 0)
+  if not ok then
+    ok, x, y = pcall(getFn)
+  end
+  if not ok then return 0, 0, false end
+  return normalizeStickAxis(x), normalizeStickAxis(y), true
+end
+
 local function getOverlayLogoAnalogScale(ctx)
   local state = ctx._overlayLogoAnalogState
   if type(state) ~= "table" then
@@ -885,20 +915,22 @@ local function getOverlayLogoAnalogScale(ctx)
     ctx._overlayLogoAnalogState = state
   end
 
-  local lx, ly, rx, ry = 0, 0, 0, 0
-  if Pads and Pads.getLeftStick then
-    local ok, x, y = pcall(Pads.getLeftStick, 0)
-    if ok then
-      lx = normalizeStickAxis(x)
-      ly = normalizeStickAxis(y)
-    end
+  if not isPadAnalogCapable() then
+    state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    return 1, 1
   end
-  if Pads and Pads.getRightStick then
-    local ok, x, y = pcall(Pads.getRightStick, 0)
-    if ok then
-      rx = normalizeStickAxis(x)
-      ry = normalizeStickAxis(y)
-    end
+
+  local lx, ly, leftOk = readStickNormalized(Pads and Pads.getLeftStick)
+  local rx, ry, rightOk = readStickNormalized(Pads and Pads.getRightStick)
+  if not leftOk and not rightOk then
+    state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    return 1, 1
+  end
+
+  -- Centered sticks should produce exact identity (no residual drift/tilt).
+  if lx == 0 and ly == 0 and rx == 0 and ry == 0 then
+    state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    return 1, 1
   end
 
   local smooth = OVERLAY_LOGO_STICK_SMOOTH
