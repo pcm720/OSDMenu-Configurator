@@ -740,6 +740,22 @@ local function run(ctx)
     drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
   end
 
+  local function moveTextCursorWrap(delta)
+    local maxPos = #(ctx.textInputValue or "") + 1
+    if maxPos < 1 then maxPos = 1 end
+    local cursor = tonumber(ctx.textInputCursor) or 1
+    if cursor < 1 then cursor = 1 end
+    if cursor > maxPos then cursor = maxPos end
+    if delta < 0 then
+      cursor = cursor - 1
+      if cursor < 1 then cursor = maxPos end
+    elseif delta > 0 then
+      cursor = cursor + 1
+      if cursor > maxPos then cursor = 1 end
+    end
+    ctx.textInputCursor = cursor
+  end
+
   if ctx[belMenuOpenKey] then
     local padSelect = _.PAD_SELECT or 0
     if padSelect ~= 0 and (_.padEffective & padSelect) ~= 0 then
@@ -751,11 +767,8 @@ local function run(ctx)
       end
     end
     local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
-    if (cursorMoveMask & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
-    if (cursorMoveMask & _.PAD_R1) ~= 0 then
-      ctx.textInputCursor = math.min(#ctx.textInputValue + 1,
-        ctx.textInputCursor + 1)
-    end
+    if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
+    if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
     local belProfile = belProfileFromContext(ctx)
     local belPage = clampBelPage(ctx.textInputBelPage)
     ctx.textInputBelPage = belPage
@@ -823,15 +836,8 @@ local function run(ctx)
       },
     })
     if handled then
-      ctx.textInputCursorPrevHeldMask = nil
-      ctx.textInputCursorHoldFrames = nil
-      ctx.textInputCursorHoldCountdown = nil
-      ctx.textInputBackspacePrevHeldMask = nil
-      ctx.textInputBackspaceHoldFrames = nil
-      ctx.textInputBackspaceHoldCountdown = nil
-      ctx.textInputGridHorizontalPrevHeldMask = nil
-      ctx.textInputGridHorizontalHoldFrames = nil
-      ctx.textInputGridHorizontalHoldCountdown = nil
+      -- Keep hold-repeat state while glyph overlay is open so L1/R1 cursor
+      -- movement can continue accelerating like other repeat-driven navigation.
       return
     end
   end
@@ -943,11 +949,8 @@ local function run(ctx)
     end
   end
   local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
-  if (cursorMoveMask & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
-  if (cursorMoveMask & _.PAD_R1) ~= 0 then
-    ctx.textInputCursor = math.min(#ctx.textInputValue + 1,
-      ctx.textInputCursor + 1)
-  end
+  if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
+  if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     local selIdx = ctx.textInputGridSel
     local sk = specialKeys[selIdx]
