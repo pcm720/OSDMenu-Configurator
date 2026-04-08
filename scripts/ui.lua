@@ -962,7 +962,7 @@ local function getOverlayLogoAnalogTransform(ctx)
   -- x = R*sin(yaw)*cos(pitch), y = R*sin(pitch), z = R*cos(yaw)*cos(pitch)
   -- We intentionally keep axis-decoupled visual mapping below for predictable UX.
 
-  -- Right stick up/down defines logo depth offset along camera-forward:
+  -- Right stick up/down defines logo depth offset in world Z:
   -- up => farther (logo appears farther), down => closer.
   -- Right stick left/right is currently reserved (no-op).
   local baseRadius = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
@@ -1033,18 +1033,12 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
     return (ax * bx) + (ay * by) + (az * bz)
   end
 
-  -- Camera basis: forward looks at origin, right/up derived from world up.
-  local fwdX, fwdY, fwdZ = normalize3(-camX, -camY, -camZ)
-  local worldUpX, worldUpY, worldUpZ = 0, 1, 0
-  local rightX, rightY, rightZ = cross3(fwdX, fwdY, fwdZ, worldUpX, worldUpY, worldUpZ)
-  rightX, rightY, rightZ = normalize3(rightX, rightY, rightZ)
-  -- Near the poles, Y-up cross forward collapses; fall back to Z-up.
-  if math.abs(rightX) < 0.00001 and math.abs(rightY) < 0.00001 and math.abs(rightZ) < 0.00001 then
-    worldUpX, worldUpY, worldUpZ = 0, 0, 1
-    rightX, rightY, rightZ = cross3(fwdX, fwdY, fwdZ, worldUpX, worldUpY, worldUpZ)
-    rightX, rightY, rightZ = normalize3(rightX, rightY, rightZ)
-  end
+  -- Camera basis built analytically from yaw/pitch to avoid pole flips/jumps.
+  -- This stays continuous when pitch crosses +/-90 degrees.
+  local fwdX, fwdY, fwdZ = normalize3(-syaw * cpitch, -spitch, -cyaw * cpitch)
+  local rightX, rightY, rightZ = normalize3(cyaw, 0, -syaw)
   local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
+  upX, upY, upZ = normalize3(upX, upY, upZ)
 
   local aspectY = hh / math.max(hw, 0.0001)
   local unit = hw
