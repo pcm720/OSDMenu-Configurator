@@ -851,6 +851,7 @@ local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
 local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_STRETCH_RANGE = 0.80
+local OVERLAY_LOGO_CAMERA_DISTANCE = 1.0
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
@@ -945,12 +946,21 @@ local function getOverlayLogoAnalogTransform(ctx)
   state.rx = (tonumber(state.rx) or 0) + (rx - (tonumber(state.rx) or 0)) * smooth
   state.ry = (tonumber(state.ry) or 0) + (ry - (tonumber(state.ry) or 0)) * smooth
 
-  -- Center-origin pseudo-3D orientation from left stick:
-  -- X -> yaw [-180, +180], Y -> pitch [-180, +180], plus roll from stick angle.
-  local yawDeg = (state.lx or 0) * OVERLAY_LOGO_ROTATION_MAX_DEG
-  local pitchDeg = (-(state.ly or 0)) * OVERLAY_LOGO_ROTATION_MAX_DEG
-  local yawCos = math.cos(math.rad(yawDeg))
-  local pitchCos = math.cos(math.rad(pitchDeg))
+  -- Camera-orbit model (left stick):
+  -- treat the logo as fixed at origin, camera on a sphere of fixed radius.
+  -- Stick direction chooses orbit direction; magnitude chooses arc distance.
+  local orbitMag = math.sqrt((state.lx * state.lx) + (state.ly * state.ly))
+  if orbitMag > 1 then orbitMag = 1 end
+  local orbitTheta = safeAtan2(-(state.ly or 0), state.lx or 0)
+  local orbitArc = orbitMag * math.rad(OVERLAY_LOGO_ROTATION_MAX_DEG)
+  local sinArc = math.sin(orbitArc)
+  local camX = OVERLAY_LOGO_CAMERA_DISTANCE * sinArc * math.cos(orbitTheta)
+  local camY = OVERLAY_LOGO_CAMERA_DISTANCE * sinArc * math.sin(orbitTheta)
+  local camZ = OVERLAY_LOGO_CAMERA_DISTANCE * math.cos(orbitArc)
+
+  -- Approximate viewpoint-induced foreshortening from orbit angles.
+  local yawCos = math.cos(safeAtan2(camX, camZ))
+  local pitchCos = math.cos(safeAtan2(camY, camZ))
   if math.abs(yawCos) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
     yawCos = (yawCos < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
   end
@@ -965,12 +975,8 @@ local function getOverlayLogoAnalogTransform(ctx)
   local sx = clampSignedAbs(yawCos * stretchScaleX, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
   local sy = clampSignedAbs(pitchCos * stretchScaleY, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
 
-  local mag = math.sqrt((state.lx * state.lx) + (state.ly * state.ly))
-  if mag > 1 then mag = 1 end
-  local rollDeg = math.deg(safeAtan2(-(state.ly or 0), state.lx or 0)) * mag
-  local rollRad = math.rad(rollDeg)
-
-  return sx, sy, rollRad
+  -- Camera orbit does not roll around view axis by default.
+  return sx, sy, 0
 end
 
 flushOverlayLogoCache = function()
