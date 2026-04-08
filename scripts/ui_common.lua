@@ -602,6 +602,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
+      if common.calcTextWidth then
+        local w = common.calcTextWidth(hintFont, label, drawScale)
+        if type(w) == "number" and w > 0 then
+          return w
+        end
+      end
       if drawMode == "ftPrint" and hintFont and Font and Font.ftCalcDimensions then
         local w = Font.ftCalcDimensions(hintFont, label)
         return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #label)

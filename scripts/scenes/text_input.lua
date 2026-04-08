@@ -660,11 +660,11 @@ local function run(ctx)
     local drawLabelScale = tonumber(labelScale) or keyScale
     local bg = sel and _.KEY_BG_SEL or _.KEY_BG
     local border = sel and _.KEY_BORDER_SEL or _.KEY_BORDER
-    _.Graphics.drawRect(kx, ky, w, h, bg)
-    _.Graphics.drawRect(kx, ky, w, 1, border)
-    _.Graphics.drawRect(kx, ky + h - 1, w, 1, border)
-    _.Graphics.drawRect(kx, ky, 1, h, border)
-    _.Graphics.drawRect(kx + w - 1, ky, 1, h, border)
+    -- Hot path optimization: draw key border+fill in 2 rects instead of 5.
+    _.Graphics.drawRect(kx, ky, w, h, border)
+    if w > 2 and h > 2 then
+      _.Graphics.drawRect(kx + 1, ky + 1, w - 2, h - 2, bg)
+    end
     local textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawLabelScale)) or
         (_.KEY_CHAR_W * #label)
     local textX = math.max(kx, math.floor(kx + (w - textW) / 2))

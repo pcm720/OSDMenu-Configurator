@@ -363,6 +363,17 @@ local function scaleSceneLength(v)
   return n * getSceneDrawScale()
 end
 
+local function isIdentitySceneTransform()
+  local runtime = _G and _G.CONFIG_UI
+  if type(runtime) ~= "table" then return true end
+  local offsetX = tonumber(runtime.sceneDrawOffsetX) or 0
+  local drawAlpha = tonumber(runtime.sceneDrawAlpha)
+  if drawAlpha == nil then drawAlpha = 1 end
+  local drawScale = tonumber(runtime.sceneDrawScale)
+  if drawScale == nil then drawScale = 1 end
+  return math.abs(offsetX) < 0.0001 and drawAlpha >= 0.999 and math.abs(drawScale - 1) < 0.0001
+end
+
 local function installSceneDrawOffsetGraphicsProxy()
   local runtime = _G and _G.CONFIG_UI
   if type(runtime) ~= "table" then return end
@@ -389,6 +400,9 @@ local function installSceneDrawOffsetGraphicsProxy()
   local function wrapDrawFn(name, fn)
     if name == "drawRect" then
       return function(x, y, width, height, color)
+        if isIdentitySceneTransform() then
+          return fn(x, y, width, height, color)
+        end
         local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
         local tx, ty = transformScenePoint(x, y)
         local tw = math.max(0, scaleSceneLength(width))
@@ -397,12 +411,18 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawPixel" then
       return function(x, y, color)
+        if isIdentitySceneTransform() then
+          return fn(x, y, color)
+        end
         local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
         local tx, ty = transformScenePoint(x, y)
         return fn(tx, ty, c)
       end
     elseif name == "drawCircle" then
       return function(x, y, radius, color, fill)
+        if isIdentitySceneTransform() then
+          return fn(x, y, radius, color, fill)
+        end
         local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
         local tx, ty = transformScenePoint(x, y)
         local tr = math.max(0, scaleSceneLength(radius))
@@ -410,6 +430,9 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawLine" then
       return function(x1, y1, x2, y2, color)
+        if isIdentitySceneTransform() then
+          return fn(x1, y1, x2, y2, color)
+        end
         local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
         local tx1, ty1 = transformScenePoint(x1, y1)
         local tx2, ty2 = transformScenePoint(x2, y2)
@@ -417,6 +440,9 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawTriangle" then
       return function(x1, y1, x2, y2, x3, y3, ...)
+        if isIdentitySceneTransform() then
+          return fn(x1, y1, x2, y2, x3, y3, ...)
+        end
         local args = { ... }
         for i = 1, math.min(3, #args) do
           if type(args[i]) == "number" then
@@ -430,6 +456,9 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawQuad" then
       return function(x1, y1, x2, y2, x3, y3, x4, y4, ...)
+        if isIdentitySceneTransform() then
+          return fn(x1, y1, x2, y2, x3, y3, x4, y4, ...)
+        end
         local args = { ... }
         for i = 1, math.min(4, #args) do
           if type(args[i]) == "number" then
@@ -444,6 +473,12 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawImage" then
       return function(image, x, y, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x, y, color)
+          end
+          return fn(image, x, y)
+        end
         local c = color
         if type(c) == "number" then
           c = applySceneAlphaToColor(c)
@@ -470,6 +505,12 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawScaleImage" then
       return function(image, x, y, width, height, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x, y, width, height, color)
+          end
+          return fn(image, x, y, width, height)
+        end
         local c = color
         if type(c) == "number" then
           c = applySceneAlphaToColor(c)
@@ -487,6 +528,12 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawRotateImage" then
       return function(image, x, y, angle, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x, y, angle, color)
+          end
+          return fn(image, x, y, angle)
+        end
         local c = color
         if type(c) == "number" then
           c = applySceneAlphaToColor(c)
@@ -515,6 +562,12 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawImageExtended" then
       return function(image, x, y, startx, starty, width, height, scale_x, scale_y, angle, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x, y, startx, starty, width, height, scale_x, scale_y, angle, color)
+          end
+          return fn(image, x, y, startx, starty, width, height, scale_x, scale_y, angle)
+        end
         local c = color
         if type(c) == "number" then
           c = applySceneAlphaToColor(c)
@@ -532,6 +585,12 @@ local function installSceneDrawOffsetGraphicsProxy()
       end
     elseif name == "drawPartialImage" then
       return function(image, x, y, startx, starty, endx, endy, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x, y, startx, starty, endx, endy, color)
+          end
+          return fn(image, x, y, startx, starty, endx, endy)
+        end
         local c = color
         if type(c) == "number" then
           c = applySceneAlphaToColor(c)

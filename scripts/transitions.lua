@@ -319,7 +319,8 @@ function transitions.install(common)
         local curved = easeInOutCubic(progress)
         local direction = tostring(tr.direction or "in")
         -- Forward and back use opposite zoom directions while both settle at 1.0.
-        local startScale = (direction == "out" or direction == "back") and 0.90 or 1.10
+        -- "in" starts much smaller; "out/back" starts much larger.
+        local startScale = (direction == "out" or direction == "back") and 1.80 or 0.20
         local scale = startScale + ((1 - startScale) * curved)
         if runtime then
           runtime.sceneDrawScale = scale
@@ -353,13 +354,6 @@ function transitions.install(common)
     -- Only dissolve keeps the previous framebuffer. Slide/whip must clear each
     -- frame to avoid frame accumulation/ghost trails.
     if t == "cross_dissolve" then
-      -- On the final dissolve step, do a normal clear so the incoming scene's
-      -- fully-opaque frame lands cleanly (avoids a perceived "hang"/ghost at end).
-      local frames = common.normalizeSceneTransitionFrames(tr and tr.frames)
-      local frame = math.max(0, math.floor(tonumber(tr and tr.frame) or 0))
-      if frame >= math.max(0, frames - 1) then
-        return false
-      end
       return true
     end
     return false
