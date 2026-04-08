@@ -7,7 +7,7 @@ local function buildKeyboardShoulderHints(hintItems)
   for i = 1, #(hintItems or {}) do
     local item = hintItems[i]
     local pad = tostring(item and item.pad or ""):lower()
-    if pad == "l1" or pad == "r1" or pad == "l2" or pad == "r2" then
+    if pad == "l1" or pad == "r1" or pad == "l2" or pad == "r2" or pad == "select" then
       out[pad] = tostring(item and item.label or "")
     end
   end
@@ -16,7 +16,7 @@ end
 
 local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, color)
   local labels = buildKeyboardShoulderHints(hintItems)
-  if not (labels.l1 or labels.r1) then
+  if not (labels.l1 or labels.select or labels.r1) then
     return
   end
   local drawColor = _.WHITE or color or _.DIM
@@ -40,6 +40,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   local columns = {
     { pad = "l1", col = 2 },
+    { pad = "select", col = 3 },
     { pad = "r1", col = 4 },
   }
 
@@ -70,11 +71,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 end
 
 local BEL = string.char(7)
-local BEL_WARNING_TEXT_FALLBACK = "Advanced glyphs, use with caution"
 local GLYPH_KEY_LABEL_FALLBACK = "Glyphs"
--- Match current helper-text scale, but keep it decoupled for future tuning.
-local GLYPH_KEY_LABEL_SCALE = 0.7
-local GLYPH_KEY_GAP_SLOTS = 0.5
 local BEL_PAGE_COUNT = 3
 
 local BEL_COLOR_TOKENS = {
@@ -143,8 +140,8 @@ local BEL_SYMBOLS_HDDOSD = {
 
 local BEL_TUNABLE_TOKENS = {
   { code = "r#.##", insert = "r", preview = "□r", desc = "Font scale (0.50-1.50, reset r0.00)" },
-  { code = "y+##", insert = "y+", preview = "□y+", desc = "Y offset + (range unknown)" },
-  { code = "y-##", insert = "y-", preview = "□y-", desc = "Y offset - (range unknown)" },
+  { code = "y+##", insert = "y+", preview = "□y+", desc = "Y offset down (range unknown)" },
+  { code = "y-##", insert = "y-", preview = "□y-", desc = "Y offset up (range unknown)" },
   { code = "p##", insert = "p", preview = "□p", desc = "Letter spacing (reset p00)" },
   { code = "a###", insert = "a", preview = "□a", desc = "Transparency (000-128?)" },
   { code = "w#", insert = "w", preview = "□w", desc = "Horizontal scale (0-9, reset w1)" },
@@ -189,34 +186,65 @@ local function clampBelPage(page)
   return p
 end
 
-local function buildBelTokenRows(profile, page)
+local function glyphText(textInputStrings, key, fallback)
+  local glyphs = (type(textInputStrings) == "table" and type(textInputStrings.glyphs) == "table") and textInputStrings.glyphs or nil
+  local value = glyphs and glyphs[key]
+  if type(value) == "string" and value ~= "" then
+    return value
+  end
+  return fallback
+end
+
+local function glyphDesc(textInputStrings, tableKey, code, fallback)
+  local glyphs = (type(textInputStrings) == "table" and type(textInputStrings.glyphs) == "table") and textInputStrings.glyphs or nil
+  local map = glyphs and glyphs[tableKey]
+  local value = (type(map) == "table") and map[code] or nil
+  if type(value) == "string" and value ~= "" then
+    return value
+  end
+  return fallback
+end
+
+local function buildBelTokenRows(profile, page, textInputStrings)
   page = clampBelPage(page)
   local out = {}
-  local symHeader = (profile == "hddosd") and "Symbols (HDDOSD Browser 2.00)" or "Symbols (PS2 ROM OSD)"
+  local symHeader = (profile == "hddosd")
+      and glyphText(textInputStrings, "header_symbols_hddosd", "Symbols (HDDOSD Browser 2.00)")
+      or glyphText(textInputStrings, "header_symbols_ps2rom", "Symbols (PS2 ROM OSD)")
   local symRows = (profile == "hddosd") and BEL_SYMBOLS_HDDOSD or BEL_SYMBOLS_PS2_ROM
+  local symDescTableKey = (profile == "hddosd") and "desc_symbols_hddosd" or "desc_symbols_ps2rom"
 
   if page == 1 then
-    out[#out + 1] = { id = "header_manual", label = "Manual", enabled = false }
+    out[#out + 1] = {
+      id = "header_manual",
+      label = glyphText(textInputStrings, "header_manual", "Manual"),
+      enabled = false
+    }
     out[#out + 1] = {
       id = "token_manual_bel",
-      label = "BEL  □  Insert BEL...",
-      columns = { "BEL", "□", "Insert BEL..." },
+      label = "BEL  □  " .. glyphText(textInputStrings, "manual_insert_bel", "Insert BEL..."),
+      columns = { "BEL", "□", glyphText(textInputStrings, "manual_insert_bel", "Insert BEL...") },
       token = BEL,
     }
-    out[#out + 1] = { id = "header_colors", label = "Colors", enabled = false }
+    out[#out + 1] = {
+      id = "header_colors",
+      label = glyphText(textInputStrings, "header_colors", "Colors"),
+      enabled = false
+    }
     for i = 1, #BEL_COLOR_TOKENS do
       local t = BEL_COLOR_TOKENS[i]
       local token = BEL .. tostring(t.code)
+      local desc = glyphDesc(textInputStrings, "desc_colors", tostring(t.code), tostring(t.desc or ""))
       out[#out + 1] = {
         id = "token_" .. tostring(t.code),
-        label = tostring(t.code) .. "  " .. tostring(t.desc or ""),
-        columns = { tostring(t.code), "", tostring(t.desc or "") },
+        label = tostring(t.code) .. "  " .. desc,
+        columns = { tostring(t.code), "", desc },
         token = token,
       }
     end
     out[#out + 1] = {
       id = "footer_colors_sample",
-      label = "c#/c## Many undocumented. The above is a small sample.",
+      label = glyphText(textInputStrings, "footer_colors_sample", "c#/c## Many undocumented. The above is a small sample."),
       enabled = false,
       forceTicker = true,
     }
@@ -226,33 +254,39 @@ local function buildBelTokenRows(profile, page)
       local t = symRows[i]
       local token = BEL .. tostring(t.code)
       local preview = tostring(t.preview or "")
+      local desc = glyphDesc(textInputStrings, symDescTableKey, tostring(t.code), tostring(t.desc or ""))
       out[#out + 1] = {
         id = "token_" .. tostring(t.code),
         label = tostring(t.code) ..
             ((preview ~= "") and ("  " .. preview) or "") ..
-            "  " .. tostring(t.desc or ""),
-        columns = { tostring(t.code), preview, tostring(t.desc or "") },
+            "  " .. desc,
+        columns = { tostring(t.code), preview, desc },
         token = token,
       }
     end
     out[#out + 1] = {
       id = "footer_symbols_sample",
-      label = "o000-o999 exist. The above is a small sample.",
+      label = glyphText(textInputStrings, "footer_symbols_sample", "o000-o999 exist. The above is a small sample."),
       enabled = false,
       forceTicker = true,
     }
   else
-    out[#out + 1] = { id = "header_tunables", label = "Tunables", enabled = false }
+    out[#out + 1] = {
+      id = "header_tunables",
+      label = glyphText(textInputStrings, "header_tunables", "Tunables"),
+      enabled = false
+    }
     for i = 1, #BEL_TUNABLE_TOKENS do
       local t = BEL_TUNABLE_TOKENS[i]
       local token = BEL .. tostring(t.insert or "")
       local preview = tostring(t.preview or "")
+      local desc = glyphDesc(textInputStrings, "desc_tunables", tostring(t.code or ""), tostring(t.desc or ""))
       out[#out + 1] = {
         id = "token_tunable_" .. tostring(i),
         label = tostring(t.code or "") ..
             ((preview ~= "") and ("  " .. preview) or "") ..
-            "  " .. tostring(t.desc or ""),
-        columns = { tostring(t.code or ""), preview, tostring(t.desc or "") },
+            "  " .. desc,
+        columns = { tostring(t.code or ""), preview, desc },
         token = token,
       }
     end
@@ -269,14 +303,16 @@ local function rowColumnCount(columns)
   return n
 end
 
-local function ensureBelRowsByPage(ctx, profile)
-  if type(ctx.textInputBelRowsByPage) ~= "table" or ctx.textInputBelRowsProfile ~= profile then
+local function ensureBelRowsByPage(ctx, profile, textInputStrings)
+  if type(ctx.textInputBelRowsByPage) ~= "table" or ctx.textInputBelRowsProfile ~= profile or
+      ctx.textInputBelRowsText ~= textInputStrings then
     local rowsByPage = {}
     for p = 1, BEL_PAGE_COUNT do
-      rowsByPage[p] = buildBelTokenRows(profile, p)
+      rowsByPage[p] = buildBelTokenRows(profile, p, textInputStrings)
     end
     ctx.textInputBelRowsByPage = rowsByPage
     ctx.textInputBelRowsProfile = profile
+    ctx.textInputBelRowsText = textInputStrings
   end
   return ctx.textInputBelRowsByPage
 end
@@ -339,28 +375,6 @@ local function buildBelMenuLayoutMetrics(_, rowsByPage)
   end
 
   return columnMinWidths, maxIntrinsicW
-end
-
-local function drawBelWarning(_, text, scale, totalWidth, color)
-  local drawColor = _.WHITE or color or _.DIM
-  local textScale = 0.75
-  local drawScale = (scale or 0.7) * textScale
-  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
-  local rowH = math.max(14, math.floor((_.common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-  local textH = math.max(10, math.floor((_.common.FT_PIXEL_H or 18) * textScale + 0.5))
-  local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
-  width = width + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
-  local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
-  local xEff = (_.MARGIN_X or 0) + sideMargin + (tonumber(_.common.PAD_HINT_GRID_X_SHIFT) or 0)
-  local widthEff = width - 2 * sideMargin
-  local topRowTop = math.floor(_.HINT_Y) - (2 * rowH)
-  local warnRowTop = topRowTop - rowH
-  local msg = tostring(text or "")
-  local textW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, msg, drawScale)) or
-      math.floor(8 * drawScale * #msg)
-  local textX = math.floor(xEff + (widthEff - textW) / 2)
-  local textY = math.floor(warnRowTop + (rowH - textH) / 2) - 4
-  _.common.drawText(hintFont, _.drawMode, textX, textY, drawScale, msg, drawColor, textH)
 end
 
 local function getTextInputCursorHoldRepeatMask(ctx, _)
@@ -527,11 +541,13 @@ local function run(ctx)
     ctx.textInputBelMenuScroll = nil
     ctx.textInputBelRowsByPage = nil
     ctx.textInputBelRowsProfile = nil
+    ctx.textInputBelRowsText = nil
     ctx.textInputBelPage = nil
     ctx.textInputBelColumnMinWidths = nil
     ctx.textInputBelMinIntrinsicW = nil
     ctx.textInputBelLayoutProfile = nil
     ctx.textInputBelLayoutScale = nil
+    ctx.textInputBelLayoutText = nil
     ctx._textInputBelBaselineCallback = nil
     ctx.textInputBelBaseline = nil
     ctx.textInputAllowBelAdd = nil
@@ -620,16 +636,8 @@ local function run(ctx)
     end
     running = running + rowLen[r]
   end
-  local belIdx = nil
   local spaceIdx = nil
   if not ctx.textInputTitleIdMode then
-    if belEnabled then
-      belIdx = running
-      keyList[#keyList + 1] = ""
-      specialKeys[belIdx] = { kind = "bel", label = glyphKeyLabel }
-      rowLen[rowCount] = (rowLen[rowCount] or 0) + 1
-      running = running + 1
-    end
     rowStart[rowCount + 1] = running
     spaceIdx = running
     keyList[#keyList + 1] = " "
@@ -643,14 +651,6 @@ local function run(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = 0.7
-  local glyphLabelW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, glyphKeyLabel, GLYPH_KEY_LABEL_SCALE))
-      or math.floor(((_.KEY_CHAR_W or 8) * GLYPH_KEY_LABEL_SCALE) * #glyphKeyLabel)
-  -- Real hardware text metrics can run wider than measurement/fallback estimates.
-  -- Keep a safety margin so the Glyphs key always visually covers the label.
-  local glyphSafetyW = math.max(6, math.floor((_.KEY_CHAR_W or 8) * 0.9 + 0.5))
-  glyphLabelW = glyphLabelW + glyphSafetyW
-  local glyphPadX = math.max(4, math.floor((_.KEY_WIDTH * 0.22) + 0.5))
-  local glyphW = math.max(kw, glyphLabelW + (glyphPadX * 2))
   local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
       { 0, 0.5, 0.85, 1.2 }
   local minOffset = 0
@@ -692,15 +692,6 @@ local function run(ctx)
       drawKey(kx, ky, kw, kh, ch, idx == ctx.textInputGridSel)
     end
   end
-  if belIdx then
-    local belRow = rowCount
-    local row = rows[belRow] or ""
-    local startX = keyboardLeft + (tonumber(rowOffsets[belRow]) or 0) * _.KEY_WIDTH
-    local belCol = #row + 1 + GLYPH_KEY_GAP_SLOTS
-    local belKx = math.floor(startX + (belCol - 1) * _.KEY_WIDTH + _.KEY_GAP / 2)
-    local belKy = math.floor(keyY + (belRow - 1) * _.KEY_H + _.KEY_GAP / 2)
-    drawKey(belKx, belKy, glyphW, kh, glyphKeyLabel, belIdx == ctx.textInputGridSel, GLYPH_KEY_LABEL_SCALE)
-  end
   if spaceIdx then
     local specY = keyY + rowCount * _.KEY_H
     local ky = math.floor(specY + _.KEY_GAP / 2)
@@ -711,21 +702,29 @@ local function run(ctx)
   end
 
   if ctx.textInputBelMenuOpen then
+    local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
+    if (cursorMoveMask & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
+    if (cursorMoveMask & _.PAD_R1) ~= 0 then
+      ctx.textInputCursor = math.min(#ctx.textInputValue + 1,
+        ctx.textInputCursor + 1)
+    end
     local belProfile = belProfileFromContext(ctx)
     local belPage = clampBelPage(ctx.textInputBelPage)
     ctx.textInputBelPage = belPage
-    local belRowsByPage = ensureBelRowsByPage(ctx, belProfile)
+    local belRowsByPage = ensureBelRowsByPage(ctx, belProfile, _.text_str)
     local uiScale = tonumber(ctx.uiScale) or 1
     if type(ctx.textInputBelColumnMinWidths) ~= "table" or ctx.textInputBelLayoutProfile ~= belProfile or
-        ctx.textInputBelLayoutScale ~= uiScale then
+        ctx.textInputBelLayoutScale ~= uiScale or ctx.textInputBelLayoutText ~= _.text_str then
       local colMinW, maxIntrinsicW = buildBelMenuLayoutMetrics(_, belRowsByPage)
       ctx.textInputBelColumnMinWidths = colMinW
       ctx.textInputBelMinIntrinsicW = maxIntrinsicW
       ctx.textInputBelLayoutProfile = belProfile
       ctx.textInputBelLayoutScale = uiScale
+      ctx.textInputBelLayoutText = _.text_str
     end
     local belRows = belRowsByPage[belPage] or {}
-    local pageLabel = "Page " .. tostring(belPage) .. "/" .. tostring(BEL_PAGE_COUNT)
+    local pageLabelFmt = glyphText(_.text_str, "page_label_format", "Page %d/%d")
+    local pageLabel = string.format(pageLabelFmt, belPage, BEL_PAGE_COUNT)
     local belMenuMaxVisible = 8
     local handled = actions_menu.run(ctx, {
       openKey = "textInputBelMenuOpen",
@@ -770,9 +769,9 @@ local function run(ctx)
         ctx.textInputBelPage = nil
       end,
       hints = {
-        { pad = "cross", label = "Insert", row = 1 },
-        { pad = "square", label = "Page", row = 1 },
-        { pad = "circle", label = "Cancel", row = 1 },
+        { pad = "cross", label = glyphText(_.text_str, "hint_insert", "Insert"), row = 1 },
+        { pad = "square", label = glyphText(_.text_str, "hint_page", "Page"), row = 1 },
+        { pad = "circle", label = glyphText(_.text_str, "hint_cancel", "Cancel"), row = 1 },
       },
     })
     if handled then
@@ -789,6 +788,16 @@ local function run(ctx)
     end
   end
   local rowSize = rowLen
+  local spaceRow = spaceIdx and (rowCount + 1) or nil
+  local function rowAt(r, col)
+    local start = rowStart[r]
+    local size = rowSize[r] or 0
+    if not start or size <= 0 then return 1 end
+    local c = col
+    if c < 1 then c = 1 end
+    if c > size then c = size end
+    return start + c - 1
+  end
   local function rowOf(s)
     for r = 1, maxRow do
       local start = rowStart[r]
@@ -799,32 +808,101 @@ local function run(ctx)
     end
     return 1
   end
+  local function keyCenterXForRowCol(r, col)
+    if spaceRow and r == spaceRow then
+      return _.KEYBOARD_CENTER_X
+    end
+    local off = tonumber(rowOffsets[r]) or 0
+    local startX = keyboardLeft + off * _.KEY_WIDTH
+    return startX + ((col - 0.5) * _.KEY_WIDTH)
+  end
+  local function nearestColForRowX(r, centerX)
+    local size = rowSize[r] or 0
+    if size <= 1 then return 1 end
+    if spaceRow and r == spaceRow then return 1 end
+    local off = tonumber(rowOffsets[r]) or 0
+    local startX = keyboardLeft + off * _.KEY_WIDTH
+    local bestCol = 1
+    local bestDist = nil
+    local tieEpsilon = 0.001
+    for c = 1, size do
+      local cx = startX + ((c - 0.5) * _.KEY_WIDTH)
+      local dist = math.abs(cx - centerX)
+      if (bestDist == nil) or (dist < (bestDist - tieEpsilon)) or
+          (math.abs(dist - bestDist) <= tieEpsilon and c > bestCol) then
+        bestDist = dist
+        bestCol = c
+      end
+    end
+    return bestCol
+  end
   local gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _)
   if (gridHorizontalMask & _.PAD_LEFT) ~= 0 then
-    ctx.textInputGridSel = ctx.textInputGridSel - 1; if ctx.textInputGridSel < 1 then ctx.textInputGridSel = #keyList end
+    local r = rowOf(ctx.textInputGridSel)
+    local start = rowStart[r]
+    local size = rowSize[r] or 0
+    if start and size > 0 then
+      local colInRow = ctx.textInputGridSel - start + 1
+      colInRow = colInRow - 1
+      if colInRow < 1 then colInRow = size end
+      ctx.textInputGridSel = rowAt(r, colInRow)
+    end
   end
   if (gridHorizontalMask & _.PAD_RIGHT) ~= 0 then
-    ctx.textInputGridSel = ctx.textInputGridSel + 1; if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = 1 end
+    local r = rowOf(ctx.textInputGridSel)
+    local start = rowStart[r]
+    local size = rowSize[r] or 0
+    if start and size > 0 then
+      local colInRow = ctx.textInputGridSel - start + 1
+      colInRow = colInRow + 1
+      if colInRow > size then colInRow = 1 end
+      ctx.textInputGridSel = rowAt(r, colInRow)
+    end
   end
   if (_.padEffective & _.PAD_UP) ~= 0 then
     local r = rowOf(ctx.textInputGridSel)
-    if r > 1 then
-      local colInRow = ctx.textInputGridSel - rowStart[r] + 1
-      local prevSize = rowSize[r - 1]
-      ctx.textInputGridSel = rowStart[r - 1] + math.min(colInRow, prevSize) - 1
-    elseif r == 1 and spaceIdx then
-      ctx.textInputGridSel = spaceIdx
+    local start = rowStart[r]
+    local size = rowSize[r] or 0
+    if start and size > 0 then
+      local colInRow = ctx.textInputGridSel - start + 1
+      local targetRow
+      if r > 1 then
+        targetRow = r - 1
+      else
+        if spaceRow then
+          -- Wrap from top row with visual intent:
+          -- center top keys (5..9 in default layout) go to Space,
+          -- others wrap to bottom letter row.
+          if colInRow >= 5 and colInRow <= 9 then
+            targetRow = spaceRow
+          else
+            targetRow = rowCount
+          end
+        else
+          targetRow = maxRow
+        end
+      end
+      local targetCol
+      if spaceRow and r == spaceRow then
+        local targetSize = rowSize[targetRow] or 1
+        targetCol = math.max(1, math.floor(targetSize / 2) + 1)
+      else
+        local xCenter = keyCenterXForRowCol(r, colInRow)
+        targetCol = nearestColForRowX(targetRow, xCenter)
+      end
+      ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
   end
   if (_.padEffective & _.PAD_DOWN) ~= 0 then
     local r = rowOf(ctx.textInputGridSel)
-    if r < maxRow then
-      local colInRow = ctx.textInputGridSel - rowStart[r] + 1
-      local nextSize = rowSize[r + 1]
-      ctx.textInputGridSel = rowStart[r + 1] + math.min(colInRow, nextSize) - 1
-    elseif r == maxRow and spaceIdx then
-      local colInRow = ctx.textInputGridSel - rowStart[r] + 1
-      ctx.textInputGridSel = rowStart[1] + math.min(colInRow, rowSize[1]) - 1
+    local start = rowStart[r]
+    local size = rowSize[r] or 0
+    if start and size > 0 then
+      local colInRow = ctx.textInputGridSel - start + 1
+      local targetRow = (r < maxRow) and (r + 1) or 1
+      local xCenter = keyCenterXForRowCol(r, colInRow)
+      local targetCol = nearestColForRowX(targetRow, xCenter)
+      ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
   end
   local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
@@ -836,12 +914,7 @@ local function run(ctx)
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     local selIdx = ctx.textInputGridSel
     local sk = specialKeys[selIdx]
-    if sk and sk.kind == "bel" then
-      ctx.textInputBelMenuOpen = true
-      ctx.textInputBelPage = 1
-      ctx.textInputBelMenuSel = ctx.textInputBelMenuSel or 1
-      ctx.textInputBelMenuScroll = ctx.textInputBelMenuScroll or 0
-    elseif sk and sk.kind == "space" then
+    if sk and sk.kind == "space" then
       if #ctx.textInputValue < ctx.textInputMaxLen then
         ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 1) ..
             " " .. ctx.textInputValue:sub(ctx.textInputCursor)
@@ -856,6 +929,12 @@ local function run(ctx)
         ctx.textInputCursor = ctx.textInputCursor + 1
       end
     end
+  end
+  if belEnabled and (not ctx.textInputBelMenuOpen) and (_.padEffective & _.PAD_SELECT) ~= 0 then
+    ctx.textInputBelMenuOpen = true
+    ctx.textInputBelPage = 1
+    ctx.textInputBelMenuSel = ctx.textInputBelMenuSel or 1
+    ctx.textInputBelMenuScroll = ctx.textInputBelMenuScroll or 0
   end
   if (_.padEffective & _.PAD_START) ~= 0 then
     local submitValue = tostring(ctx.textInputValue or "")
@@ -875,11 +954,13 @@ local function run(ctx)
     ctx.textInputBelMenuScroll = nil
     ctx.textInputBelRowsByPage = nil
     ctx.textInputBelRowsProfile = nil
+    ctx.textInputBelRowsText = nil
     ctx.textInputBelPage = nil
     ctx.textInputBelColumnMinWidths = nil
     ctx.textInputBelMinIntrinsicW = nil
     ctx.textInputBelLayoutProfile = nil
     ctx.textInputBelLayoutScale = nil
+    ctx.textInputBelLayoutText = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
@@ -904,11 +985,13 @@ local function run(ctx)
     ctx.textInputBelMenuScroll = nil
     ctx.textInputBelRowsByPage = nil
     ctx.textInputBelRowsProfile = nil
+    ctx.textInputBelRowsText = nil
     ctx.textInputBelPage = nil
     ctx.textInputBelColumnMinWidths = nil
     ctx.textInputBelMinIntrinsicW = nil
     ctx.textInputBelLayoutProfile = nil
     ctx.textInputBelLayoutScale = nil
+    ctx.textInputBelLayoutText = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
@@ -935,11 +1018,15 @@ local function run(ctx)
   local hints = (ctx.textInputTitleIdMode and _.text_str.hint_items_title_id) or _.text_str.hint_items
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM,
     _.w - 2 * _.MARGIN_X)
-  drawKeyboardShoulderHints(ctx, _, hints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM)
-  if belIdx and ctx.textInputGridSel == belIdx then
-    local warningText = (_.text_str and _.text_str.advanced_glyphs_warning) or BEL_WARNING_TEXT_FALLBACK
-    drawBelWarning(_, warningText, 0.7, _.w - 2 * _.MARGIN_X, _.DIM)
+  local shoulderHints = hints
+  if belEnabled then
+    shoulderHints = {}
+    for i = 1, #(hints or {}) do
+      shoulderHints[#shoulderHints + 1] = hints[i]
+    end
+    shoulderHints[#shoulderHints + 1] = { pad = "select", label = glyphKeyLabel, row = 2 }
   end
+  drawKeyboardShoulderHints(ctx, _, shoulderHints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM)
 end
 
 return { run = run }

@@ -1259,9 +1259,9 @@ function common.listDirectoryElfOnly(path, file_selector)
 end
 
 common.REPEATABLE_MASK = common.PAD_UP | common.PAD_DOWN
-common.REPEAT_START_HZ = 3
+common.REPEAT_START_HZ = 5
 common.REPEAT_END_HZ = 12
-common.REPEAT_ACCEL_SECONDS = 4
+common.REPEAT_ACCEL_SECONDS = 3
 common.REPEAT_FPS_SAMPLE_WINDOW = 8
 
 function common.getRepeatFps(ctx, nominalFps, opts)
