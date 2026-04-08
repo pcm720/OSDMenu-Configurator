@@ -683,8 +683,8 @@ local dev_str = strings.devices
 
 -- Local aliases so the rest of the file can stay unchanged
 local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = common.PAD_UP, common.PAD_DOWN, common.PAD_LEFT, common.PAD_RIGHT
-local PAD_CROSS, PAD_CIRCLE, PAD_START, PAD_TRIANGLE, PAD_SQUARE = common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_START,
-    common.PAD_TRIANGLE, common.PAD_SQUARE
+local PAD_CROSS, PAD_CIRCLE, PAD_SELECT, PAD_START, PAD_TRIANGLE, PAD_SQUARE = common.PAD_CROSS, common.PAD_CIRCLE,
+    common.PAD_SELECT, common.PAD_START, common.PAD_TRIANGLE, common.PAD_SQUARE
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = common.PAD_L1, common.PAD_R1, common.PAD_L2, common.PAD_R2
 local WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
 local HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
@@ -1237,6 +1237,7 @@ local function mainLoop()
       PAD_RIGHT = PAD_RIGHT,
       PAD_CROSS = PAD_CROSS,
       PAD_CIRCLE = PAD_CIRCLE,
+      PAD_SELECT = PAD_SELECT,
       PAD_START = PAD_START,
       PAD_TRIANGLE = PAD_TRIANGLE,
       PAD_SQUARE = PAD_SQUARE,
