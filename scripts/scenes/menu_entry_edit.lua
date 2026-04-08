@@ -4,6 +4,9 @@ local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function run(ctx)
   local _ = ctx._
+  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
+    return tostring(text or ""):gsub(string.char(7), "\226\150\161")
+  end
   if not ctx.lines or not ctx.entryIdx then
     ctx.state = "menu_entries"; ctx.entryIdx = nil; return
   end
@@ -115,7 +118,7 @@ local function run(ctx)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
     _.menu_str.name .. (nameDisplay == "" and (_.common_str.name_not_defined or _.common_str.empty) or
-      nameDisplay:sub(1, 40)), _.DIM)
+      formatBelForDisplay(nameDisplay):sub(1, 40)), _.DIM)
   if not isFmcbEntry then
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
   end
@@ -153,6 +156,7 @@ local function run(ctx)
     if row.kind == "path" and ctx.fmcbEntryPathGrab and i == ctx.entryEditSub then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
+    label = formatBelForDisplay(label)
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "menu_entry_edit_row_" .. tostring(row.id or i), _.font, label, maxLabelW,
         _.FONT_SCALE, isSelected)

@@ -72,6 +72,9 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
+    return tostring(text or ""):gsub(string.char(7), "\226\150\161")
+  end
   if not ctx.lines then
     ctx.state = "editor"
     return
@@ -374,6 +377,7 @@ local function run(ctx)
     if canMoveEntries and ctx.menuEntryGrab and i == ctx.entrySel then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
+    label = formatBelForDisplay(label)
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
     local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.WHITE
     local effectiveDisabled = ent.disabled or ((not isSeparator) and (not hasActivePath))

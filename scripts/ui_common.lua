@@ -291,6 +291,12 @@ function common.configureBelTextInput(ctx, opts)
   end
 end
 
+function common.formatBelForDisplay(text)
+  local s = tostring(text or "")
+  if s == "" then return s end
+  return s:gsub(string.char(7), "\226\150\161")
+end
+
 function common.drawPadTitle(_, padName, titleText, opts)
   if type(_) ~= "table" then return end
   opts = opts or {}

@@ -1027,6 +1027,9 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
+    return tostring(text or ""):gsub(string.char(7), "\226\150\161")
+  end
   local frameParse = getEditorParseCache(ctx, _)
   local cachedGet = frameParse.get
   local cachedGetWithComment = frameParse.getWithComment
@@ -1418,6 +1421,7 @@ local function run(ctx)
         end
         _.drawText(_.font, _.drawMode, rowX + bootHotkeyIconW + bootHotkeyIconGap, y, _.FONT_SCALE, lab, col)
       else
+        lab = formatBelForDisplay(lab)
         _.drawListRow(_.MARGIN_X + 16, y, i == ctx.optSel, lab, col)
       end
       local timerInlineEdit = (i == ctx.optSel) and ctx.timerDigitEdit and ctx.timerDigitEdit.key == o.key
@@ -1440,19 +1444,20 @@ local function run(ctx)
         if valDisplay ~= "" then
           local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or optionDisabled) and _.DIM or
               ((i == ctx.optSel) and _.WHITE or _.GRAY)
+          local valDisplayDraw = formatBelForDisplay(valDisplay)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
           local drawVal
           if _.common.fitValueText then
-            drawVal = _.common.fitValueText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplay, valueAreaWidth,
+            drawVal = _.common.fitValueText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplayDraw, valueAreaWidth,
               _.FONT_SCALE, i == ctx.optSel, { holdStart = 50, stepFrames = 18, holdEnd = 70 })
           elseif _.common.fitListRowText then
-            drawVal = _.common.fitListRowText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplay, valueAreaWidth,
+            drawVal = _.common.fitListRowText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplayDraw, valueAreaWidth,
               _.FONT_SCALE, i == ctx.optSel, { holdStart = 50, stepFrames = 18, holdEnd = 70 })
           elseif _.common.truncateTextToWidth then
-            drawVal = (i == ctx.optSel) and valDisplay or
-                _.common.truncateTextToWidth(_.font, valDisplay, valueAreaWidth, _.FONT_SCALE)
+            drawVal = (i == ctx.optSel) and valDisplayDraw or
+                _.common.truncateTextToWidth(_.font, valDisplayDraw, valueAreaWidth, _.FONT_SCALE)
           else
-            drawVal = valDisplay
+            drawVal = valDisplayDraw
           end
           _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, drawVal, valCol)
         end

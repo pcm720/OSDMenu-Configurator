@@ -571,20 +571,25 @@ local function run(ctx)
   local segEnd = math.min(segStart + TEXT_DISP_CHARS - 2, #ctx.textInputValue)
   local beforeCurs = ctx.textInputValue:sub(segStart, ctx.textInputCursor - 1)
   local afterCurs = ctx.textInputValue:sub(ctx.textInputCursor, segEnd)
+  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
+    return tostring(text or ""):gsub(BEL, "\226\150\161")
+  end
+  local beforeDisplay = formatBelForDisplay(beforeCurs)
+  local afterDisplay = formatBelForDisplay(afterCurs)
   local baseX = _.KEYBOARD_CENTER_X - 200
   local textY = _.scaleY(108)
   local scale = 0.9
   _.drawText(_.font, _.drawMode, _.KEYBOARD_CENTER_X - 200, _.scaleY(88), 0.9,
     ctx.textInputPrompt or _.common_str.enter_text, _.DIM)
   local x = baseX
-  if beforeCurs ~= "" then
-    _.drawText(_.font, _.drawMode, x, textY, scale, beforeCurs, _.WHITE)
-    x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, beforeCurs, scale) or (#beforeCurs * 10))
+  if beforeDisplay ~= "" then
+    _.drawText(_.font, _.drawMode, x, textY, scale, beforeDisplay, _.WHITE)
+    x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, beforeDisplay, scale) or (#beforeDisplay * 10))
   end
   _.drawText(_.font, _.drawMode, x, textY, scale, "|", _.TEXT_CURSOR_COLOR or _.WHITE)
   x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, "|", scale) or 10)
-  if afterCurs ~= "" then
-    _.drawText(_.font, _.drawMode, x, textY, scale, afterCurs, _.WHITE)
+  if afterDisplay ~= "" then
+    _.drawText(_.font, _.drawMode, x, textY, scale, afterDisplay, _.WHITE)
   end
   local rows = ctx.textInputTitleIdMode and (_.KEYBOARD_ROWS_TITLE_ID or _.KEYBOARD_ROWS_SHIFTED) or
       (ctx.textInputShift and _.KEYBOARD_ROWS_SHIFTED or _.KEYBOARD_ROWS)
