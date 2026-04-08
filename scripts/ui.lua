@@ -855,6 +855,8 @@ local OVERLAY_LOGO_PSEUDO_YAW_SQUEEZE = 0.42
 local OVERLAY_LOGO_PSEUDO_PITCH_SQUEEZE = 0.34
 local OVERLAY_LOGO_SCALE_MIN = 0.25
 local OVERLAY_LOGO_SCALE_MAX = 2.40
+local OVERLAY_LOGO_STICK_DEBUG = true
+local OVERLAY_LOGO_STICK_DEBUG_EVERY_FRAMES = 20
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
@@ -878,14 +880,21 @@ local function normalizeStickAxis(raw)
   return (v < 0) and (-n) or n
 end
 
-local function isPadAnalogCapable()
-  if not (Pads and Pads.getType) then return true end
+local function getPadTypeMode()
+  if not (Pads and Pads.getType) then return nil, false end
   local ok, t = pcall(Pads.getType, 0)
   if not ok then
     ok, t = pcall(Pads.getType)
   end
-  if not ok then return true end
-  local mode = tonumber(t) or 0
+  if not ok then return nil, false end
+  return tonumber(t) or 0, true
+end
+
+local function isPadAnalogCapable(mode, hasType)
+  -- Be permissive: some environments return non-type values here.
+  if hasType ~= true then return true end
+  mode = tonumber(mode) or 0
+  if mode <= 0 then return true end
   local analog = tonumber(PAD_TYPE_ANALOG)
   local dualshock = tonumber(PAD_TYPE_DUALSHOCK)
   if analog and dualshock then
@@ -899,13 +908,37 @@ local function isPadAnalogCapable()
 end
 
 local function readStickNormalized(getFn)
-  if not getFn then return 0, 0, false end
+  if not getFn then return 0, 0, false, 0, 0 end
   local ok, x, y = pcall(getFn, 0)
   if not ok then
     ok, x, y = pcall(getFn)
   end
-  if not ok then return 0, 0, false end
-  return normalizeStickAxis(x), normalizeStickAxis(y), true
+  if not ok then return 0, 0, false, 0, 0 end
+  local rawX = tonumber(x) or 0
+  local rawY = tonumber(y) or 0
+  return normalizeStickAxis(rawX), normalizeStickAxis(rawY), true, rawX, rawY
+end
+
+local function shouldLogOverlayStickDebug(ctx)
+  if not OVERLAY_LOGO_STICK_DEBUG then return false end
+  local frame = (tonumber(ctx._overlayLogoStickDebugFrame) or 0) + 1
+  ctx._overlayLogoStickDebugFrame = frame
+  if OVERLAY_LOGO_STICK_DEBUG_EVERY_FRAMES <= 1 then return true end
+  return (frame % OVERLAY_LOGO_STICK_DEBUG_EVERY_FRAMES) == 0
+end
+
+local function logOverlayStickDebug(ctx, info)
+  if not shouldLogOverlayStickDebug(ctx) then return end
+  local function b(v) return v and "1" or "0" end
+  local function f(v) return string.format("%.2f", tonumber(v) or 0) end
+  print(string.format(
+    "[logo-stick] mode=%s typeOk=%s analog=%s leftOk=%s rightOk=%s lRaw=(%d,%d) rRaw=(%d,%d) lNorm=(%s,%s) rNorm=(%s,%s) scale=(%s,%s) reason=%s",
+    tostring(info.mode), b(info.typeOk), b(info.analog), b(info.leftOk), b(info.rightOk),
+    tonumber(info.lRawX) or 0, tonumber(info.lRawY) or 0,
+    tonumber(info.rRawX) or 0, tonumber(info.rRawY) or 0,
+    f(info.lx), f(info.ly), f(info.rx), f(info.ry),
+    f(info.sx), f(info.sy), tostring(info.reason or "ok")
+  ))
 end
 
 local function getOverlayLogoAnalogScale(ctx)
@@ -915,21 +948,43 @@ local function getOverlayLogoAnalogScale(ctx)
     ctx._overlayLogoAnalogState = state
   end
 
-  if not isPadAnalogCapable() then
+  local mode, typeOk = getPadTypeMode()
+  local analogCapable = isPadAnalogCapable(mode, typeOk)
+  -- Do not hard-block by mode alone: some environments report non-type values
+  -- here even when analog stick readings are valid.
+
+  local lx, ly, leftOk, lRawX, lRawY = readStickNormalized(Pads and Pads.getLeftStick)
+  local rx, ry, rightOk, rRawX, rRawY = readStickNormalized(Pads and Pads.getRightStick)
+  if not leftOk and not rightOk then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    logOverlayStickDebug(ctx, {
+      mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
+      lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
+      lx = lx, ly = ly, rx = rx, ry = ry, sx = 1, sy = 1, reason = "stick_read_failed",
+    })
     return 1, 1
   end
 
-  local lx, ly, leftOk = readStickNormalized(Pads and Pads.getLeftStick)
-  local rx, ry, rightOk = readStickNormalized(Pads and Pads.getRightStick)
-  if not leftOk and not rightOk then
+  local invalidSignature = (math.abs(lRawX) >= 126 and math.abs(lRawY) >= 126 and
+      math.abs(rRawX) >= 126 and math.abs(rRawY) >= 126)
+  if invalidSignature then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    logOverlayStickDebug(ctx, {
+      mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
+      lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
+      lx = lx, ly = ly, rx = rx, ry = ry, sx = 1, sy = 1, reason = "invalid_signature",
+    })
     return 1, 1
   end
 
   -- Centered sticks should produce exact identity (no residual drift/tilt).
   if lx == 0 and ly == 0 and rx == 0 and ry == 0 then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
+    logOverlayStickDebug(ctx, {
+      mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
+      lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
+      lx = lx, ly = ly, rx = rx, ry = ry, sx = 1, sy = 1, reason = "centered_identity",
+    })
     return 1, 1
   end
 
@@ -951,6 +1006,11 @@ local function getOverlayLogoAnalogScale(ctx)
 
   local sx = clampf(tiltScaleX * stretchScaleX, OVERLAY_LOGO_SCALE_MIN, OVERLAY_LOGO_SCALE_MAX)
   local sy = clampf(tiltScaleY * stretchScaleY, OVERLAY_LOGO_SCALE_MIN, OVERLAY_LOGO_SCALE_MAX)
+  logOverlayStickDebug(ctx, {
+    mode = mode, typeOk = typeOk, analog = analogCapable, leftOk = leftOk, rightOk = rightOk,
+    lRawX = lRawX, lRawY = lRawY, rRawX = rRawX, rRawY = rRawY,
+    lx = lx, ly = ly, rx = rx, ry = ry, sx = sx, sy = sy, reason = "active",
+  })
   return sx, sy
 end
 
