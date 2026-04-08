@@ -617,6 +617,29 @@ local function installSceneDrawOffsetGraphicsProxy()
         end
         return fn(image, tx, ty, startx, starty, endx, endy)
       end
+    elseif name == "drawImageQuad" then
+      return function(image, x1, y1, x2, y2, x3, y3, x4, y4, color)
+        if isIdentitySceneTransform() then
+          if color ~= nil then
+            return fn(image, x1, y1, x2, y2, x3, y3, x4, y4, color)
+          end
+          return fn(image, x1, y1, x2, y2, x3, y3, x4, y4)
+        end
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
+        elseif getSceneDrawAlpha() < 0.999 then
+          c = applySceneAlphaToColor(0x80808080)
+        end
+        local tx1, ty1 = transformScenePoint(x1, y1)
+        local tx2, ty2 = transformScenePoint(x2, y2)
+        local tx3, ty3 = transformScenePoint(x3, y3)
+        local tx4, ty4 = transformScenePoint(x4, y4)
+        if c ~= nil then
+          return fn(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, c)
+        end
+        return fn(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4)
+      end
     end
     return fn
   end
@@ -1008,6 +1031,17 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
   local blx, bly = project(-ux, uy)
   local urx, ury = project(ux, -uy)
   local brx, bry = project(ux, uy)
+
+  -- Keep visual pivot centered: compensate perspective-induced centroid drift.
+  local avgX = (ulx + blx + urx + brx) * 0.25
+  local avgY = (uly + bly + ury + bry) * 0.25
+  local dx = (tonumber(cx) or 0) - avgX
+  local dy = (tonumber(cy) or 0) - avgY
+  ulx, uly = ulx + dx, uly + dy
+  blx, bly = blx + dx, bly + dy
+  urx, ury = urx + dx, ury + dy
+  brx, bry = brx + dx, bry + dy
+
   return ulx, uly, blx, bly, urx, ury, brx, bry
 end
 
