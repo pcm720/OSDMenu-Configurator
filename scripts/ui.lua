@@ -457,10 +457,16 @@ local function installSceneDrawOffsetGraphicsProxy()
           local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
           local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
           if iw > 0 and ih > 0 then
-            return rawGraphics.drawScaleImage(image, tx, ty, iw * sceneScale, ih * sceneScale, c)
+            if c ~= nil then
+              return rawGraphics.drawScaleImage(image, tx, ty, iw * sceneScale, ih * sceneScale, c)
+            end
+            return rawGraphics.drawScaleImage(image, tx, ty, iw * sceneScale, ih * sceneScale)
           end
         end
-        return fn(image, tx, ty, c)
+        if c ~= nil then
+          return fn(image, tx, ty, c)
+        end
+        return fn(image, tx, ty)
       end
     elseif name == "drawScaleImage" then
       return function(image, x, y, width, height, color)
@@ -474,7 +480,10 @@ local function installSceneDrawOffsetGraphicsProxy()
         local sceneScale = getSceneDrawScale()
         local tw = (tonumber(width) or 0) * sceneScale
         local th = (tonumber(height) or 0) * sceneScale
-        return fn(image, tx, ty, tw, th, c)
+        if c ~= nil then
+          return fn(image, tx, ty, tw, th, c)
+        end
+        return fn(image, tx, ty, tw, th)
       end
     elseif name == "drawRotateImage" then
       return function(image, x, y, angle, color)
@@ -491,11 +500,18 @@ local function installSceneDrawOffsetGraphicsProxy()
           local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
           local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
           if iw > 0 and ih > 0 then
+            if c ~= nil then
+              return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScale, ih * sceneScale,
+                tonumber(angle) or 0, c)
+            end
             return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScale, ih * sceneScale,
-              tonumber(angle) or 0, c)
+              tonumber(angle) or 0)
           end
         end
-        return fn(image, tx, ty, angle, c)
+        if c ~= nil then
+          return fn(image, tx, ty, angle, c)
+        end
+        return fn(image, tx, ty, angle)
       end
     elseif name == "drawImageExtended" then
       return function(image, x, y, startx, starty, width, height, scale_x, scale_y, angle, color)
@@ -509,7 +525,10 @@ local function installSceneDrawOffsetGraphicsProxy()
         local sceneScale = getSceneDrawScale()
         local sx = (tonumber(scale_x) or tonumber(width) or 0) * sceneScale
         local sy = (tonumber(scale_y) or tonumber(height) or 0) * sceneScale
-        return fn(image, tx, ty, startx, starty, width, height, sx, sy, angle, c)
+        if c ~= nil then
+          return fn(image, tx, ty, startx, starty, width, height, sx, sy, angle, c)
+        end
+        return fn(image, tx, ty, startx, starty, width, height, sx, sy, angle)
       end
     elseif name == "drawPartialImage" then
       return function(image, x, y, startx, starty, endx, endy, color)
@@ -526,11 +545,18 @@ local function installSceneDrawOffsetGraphicsProxy()
           local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
           local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
           if iw > 0 and ih > 0 then
+            if c ~= nil then
+              return rawGraphics.drawImageExtended(image, tx, ty, startx, starty, endx, endy, iw * sceneScale,
+                ih * sceneScale, 0, c)
+            end
             return rawGraphics.drawImageExtended(image, tx, ty, startx, starty, endx, endy, iw * sceneScale,
-              ih * sceneScale, 0, c)
+              ih * sceneScale, 0)
           end
         end
-        return fn(image, tx, ty, startx, starty, endx, endy, c)
+        if c ~= nil then
+          return fn(image, tx, ty, startx, starty, endx, endy, c)
+        end
+        return fn(image, tx, ty, startx, starty, endx, endy)
       end
     end
     return fn
