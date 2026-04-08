@@ -15,7 +15,7 @@ static int waitPadReadyState(int p, int s, int maxPolls) {
     state = padGetState(p, s);
     if ((state == PAD_STATE_STABLE) || (state == PAD_STATE_FINDCTP1) || (state == PAD_STATE_DISCONN))
       break;
-    DelayThread(1000);
+    usleep(1000);
   }
   return state;
 }
