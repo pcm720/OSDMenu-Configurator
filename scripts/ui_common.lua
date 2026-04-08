@@ -1451,7 +1451,11 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
     if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
-      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
+      local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
+      if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
+      if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
+      if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
       if ctx._ftPixelSizeApplied ~= wantPx then
         pcall(Font.ftSetPixelSize, ctx.font, 0, wantPx)
         ctx._ftPixelSizeApplied = wantPx
@@ -1843,6 +1847,14 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   local c = color or common.WHITE
   local runtime = _G and _G.CONFIG_UI
   local offsetX = math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
+  local drawScale = tonumber(runtime and runtime.sceneDrawScale) or 1
+  if drawScale <= 0 then drawScale = 1 end
+  if drawScale < 0.1 then drawScale = 0.1 end
+  if drawScale > 4 then drawScale = 4 end
+  local centerX = tonumber(runtime and runtime.sceneDrawCenterX) or
+      ((tonumber(runtime and runtime.currentSceneWidth) or common.DEFAULT_W) / 2)
+  local centerY = tonumber(runtime and runtime.sceneDrawCenterY) or
+      ((tonumber(runtime and runtime.currentSceneHeight) or common.DEFAULT_H) / 2)
   local drawAlpha = tonumber(runtime and runtime.sceneDrawAlpha) or 1
   if c and drawAlpha < 0.999 then
     local base = math.floor(tonumber(c) or 0)
@@ -1852,18 +1864,25 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
     if scaledA > 0x80 then scaledA = 0x80 end
     c = (base & 0x00FFFFFF) | ((scaledA & 0xFF) << 24)
   end
-  local ix = math.floor((tonumber(x) or 0) + offsetX)
-  local iy = math.floor(tonumber(y) or 0)
+  local px = tonumber(x) or 0
+  local py = tonumber(y) or 0
+  if math.abs(drawScale - 1) > 0.0001 then
+    px = centerX + ((px - centerX) * drawScale)
+    py = centerY + ((py - centerY) * drawScale)
+  end
+  local ix = math.floor(px + offsetX)
+  local iy = math.floor(py)
   local s = text or ""
+  local scaleN = tonumber(scale) or 1
   if mode == "fmPrint" then
-    Font.fmPrint(ix, iy, scale, s, c)
+    Font.fmPrint(ix, iy, scaleN * drawScale, s, c)
   elseif mode == "ftPrint" then
     local w = (_G.CONFIG_UI and _G.CONFIG_UI.currentDrawWidth) or common.FT_DRAW_W
     local h = (drawHeight and drawHeight > 0) and drawHeight or (_G.CONFIG_UI and _G.CONFIG_UI.currentDrawHeight) or
         common.FT_DRAW_H
     Font.ftPrint(font, ix, iy, 0, w, h, s, c)
   else
-    Font.print(font, ix, iy, scale, s, c)
+    Font.print(font, ix, iy, scaleN * drawScale, s, c)
   end
 end
 

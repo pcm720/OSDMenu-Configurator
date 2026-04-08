@@ -336,7 +336,7 @@ local function isSlideLikeSceneTransition(_, transitionType)
   if _.common and _.common.normalizeSceneTransitionType then
     t = _.common.normalizeSceneTransitionType(t)
   end
-  return t == "slide" or t == "whip_pan"
+  return t == "slide" or t == "whip_pan" or t == "zoom"
 end
 
 local function isInSceneDissolveTransition(_, transitionType)

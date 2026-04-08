@@ -324,6 +324,42 @@ local function getSceneDrawAlpha()
   return a
 end
 
+local function getSceneDrawScale()
+  local runtime = _G and _G.CONFIG_UI
+  local s = tonumber(runtime and runtime.sceneDrawScale)
+  if not s or s <= 0 then return 1 end
+  if s < 0.1 then s = 0.1 end
+  if s > 4 then s = 4 end
+  return s
+end
+
+local function getSceneDrawCenter()
+  local runtime = _G and _G.CONFIG_UI
+  local w = tonumber(runtime and runtime.currentSceneWidth) or common.DEFAULT_W
+  local h = tonumber(runtime and runtime.currentSceneHeight) or common.DEFAULT_H
+  local cx = tonumber(runtime and runtime.sceneDrawCenterX) or (w / 2)
+  local cy = tonumber(runtime and runtime.sceneDrawCenterY) or (h / 2)
+  return cx, cy
+end
+
+local function transformScenePoint(x, y)
+  local px = tonumber(x) or 0
+  local py = tonumber(y) or 0
+  local scale = getSceneDrawScale()
+  if math.abs(scale - 1) > 0.0001 then
+    local cx, cy = getSceneDrawCenter()
+    px = cx + ((px - cx) * scale)
+    py = cy + ((py - cy) * scale)
+  end
+  px = px + getSceneDrawOffsetX()
+  return px, py
+end
+
+local function scaleSceneLength(v)
+  local n = tonumber(v) or 0
+  return n * getSceneDrawScale()
+end
+
 local function installSceneDrawOffsetGraphicsProxy()
   local runtime = _G and _G.CONFIG_UI
   if type(runtime) ~= "table" then return end
@@ -348,26 +384,33 @@ local function installSceneDrawOffsetGraphicsProxy()
   end
 
   local function wrapDrawFn(name, fn)
-    if name == "drawRect" or name == "drawPixel" or name == "drawCircle" then
-      return function(x, y, ...)
-        local args = { ... }
-        if name == "drawRect" and type(args[3]) == "number" then
-          args[3] = applySceneAlphaToColor(args[3])
-        elseif name == "drawPixel" and type(args[1]) == "number" then
-          args[1] = applySceneAlphaToColor(args[1])
-        elseif name == "drawCircle" and type(args[2]) == "number" then
-          args[2] = applySceneAlphaToColor(args[2])
-        end
-        return fn((tonumber(x) or 0) + getSceneDrawOffsetX(), y, unpackFn(args))
+    if name == "drawRect" then
+      return function(x, y, width, height, color)
+        local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
+        local tx, ty = transformScenePoint(x, y)
+        local tw = math.max(0, scaleSceneLength(width))
+        local th = math.max(0, scaleSceneLength(height))
+        return fn(tx, ty, tw, th, c)
+      end
+    elseif name == "drawPixel" then
+      return function(x, y, color)
+        local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
+        local tx, ty = transformScenePoint(x, y)
+        return fn(tx, ty, c)
+      end
+    elseif name == "drawCircle" then
+      return function(x, y, radius, color, fill)
+        local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
+        local tx, ty = transformScenePoint(x, y)
+        local tr = math.max(0, scaleSceneLength(radius))
+        return fn(tx, ty, tr, c, fill)
       end
     elseif name == "drawLine" then
-      return function(x1, y1, x2, y2, ...)
-        local args = { ... }
-        if type(args[1]) == "number" then
-          args[1] = applySceneAlphaToColor(args[1])
-        end
-        local dx = getSceneDrawOffsetX()
-        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, unpackFn(args))
+      return function(x1, y1, x2, y2, color)
+        local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
+        local tx1, ty1 = transformScenePoint(x1, y1)
+        local tx2, ty2 = transformScenePoint(x2, y2)
+        return fn(tx1, ty1, tx2, ty2, c)
       end
     elseif name == "drawTriangle" then
       return function(x1, y1, x2, y2, x3, y3, ...)
@@ -377,9 +420,10 @@ local function installSceneDrawOffsetGraphicsProxy()
             args[i] = applySceneAlphaToColor(args[i])
           end
         end
-        local dx = getSceneDrawOffsetX()
-        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3,
-          unpackFn(args))
+        local tx1, ty1 = transformScenePoint(x1, y1)
+        local tx2, ty2 = transformScenePoint(x2, y2)
+        local tx3, ty3 = transformScenePoint(x3, y3)
+        return fn(tx1, ty1, tx2, ty2, tx3, ty3, unpackFn(args))
       end
     elseif name == "drawQuad" then
       return function(x1, y1, x2, y2, x3, y3, x4, y4, ...)
@@ -389,37 +433,101 @@ local function installSceneDrawOffsetGraphicsProxy()
             args[i] = applySceneAlphaToColor(args[i])
           end
         end
-        local dx = getSceneDrawOffsetX()
-        return fn((tonumber(x1) or 0) + dx, y1, (tonumber(x2) or 0) + dx, y2, (tonumber(x3) or 0) + dx, y3,
-          (tonumber(x4) or 0) + dx, y4, unpackFn(args))
+        local tx1, ty1 = transformScenePoint(x1, y1)
+        local tx2, ty2 = transformScenePoint(x2, y2)
+        local tx3, ty3 = transformScenePoint(x3, y3)
+        local tx4, ty4 = transformScenePoint(x4, y4)
+        return fn(tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, unpackFn(args))
       end
-    elseif name == "drawImage" or name == "drawScaleImage" or name == "drawRotateImage" or name == "drawImageExtended" then
-      return function(image, x, y, ...)
-        local args = { ... }
-        local colorIdxByFn = {
-          drawImage = 1,
-          drawScaleImage = 3,
-          drawRotateImage = 2,
-          drawImageExtended = 8,
-        }
-        local ci = colorIdxByFn[name]
-        if ci then
-          if type(args[ci]) == "number" then
-            args[ci] = applySceneAlphaToColor(args[ci])
-          elseif getSceneDrawAlpha() < 0.999 then
-            args[ci] = applySceneAlphaToColor(0x80808080)
+    elseif name == "drawImage" then
+      return function(image, x, y, color)
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
+        elseif getSceneDrawAlpha() < 0.999 then
+          c = applySceneAlphaToColor(0x80808080)
+        end
+        local tx, ty = transformScenePoint(x, y)
+        local sceneScale = getSceneDrawScale()
+        if math.abs(sceneScale - 1) > 0.0001 and rawGraphics.drawScaleImage and rawGraphics.getImageWidth and
+            rawGraphics.getImageHeight then
+          local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
+          local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
+          if iw > 0 and ih > 0 then
+            return rawGraphics.drawScaleImage(image, tx, ty, iw * sceneScale, ih * sceneScale, c)
           end
         end
-        return fn(image, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, unpackFn(args))
+        return fn(image, tx, ty, c)
+      end
+    elseif name == "drawScaleImage" then
+      return function(image, x, y, width, height, color)
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
+        elseif getSceneDrawAlpha() < 0.999 then
+          c = applySceneAlphaToColor(0x80808080)
+        end
+        local tx, ty = transformScenePoint(x, y)
+        local sceneScale = getSceneDrawScale()
+        local tw = (tonumber(width) or 0) * sceneScale
+        local th = (tonumber(height) or 0) * sceneScale
+        return fn(image, tx, ty, tw, th, c)
+      end
+    elseif name == "drawRotateImage" then
+      return function(image, x, y, angle, color)
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
+        elseif getSceneDrawAlpha() < 0.999 then
+          c = applySceneAlphaToColor(0x80808080)
+        end
+        local tx, ty = transformScenePoint(x, y)
+        local sceneScale = getSceneDrawScale()
+        if math.abs(sceneScale - 1) > 0.0001 and rawGraphics.drawImageExtended and rawGraphics.getImageWidth and
+            rawGraphics.getImageHeight then
+          local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
+          local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
+          if iw > 0 and ih > 0 then
+            return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScale, ih * sceneScale,
+              tonumber(angle) or 0, c)
+          end
+        end
+        return fn(image, tx, ty, angle, c)
+      end
+    elseif name == "drawImageExtended" then
+      return function(image, x, y, startx, starty, width, height, scale_x, scale_y, angle, color)
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
+        elseif getSceneDrawAlpha() < 0.999 then
+          c = applySceneAlphaToColor(0x80808080)
+        end
+        local tx, ty = transformScenePoint(x, y)
+        local sceneScale = getSceneDrawScale()
+        local sx = (tonumber(scale_x) or tonumber(width) or 0) * sceneScale
+        local sy = (tonumber(scale_y) or tonumber(height) or 0) * sceneScale
+        return fn(image, tx, ty, startx, starty, width, height, sx, sy, angle, c)
       end
     elseif name == "drawPartialImage" then
       return function(image, x, y, startx, starty, endx, endy, color)
-        if type(color) == "number" then
-          color = applySceneAlphaToColor(color)
+        local c = color
+        if type(c) == "number" then
+          c = applySceneAlphaToColor(c)
         elseif getSceneDrawAlpha() < 0.999 then
-          color = applySceneAlphaToColor(0x80808080)
+          c = applySceneAlphaToColor(0x80808080)
         end
-        return fn(image, (tonumber(x) or 0) + getSceneDrawOffsetX(), y, startx, starty, endx, endy, color)
+        local tx, ty = transformScenePoint(x, y)
+        local sceneScale = getSceneDrawScale()
+        if math.abs(sceneScale - 1) > 0.0001 and rawGraphics.drawImageExtended and rawGraphics.getImageWidth and
+            rawGraphics.getImageHeight then
+          local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
+          local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
+          if iw > 0 and ih > 0 then
+            return rawGraphics.drawImageExtended(image, tx, ty, startx, starty, endx, endy, iw * sceneScale,
+              ih * sceneScale, 0, c)
+          end
+        end
+        return fn(image, tx, ty, startx, starty, endx, endy, c)
       end
     end
     return fn
@@ -917,7 +1025,11 @@ local function mainLoop()
     local KEY_CW = c.KEY_CHAR_W or math.max(1, scaleX(common.KEY_CHAR_W))
     local KEY_LH = c.KEY_LINE_H or math.max(1, scaleY(common.KEY_LINE_H))
     if drawMode == "ftPrint" and font then
-      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
+      local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
+      if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
+      if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
+      if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
       if c._ftPixelSizeApplied ~= wantPx then
         Font.ftSetPixelSize(font, 0, wantPx)
         c._ftPixelSizeApplied = wantPx
@@ -1152,7 +1264,7 @@ local function mainLoop()
     if common.normalizeSceneTransitionType then
       t = common.normalizeSceneTransitionType(t)
     end
-    return t == "slide" or t == "whip_pan"
+    return t == "slide" or t == "whip_pan" or t == "zoom"
   end
 
   local function runSceneTransitionOnStateChange(c, prevScene, nextScene)

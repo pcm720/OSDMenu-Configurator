@@ -282,9 +282,15 @@ function transitions.install(common)
 
   function common.applySceneDrawOffsetForCurrentFrame(ctx)
     local runtime = _G and _G.CONFIG_UI
+    local w, h = getTransitionScreenSize(ctx)
     if runtime then
       runtime.sceneDrawOffsetX = 0
       runtime.sceneDrawAlpha = 1
+      runtime.sceneDrawScale = 1
+      runtime.sceneDrawCenterX = math.floor((w or 0) / 2)
+      runtime.sceneDrawCenterY = math.floor((h or 0) / 2)
+      runtime.currentSceneWidth = w
+      runtime.currentSceneHeight = h
     end
     if not common.isSceneTransitionInActive(ctx) then
       return 0
@@ -294,12 +300,36 @@ function transitions.install(common)
       local frames = common.normalizeSceneTransitionFrames(tr.frames)
       local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
       local progress = clamp01((frame + 1) / math.max(1, frames))
+      local prevProgress = clamp01(frame / math.max(1, frames))
+      -- We preserve previous framebuffer for dissolve frames, so alpha must be
+      -- incremental (delta blend), not absolute. This yields:
+      --   out = old*(1-progress) + new*progress
+      -- instead of repeatedly re-blending absolute alpha onto prior mixed frames.
+      local remainingOld = 1 - prevProgress
+      local blendAlpha = progress
+      if remainingOld > 0 then
+        blendAlpha = (progress - prevProgress) / remainingOld
+      end
+      blendAlpha = clamp01(blendAlpha)
       if runtime then
-        runtime.sceneDrawAlpha = progress
+        runtime.sceneDrawAlpha = blendAlpha
       end
       return 0
     end
     if not isSceneSlideTransition(tr.type) then
+      if tr.type == "zoom" then
+        local frames = common.normalizeSceneTransitionFrames(tr.frames)
+        local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
+        local progress = clamp01((frame + 1) / math.max(1, frames))
+        local curved = easeInOutCubic(progress)
+        local direction = tostring(tr.direction or "in")
+        -- Forward and back use opposite zoom directions while both settle at 1.0.
+        local startScale = (direction == "out" or direction == "back") and 0.90 or 1.10
+        local scale = startScale + ((1 - startScale) * curved)
+        if runtime then
+          runtime.sceneDrawScale = scale
+        end
+      end
       return 0
     end
     local frames = common.normalizeSceneTransitionFrames(tr.frames)
@@ -325,9 +355,19 @@ function transitions.install(common)
     if not common.isSceneTransitionInActive(ctx) then return false end
     local tr = ctx and ctx.sceneTransitionIn
     local t = common.normalizeSceneTransitionType(tr and tr.type)
-    -- Preserve the previous framebuffer for dissolve/slide-like transitions so
-    -- outgoing content stays visible while incoming content animates in.
-    return t == "cross_dissolve" or isSceneSlideTransition(t)
+    -- Only dissolve keeps the previous framebuffer. Slide/whip must clear each
+    -- frame to avoid frame accumulation/ghost trails.
+    if t == "cross_dissolve" then
+      -- On the final dissolve step, do a normal clear so the incoming scene's
+      -- fully-opaque frame lands cleanly (avoids a perceived "hang"/ghost at end).
+      local frames = common.normalizeSceneTransitionFrames(tr and tr.frames)
+      local frame = math.max(0, math.floor(tonumber(tr and tr.frame) or 0))
+      if frame >= math.max(0, frames - 1) then
+        return false
+      end
+      return true
+    end
+    return false
   end
 
   function common.shouldDrawBackgroundLayerForTransition(ctx)
@@ -359,8 +399,10 @@ function transitions.install(common)
     elseif tr.type == "cross_dissolve" then
       -- True dissolve approximation: preserve previous frame in buffer and
       -- draw incoming scene with rising alpha (handled by sceneDrawAlpha).
+    elseif tr.type == "zoom" then
+      -- Zoom transition is handled through sceneDrawScale in applySceneDrawOffsetForCurrentFrame.
     elseif not isSceneSlideTransition(tr.type) then
-      -- For incoming non-slide transitions (fade/cross_dissolve/zoom), start at step 1
+      -- For incoming non-slide transitions (fade/cross_dissolve), start at step 1
       -- to avoid a fully blank first frame right after scene switch.
       local progress = clamp01((frame + 1) / math.max(1, frames))
       common.drawSceneTransitionOverlay(ctx, {
