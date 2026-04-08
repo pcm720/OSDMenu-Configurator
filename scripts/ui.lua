@@ -875,9 +875,10 @@ local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_RADIUS_BASE = 3.00
-local OVERLAY_LOGO_RADIUS_RANGE = 1.80
-local OVERLAY_LOGO_RADIUS_MIN = 1.20
-local OVERLAY_LOGO_RADIUS_MAX = 6.00
+local OVERLAY_LOGO_DEPTH_RANGE = 3.00
+local OVERLAY_LOGO_DEPTH_TOWARD_LIMIT = 2.40
+local OVERLAY_LOGO_EFFECTIVE_MIN = 0.60
+local OVERLAY_LOGO_EFFECTIVE_MAX = 9.00
 local OVERLAY_LOGO_CAMERA_MIN_DENOM = 0.20
 local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
@@ -930,20 +931,20 @@ local function getOverlayLogoAnalogTransform(ctx)
   local rx, ry, rightOk, rRawX, rRawY = readStickNormalized(Pads and Pads.getRightStick)
   if not leftOk and not rightOk then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0, 0, 0, (tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00)
+    return 1, 1, 0, 0, 0, 0
   end
 
   local invalidSignature = (math.abs(lRawX) >= 126 and math.abs(lRawY) >= 126 and
       math.abs(rRawX) >= 126 and math.abs(rRawY) >= 126)
   if invalidSignature then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0, 0, 0, (tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00)
+    return 1, 1, 0, 0, 0, 0
   end
 
   -- Centered sticks should produce exact identity (no residual drift/tilt/roll).
   if lx == 0 and ly == 0 and rx == 0 and ry == 0 then
     state.lx, state.ly, state.rx, state.ry = 0, 0, 0, 0
-    return 1, 1, 0, 0, 0, (tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00)
+    return 1, 1, 0, 0, 0, 0
   end
 
   local smooth = OVERLAY_LOGO_STICK_SMOOTH
@@ -962,18 +963,26 @@ local function getOverlayLogoAnalogTransform(ctx)
   -- x = R*sin(yaw)*cos(pitch), y = R*sin(pitch), z = R*cos(yaw)*cos(pitch)
   -- We intentionally keep axis-decoupled visual mapping below for predictable UX.
 
-  -- Right stick up/down defines camera orbit radius (depth):
+  -- Right stick up/down defines logo depth offset along camera-forward:
   -- up => farther (logo appears farther), down => closer.
   -- Right stick left/right is currently reserved (no-op).
-  local orbitRadius = (tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00) +
-      ((-(state.ry or 0)) * (tonumber(OVERLAY_LOGO_RADIUS_RANGE) or 1.80))
-  if orbitRadius < (tonumber(OVERLAY_LOGO_RADIUS_MIN) or 1.20) then
-    orbitRadius = tonumber(OVERLAY_LOGO_RADIUS_MIN) or 1.20
-  end
-  if orbitRadius > (tonumber(OVERLAY_LOGO_RADIUS_MAX) or 6.00) then
-    orbitRadius = tonumber(OVERLAY_LOGO_RADIUS_MAX) or 6.00
-  end
-  local radiusScale = (tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00) / orbitRadius
+  local baseRadius = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
+  if baseRadius < 0.10 then baseRadius = 0.10 end
+  local depthRange = tonumber(OVERLAY_LOGO_DEPTH_RANGE) or baseRadius
+  if depthRange < 0 then depthRange = 0 end
+  local depthTowardLimit = tonumber(OVERLAY_LOGO_DEPTH_TOWARD_LIMIT) or (baseRadius * 0.80)
+  if depthTowardLimit < 0 then depthTowardLimit = 0 end
+  local depthOffset = (-(state.ry or 0)) * depthRange
+  if depthOffset < -depthTowardLimit then depthOffset = -depthTowardLimit end
+
+  local effectiveDistance = baseRadius + depthOffset
+  local effMin = tonumber(OVERLAY_LOGO_EFFECTIVE_MIN) or 0.60
+  local effMax = tonumber(OVERLAY_LOGO_EFFECTIVE_MAX) or 9.00
+  if effMin < 0.10 then effMin = 0.10 end
+  if effMax < effMin then effMax = effMin end
+  if effectiveDistance < effMin then effectiveDistance = effMin end
+  if effectiveDistance > effMax then effectiveDistance = effMax end
+  local radiusScale = baseRadius / effectiveDistance
 
   -- Fallback scales for engines without quad warping.
   local yawCos = math.cos(yawRad)
@@ -988,15 +997,15 @@ local function getOverlayLogoAnalogTransform(ctx)
   local sy = clampSignedAbs(pitchCos * radiusScale, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
 
   -- Camera orbit does not roll around view axis by default.
-  return sx, sy, 0, yawRad, pitchRad, orbitRadius
+  return sx, sy, 0, yawRad, pitchRad, depthOffset
 end
 
-local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, orbitRadius)
+local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, depthOffset)
   local hw = tonumber(halfW) or 0
   local hh = tonumber(halfH) or 0
   if hw <= 0 or hh <= 0 then return nil end
 
-  local radius = tonumber(orbitRadius) or tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
+  local radius = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
   local focal = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
   local minDen = tonumber(OVERLAY_LOGO_CAMERA_MIN_DENOM) or 0.20
   if radius < 0.10 then radius = 0.10 end
@@ -1028,24 +1037,28 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
   -- Camera basis: forward looks at origin, right/up derived from world up.
   local fwdX, fwdY, fwdZ = normalize3(-camX, -camY, -camZ)
   local worldUpX, worldUpY, worldUpZ = 0, 1, 0
-  local rightX, rightY, rightZ = cross3(worldUpX, worldUpY, worldUpZ, fwdX, fwdY, fwdZ)
+  local rightX, rightY, rightZ = cross3(fwdX, fwdY, fwdZ, worldUpX, worldUpY, worldUpZ)
   rightX, rightY, rightZ = normalize3(rightX, rightY, rightZ)
   -- Near the poles, Y-up cross forward collapses; fall back to Z-up.
   if math.abs(rightX) < 0.00001 and math.abs(rightY) < 0.00001 and math.abs(rightZ) < 0.00001 then
     worldUpX, worldUpY, worldUpZ = 0, 0, 1
-    rightX, rightY, rightZ = cross3(worldUpX, worldUpY, worldUpZ, fwdX, fwdY, fwdZ)
+    rightX, rightY, rightZ = cross3(fwdX, fwdY, fwdZ, worldUpX, worldUpY, worldUpZ)
     rightX, rightY, rightZ = normalize3(rightX, rightY, rightZ)
   end
-  local upX, upY, upZ = cross3(fwdX, fwdY, fwdZ, rightX, rightY, rightZ)
+  local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
 
   local aspectY = hh / math.max(hw, 0.0001)
   local unit = hw
+  local centerOffset = tonumber(depthOffset) or 0
+  local centerX = fwdX * centerOffset
+  local centerY = fwdY * centerOffset
+  local centerZ = fwdZ * centerOffset
 
   local function project(px, py)
     -- Logo plane in world-space, centered at origin facing default camera.
-    local pX = px
-    local pY = py
-    local pZ = 0
+    local pX = centerX + px
+    local pY = centerY + py
+    local pZ = centerZ
 
     -- Point in camera-space.
     local vX = pX - camX
@@ -1154,7 +1167,7 @@ local function drawSelectionOverlayLogo(ctx)
   if isR3SettingsScene then
     scale = math.min(scale, OVERLAY_LOGO_R3_TITLE_SCALE)
   end
-  local analogScaleX, analogScaleY, analogRoll, yawRad, pitchRad, orbitRadius =
+  local analogScaleX, analogScaleY, analogRoll, yawRad, pitchRad, depthOffset =
       getOverlayLogoAnalogTransform(ctx)
   local baseW = math.max(1, math.floor(iw * scale + 0.5))
   local baseH = math.max(1, math.floor(ih * scale + 0.5))
@@ -1168,7 +1181,7 @@ local function drawSelectionOverlayLogo(ctx)
 
   if Graphics.drawImageQuad then
     local ulx, uly, blx, bly, urx, ury, brx, bry =
-        projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, orbitRadius)
+        projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitchRad, depthOffset)
     if ulx and uly and blx and bly and urx and ury and brx and bry then
       Graphics.drawImageQuad(tex, ulx, uly, blx, bly, urx, ury, brx, bry, color)
       return
