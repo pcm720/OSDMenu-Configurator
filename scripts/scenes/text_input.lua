@@ -692,16 +692,54 @@ local function run(ctx)
       drawKey(kx, ky, kw, kh, ch, idx == ctx.textInputGridSel)
     end
   end
+  local spaceCenterX = _.KEYBOARD_CENTER_X
   if spaceIdx then
     local specY = keyY + rowCount * _.KEY_H
     local ky = math.floor(specY + _.KEY_GAP / 2)
-    local specSlotW = _.KEY_WIDTH * 2.2
-    local spaceW = math.floor(specSlotW * 2 - _.KEY_GAP)
-    local specStartX = _.KEYBOARD_CENTER_X - spaceW / 2
+    local function findAdjacentGapX(leftCh, rightCh)
+      local needle = string.lower(tostring(leftCh or "") .. tostring(rightCh or ""))
+      if #needle ~= 2 then return nil end
+      for r = 1, rowCount do
+        local row = rows[r] or ""
+        local pos = string.lower(row):find(needle, 1, true)
+        if pos then
+          local rowStartX = keyboardLeft + (tonumber(rowOffsets[r]) or 0) * _.KEY_WIDTH
+          return rowStartX + (pos * _.KEY_WIDTH)
+        end
+      end
+      return nil
+    end
+
+    local leftGapX = findAdjacentGapX("e", "r")
+    local rightGapX = findAdjacentGapX("k", "l")
+    local specStartX
+    local spaceW
+
+    if leftGapX and rightGapX and rightGapX > leftGapX then
+      -- Spacebar spans visually from the e/r gap to the k/l gap.
+      spaceCenterX = (leftGapX + rightGapX) * 0.5
+      specStartX = math.floor(leftGapX + (_.KEY_GAP / 2) + 0.5)
+      spaceW = math.floor((rightGapX - leftGapX) - _.KEY_GAP + 0.5)
+    else
+      -- Fallback for non-standard layouts.
+      local specSlotW = _.KEY_WIDTH * 2.2
+      spaceW = math.floor(specSlotW * 2 - _.KEY_GAP)
+      specStartX = math.floor(spaceCenterX - (spaceW / 2) + 0.5)
+    end
+
+    if spaceW < kw then spaceW = kw end
     drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
   end
 
   if ctx.textInputBelMenuOpen then
+    local padSelect = _.PAD_SELECT or 0
+    if padSelect ~= 0 and (_.padEffective & padSelect) ~= 0 then
+      ctx.textInputBelMenuOpen = nil
+      ctx.textInputBelMenuSel = nil
+      ctx.textInputBelMenuScroll = nil
+      ctx.textInputBelPage = nil
+      return
+    end
     local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
     if (cursorMoveMask & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
     if (cursorMoveMask & _.PAD_R1) ~= 0 then
@@ -810,7 +848,7 @@ local function run(ctx)
   end
   local function keyCenterXForRowCol(r, col)
     if spaceRow and r == spaceRow then
-      return _.KEYBOARD_CENTER_X
+      return spaceCenterX
     end
     local off = tonumber(rowOffsets[r]) or 0
     local startX = keyboardLeft + off * _.KEY_WIDTH
@@ -869,18 +907,7 @@ local function run(ctx)
       if r > 1 then
         targetRow = r - 1
       else
-        if spaceRow then
-          -- Wrap from top row with visual intent:
-          -- center top keys (5..9 in default layout) go to Space,
-          -- others wrap to bottom letter row.
-          if colInRow >= 5 and colInRow <= 9 then
-            targetRow = spaceRow
-          else
-            targetRow = rowCount
-          end
-        else
-          targetRow = maxRow
-        end
+        targetRow = spaceRow or maxRow
       end
       local targetCol
       if spaceRow and r == spaceRow then
