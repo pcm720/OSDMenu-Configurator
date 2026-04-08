@@ -996,40 +996,71 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
   local hh = tonumber(halfH) or 0
   if hw <= 0 or hh <= 0 then return nil end
 
-  local cam = tonumber(orbitRadius) or tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
+  local radius = tonumber(orbitRadius) or tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
   local focal = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
   local minDen = tonumber(OVERLAY_LOGO_CAMERA_MIN_DENOM) or 0.20
-  if cam < 0.10 then cam = 0.10 end
+  if radius < 0.10 then radius = 0.10 end
   if focal < 0.10 then focal = 0.10 end
   if minDen < 0.05 then minDen = 0.05 end
 
   local cyaw, syaw = math.cos(yawRad or 0), math.sin(yawRad or 0)
   local cpitch, spitch = math.cos(pitchRad or 0), math.sin(pitchRad or 0)
 
-  local aspectY = hh / math.max(hw, 0.0001)
+  -- Camera position on a sphere around world origin (logo center at origin).
+  local camX = radius * syaw * cpitch
+  local camY = radius * spitch
+  local camZ = radius * cyaw * cpitch
 
+  local function normalize3(x, y, z)
+    local l = math.sqrt((x * x) + (y * y) + (z * z))
+    if l <= 0.000001 then return 0, 0, 1 end
+    return x / l, y / l, z / l
+  end
+
+  local function cross3(ax, ay, az, bx, by, bz)
+    return (ay * bz) - (az * by), (az * bx) - (ax * bz), (ax * by) - (ay * bx)
+  end
+
+  local function dot3(ax, ay, az, bx, by, bz)
+    return (ax * bx) + (ay * by) + (az * bz)
+  end
+
+  -- Camera basis: forward looks at origin, right/up derived from world up.
+  local fwdX, fwdY, fwdZ = normalize3(-camX, -camY, -camZ)
+  local worldUpX, worldUpY, worldUpZ = 0, 1, 0
+  local rightX, rightY, rightZ = cross3(worldUpX, worldUpY, worldUpZ, fwdX, fwdY, fwdZ)
+  rightX, rightY, rightZ = normalize3(rightX, rightY, rightZ)
+  -- Near the poles, Y-up cross forward collapses; fall back to Z-up.
+  if math.abs(rightX) < 0.00001 and math.abs(rightY) < 0.00001 and math.abs(rightZ) < 0.00001 then
+    worldUpX, worldUpY, worldUpZ = 0, 0, 1
+    rightX, rightY, rightZ = cross3(worldUpX, worldUpY, worldUpZ, fwdX, fwdY, fwdZ)
+    rightX, rightY, rightZ = normalize3(rightX, rightY, rightZ)
+  end
+  local upX, upY, upZ = cross3(fwdX, fwdY, fwdZ, rightX, rightY, rightZ)
+
+  local aspectY = hh / math.max(hw, 0.0001)
   local unit = hw
 
   local function project(px, py)
-    local x = px
-    local y = py
-    local z = 0
+    -- Logo plane in world-space, centered at origin facing default camera.
+    local pX = px
+    local pY = py
+    local pZ = 0
 
-    -- Rotate around Y (yaw), then X (pitch), around logo center/origin.
-    local x1 = (x * cyaw) + (z * syaw)
-    local z1 = (-x * syaw) + (z * cyaw)
-    local y2 = (y * cpitch) - (z1 * spitch)
-    local z2 = (y * spitch) + (z1 * cpitch)
+    -- Point in camera-space.
+    local vX = pX - camX
+    local vY = pY - camY
+    local vZ = pZ - camZ
+    local xCam = dot3(vX, vY, vZ, rightX, rightY, rightZ)
+    local yCam = dot3(vX, vY, vZ, upX, upY, upZ)
+    local zCam = dot3(vX, vY, vZ, fwdX, fwdY, fwdZ)
+    if zCam < minDen then zCam = minDen end
 
-    -- Simple perspective projection with denominator guard.
-    local denom = cam + z2
-    if denom < minDen then denom = minDen end
-    local p = focal / denom
-
-    return cx + (x1 * unit * p), cy + (y2 * unit * p)
+    local p = focal / zCam
+    return cx + (xCam * unit * p), cy + (yCam * unit * p)
   end
 
-  -- True geometry path: local plane extents are independent from yaw/pitch.
+  -- True geometry path: fixed plane extents.
   local ux = 1
   local uy = aspectY
 
