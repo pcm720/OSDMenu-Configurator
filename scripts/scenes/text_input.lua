@@ -535,6 +535,11 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local belMenuOpenKey = "textInputBelMenuOpen"
+  local belMenuAnimKey = belMenuOpenKey .. "_anim"
+  local belMenuClosingKey = belMenuOpenKey .. "_closing"
+  local belMenuRowsCacheKey = belMenuOpenKey .. "_rowsCache"
+  local belMenuHintsCacheKey = belMenuOpenKey .. "_hintsCache"
   if not ctx.textInputCallback then
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
@@ -548,6 +553,10 @@ local function run(ctx)
     ctx.textInputBelLayoutProfile = nil
     ctx.textInputBelLayoutScale = nil
     ctx.textInputBelLayoutText = nil
+    ctx[belMenuAnimKey] = nil
+    ctx[belMenuClosingKey] = nil
+    ctx[belMenuRowsCacheKey] = nil
+    ctx[belMenuHintsCacheKey] = nil
     ctx._textInputBelBaselineCallback = nil
     ctx.textInputBelBaseline = nil
     ctx.textInputAllowBelAdd = nil
@@ -731,14 +740,15 @@ local function run(ctx)
     drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
   end
 
-  if ctx.textInputBelMenuOpen then
+  if ctx[belMenuOpenKey] then
     local padSelect = _.PAD_SELECT or 0
     if padSelect ~= 0 and (_.padEffective & padSelect) ~= 0 then
-      ctx.textInputBelMenuOpen = nil
-      ctx.textInputBelMenuSel = nil
-      ctx.textInputBelMenuScroll = nil
-      ctx.textInputBelPage = nil
-      return
+      if ctx[belMenuClosingKey] ~= true then
+        ctx[belMenuClosingKey] = true
+        if tonumber(ctx[belMenuAnimKey]) == nil or tonumber(ctx[belMenuAnimKey]) < 0.001 then
+          ctx[belMenuAnimKey] = 1
+        end
+      end
     end
     local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
     if (cursorMoveMask & _.PAD_L1) ~= 0 then ctx.textInputCursor = math.max(1, ctx.textInputCursor - 1) end
@@ -765,7 +775,7 @@ local function run(ctx)
     local pageLabel = string.format(pageLabelFmt, belPage, BEL_PAGE_COUNT)
     local belMenuMaxVisible = 8
     local handled = actions_menu.run(ctx, {
-      openKey = "textInputBelMenuOpen",
+      openKey = belMenuOpenKey,
       selKey = "textInputBelMenuSel",
       scrollKey = "textInputBelMenuScroll",
       cacheRows = true,
@@ -957,8 +967,10 @@ local function run(ctx)
       end
     end
   end
-  if belEnabled and (not ctx.textInputBelMenuOpen) and (_.padEffective & _.PAD_SELECT) ~= 0 then
-    ctx.textInputBelMenuOpen = true
+  if belEnabled and (not ctx[belMenuOpenKey]) and (_.padEffective & _.PAD_SELECT) ~= 0 then
+    ctx[belMenuOpenKey] = true
+    ctx[belMenuClosingKey] = nil
+    ctx[belMenuAnimKey] = 0
     ctx.textInputBelPage = 1
     ctx.textInputBelMenuSel = ctx.textInputBelMenuSel or 1
     ctx.textInputBelMenuScroll = ctx.textInputBelMenuScroll or 0
@@ -988,6 +1000,10 @@ local function run(ctx)
     ctx.textInputBelLayoutProfile = nil
     ctx.textInputBelLayoutScale = nil
     ctx.textInputBelLayoutText = nil
+    ctx[belMenuAnimKey] = nil
+    ctx[belMenuClosingKey] = nil
+    ctx[belMenuRowsCacheKey] = nil
+    ctx[belMenuHintsCacheKey] = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
@@ -1019,6 +1035,10 @@ local function run(ctx)
     ctx.textInputBelLayoutProfile = nil
     ctx.textInputBelLayoutScale = nil
     ctx.textInputBelLayoutText = nil
+    ctx[belMenuAnimKey] = nil
+    ctx[belMenuClosingKey] = nil
+    ctx[belMenuRowsCacheKey] = nil
+    ctx[belMenuHintsCacheKey] = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
