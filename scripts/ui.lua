@@ -875,8 +875,7 @@ local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_STRETCH_RANGE = 0.80
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
-local OVERLAY_LOGO_DIRECTIONAL_BIAS = 0.30
-local OVERLAY_LOGO_CAMERA_DISTANCE = 2.20
+local OVERLAY_LOGO_CAMERA_DISTANCE = 3.00
 local OVERLAY_LOGO_CAMERA_MIN_DENOM = 0.20
 local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
@@ -961,26 +960,21 @@ local function getOverlayLogoAnalogTransform(ctx)
   -- x = R*sin(yaw)*cos(pitch), y = R*sin(pitch), z = R*cos(yaw)*cos(pitch)
   -- We intentionally keep axis-decoupled visual mapping below for predictable UX.
 
-  -- Use decoupled foreshortening so each axis behaves as expected to users.
-  local yawCos = math.cos(yawRad)
-  local pitchCos = math.cos(pitchRad)
-  -- Pure cosine is symmetric (+/- look identical). Add a signed directional
-  -- term so opposite stick directions are visually distinct in this renderer.
-  local yawPerspective = yawCos + (math.sin(yawRad) * OVERLAY_LOGO_DIRECTIONAL_BIAS)
-  local pitchPerspective = pitchCos + (math.sin(pitchRad) * OVERLAY_LOGO_DIRECTIONAL_BIAS)
-  if math.abs(yawPerspective) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
-    yawPerspective = (yawPerspective < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
-  end
-  if math.abs(pitchPerspective) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
-    pitchPerspective = (pitchPerspective < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
-  end
-
   -- Right stick provides fun direct stretch controls.
   local stretchScaleX = 1 + (state.rx * OVERLAY_LOGO_STRETCH_RANGE)
   local stretchScaleY = 1 + ((-state.ry) * OVERLAY_LOGO_STRETCH_RANGE)
 
-  local sx = clampSignedAbs(yawPerspective * stretchScaleX, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
-  local sy = clampSignedAbs(pitchPerspective * stretchScaleY, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
+  -- Fallback scales for engines without quad warping.
+  local yawCos = math.cos(yawRad)
+  local pitchCos = math.cos(pitchRad)
+  if math.abs(yawCos) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
+    yawCos = (yawCos < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
+  end
+  if math.abs(pitchCos) < OVERLAY_LOGO_PERSPECTIVE_MIN_ABS then
+    pitchCos = (pitchCos < 0) and (-OVERLAY_LOGO_PERSPECTIVE_MIN_ABS) or OVERLAY_LOGO_PERSPECTIVE_MIN_ABS
+  end
+  local sx = clampSignedAbs(yawCos * stretchScaleX, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
+  local sy = clampSignedAbs(pitchCos * stretchScaleY, OVERLAY_LOGO_SCALE_MIN_ABS, OVERLAY_LOGO_SCALE_MAX_ABS)
 
   -- Camera orbit does not roll around view axis by default.
   return sx, sy, 0, yawRad, pitchRad, stretchScaleX, stretchScaleY
@@ -1024,6 +1018,7 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
     return cx + (x1 * unit * p), cy + (y2 * unit * p)
   end
 
+  -- True geometry path: local plane extents are independent from yaw/pitch.
   local ux = sx
   local uy = aspectY * sy
 
@@ -1031,16 +1026,6 @@ local function projectOverlayLogoQuadCorners(cx, cy, halfW, halfH, yawRad, pitch
   local blx, bly = project(-ux, uy)
   local urx, ury = project(ux, -uy)
   local brx, bry = project(ux, uy)
-
-  -- Keep visual pivot centered: compensate perspective-induced centroid drift.
-  local avgX = (ulx + blx + urx + brx) * 0.25
-  local avgY = (uly + bly + ury + bry) * 0.25
-  local dx = (tonumber(cx) or 0) - avgX
-  local dy = (tonumber(cy) or 0) - avgY
-  ulx, uly = ulx + dx, uly + dy
-  blx, bly = blx + dx, bly + dy
-  urx, ury = urx + dx, ury + dy
-  brx, bry = brx + dx, bry + dy
 
   return ulx, uly, blx, bly, urx, ury, brx, bry
 end
