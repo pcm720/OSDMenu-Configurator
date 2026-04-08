@@ -875,8 +875,7 @@ local OVERLAY_LOGO_STICK_DEADZONE = 14
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_RADIUS_BASE = 3.00
-local OVERLAY_LOGO_DEPTH_RANGE = 3.00
-local OVERLAY_LOGO_DEPTH_TOWARD_LIMIT = 2.40
+local OVERLAY_LOGO_DEPTH_RADIUS_FRACTION = 0.50
 local OVERLAY_LOGO_EFFECTIVE_MIN = 0.60
 local OVERLAY_LOGO_EFFECTIVE_MAX = 9.00
 local OVERLAY_LOGO_CAMERA_MIN_DENOM = 0.20
@@ -968,12 +967,12 @@ local function getOverlayLogoAnalogTransform(ctx)
   -- Right stick left/right is currently reserved (no-op).
   local baseRadius = tonumber(OVERLAY_LOGO_RADIUS_BASE) or 3.00
   if baseRadius < 0.10 then baseRadius = 0.10 end
-  local depthRange = tonumber(OVERLAY_LOGO_DEPTH_RANGE) or baseRadius
-  if depthRange < 0 then depthRange = 0 end
-  local depthTowardLimit = tonumber(OVERLAY_LOGO_DEPTH_TOWARD_LIMIT) or (baseRadius * 0.80)
-  if depthTowardLimit < 0 then depthTowardLimit = 0 end
-  local depthOffset = (-(state.ry or 0)) * depthRange
-  if depthOffset < -depthTowardLimit then depthOffset = -depthTowardLimit end
+  local depthFraction = tonumber(OVERLAY_LOGO_DEPTH_RADIUS_FRACTION) or 0.50
+  if depthFraction < 0 then depthFraction = 0 end
+  local depthLimit = baseRadius * depthFraction
+  local depthOffset = (-(state.ry or 0)) * depthLimit
+  if depthOffset > depthLimit then depthOffset = depthLimit end
+  if depthOffset < -depthLimit then depthOffset = -depthLimit end
 
   local effectiveDistance = baseRadius + depthOffset
   local effMin = tonumber(OVERLAY_LOGO_EFFECTIVE_MIN) or 0.60
