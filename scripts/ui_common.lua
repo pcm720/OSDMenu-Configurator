@@ -573,6 +573,50 @@ end
 -- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM end
+  local runtime = _G and _G.CONFIG_UI
+  local function clamp01(v)
+    local n = tonumber(v) or 0
+    if n < 0 then return 0 end
+    if n > 1 then return 1 end
+    return n
+  end
+  local function applyAlpha(colorValue, alpha)
+    local c = math.floor(tonumber(colorValue) or 0)
+    local a = (c >> 24) & 0xFF
+    local scaled = math.floor(a * clamp01(alpha) + 0.5)
+    if scaled < 0 then scaled = 0 end
+    if scaled > 0x80 then scaled = 0x80 end
+    return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
+  end
+  local function cloneSlots(src)
+    local out = {}
+    for i = 1, #(src or {}) do
+      local s = src[i] or {}
+      out[i] = {
+        pad = tostring(s.pad or ""),
+        label = tostring(s.label or ""),
+        used = (s.used == true),
+      }
+    end
+    return out
+  end
+  local function slotsEqual(a, b)
+    if #(a or {}) ~= #(b or {}) then return false end
+    for i = 1, #(a or {}) do
+      local sa = a[i] or {}
+      local sb = b[i] or {}
+      if tostring(sa.pad or "") ~= tostring(sb.pad or "") then return false end
+      if tostring(sa.label or "") ~= tostring(sb.label or "") then return false end
+      if (sa.used == true) ~= (sb.used == true) then return false end
+    end
+    return true
+  end
+  local function drawHintsUntransformed(drawFn)
+    if common.drawWithoutSceneTransform then
+      return common.drawWithoutSceneTransform(drawFn)
+    end
+    return drawFn()
+  end
   local function getPadLabelColor(padName, fallbackColor)
     local key = tostring(padName or ""):lower()
     if key == "cross" then return common.PAD_LABEL_CROSS end
@@ -606,6 +650,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local slotCount = #rowPads
     local slotW = widthEff / slotCount
     local hintFont = common.getHintFont(font, drawMode, textScale)
+    local hintKey = tostring(math.floor(xEff + 0.5)) .. "|" .. tostring(math.floor(y + 0.5)) .. "|" ..
+        tostring(math.floor(widthEff + 0.5))
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
@@ -625,6 +671,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local rowSlots = {}
     local rowMap = {}
     local drawUnusedButtons = common.PAD_HINT_DRAW_UNUSED_BUTTONS == true
+    local inactiveIconAlpha = clamp01((tonumber(common.PAD_HINT_UNUSED_ALPHA) or 0) / FULL_ALPHA)
     for i = 1, slotCount do
       rowMap[rowPads[i]] = true
     end
@@ -643,81 +690,171 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     for i = 1, slotCount do
       local key = rowPads[i]
       local active = activeByPad[key]
-      if drawUnusedButtons or active then
-        rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
-      end
+      rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
     end
 
     local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH
+
+    local function getIconVisualAlpha(slot)
+      if slot and slot.used == true then return 1 end
+      if drawUnusedButtons then return inactiveIconAlpha end
+      return 0
+    end
+
+    local function drawSlot(slot, col, rowCenter, iconY, textY, iconAlpha, labelAlpha, labelTextOverride)
+      if not slot then return end
+      local padName = tostring(slot.pad or "")
+      if padName == "" then return end
+      local icon = common.getPadIcon(padName)
+      local slotLeft = xEff + (col - 1) * slotW
+      local slotCenter = slotLeft + slotW / 2
+      local px = math.floor(slotCenter - iconW / 2)
+      local drawIconAlpha = clamp01(iconAlpha or 0)
+      local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
+      local drawLabelAlpha = clamp01(labelAlpha or 0)
+      if icon and drawIconAlpha > 0.001 then
+        local iconColor = applyAlpha(Color.new(255, 255, 255, FULL_ALPHA), drawIconAlpha)
+        if drawIconAlpha >= 0.999 and Graphics.drawScaleImage then
+          local ok = pcall(Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
+          if not ok then
+            Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+          end
+        elseif Graphics.drawScaleImage then
+          Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+        elseif Graphics.drawImage then
+          Graphics.drawImage(icon, px, iconY, iconColor)
+        end
+      end
+      if drawLabelAlpha > 0.001 and label ~= "" then
+        local textW = getTextWidth(label)
+        local textX
+        if icon then
+          textX = px + iconW + gap
+        else
+          textX = math.floor(slotCenter - textW / 2)
+        end
+        local labelColor = applyAlpha(getPadLabelColor(padName, color), drawLabelAlpha)
+        common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
+      end
+    end
 
     local function drawRow(slots, rowIndex)
       local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
-      local activeIconColor = Color.new(255, 255, 255, FULL_ALPHA)
-      local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
-      local function drawActiveIcon(icon, px)
-        if Graphics.drawScaleImage then
-          local drawScaled = Graphics.drawScaleImage
-          local ok = pcall(drawScaled, icon, px, iconY, iconW, iconH)
-          if not ok then
-            drawScaled(icon, px, iconY, iconW, iconH, activeIconColor)
-          end
-        else
-          Graphics.drawImage(icon, px, iconY)
-        end
-      end
       for col = 1, slotCount do
-        local item = slots[col]
-        local padName = item and item.pad
-        local label = (item and item.label) or ""
-        local isUsed = item and item.used
-        local active = (padName and activeByPad[padName]) or nil
-        if active then
-          isUsed = true
-          if label == "" then
-            label = active.label or ""
+        local slot = slots[col]
+        drawSlot(slot, col, rowCenter, iconY, textY, getIconVisualAlpha(slot),
+          (slot and slot.used and tostring(slot.label or "") ~= "") and 1 or 0)
+      end
+    end
+
+    local function drawBlendedRows(fromSlots, toSlots, progress)
+      local p = clamp01(progress)
+      local rowIndex = 0
+      local rTop = rowTop + rowIndex * rowH
+      local rowCenter = rTop + rowH / 2
+      local iconY = math.floor(rowCenter - iconH / 2)
+      local textY = math.floor(rowCenter - textH / 2) - 4
+      for col = 1, slotCount do
+        local fromSlot = (fromSlots and fromSlots[col]) or { pad = rowPads[col], label = "", used = false }
+        local toSlot = (toSlots and toSlots[col]) or { pad = rowPads[col], label = "", used = false }
+        local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
+        local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
+        local sameLabel = tostring(fromSlot.label or "") == tostring(toSlot.label or "")
+        if samePad and sameUsed and sameLabel then
+          drawSlot(toSlot, col, rowCenter, iconY, textY, getIconVisualAlpha(toSlot),
+            (toSlot.used and tostring(toSlot.label or "") ~= "") and 1 or 0)
+        else
+          local fromIcon = getIconVisualAlpha(fromSlot)
+          local toIcon = getIconVisualAlpha(toSlot)
+          if samePad and fromSlot.used == true and toSlot.used == true then
+            -- Same button stays active across scenes: icon should remain stable.
+            fromIcon = 0
+            toIcon = 1
+          else
+            fromIcon = fromIcon * (1 - p)
+            toIcon = toIcon * p
           end
-        end
-        if padName and padName ~= "" then
-          local icon = common.getPadIcon(padName)
-          local slotLeft = xEff + (col - 1) * slotW
-          local slotCenter = slotLeft + slotW / 2
-          local px = math.floor(slotCenter - iconW / 2)
-          if icon then
-            if isUsed then
-              drawActiveIcon(icon, px)
-            else
-              if Graphics.drawScaleImage then
-                Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, inactiveIconColor)
-              else
-                Graphics.drawImage(icon, px, iconY, inactiveIconColor)
-              end
-            end
-          end
-          if isUsed and label ~= "" then
-            local textW = getTextWidth(label)
-            local textX
-            if icon then
-              textX = px + iconW + gap
-            else
-              textX = math.floor(slotCenter - textW / 2)
-            end
-            local labelColor = getPadLabelColor(padName, color)
-            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
-          end
+          drawSlot(fromSlot, col, rowCenter, iconY, textY, fromIcon,
+            (fromSlot.used and tostring(fromSlot.label or "") ~= "") and (1 - p) or 0)
+          drawSlot(toSlot, col, rowCenter, iconY, textY, toIcon,
+            (toSlot.used and tostring(toSlot.label or "") ~= "") and p or 0)
         end
       end
     end
 
-    drawRow(rowSlots, 0)
+    drawHintsUntransformed(function()
+      local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
+      local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
+      local transitionFrames = math.max(0, math.floor(tonumber(runtime and runtime.sceneTransitionAnimFrames) or 0))
+      local instantHintSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
+      if instantHintSwitch then
+        if type(runtime) == "table" then
+          runtime.hintRowStableSlots = runtime.hintRowStableSlots or {}
+          runtime.hintRowStableSlots[hintKey] = cloneSlots(rowSlots)
+          if type(runtime.hintRowFadeStates) == "table" then
+            runtime.hintRowFadeStates[hintKey] = nil
+          end
+        end
+        drawRow(rowSlots, 0)
+        return
+      end
+
+      local frameCounter = math.floor(tonumber(runtime and runtime.uiFrameCounter) or 0)
+      runtime.hintRowStableSlots = runtime.hintRowStableSlots or {}
+      runtime.hintRowFadeStates = runtime.hintRowFadeStates or {}
+      local stableSlots = runtime.hintRowStableSlots[hintKey]
+      local state = runtime.hintRowFadeStates[hintKey] or {}
+      runtime.hintRowFadeStates[hintKey] = state
+
+      if type(state.fromSlots) ~= "table" then
+        state.fromSlots = cloneSlots(stableSlots or rowSlots)
+      end
+      if type(state.toSlots) ~= "table" then
+        state.toSlots = cloneSlots(state.fromSlots)
+      end
+
+      if not slotsEqual(state.toSlots, rowSlots) then
+        -- Start a new per-row fade only when hints actually changed.
+        local hasSource = type(stableSlots) == "table" and #stableSlots > 0
+        state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
+        state.toSlots = cloneSlots(rowSlots)
+        state.frame = 0
+        state.lastAdvanceFrame = nil
+        local phaseFrames = math.max(1,
+          math.floor(tonumber(runtime.sceneTransitionAnimFrames) or common.SCENE_TRANSITION_DEFAULT_FRAMES))
+        state.frames = phaseFrames
+      end
+
+      local progress = 1
+      local frames = math.max(1, math.floor(tonumber(state.frames) or 1))
+      if not slotsEqual(state.fromSlots, state.toSlots) then
+        if state.lastAdvanceFrame ~= frameCounter then
+          state.frame = math.max(0, math.floor(tonumber(state.frame) or 0)) + 1
+          if state.frame > frames then state.frame = frames end
+          state.lastAdvanceFrame = frameCounter
+        end
+        progress = clamp01((tonumber(state.frame) or frames) / frames)
+      end
+
+      drawBlendedRows(state.fromSlots, state.toSlots, progress)
+
+      if progress >= 1 then
+        state.fromSlots = cloneSlots(state.toSlots)
+        runtime.hintRowStableSlots[hintKey] = cloneSlots(state.toSlots)
+      end
+    end)
     return
   end
   if textFallback and textFallback ~= "" then
     local rowTop = math.floor(y) - common.PAD_HINT_ROW_H
-    common.drawText(font, drawMode, x, rowTop + math.floor((common.PAD_HINT_ROW_H - 16) / 2), scale, textFallback, color)
+    drawHintsUntransformed(function()
+      common.drawText(font, drawMode, x, rowTop + math.floor((common.PAD_HINT_ROW_H - 16) / 2), scale, textFallback,
+        color)
+    end)
   end
 end
 
@@ -1450,6 +1587,9 @@ end
 -- Shared scene loop: clear, layout, getPadEffective, runHandler(ctx, pad), exit when ctx.state ~= sceneName.
 function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
+    if _G and _G.CONFIG_UI then
+      _G.CONFIG_UI.uiFrameCounter = (tonumber(_G.CONFIG_UI.uiFrameCounter) or 0) + 1
+    end
     if not common.shouldSkipSceneClearForTransition(ctx) then
       Screen.clear(common.BGCOLOR)
     end

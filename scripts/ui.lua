@@ -1610,6 +1610,9 @@ local function mainLoop()
   local function runOneFrame(c)
     syncFromS(c)
     refreshRuntimeColorAliases()
+    if _G and _G.CONFIG_UI then
+      _G.CONFIG_UI.uiFrameCounter = (tonumber(_G.CONFIG_UI.uiFrameCounter) or 0) + 1
+    end
     if not common.shouldSkipSceneClearForTransition(c) then
       Screen.clear(BLACK)
     end

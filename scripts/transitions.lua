@@ -386,11 +386,23 @@ function transitions.install(common)
       runtime.sceneFlipCenterX = runtime.sceneDrawCenterX
       runtime.sceneFlipCenterY = runtime.sceneDrawCenterY
       runtime.sceneFlipPhase = nil
+      runtime.sceneTransitionAnimActive = false
+      runtime.sceneTransitionAnimType = nil
+      runtime.sceneTransitionAnimPhase = nil
+      runtime.sceneTransitionAnimFrame = 0
+      runtime.sceneTransitionAnimFrames = 0
     end
     if not common.isSceneTransitionInActive(ctx) then
       return 0
     end
     tr = ctx.sceneTransitionIn
+    if runtime then
+      runtime.sceneTransitionAnimActive = true
+      runtime.sceneTransitionAnimType = common.normalizeSceneTransitionType(tr.type)
+      runtime.sceneTransitionAnimPhase = tostring(tr.phase or "in")
+      runtime.sceneTransitionAnimFrame = math.max(0, math.floor(tonumber(tr.frame) or 0))
+      runtime.sceneTransitionAnimFrames = common.normalizeSceneTransitionFrames(tr.frames)
+    end
     if tr.type == "cross_dissolve" then
       local frames = common.normalizeSceneTransitionFrames(tr.frames)
       local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
@@ -618,6 +630,11 @@ function transitions.install(common)
         runtime.sceneFlipActive = false
         runtime.sceneFlipType = nil
         runtime.sceneFlipPhase = nil
+        runtime.sceneTransitionAnimActive = false
+        runtime.sceneTransitionAnimType = nil
+        runtime.sceneTransitionAnimPhase = nil
+        runtime.sceneTransitionAnimFrame = 0
+        runtime.sceneTransitionAnimFrames = 0
       end
       return
     end
@@ -665,9 +682,18 @@ function transitions.install(common)
         runtime.sceneFlipActive = false
         runtime.sceneFlipType = nil
         runtime.sceneFlipPhase = nil
+        runtime.sceneTransitionAnimActive = false
+        runtime.sceneTransitionAnimType = nil
+        runtime.sceneTransitionAnimPhase = nil
+        runtime.sceneTransitionAnimFrame = 0
+        runtime.sceneTransitionAnimFrames = 0
       end
     else
       tr.frame = frame
+      local runtime = _G and _G.CONFIG_UI
+      if runtime then
+        runtime.sceneTransitionAnimFrame = frame
+      end
     end
   end
 
