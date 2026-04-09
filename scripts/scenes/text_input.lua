@@ -33,12 +33,6 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     if scaled > 0x80 then scaled = 0x80 end
     return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
   end
-  local function iconAlphaColor(alpha)
-    local a = math.floor(0x80 * clamp01(alpha) + 0.5)
-    if a < 0 then a = 0 end
-    if a > 0x80 then a = 0x80 end
-    return Color.new(255, 255, 255, a)
-  end
 
   local function cloneSlots(src)
     local out = {}
@@ -153,11 +147,25 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
     local px = math.floor(slotCenter - iconW / 2)
     if icon and drawIconAlpha > 0.001 then
-      local iconColor = iconAlphaColor(drawIconAlpha)
+      local iconColor = applyAlpha(tonumber(_.WHITE) or 0x80FFFFFF, drawIconAlpha)
       if _.Graphics.drawScaleImage then
-        _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+        if drawIconAlpha >= 0.999 then
+          local ok = pcall(_.Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
+          if not ok then
+            _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+          end
+        else
+          _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+        end
       elseif _.Graphics.drawImage then
-        _.Graphics.drawImage(icon, px, iconY, iconColor)
+        if drawIconAlpha >= 0.999 then
+          local ok = pcall(_.Graphics.drawImage, icon, px, iconY)
+          if not ok then
+            _.Graphics.drawImage(icon, px, iconY, iconColor)
+          end
+        else
+          _.Graphics.drawImage(icon, px, iconY, iconColor)
+        end
       end
     end
     if drawLabelAlpha > 0.001 and label ~= "" then
