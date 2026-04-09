@@ -662,8 +662,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local slotCount = #rowPads
     local slotW = widthEff / slotCount
     local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
-    local hintKey = tostring(math.floor(xEff + 0.5)) .. "|" .. tostring(math.floor(y + 0.5)) .. "|" ..
-        tostring(math.floor(widthEff + 0.5))
+    -- Keep one shared hint-row transition state across scenes so back/forward
+    -- navigation always fades between previous/next rows, even if layout width
+    -- differs between scenes.
+    local hintKey = "__main_hint_row__"
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
@@ -774,6 +776,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     local function drawBlendedRows(fromSlots, toSlots, progress)
       local p = clamp01(progress)
+      local fullOut = 1 - p
+      local fullIn = p
       local function splitFadeAlpha(t)
         local q = clamp01(t)
         if q < 0.5 then
@@ -795,27 +799,41 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
         local fromIcon = getIconVisualAlpha(fromSlot)
         local toIcon = getIconVisualAlpha(toSlot)
+        local fromLabel = tostring(fromSlot.label or "")
+        local toLabel = tostring(toSlot.label or "")
         if samePad and sameUsed and sameLabel then
           drawSlot(toSlot, col, rowCenter, iconY, textY, getIconVisualAlpha(toSlot),
-            (toSlot.used and tostring(toSlot.label or "") ~= "") and 1 or 0)
+            (toSlot.used and toLabel ~= "") and 1 or 0)
         else
-          if samePad and sameUsed and fromSlot.used == true and toSlot.used == true then
-            -- Same active button in both scenes: keep icon steady.
-            -- Only helper text transitions, and does so as fade-out then fade-in.
-            drawSlot(toSlot, col, rowCenter, iconY, textY, toIcon, 0)
-            if tostring(fromSlot.label or "") ~= "" then
-              drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, outAlpha)
-            end
-            if tostring(toSlot.label or "") ~= "" then
-              drawSlot(toSlot, col, rowCenter, iconY, textY, 0, inAlpha)
+          if samePad then
+            -- Same pad in this slot: draw icon once with a continuous blend to
+            -- avoid double-draw pops/brightness pulses.
+            local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
+            if sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
+              -- Same active button, changed helper text: text uses sequential fade.
+              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon, 0)
+              if fromLabel ~= "" then
+                drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, outAlpha)
+              end
+              if toLabel ~= "" then
+                drawSlot(toSlot, col, rowCenter, iconY, textY, 0, inAlpha)
+              end
+            else
+              -- Active/inactive changes and non-paired text follow full-duration fade.
+              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon,
+                (toSlot.used and toLabel ~= "") and fullIn or 0)
+              if fromSlot.used and fromLabel ~= "" then
+                drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, fullOut)
+              end
             end
           else
-            local fromBlend = fromIcon * outAlpha
-            local toBlend = toIcon * inAlpha
+            -- Different pad in this slot: cross-fade icon presence over full duration.
+            local fromBlend = fromIcon * fullOut
+            local toBlend = toIcon * fullIn
             drawSlot(fromSlot, col, rowCenter, iconY, textY, fromBlend,
-              (fromSlot.used and tostring(fromSlot.label or "") ~= "") and outAlpha or 0)
+              (fromSlot.used and fromLabel ~= "") and fullOut or 0)
             drawSlot(toSlot, col, rowCenter, iconY, textY, toBlend,
-              (toSlot.used and tostring(toSlot.label or "") ~= "") and inAlpha or 0)
+              (toSlot.used and toLabel ~= "") and fullIn or 0)
           end
         end
       end

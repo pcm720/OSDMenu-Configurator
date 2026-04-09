@@ -16,19 +16,71 @@ end
 
 local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, color)
   local labels = buildKeyboardShoulderHints(hintItems)
-  if not (labels.l1 or labels.select or labels.r1) then
-    return
+  local runtime = _G and _G.CONFIG_UI
+
+  local function clamp01(v)
+    local n = tonumber(v) or 0
+    if n < 0 then return 0 end
+    if n > 1 then return 1 end
+    return n
   end
+
+  local function applyAlpha(colorValue, alpha)
+    local c = math.floor(tonumber(colorValue) or 0)
+    local a = (c >> 24) & 0xFF
+    local scaled = math.floor(a * clamp01(alpha) + 0.5)
+    if scaled < 0 then scaled = 0 end
+    if scaled > 0x80 then scaled = 0x80 end
+    return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
+  end
+
+  local function cloneSlots(src)
+    local out = {}
+    for i = 1, #(src or {}) do
+      local s = src[i] or {}
+      out[i] = {
+        pad = tostring(s.pad or ""),
+        label = tostring(s.label or ""),
+        used = (s.used == true),
+      }
+    end
+    return out
+  end
+
+  local function normalizeLabelForCompare(s)
+    return tostring(s or ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+  end
+
+  local function slotsEqual(a, b)
+    if #(a or {}) ~= #(b or {}) then return false end
+    for i = 1, #(a or {}) do
+      local sa = a[i] or {}
+      local sb = b[i] or {}
+      if tostring(sa.pad or "") ~= tostring(sb.pad or "") then return false end
+      if normalizeLabelForCompare(sa.label) ~= normalizeLabelForCompare(sb.label) then return false end
+      if (sa.used == true) ~= (sb.used == true) then return false end
+    end
+    return true
+  end
+
+  local function drawHintsUntransformed(drawFn)
+    if _.common.drawWithoutSceneTransform then
+      return _.common.drawWithoutSceneTransform(drawFn)
+    end
+    return drawFn()
+  end
+
   local drawColor = _.WHITE or color or _.DIM
   local iconScale = 0.6
   local textScale = 0.75
   local drawScale = (scale or 0.7) * textScale
-  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
+  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale, { lockSceneScale = true })) or _.font
   local iconW = math.max(10, math.floor((_.common.PAD_ICON_W or 26) * iconScale + 0.5))
   local iconH = math.max(10, math.floor((_.common.PAD_ICON_H or 26) * iconScale + 0.5))
   local gap = math.max(2, math.floor((_.common.PAD_HINT_GAP or 5) * textScale + 0.5))
   local rowH = math.max(14, math.floor((_.common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-  local textH = math.max(10, math.floor((_.common.FT_PIXEL_H or 18) * textScale + 0.5))
+  local textH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight({ lockSceneScale = true })) or
+      math.max(10, math.floor((_.common.FT_PIXEL_H or 18) * textScale + 0.5))
   local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
   width = width + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
   local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
@@ -37,6 +89,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   local slotW = widthEff / 5
   local bottomRowTop = math.floor(_.HINT_Y) - rowH
   local topRowTop = bottomRowTop - rowH
+  local hintKey = "__keyboard_shoulder_hint_row__"
 
   local columns = {
     { pad = "l1", col = 2 },
@@ -44,30 +97,195 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     { pad = "r1", col = 4 },
   }
 
+  local rowSlots = {}
   for i = 1, #columns do
     local c = columns[i]
-    local label = labels[c.pad]
-    if label and label ~= "" then
-      local icon = _.common.getPadIcon(c.pad)
-      local slotCenter = xEff + (c.col - 1) * slotW + (slotW / 2)
-      local iconY = math.floor(topRowTop + (rowH - iconH) / 2)
-      local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
-      if icon then
-        local px = math.floor(slotCenter - iconW / 2)
-        if _.Graphics.drawScaleImage then
-          _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH)
+    local label = tostring(labels[c.pad] or "")
+    rowSlots[i] = {
+      pad = c.pad,
+      col = c.col,
+      label = label,
+      used = (label ~= ""),
+    }
+  end
+
+  local function getTextWidth(label)
+    if not label or label == "" then return 0 end
+    if _.common.calcTextWidth then
+      local w = _.common.calcTextWidth(hintFont, label, drawScale)
+      if type(w) == "number" and w > 0 then
+        return w
+      end
+    end
+    if _.drawMode == "ftPrint" and hintFont and _.Font and _.Font.ftCalcDimensions then
+      local w = _.Font.ftCalcDimensions(hintFont, label)
+      if type(w) == "number" and w > 0 then
+        return w
+      end
+    end
+    return math.floor(8 * drawScale * #label)
+  end
+
+  local function drawSlot(slot, iconAlpha, labelAlpha, labelOverride)
+    if not slot then return end
+    local label = (labelOverride ~= nil) and tostring(labelOverride or "") or tostring(slot.label or "")
+    local drawIconAlpha = clamp01(iconAlpha or 0)
+    local drawLabelAlpha = clamp01(labelAlpha or 0)
+    if drawIconAlpha <= 0.001 and (drawLabelAlpha <= 0.001 or label == "") then
+      return
+    end
+    local icon = _.common.getPadIcon(slot.pad)
+    local slotCenter = xEff + (slot.col - 1) * slotW + (slotW / 2)
+    local iconY = math.floor(topRowTop + (rowH - iconH) / 2)
+    local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
+    local px = math.floor(slotCenter - iconW / 2)
+    if icon and drawIconAlpha > 0.001 then
+      local iconColor = applyAlpha(0x80FFFFFF, drawIconAlpha)
+      if _.Graphics.drawScaleImage then
+        if drawIconAlpha >= 0.999 then
+          local ok = pcall(_.Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
+          if not ok then
+            _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+          end
         else
-          _.Graphics.drawImage(icon, px, iconY)
+          _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
         end
-        _.common.drawText(hintFont, _.drawMode, px + iconW + gap, textY, drawScale, label, drawColor, textH)
+      elseif _.Graphics.drawImage then
+        if drawIconAlpha >= 0.999 then
+          local ok = pcall(_.Graphics.drawImage, icon, px, iconY)
+          if not ok then
+            _.Graphics.drawImage(icon, px, iconY, iconColor)
+          end
+        else
+          _.Graphics.drawImage(icon, px, iconY, iconColor)
+        end
+      end
+    end
+    if drawLabelAlpha > 0.001 and label ~= "" then
+      local textColor = applyAlpha(drawColor, drawLabelAlpha)
+      if icon then
+        _.common.drawText(hintFont, _.drawMode, px + iconW + gap, textY, drawScale, label, textColor, textH)
       else
-        local textW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, label, drawScale)) or
-            math.floor(8 * drawScale * #label)
+        local textW = getTextWidth(label)
         local textX = math.floor(slotCenter - (textW / 2))
-        _.common.drawText(hintFont, _.drawMode, textX, textY, drawScale, label, drawColor, textH)
+        _.common.drawText(hintFont, _.drawMode, textX, textY, drawScale, label, textColor, textH)
       end
     end
   end
+
+  local function drawRow(slots)
+    for i = 1, #(slots or {}) do
+      local slot = slots[i]
+      drawSlot(slot, (slot and slot.used) and 1 or 0, (slot and slot.used) and 1 or 0)
+    end
+  end
+
+  local function drawBlendedRows(fromSlots, toSlots, progress)
+    local p = clamp01(progress)
+    local fullOut = 1 - p
+    local fullIn = p
+    local function splitFadeAlpha(t)
+      local q = clamp01(t)
+      if q < 0.5 then
+        return 1 - (q * 2), 0
+      end
+      return 0, (q - 0.5) * 2
+    end
+    local outAlpha, inAlpha = splitFadeAlpha(p)
+    local count = math.max(#(fromSlots or {}), #(toSlots or {}))
+    for i = 1, count do
+      local fallbackCol = (columns[i] and columns[i].col) or i
+      local fromSlot = (fromSlots and fromSlots[i]) or { pad = columns[i] and columns[i].pad or "", col = fallbackCol, label = "", used = false }
+      local toSlot = (toSlots and toSlots[i]) or { pad = columns[i] and columns[i].pad or "", col = fallbackCol, label = "", used = false }
+      local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
+      local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
+      local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
+      local fromIcon = (fromSlot.used == true) and 1 or 0
+      local toIcon = (toSlot.used == true) and 1 or 0
+      local fromLabel = tostring(fromSlot.label or "")
+      local toLabel = tostring(toSlot.label or "")
+      if samePad and sameUsed and sameLabel then
+        drawSlot(toSlot, toIcon, (toSlot.used and toLabel ~= "") and 1 or 0)
+      else
+        local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
+        if samePad and sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
+          drawSlot(toSlot, blendedIcon, 0)
+          if fromLabel ~= "" then
+            drawSlot(fromSlot, 0, outAlpha)
+          end
+          if toLabel ~= "" then
+            drawSlot(toSlot, 0, inAlpha)
+          end
+        else
+          drawSlot(toSlot, blendedIcon, (toSlot.used and toLabel ~= "") and fullIn or 0)
+          if fromSlot.used and fromLabel ~= "" then
+            drawSlot(fromSlot, 0, fullOut)
+          end
+        end
+      end
+    end
+  end
+
+  drawHintsUntransformed(function()
+    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
+    local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
+    local transitionFrames = math.max(0,
+      math.floor(tonumber(runtime and runtime.sceneTransitionFrames) or
+        tonumber(runtime and runtime.sceneTransitionAnimFrames) or 0))
+    local instantSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
+    if instantSwitch then
+      if type(runtime) == "table" then
+        runtime.keyboardShoulderStableSlots = runtime.keyboardShoulderStableSlots or {}
+        runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(rowSlots)
+        if type(runtime.keyboardShoulderFadeStates) == "table" then
+          runtime.keyboardShoulderFadeStates[hintKey] = nil
+        end
+      end
+      drawRow(rowSlots)
+      return
+    end
+
+    local frameCounter = math.floor(tonumber(runtime and runtime.uiFrameCounter) or 0)
+    runtime.keyboardShoulderStableSlots = runtime.keyboardShoulderStableSlots or {}
+    runtime.keyboardShoulderFadeStates = runtime.keyboardShoulderFadeStates or {}
+    local stableSlots = runtime.keyboardShoulderStableSlots[hintKey]
+    local state = runtime.keyboardShoulderFadeStates[hintKey] or {}
+    runtime.keyboardShoulderFadeStates[hintKey] = state
+
+    if type(state.fromSlots) ~= "table" then
+      state.fromSlots = cloneSlots(stableSlots or rowSlots)
+    end
+    if type(state.toSlots) ~= "table" then
+      state.toSlots = cloneSlots(state.fromSlots)
+    end
+
+    if not slotsEqual(state.toSlots, rowSlots) then
+      local hasSource = type(stableSlots) == "table" and #stableSlots > 0
+      state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
+      state.toSlots = cloneSlots(rowSlots)
+      state.frame = 0
+      state.lastAdvanceFrame = nil
+      state.frames = math.max(1, transitionFrames)
+    end
+
+    local progress = 1
+    local frames = math.max(1, math.floor(tonumber(state.frames) or 1))
+    if not slotsEqual(state.fromSlots, state.toSlots) then
+      if state.lastAdvanceFrame ~= frameCounter then
+        state.frame = math.max(0, math.floor(tonumber(state.frame) or 0)) + 1
+        if state.frame > frames then state.frame = frames end
+        state.lastAdvanceFrame = frameCounter
+      end
+      progress = clamp01((tonumber(state.frame) or frames) / frames)
+    end
+
+    drawBlendedRows(state.fromSlots, state.toSlots, progress)
+
+    if progress >= 1 then
+      state.fromSlots = cloneSlots(state.toSlots)
+      runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(state.toSlots)
+    end
+  end)
 end
 
 local BEL = string.char(7)
