@@ -52,30 +52,6 @@ local function osdmbrBootKeyHasEntries(ctx, _, key)
   return false
 end
 
-local function getCategoryOptSel(ctx, categoryIdx)
-  if not categoryIdx or categoryIdx < 1 then return 1 end
-  local byFile = ctx.editorCategoryOptSelByFile
-  if type(byFile) ~= "table" then return 1 end
-  local fileKey = ctx.fileType or "__none__"
-  local byCategory = byFile[fileKey]
-  if type(byCategory) ~= "table" then return 1 end
-  local sel = byCategory[categoryIdx]
-  if type(sel) ~= "number" then return 1 end
-  return math.max(1, math.floor(sel))
-end
-
-local function setCategoryOptSel(ctx, categoryIdx, sel)
-  if not categoryIdx or categoryIdx < 1 then return end
-  if type(ctx.editorCategoryOptSelByFile) ~= "table" then
-    ctx.editorCategoryOptSelByFile = {}
-  end
-  local fileKey = ctx.fileType or "__none__"
-  if type(ctx.editorCategoryOptSelByFile[fileKey]) ~= "table" then
-    ctx.editorCategoryOptSelByFile[fileKey] = {}
-  end
-  ctx.editorCategoryOptSelByFile[fileKey][categoryIdx] = math.max(1, math.floor(tonumber(sel) or 1))
-end
-
 local function getEditorBackState(ctx)
   local context = ctx and ctx.context or nil
   local fileType = ctx and ctx.fileType or nil
@@ -1074,9 +1050,9 @@ local function run(ctx)
     local cat = categories[selectedCategoryIdx]
     ctx.editorCategoryIdx = selectedCategoryIdx
     ctx.optList = resolveCategoryOptList(cat)
-    local rememberedSel = getCategoryOptSel(ctx, selectedCategoryIdx)
     if #ctx.optList > 0 then
-      ctx.optSel = math.max(1, math.min(rememberedSel, #ctx.optList))
+      -- Forward enter should always land on the first interactive row.
+      ctx.optSel = 1
     else
       ctx.optSel = 1
     end
@@ -2598,7 +2574,6 @@ local function run(ctx)
     ctx.editorR3ColorPresetScroll = nil
     ctx.editorR3ColorPresetKey = nil
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
-      setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx
       ctx.editorPendingReturnCategorySel = prevCategoryIdx
       ctx.state = "editor_categories"

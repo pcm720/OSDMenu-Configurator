@@ -2080,10 +2080,25 @@ local function mainLoop()
     end
   end
 
+  local function getSceneNavigationDirection(c, nextScene)
+    local direction = getSceneTransitionDirectionFromPad(c and c._lastPadEffective)
+    if direction == "in" or direction == "out" then
+      return direction
+    end
+    -- Fallback for scene/page changes not driven by a direct pad edge this frame:
+    -- if destination matches stack top, treat as back; otherwise treat as forward.
+    local stack = getSceneSelectionStack(c)
+    local top = stack[#stack]
+    if top and top.scene == nextScene then
+      return "out"
+    end
+    return "in"
+  end
+
   local function applySceneSelectionNavigationPolicy(c, prevScene, nextScene)
     if not c then return end
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
-    local direction = getSceneTransitionDirectionFromPad(c._lastPadEffective)
+    local direction = getSceneNavigationDirection(c, nextScene)
     if direction == "out" then
       restoreSceneSelectionOnBack(c, nextScene)
     else
@@ -2095,10 +2110,7 @@ local function mainLoop()
   local function runSceneTransitionOnStateChange(c, prevScene, nextScene)
     if not c then return end
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
-    local direction = getSceneTransitionDirectionFromPad(c._lastPadEffective)
-    if not direction then
-      return c
-    end
+    local direction = getSceneNavigationDirection(c, nextScene)
     -- Some scene changes (notably * -> open) are one-shot loaders that can
     -- immediately resolve to editor/choose_load. Resolve once up-front so
     -- transitions run against a stable destination scene.
