@@ -1275,7 +1275,7 @@ local function drawSelectionOverlayLogo(ctx)
       local phase1 = math.max(1, math.floor(frames / 2))
       local phase2Start = phase1 + 1
       local phase2Count = math.max(1, frames - phase1)
-      local sign = (flip.direction == "down") and 1 or -1
+      local sign = (flip.direction == "down") and -1 or 1
       local key = nil
       local pitchRad = 0
 
