@@ -367,15 +367,85 @@ local function getSceneDrawCenter()
   return cx, cy
 end
 
+local function isProjectiveSceneTransformActive()
+  local runtime = _G and _G.CONFIG_UI
+  return type(runtime) == "table" and runtime.sceneDrawProjective == true
+end
+
+local function projectScenePoint(px, py)
+  local runtime = _G and _G.CONFIG_UI
+  if type(runtime) ~= "table" or runtime.sceneDrawProjective ~= true then
+    return nil
+  end
+
+  local w = tonumber(runtime.currentSceneWidth) or common.DEFAULT_W
+  local h = tonumber(runtime.currentSceneHeight) or common.DEFAULT_H
+  local cx = tonumber(runtime.sceneDrawCenterX) or (w / 2)
+  local cy = tonumber(runtime.sceneDrawCenterY) or (h / 2)
+  local yaw = tonumber(runtime.sceneDrawYawRad) or 0
+  local pitch = tonumber(runtime.sceneDrawPitchRad) or 0
+  local radius = tonumber(runtime.sceneDrawCameraRadius) or 1.0
+  local focal = tonumber(runtime.sceneDrawCameraFocal) or radius
+  local minDen = tonumber(runtime.sceneDrawCameraMinDen) or 0.12
+  if radius < 0.10 then radius = 0.10 end
+  if focal < 0.10 then focal = 0.10 end
+  if minDen < 0.05 then minDen = 0.05 end
+
+  local function normalize3(x, y, z)
+    local l = math.sqrt((x * x) + (y * y) + (z * z))
+    if l <= 0.000001 then return 0, 0, 1 end
+    return x / l, y / l, z / l
+  end
+
+  local function cross3(ax, ay, az, bx, by, bz)
+    return (ay * bz) - (az * by), (az * bx) - (ax * bz), (ax * by) - (ay * bx)
+  end
+
+  local function dot3(ax, ay, az, bx, by, bz)
+    return (ax * bx) + (ay * by) + (az * bz)
+  end
+
+  local cyaw, syaw = math.cos(yaw), math.sin(yaw)
+  local cpitch, spitch = math.cos(pitch), math.sin(pitch)
+  local camX = radius * syaw * cpitch
+  local camY = radius * spitch
+  local camZ = radius * cyaw * cpitch
+  local fwdX, fwdY, fwdZ = normalize3(-syaw * cpitch, -spitch, -cyaw * cpitch)
+  local rightX, rightY, rightZ = normalize3(cyaw, 0, -syaw)
+  local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
+  upX, upY, upZ = normalize3(upX, upY, upZ)
+
+  local nx = ((tonumber(px) or 0) - cx) / math.max(1, (w * 0.5))
+  local ny = ((tonumber(py) or 0) - cy) / math.max(1, (h * 0.5))
+  local pX, pY, pZ = nx, ny, 0
+  local vX = pX - camX
+  local vY = pY - camY
+  local vZ = pZ - camZ
+  local xCam = dot3(vX, vY, vZ, rightX, rightY, rightZ)
+  local yCam = dot3(vX, vY, vZ, upX, upY, upZ)
+  local zCam = dot3(vX, vY, vZ, fwdX, fwdY, fwdZ)
+  if zCam < minDen then zCam = minDen end
+  local p = focal / zCam
+
+  local outX = cx + (xCam * (w * 0.5) * p)
+  local outY = cy + (yCam * (h * 0.5) * p)
+  return outX, outY
+end
+
 local function transformScenePoint(x, y)
   local px = tonumber(x) or 0
   local py = tonumber(y) or 0
-  local scaleX = getSceneDrawScaleX()
-  local scaleY = getSceneDrawScaleY()
-  if math.abs(scaleX - 1) > 0.0001 or math.abs(scaleY - 1) > 0.0001 then
-    local cx, cy = getSceneDrawCenter()
-    px = cx + ((px - cx) * scaleX)
-    py = cy + ((py - cy) * scaleY)
+  local projX, projY = projectScenePoint(px, py)
+  if projX ~= nil and projY ~= nil then
+    px, py = projX, projY
+  else
+    local scaleX = getSceneDrawScaleX()
+    local scaleY = getSceneDrawScaleY()
+    if math.abs(scaleX - 1) > 0.0001 or math.abs(scaleY - 1) > 0.0001 then
+      local cx, cy = getSceneDrawCenter()
+      px = cx + ((px - cx) * scaleX)
+      py = cy + ((py - cy) * scaleY)
+    end
   end
   px = px + getSceneDrawOffsetX()
   return px, py
@@ -383,11 +453,25 @@ end
 
 local function scaleSceneLengthX(v)
   local n = tonumber(v) or 0
+  if isProjectiveSceneTransformActive() then
+    local cx, cy = getSceneDrawCenter()
+    local x1, y1 = transformScenePoint(cx, cy)
+    local x2, y2 = transformScenePoint(cx + n, cy)
+    local dx, dy = x2 - x1, y2 - y1
+    return math.sqrt((dx * dx) + (dy * dy))
+  end
   return n * math.abs(getSceneDrawScaleX())
 end
 
 local function scaleSceneLengthY(v)
   local n = tonumber(v) or 0
+  if isProjectiveSceneTransformActive() then
+    local cx, cy = getSceneDrawCenter()
+    local x1, y1 = transformScenePoint(cx, cy)
+    local x2, y2 = transformScenePoint(cx, cy + n)
+    local dx, dy = x2 - x1, y2 - y1
+    return math.sqrt((dx * dx) + (dy * dy))
+  end
   return n * math.abs(getSceneDrawScaleY())
 end
 
@@ -401,6 +485,9 @@ end
 local function isIdentitySceneTransform()
   local runtime = _G and _G.CONFIG_UI
   if type(runtime) ~= "table" then return true end
+  if runtime.sceneDrawProjective == true then
+    return false
+  end
   local offsetX = tonumber(runtime.sceneDrawOffsetX) or 0
   local drawAlpha = tonumber(runtime.sceneDrawAlpha)
   if drawAlpha == nil then drawAlpha = 1 end
@@ -408,7 +495,10 @@ local function isIdentitySceneTransform()
   if sx == nil then sx = tonumber(runtime.sceneDrawScale) or 1 end
   local sy = tonumber(runtime.sceneDrawScaleY)
   if sy == nil then sy = tonumber(runtime.sceneDrawScale) or 1 end
-  return math.abs(offsetX) < 0.0001 and drawAlpha >= 0.999 and math.abs(sx - 1) < 0.0001 and
+  local yaw = tonumber(runtime.sceneDrawYawRad) or 0
+  local pitch = tonumber(runtime.sceneDrawPitchRad) or 0
+  return math.abs(offsetX) < 0.0001 and drawAlpha >= 0.999 and math.abs(yaw) < 0.0001 and math.abs(pitch) < 0.0001 and
+      math.abs(sx - 1) < 0.0001 and
       math.abs(sy - 1) < 0.0001
 end
 
@@ -442,6 +532,17 @@ local function installSceneDrawOffsetGraphicsProxy()
           return fn(x, y, width, height, color)
         end
         local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
+        if isProjectiveSceneTransformActive() and rawGraphics.drawQuad then
+          local px = tonumber(x) or 0
+          local py = tonumber(y) or 0
+          local pw = tonumber(width) or 0
+          local ph = tonumber(height) or 0
+          local x1, y1 = transformScenePoint(px, py)
+          local x2, y2 = transformScenePoint(px, py + ph)
+          local x3, y3 = transformScenePoint(px + pw, py)
+          local x4, y4 = transformScenePoint(px + pw, py + ph)
+          return rawGraphics.drawQuad(x1, y1, x2, y2, x3, y3, x4, y4, c)
+        end
         local tx, ty = transformScenePoint(x, y)
         local tw = math.max(0, scaleSceneLengthX(width))
         local th = math.max(0, scaleSceneLengthY(height))
@@ -1553,7 +1654,11 @@ local function mainLoop()
       if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
       if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
       if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
-      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
+      local minFtPx = 10
+      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
+        minFtPx = 2
+      end
+      local wantPx = math.max(minFtPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
       if c._ftPixelSizeApplied ~= wantPx then
         Font.ftSetPixelSize(font, 0, wantPx)
         c._ftPixelSizeApplied = wantPx

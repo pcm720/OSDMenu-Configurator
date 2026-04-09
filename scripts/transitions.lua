@@ -347,6 +347,12 @@ function transitions.install(common)
       runtime.sceneDrawScaleY = 1
       runtime.sceneDrawCenterX = math.floor((w or 0) / 2)
       runtime.sceneDrawCenterY = math.floor((h or 0) / 2)
+      runtime.sceneDrawProjective = false
+      runtime.sceneDrawYawRad = 0
+      runtime.sceneDrawPitchRad = 0
+      runtime.sceneDrawCameraRadius = 1.0
+      runtime.sceneDrawCameraFocal = 1.0
+      runtime.sceneDrawCameraMinDen = 0.12
       runtime.currentSceneWidth = w
       runtime.currentSceneHeight = h
       runtime.sceneFlipActive = false
@@ -423,13 +429,26 @@ function transitions.install(common)
         local phaseDirSign = incoming and (-baseDirSign) or baseDirSign
         local centerX = math.floor((w or 0) / 2)
         local centerY = math.floor((h or 0) / 2)
-        -- Bell-shaped shift: zero at both edge-on and fully-open endpoints,
-        -- strongest mid-phase. This avoids midpoint/final jumps while still
-        -- giving directional perspective.
-        local shiftBell = axisScale * (1 - axisScale)
-        local shiftX = math.floor((shiftBell * (w * 0.56)) + 0.5)
-        local shiftY = math.floor((shiftBell * (h * 0.56)) + 0.5)
+        local halfPi = math.pi * 0.5
+        local angle
+        if incoming then
+          angle = (-phaseDirSign) * (1 - curved) * halfPi
+        else
+          angle = phaseDirSign * curved * halfPi
+        end
+        local yawRad, pitchRad = 0, 0
+        if tr.type == "flip_horizontal" then
+          yawRad = angle
+        else
+          pitchRad = angle
+        end
         if runtime then
+          runtime.sceneDrawProjective = true
+          runtime.sceneDrawYawRad = yawRad
+          runtime.sceneDrawPitchRad = pitchRad
+          runtime.sceneDrawCameraRadius = 1.0
+          runtime.sceneDrawCameraFocal = 1.0
+          runtime.sceneDrawCameraMinDen = 0.12
           runtime.sceneDrawScale = axisScale
           runtime.sceneDrawScaleX = 1
           runtime.sceneDrawScaleY = 1
@@ -437,13 +456,6 @@ function transitions.install(common)
           runtime.sceneDrawCenterY = centerY
           runtime.sceneDrawAlpha = axisScale
           runtime.sceneFlipPhase = phase
-          if tr.type == "flip_horizontal" then
-            runtime.sceneDrawScaleX = axisScale
-            runtime.sceneDrawCenterX = centerX + (phaseDirSign * shiftX)
-          else
-            runtime.sceneDrawScaleY = axisScale
-            runtime.sceneDrawCenterY = centerY + (phaseDirSign * shiftY)
-          end
         end
       end
       return 0
@@ -512,11 +524,23 @@ function transitions.install(common)
     local prevScaleY = runtime.sceneDrawScaleY
     local prevCenterX = runtime.sceneDrawCenterX
     local prevCenterY = runtime.sceneDrawCenterY
+    local prevProjective = runtime.sceneDrawProjective
+    local prevYawRad = runtime.sceneDrawYawRad
+    local prevPitchRad = runtime.sceneDrawPitchRad
+    local prevCamRadius = runtime.sceneDrawCameraRadius
+    local prevCamFocal = runtime.sceneDrawCameraFocal
+    local prevCamMinDen = runtime.sceneDrawCameraMinDen
     runtime.sceneDrawOffsetX = 0
     runtime.sceneDrawAlpha = 1
     runtime.sceneDrawScale = 1
     runtime.sceneDrawScaleX = 1
     runtime.sceneDrawScaleY = 1
+    runtime.sceneDrawProjective = false
+    runtime.sceneDrawYawRad = 0
+    runtime.sceneDrawPitchRad = 0
+    runtime.sceneDrawCameraRadius = 1.0
+    runtime.sceneDrawCameraFocal = 1.0
+    runtime.sceneDrawCameraMinDen = 0.12
     local ok, r1, r2, r3, r4 = pcall(drawFn)
     runtime.sceneDrawOffsetX = prevOffsetX
     runtime.sceneDrawAlpha = prevAlpha
@@ -525,6 +549,12 @@ function transitions.install(common)
     runtime.sceneDrawScaleY = prevScaleY
     runtime.sceneDrawCenterX = prevCenterX
     runtime.sceneDrawCenterY = prevCenterY
+    runtime.sceneDrawProjective = prevProjective
+    runtime.sceneDrawYawRad = prevYawRad
+    runtime.sceneDrawPitchRad = prevPitchRad
+    runtime.sceneDrawCameraRadius = prevCamRadius
+    runtime.sceneDrawCameraFocal = prevCamFocal
+    runtime.sceneDrawCameraMinDen = prevCamMinDen
     if not ok then
       error(r1)
     end
@@ -541,6 +571,12 @@ function transitions.install(common)
         runtime.sceneDrawScale = 1
         runtime.sceneDrawScaleX = 1
         runtime.sceneDrawScaleY = 1
+        runtime.sceneDrawProjective = false
+        runtime.sceneDrawYawRad = 0
+        runtime.sceneDrawPitchRad = 0
+        runtime.sceneDrawCameraRadius = 1.0
+        runtime.sceneDrawCameraFocal = 1.0
+        runtime.sceneDrawCameraMinDen = 0.12
         runtime.sceneFlipActive = false
         runtime.sceneFlipType = nil
         runtime.sceneFlipPhase = nil
@@ -582,6 +618,12 @@ function transitions.install(common)
         runtime.sceneDrawScale = 1
         runtime.sceneDrawScaleX = 1
         runtime.sceneDrawScaleY = 1
+        runtime.sceneDrawProjective = false
+        runtime.sceneDrawYawRad = 0
+        runtime.sceneDrawPitchRad = 0
+        runtime.sceneDrawCameraRadius = 1.0
+        runtime.sceneDrawCameraFocal = 1.0
+        runtime.sceneDrawCameraMinDen = 0.12
         runtime.sceneFlipActive = false
         runtime.sceneFlipType = nil
         runtime.sceneFlipPhase = nil
@@ -606,6 +648,12 @@ function transitions.install(common)
       runtime.sceneDrawScale = 1
       runtime.sceneDrawScaleX = 1
       runtime.sceneDrawScaleY = 1
+      runtime.sceneDrawProjective = false
+      runtime.sceneDrawYawRad = 0
+      runtime.sceneDrawPitchRad = 0
+      runtime.sceneDrawCameraRadius = 1.0
+      runtime.sceneDrawCameraFocal = 1.0
+      runtime.sceneDrawCameraMinDen = 0.12
       runtime.sceneFlipActive = false
       runtime.sceneFlipType = nil
       runtime.sceneFlipPhase = nil
