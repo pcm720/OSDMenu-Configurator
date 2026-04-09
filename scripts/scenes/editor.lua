@@ -379,53 +379,6 @@ local function setConfigValue(ctx, _, key, value)
   applyR3ConfiguratorRuntimeOverride(ctx, _, key, outValue)
 end
 
-local function getSceneTransitionConfig(_)
-  local runtime = _G.CONFIG_UI or {}
-  local t = runtime.sceneTransitionType
-  local f = runtime.sceneTransitionFrames
-  if _.common and _.common.normalizeSceneTransitionType then
-    t = _.common.normalizeSceneTransitionType(t)
-  end
-  if _.common and _.common.normalizeSceneTransitionFrames then
-    f = _.common.normalizeSceneTransitionFrames(f)
-  end
-  return t, f
-end
-
-local function beginSceneTransitionInIfEnabled(ctx, _)
-  if not (_.common and _.common.beginSceneTransitionIn) then return end
-  local t, f = getSceneTransitionConfig(_)
-  _.common.beginSceneTransitionIn(ctx, t, f, { direction = "in" })
-end
-
-local function isSlideLikeSceneTransition(_, transitionType)
-  local t = transitionType
-  if _.common and _.common.normalizeSceneTransitionType then
-    t = _.common.normalizeSceneTransitionType(t)
-  end
-  return t == "slide" or t == "whip_pan" or t == "zoom" or t == "flip_horizontal" or t == "flip_vertical"
-end
-
-local function isInSceneDissolveTransition(_, transitionType)
-  local t = transitionType
-  if _.common and _.common.normalizeSceneTransitionType then
-    t = _.common.normalizeSceneTransitionType(t)
-  end
-  return t == "cross_dissolve"
-end
-
-local function playSceneTransitionOutIfEnabled(ctx, _)
-  if not (_.common and (_.common.playSceneTransitionOnCurrentFrame or _.common.beginSceneTransitionIn)) then return end
-  local t, f = getSceneTransitionConfig(_)
-  if (isSlideLikeSceneTransition(_, t) or isInSceneDissolveTransition(_, t)) and _.common.beginSceneTransitionIn then
-    _.common.beginSceneTransitionIn(ctx, t, f, { direction = "out" })
-    return
-  end
-  if _.common.playSceneTransitionOnCurrentFrame then
-    _.common.playSceneTransitionOnCurrentFrame(ctx, "out", t, f)
-  end
-end
-
 local function markConfigMutated(ctx, recomputeDirty)
   if not ctx then return end
   ctx.editorFrameParseCache = nil
@@ -1056,6 +1009,8 @@ local function run(ctx)
           ctx.lines = nil
           ctx.optList = nil
           ctx.editorCategoryIdx = 0
+          ctx.editorPendingEnterCategoryIdx = nil
+          ctx.editorPendingReturnCategorySel = nil
           ctx.saveSplash = nil
         end,
       }) then
@@ -1096,6 +1051,51 @@ local function run(ctx)
     categories = _.config_options.ps2bbl_ini_categories or {}
   elseif ctx.fileType == "psxbbl_ini" then
     categories = _.config_options.psxbbl_ini_categories or {}
+  end
+
+  local function resolveCategoryOptList(cat)
+    local rawOpts = (cat and cat.options) or {}
+    -- DKWDRV custom path not applicable for HOSDMenu (no MC path)
+    if ctx.context == "hosdmenu" and ctx.fileType == "osdmenu_cnf" then
+      local filtered = {}
+      for _, o in ipairs(rawOpts) do
+        if o.key ~= "path_DKWDRV_ELF" then filtered[#filtered + 1] = o end
+      end
+      return filtered
+    end
+    return rawOpts
+  end
+
+  local function applyEnterCategory(categoryIdx)
+    local selectedCategoryIdx = math.max(1, math.floor(tonumber(categoryIdx) or 1))
+    if #categories > 0 and selectedCategoryIdx > #categories then
+      selectedCategoryIdx = #categories
+    end
+    local cat = categories[selectedCategoryIdx]
+    ctx.editorCategoryIdx = selectedCategoryIdx
+    ctx.optList = resolveCategoryOptList(cat)
+    local rememberedSel = getCategoryOptSel(ctx, selectedCategoryIdx)
+    if #ctx.optList > 0 then
+      ctx.optSel = math.max(1, math.min(rememberedSel, #ctx.optList))
+    else
+      ctx.optSel = 1
+    end
+    ctx.optScroll = ctx.optScroll or 0
+  end
+
+  if isCategorizedFile and ctx.state == "editor" and ctx.editorPendingEnterCategoryIdx then
+    applyEnterCategory(ctx.editorPendingEnterCategoryIdx)
+    ctx.editorPendingEnterCategoryIdx = nil
+  elseif isCategorizedFile and ctx.state == "editor_categories" and ctx.editorPendingReturnCategorySel then
+    local prevCategoryIdx = math.max(1, math.floor(tonumber(ctx.editorPendingReturnCategorySel) or 1))
+    if #categories > 0 and prevCategoryIdx > #categories then
+      prevCategoryIdx = #categories
+    end
+    ctx.editorCategoryIdx = 0
+    ctx.optList = nil
+    ctx.optSel = prevCategoryIdx
+    ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #categories, _.MAX_VISIBLE)
+    ctx.editorPendingReturnCategorySel = nil
   end
 
   -- Keep interactive rows anchored to the same Y slots between category and child option pages.
@@ -1162,36 +1162,21 @@ local function run(ctx)
         ctx.bblHotkeySel = 1
         ctx.state = "bbl_hotkeys"
       else
-        local selectedCategoryIdx = ctx.optSel
-        ctx.editorCategoryIdx = selectedCategoryIdx
         if isCategorizedFile then
+          local selectedCategoryIdx = ctx.optSel
+          ctx.editorPendingEnterCategoryIdx = selectedCategoryIdx
           ctx.state = "editor"
-        end
-        local rawOpts = cat.options or {}
-        -- DKWDRV custom path not applicable for HOSDMenu (no MC path)
-        if ctx.context == "hosdmenu" and ctx.fileType == "osdmenu_cnf" then
-          ctx.optList = {}
-          for _, o in ipairs(rawOpts) do
-            if o.key ~= "path_DKWDRV_ELF" then ctx.optList[#ctx.optList + 1] = o end
-          end
         else
-          ctx.optList = rawOpts
+          local selectedCategoryIdx = ctx.optSel
+          applyEnterCategory(selectedCategoryIdx)
         end
-        local rememberedSel = getCategoryOptSel(ctx, selectedCategoryIdx)
-        if #ctx.optList > 0 then
-          ctx.optSel = math.max(1, math.min(rememberedSel, #ctx.optList))
-        else
-          ctx.optSel = 1
-        end
-        ctx.optScroll = ctx.optScroll or 0
-        beginSceneTransitionInIfEnabled(ctx, _)
       end
     end
     if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
       if ctx.configModified then
         ctx.editorLeavePrompt = true
       else
-        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0
+        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0; ctx.editorPendingEnterCategoryIdx = nil; ctx.editorPendingReturnCategorySel = nil
       end
     end
   elseif ctx.optList and #ctx.optList > 0 then
@@ -2613,19 +2598,16 @@ local function run(ctx)
     ctx.editorR3ColorPresetScroll = nil
     ctx.editorR3ColorPresetKey = nil
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
-      playSceneTransitionOutIfEnabled(ctx, _)
       setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx
-      ctx.editorCategoryIdx = 0
+      ctx.editorPendingReturnCategorySel = prevCategoryIdx
       ctx.state = "editor_categories"
-      ctx.optList = nil
-      ctx.optSel = prevCategoryIdx
       ctx.saveSplash = nil
     else
       if ctx.configModified then
         ctx.editorLeavePrompt = true
       else
-        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0; ctx.saveSplash = nil
+        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0; ctx.editorPendingEnterCategoryIdx = nil; ctx.editorPendingReturnCategorySel = nil; ctx.saveSplash = nil
       end
     end
   end

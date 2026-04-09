@@ -654,6 +654,8 @@ local function setStateAfterLoad(s)
   else
     s.state = isCategorized and "editor_categories" or "editor"
     s.editorCategoryIdx = isCategorized and 0 or nil
+    s.editorPendingEnterCategoryIdx = nil
+    s.editorPendingReturnCategorySel = nil
     s.optList = isCategorized and nil or C.config_options[s.fileType]
     s.optSel, s.optScroll = 1, 0
     if not s.optList then s.optList = {} end
