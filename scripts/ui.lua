@@ -331,8 +331,7 @@ local function getSceneDrawScale()
   local runtime = _G and _G.CONFIG_UI
   local s = tonumber(runtime and runtime.sceneDrawScale)
   if not s or s <= 0 then return 1 end
-  local minScale = (runtime and runtime.sceneFlipActive == true) and 0.02 or 0.1
-  if s < minScale then s = minScale end
+  if s < 0.1 then s = 0.1 end
   if s > 4 then s = 4 end
   return s
 end
@@ -1550,18 +1549,11 @@ local function mainLoop()
     local KEY_CW = c.KEY_CHAR_W or math.max(1, scaleX(common.KEY_CHAR_W))
     local KEY_LH = c.KEY_LINE_H or math.max(1, scaleY(common.KEY_LINE_H))
     if drawMode == "ftPrint" and font then
-      local runtimeCfg = _G.CONFIG_UI
-      local runtimeDrawScale = tonumber(runtimeCfg and runtimeCfg.sceneDrawScale) or 1
+      local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
       if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
-      local minRuntimeDrawScale = 0.25
-      local minWantPx = 10
-      if runtimeCfg and runtimeCfg.sceneFlipActive == true then
-        minRuntimeDrawScale = 0.02
-        minWantPx = 2
-      end
-      if runtimeDrawScale < minRuntimeDrawScale then runtimeDrawScale = minRuntimeDrawScale end
+      if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
       if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
-      local wantPx = math.max(minWantPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
       if c._ftPixelSizeApplied ~= wantPx then
         Font.ftSetPixelSize(font, 0, wantPx)
         c._ftPixelSizeApplied = wantPx

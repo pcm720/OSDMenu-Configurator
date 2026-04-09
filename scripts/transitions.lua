@@ -390,10 +390,11 @@ function transitions.install(common)
         local frames = common.normalizeSceneTransitionFrames(tr.frames)
         local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
         local progress = clamp01((frame + 1) / math.max(1, frames))
-        local curved = easeInOutCubic(progress)
+        local curved = progress
         -- Render flip transitions as a transformed scene plane (not a wipe mask):
         -- start edge-on and expand to full view.
         local axisScale = curved
+        if axisScale < 0.08 then axisScale = 0.08 end
         if axisScale < 0 then axisScale = 0 end
         if axisScale > 1 then axisScale = 1 end
         local direction = tostring(tr.direction or "in")
