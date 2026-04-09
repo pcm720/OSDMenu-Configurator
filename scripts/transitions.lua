@@ -254,6 +254,7 @@ function transitions.install(common)
     local runtime = _G and _G.CONFIG_UI
     if type(runtime) ~= "table" then return end
     if runtime.sceneFlipActive ~= true then return end
+    if tostring(runtime.sceneFlipPhase or "") ~= "out" then return end
     local flipType = common.normalizeSceneTransitionType(runtime.sceneFlipType)
     if flipType ~= "flip_horizontal" and flipType ~= "flip_vertical" then return end
     local w, h = getTransitionScreenSize(ctx)
@@ -343,6 +344,7 @@ function transitions.install(common)
       runtime.sceneFlipDirSign = 0
       runtime.sceneFlipCenterX = runtime.sceneDrawCenterX
       runtime.sceneFlipCenterY = runtime.sceneDrawCenterY
+      runtime.sceneFlipPhase = nil
     end
     if not common.isSceneTransitionInActive(ctx) then
       return 0
@@ -410,11 +412,12 @@ function transitions.install(common)
           runtime.sceneDrawScaleY = 1
           runtime.sceneDrawCenterX = centerX
           runtime.sceneDrawCenterY = centerY
-          runtime.sceneDrawAlpha = (phase == "out") and 0 or axisScale
+          runtime.sceneDrawAlpha = (phase == "out") and 0 or 1
           runtime.sceneFlipActive = true
           runtime.sceneFlipType = tr.type
           runtime.sceneFlipAxisScale = axisScale
           runtime.sceneFlipDirSign = dirSign
+          runtime.sceneFlipPhase = phase
           if tr.type == "flip_horizontal" then
             local flipCenterX = centerX + (dirSign * shiftX)
             runtime.sceneFlipCenterX = flipCenterX
@@ -455,9 +458,15 @@ function transitions.install(common)
     if not common.isSceneTransitionInActive(ctx) then return false end
     local tr = ctx and ctx.sceneTransitionIn
     local t = common.normalizeSceneTransitionType(tr and tr.type)
-    -- Dissolve/flip preserve the previous framebuffer.
-    if t == "cross_dissolve" or t == "flip_horizontal" or t == "flip_vertical" then
+    -- Dissolve always preserves previous framebuffer.
+    if t == "cross_dissolve" then
       return true
+    end
+    if t == "flip_horizontal" or t == "flip_vertical" then
+      local frames = common.normalizeSceneTransitionFrames(tr and tr.frames)
+      local frame = math.max(0, math.floor(tonumber(tr and tr.frame) or 0))
+      local progress = clamp01((frame + 1) / math.max(1, frames))
+      return progress < 0.5
     end
     return false
   end
@@ -468,9 +477,13 @@ function transitions.install(common)
     end
     local tr = ctx and ctx.sceneTransitionIn
     local t = common.normalizeSceneTransitionType(tr and tr.type)
-    -- Preserve prior logo/background during transitions that keep framebuffer.
-    if t == "cross_dissolve" or t == "flip_horizontal" or t == "flip_vertical" then
+    -- Preserve prior logo/background only while framebuffer-preserve phase is active.
+    if t == "cross_dissolve" then
       return false
+    end
+    if t == "flip_horizontal" or t == "flip_vertical" then
+      local runtime = _G and _G.CONFIG_UI
+      return tostring(runtime and runtime.sceneFlipPhase or "") ~= "out"
     end
     return true
   end
@@ -519,6 +532,7 @@ function transitions.install(common)
         runtime.sceneDrawScaleY = 1
         runtime.sceneFlipActive = false
         runtime.sceneFlipType = nil
+        runtime.sceneFlipPhase = nil
       end
       return
     end
@@ -559,6 +573,7 @@ function transitions.install(common)
         runtime.sceneDrawScaleY = 1
         runtime.sceneFlipActive = false
         runtime.sceneFlipType = nil
+        runtime.sceneFlipPhase = nil
       end
     else
       tr.frame = frame
@@ -582,6 +597,7 @@ function transitions.install(common)
       runtime.sceneDrawScaleY = 1
       runtime.sceneFlipActive = false
       runtime.sceneFlipType = nil
+      runtime.sceneFlipPhase = nil
     end
     local p = (tostring(phase or "out") == "in") and "in" or "out"
     for i = 1, frames do
