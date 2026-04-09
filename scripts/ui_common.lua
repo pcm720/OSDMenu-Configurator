@@ -797,8 +797,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
         local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
         local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
-        local fromIcon = getIconVisualAlpha(fromSlot)
-        local toIcon = getIconVisualAlpha(toSlot)
+        -- For transition blending, animate active button presence (0/1) to
+        -- avoid color muddiness from mixing through inactive placeholder alpha.
+        local fromIcon = (fromSlot.used == true) and 1 or 0
+        local toIcon = (toSlot.used == true) and 1 or 0
         local fromLabel = tostring(fromSlot.label or "")
         local toLabel = tostring(toSlot.label or "")
         if samePad and sameUsed and sameLabel then

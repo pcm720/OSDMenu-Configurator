@@ -772,7 +772,16 @@ local function run(ctx)
   local belMenuClosingKey = belMenuOpenKey .. "_closing"
   local belMenuRowsCacheKey = belMenuOpenKey .. "_rowsCache"
   local belMenuHintsCacheKey = belMenuOpenKey .. "_hintsCache"
+  local transitionRenderPass = (_.common and _.common.isSceneTransitionInActive and _.common.isSceneTransitionInActive(ctx)) or
+      false
   if not ctx.textInputCallback then
+    -- When transitioning away from text input, we may intentionally keep
+    -- rendering this scene for outgoing transition frames. Do not force-exit
+    -- here or hints/buttons will hard-cut instead of fading.
+    if transitionRenderPass then
+      -- Keep drawing with existing text/layout snapshot; input is already
+      -- blocked by transition gate in ui.lua.
+    else
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
@@ -804,7 +813,9 @@ local function run(ctx)
     ctx.textInputGridHorizontalPrevHeldMask = nil
     ctx.textInputGridHorizontalHoldFrames = nil
     ctx.textInputGridHorizontalHoldCountdown = nil
-    ctx.state = "editor"; return
+      ctx.state = ctx.textInputReturnState or "editor"
+      return
+    end
   end
   if ctx._textInputBelBaselineCallback ~= ctx.textInputCallback then
     ctx._textInputBelBaselineCallback = ctx.textInputCallback
