@@ -501,8 +501,15 @@ function common.endPathAccess(mounted)
   end
 end
 
-local function getRuntimeFtPixelBase()
-  local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
+local function getRuntimeFtPixelBase(opts)
+  opts = opts or {}
+  local runtime = _G and _G.CONFIG_UI
+  if opts.lockSceneScale == true then
+    local uiScale = tonumber(runtime and runtime.currentUiScale) or 1
+    if uiScale <= 0 then uiScale = 1 end
+    return math.max(8, math.floor(((tonumber(common.FT_PIXEL_H) or 18) * uiScale) + 0.5))
+  end
+  local runtimePx = (runtime and tonumber(runtime.currentFtPixelH)) or 0
   if runtimePx > 0 then
     return runtimePx
   end
@@ -529,11 +536,13 @@ local function loadFtFontWithFallback()
   return nil
 end
 
-local function getHintFtFont(scaleFactor)
+local function getHintFtFont(scaleFactor, opts)
   local sf = tonumber(scaleFactor) or 1
   if sf <= 0 then sf = 1 end
-  local basePx = getRuntimeFtPixelBase()
-  local key = string.format("%d@%.3f", math.floor(basePx + 0.5), sf)
+  opts = opts or {}
+  local basePx = getRuntimeFtPixelBase(opts)
+  local lockSceneScale = opts.lockSceneScale == true
+  local key = string.format("%d@%.3f@%d", math.floor(basePx + 0.5), sf, lockSceneScale and 1 or 0)
   if hintFtFontCache[key] then return hintFtFontCache[key] end
   local f = loadFtFontWithFallback()
   if f and f >= 0 then
@@ -547,10 +556,10 @@ local function getHintFtFont(scaleFactor)
   return nil
 end
 
-function common.getHintFont(fallbackFont, drawMode, textScale)
+function common.getHintFont(fallbackFont, drawMode, textScale, opts)
   local hintFont = fallbackFont
   if drawMode == "ftPrint" then
-    local f = getHintFtFont(textScale or 1)
+    local f = getHintFtFont(textScale or 1, opts)
     if f then hintFont = f end
   end
   return hintFont
@@ -562,9 +571,9 @@ function common.getHintLabelDrawScale(baseScale)
   return bs * ts
 end
 
-function common.getHintLabelTextHeight()
+function common.getHintLabelTextHeight(opts)
   local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
-  local basePx = getRuntimeFtPixelBase()
+  local basePx = getRuntimeFtPixelBase(opts)
   return math.max(10, math.floor(basePx * ts + 0.5))
 end
 
@@ -600,13 +609,16 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
     return out
   end
+  local function normalizeLabelForCompare(s)
+    return tostring(s or ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+  end
   local function slotsEqual(a, b)
     if #(a or {}) ~= #(b or {}) then return false end
     for i = 1, #(a or {}) do
       local sa = a[i] or {}
       local sb = b[i] or {}
       if tostring(sa.pad or "") ~= tostring(sb.pad or "") then return false end
-      if tostring(sa.label or "") ~= tostring(sb.label or "") then return false end
+      if normalizeLabelForCompare(sa.label) ~= normalizeLabelForCompare(sb.label) then return false end
       if (sa.used == true) ~= (sb.used == true) then return false end
     end
     return true
@@ -633,7 +645,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
-    local textH = common.getHintLabelTextHeight()
+    local textH = common.getHintLabelTextHeight({ lockSceneScale = true })
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
     local approxCharW = math.floor(8 * drawScale)
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
@@ -649,7 +661,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
     local slotCount = #rowPads
     local slotW = widthEff / slotCount
-    local hintFont = common.getHintFont(font, drawMode, textScale)
+    local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
     local hintKey = tostring(math.floor(xEff + 0.5)) .. "|" .. tostring(math.floor(y + 0.5)) .. "|" ..
         tostring(math.floor(widthEff + 0.5))
 
@@ -763,7 +775,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local toSlot = (toSlots and toSlots[col]) or { pad = rowPads[col], label = "", used = false }
         local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
         local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
-        local sameLabel = tostring(fromSlot.label or "") == tostring(toSlot.label or "")
+        local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
         if samePad and sameUsed and sameLabel then
           drawSlot(toSlot, col, rowCenter, iconY, textY, getIconVisualAlpha(toSlot),
             (toSlot.used and tostring(toSlot.label or "") ~= "") and 1 or 0)
