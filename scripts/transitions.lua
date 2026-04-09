@@ -36,10 +36,19 @@ function transitions.install(common)
     return 1 - (a * a * a)
   end
 
-  local function applySceneMotionCurve(transitionType, progress)
+  local function easeInCubic(t)
+    local x = clamp01(t)
+    return x * x * x
+  end
+
+  local function applySceneMotionCurve(transitionType, progress, phase)
     local t = common.normalizeSceneTransitionType(transitionType)
     if t == "slide" then
-      -- Slide should immediately move content on frame 1 (no apparent blank hold).
+      -- For two-phase slide handoff, keep momentum through the phase boundary:
+      -- out phase ends fast, in phase starts fast.
+      if tostring(phase or "in") == "out" then
+        return easeInCubic(progress)
+      end
       return easeOutCubic(progress)
     end
     if t == "whip_pan" then
@@ -406,9 +415,12 @@ function transitions.install(common)
         if axisScale < 0 then axisScale = 0 end
         if axisScale > 1 then axisScale = 1 end
         local direction = tostring(tr.direction or "in")
-        -- Keep one directional cue for both halves so the perceived momentum
-        -- continues through the full 180-degree flip (no mid-transition bounce).
-        local phaseDirSign = ((direction == "out" or direction == "back") and 1) or -1
+        -- Flip cue model (joystick analogy):
+        -- forward: phase1 uses one side cue, phase2 uses the opposite side cue
+        -- as the new scene emerges from 90deg back to center; back/cancel reverses.
+        -- This preserves continuous 180deg flip feel without "90 out + 90 back".
+        local baseDirSign = ((direction == "out" or direction == "back") and 1) or -1
+        local phaseDirSign = incoming and (-baseDirSign) or baseDirSign
         local centerX = math.floor((w or 0) / 2)
         local centerY = math.floor((h or 0) / 2)
         -- Bell-shaped shift: zero at both edge-on and fully-open endpoints,
@@ -440,9 +452,9 @@ function transitions.install(common)
     local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
     -- Use a 1-based step for incoming pass so frame 1 already shows incoming content.
     local progress = clamp01((frame + 1) / math.max(1, frames))
-    local curved = applySceneMotionCurve(tr.type, progress)
     local w, _h = getTransitionScreenSize(ctx)
     local phase = tostring(tr.phase or "in")
+    local curved = applySceneMotionCurve(tr.type, progress, phase)
     local direction = tostring(tr.direction or "in")
     local sign = ((direction == "out" or direction == "back") and -1) or 1
     local distanceScale = tonumber(tr.distanceScale) or 1

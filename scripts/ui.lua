@@ -1990,6 +1990,20 @@ local function mainLoop()
     if not direction then
       return c
     end
+    -- Some scene changes (notably * -> open) are one-shot loaders that can
+    -- immediately resolve to editor/choose_load. Resolve once up-front so
+    -- transitions run against a stable destination scene.
+    if nextScene == "open" and type(main) == "table" and type(main.runOpen) == "function" then
+      c.state = "open"
+      state = "open"
+      main.runOpen(c, 0)
+      if type(c.state) == "string" and c.state ~= "" then
+        nextScene = c.state
+      else
+        nextScene = "open"
+      end
+      state = c.state
+    end
     local transitionType, transitionFrames = getSceneTransitionRuntime()
     local normalizedType = transitionType
     if common.normalizeSceneTransitionType then
