@@ -447,22 +447,26 @@ function transitions.install(common)
         -- derived from the same angle so visual momentum stays coherent.
         local axisScale = 1
         local direction = tostring(tr.direction or "in")
-        -- Flip cue model (scene pane):
-        -- preserve the same edge orientation across the handoff so the second half
-        -- feels like a continuation of the first half (no side swap at 90deg).
+        -- Flip cue model (continuous world rotation):
+        -- outgoing visually rotates 0 -> +/-90deg.
+        -- if we continued the same world angular velocity, it would go
+        -- +/-90deg -> +/-180deg. After scene handoff, that same orientation is
+        -- represented by the incoming scene as -/+90deg -> 0deg.
+        -- This gives the user-perceived "0-90-180" momentum while drawing
+        -- incoming as "-90 -> 0".
         local baseDirSign = tonumber(tr.flipBaseSign)
         if baseDirSign ~= 1 and baseDirSign ~= -1 then
           baseDirSign = ((direction == "out" or direction == "back") and 1) or -1
         end
         local outgoingDirSign = baseDirSign
-        local incomingDirSign = baseDirSign
+        local incomingDirSign = -baseDirSign
         local centerX = math.floor((tonumber(tr.centerX) or (w / 2)) + 0.5)
         local centerY = math.floor((tonumber(tr.centerY) or (h / 2)) + 0.5)
         local halfPi = math.pi * 0.5
         local angle
         if incoming then
-          -- Incoming starts from the same signed 90deg edge and settles to 0deg.
-          -- This keeps side/orientation continuity across the flip handoff.
+          -- Incoming starts at the opposite-signed 90deg edge and settles to 0deg.
+          -- Equivalent to continuing world rotation past 90deg after handoff.
           angle = incomingDirSign * (1 - curved) * halfPi
         else
           angle = outgoingDirSign * curved * halfPi
