@@ -1988,13 +1988,42 @@ local function mainLoop()
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
     local direction = getSceneTransitionDirectionFromPad(c._lastPadEffective)
     if not direction then
-      return
+      return c
     end
     local transitionType, transitionFrames = getSceneTransitionRuntime()
+    local normalizedType = transitionType
+    if common.normalizeSceneTransitionType then
+      normalizedType = common.normalizeSceneTransitionType(transitionType)
+    end
+    if normalizedType == "flip_horizontal" or normalizedType == "flip_vertical" then
+      local totalFrames = common.normalizeSceneTransitionFrames and common.normalizeSceneTransitionFrames(transitionFrames) or
+          transitionFrames
+      totalFrames = math.max(2, math.floor(tonumber(totalFrames) or 2))
+      local outFrames = math.max(1, math.floor(totalFrames / 2))
+      local inFrames = math.max(1, totalFrames - outFrames)
+      local function runFlipPhase(sceneName, phase, frames)
+        c.state = sceneName
+        state = sceneName
+        c.sceneTransitionIn = nil
+        common.beginSceneTransitionIn(c, normalizedType, frames, { direction = direction, phase = phase })
+        while common.isSceneTransitionInActive(c) do
+          local _next, newCtx = runOneFrame(c)
+          c = newCtx or c
+          -- Keep rendering the intended scene for this phase.
+          c.state = sceneName
+          state = sceneName
+        end
+      end
+      runFlipPhase(prevScene, "out", outFrames)
+      runFlipPhase(nextScene, "in", inFrames)
+      c.state = nextScene
+      state = nextScene
+      return c
+    end
     if common.normalizeSceneTransitionType and common.normalizeSceneTransitionType(transitionType) == "cross_dissolve" then
       c.sceneTransitionIn = nil
       common.beginSceneTransitionIn(c, transitionType, transitionFrames, { direction = direction })
-      return
+      return c
     end
     if direction == "out" then
       c.sceneTransitionIn = nil
@@ -2006,6 +2035,7 @@ local function mainLoop()
     else
       common.beginSceneTransitionIn(c, transitionType, transitionFrames, { direction = "in" })
     end
+    return c
   end
 
   local sceneNames = { "main", "choose_mc", "select_config", "initHdd", "open", "choose_load", "editor", "choose_save",
@@ -2039,7 +2069,7 @@ local function mainLoop()
     local nextScene, newCtx = scene.run(ctx)
     ctx = newCtx
     applySceneSelectionNavigationPolicy(ctx, prevScene, nextScene)
-    runSceneTransitionOnStateChange(ctx, prevScene, nextScene)
+    ctx = runSceneTransitionOnStateChange(ctx, prevScene, nextScene) or ctx
     currentScene = nextScene
   end
 end

@@ -311,6 +311,7 @@ function transitions.install(common)
       frames = frames,
       frame = 0,
       direction = (opts and tostring(opts.direction or "")) or "in",
+      phase = (opts and tostring(opts.phase or "")) or "in",
     }
   end
 
@@ -390,44 +391,40 @@ function transitions.install(common)
         local frames = common.normalizeSceneTransitionFrames(tr.frames)
         local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
         local progress = clamp01((frame + 1) / math.max(1, frames))
-        local curved = progress
-        -- Render flip transitions as a transformed scene plane (not a wipe mask):
-        -- start edge-on and expand to full view.
-        local axisScale = curved
-        if axisScale < 0.08 then axisScale = 0.08 end
+        local curved = easeInOutCubic(progress)
+        local phase = tostring(tr.phase or "in")
+        local incoming = (phase ~= "out")
+        -- Flip phase model:
+        -- out: full -> edge-on, in: edge-on -> full.
+        local axisScale
+        if incoming then
+          axisScale = math.sin((math.pi * 0.5) * curved)
+        else
+          axisScale = math.cos((math.pi * 0.5) * curved)
+        end
         if axisScale < 0 then axisScale = 0 end
         if axisScale > 1 then axisScale = 1 end
         local direction = tostring(tr.direction or "in")
         -- Forward behaves like "down", back/cancel behaves like "up".
-        local dirSign = ((direction == "out" or direction == "back") and 1) or -1
+        local dirSign = ((direction == "out" or direction == "back") and -1) or 1
         local centerX = math.floor((w or 0) / 2)
         local centerY = math.floor((h or 0) / 2)
-        local shiftX = math.floor(((1 - axisScale) * (w * 0.08)) + 0.5)
-        local shiftY = math.floor(((1 - axisScale) * (h * 0.08)) + 0.5)
+        local shiftX = math.floor(((1 - axisScale) * (w * 0.16)) + 0.5)
+        local shiftY = math.floor(((1 - axisScale) * (h * 0.16)) + 0.5)
         if runtime then
           runtime.sceneDrawScale = axisScale
           runtime.sceneDrawScaleX = 1
           runtime.sceneDrawScaleY = 1
           runtime.sceneDrawCenterX = centerX
           runtime.sceneDrawCenterY = centerY
-          runtime.sceneDrawAlpha = 1
-          runtime.sceneFlipActive = true
-          runtime.sceneFlipType = tr.type
-          runtime.sceneFlipAxisScale = axisScale
-          runtime.sceneFlipDirSign = dirSign
-          runtime.sceneFlipPhase = "in"
+          runtime.sceneDrawAlpha = axisScale
+          runtime.sceneFlipPhase = phase
           if tr.type == "flip_horizontal" then
-            local flipCenterX = centerX + (dirSign * shiftX)
-            runtime.sceneFlipCenterX = flipCenterX
-            runtime.sceneFlipCenterY = centerY
-            runtime.sceneDrawCenterX = flipCenterX
             runtime.sceneDrawScaleX = axisScale
+            runtime.sceneDrawCenterX = centerX + (dirSign * shiftX)
           else
-            local flipCenterY = centerY + (dirSign * shiftY)
-            runtime.sceneFlipCenterX = centerX
-            runtime.sceneFlipCenterY = flipCenterY
-            runtime.sceneDrawCenterY = flipCenterY
             runtime.sceneDrawScaleY = axisScale
+            runtime.sceneDrawCenterY = centerY + (dirSign * shiftY)
           end
         end
       end
@@ -535,6 +532,8 @@ function transitions.install(common)
       -- draw incoming scene with rising alpha (handled by sceneDrawAlpha).
     elseif tr.type == "zoom" then
       -- Zoom transition is handled through sceneDrawScale in applySceneDrawOffsetForCurrentFrame.
+    elseif tr.type == "flip_horizontal" or tr.type == "flip_vertical" then
+      -- Flip transitions are handled through sceneDrawScaleX/sceneDrawScaleY in applySceneDrawOffsetForCurrentFrame.
     elseif not isSceneSlideTransition(tr.type) then
       -- For incoming non-slide transitions, start at step 1
       -- to avoid a fully blank first frame right after scene switch.
