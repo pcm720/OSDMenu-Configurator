@@ -406,12 +406,9 @@ function transitions.install(common)
         if axisScale < 0 then axisScale = 0 end
         if axisScale > 1 then axisScale = 1 end
         local direction = tostring(tr.direction or "in")
-        -- Forward behaves like "down", back/cancel behaves like "up".
-        local dirSign = ((direction == "out" or direction == "back") and -1) or 1
-        -- Use opposite directional cue on incoming half (same idea as the
-        -- main-logo flip) so phase 2 feels like continuation of a 180 flip,
-        -- not "90 out, then 90 back".
-        local phaseDirSign = incoming and (-dirSign) or dirSign
+        -- Keep one directional cue for both halves so the perceived momentum
+        -- continues through the full 180-degree flip (no mid-transition bounce).
+        local phaseDirSign = ((direction == "out" or direction == "back") and 1) or -1
         local centerX = math.floor((w or 0) / 2)
         local centerY = math.floor((h or 0) / 2)
         -- Bell-shaped shift: zero at both edge-on and fully-open endpoints,
