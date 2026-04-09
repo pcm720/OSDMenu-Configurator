@@ -40,6 +40,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
       local s = src[i] or {}
       out[i] = {
         pad = tostring(s.pad or ""),
+        col = tonumber(s.col),
         label = tostring(s.label or ""),
         used = (s.used == true),
       }
@@ -96,6 +97,11 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     { pad = "select", col = 3 },
     { pad = "r1", col = 4 },
   }
+  local columnByPad = {}
+  for i = 1, #columns do
+    local c = columns[i]
+    columnByPad[tostring(c.pad or "")] = tonumber(c.col) or i
+  end
 
   local rowSlots = {}
   for i = 1, #columns do
@@ -135,7 +141,8 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
       return
     end
     local icon = _.common.getPadIcon(slot.pad)
-    local slotCenter = xEff + (slot.col - 1) * slotW + (slotW / 2)
+    local slotCol = tonumber(slot.col) or columnByPad[tostring(slot.pad or "")] or 1
+    local slotCenter = xEff + (slotCol - 1) * slotW + (slotW / 2)
     local iconY = math.floor(topRowTop + (rowH - iconH) / 2)
     local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
     local px = math.floor(slotCenter - iconW / 2)
