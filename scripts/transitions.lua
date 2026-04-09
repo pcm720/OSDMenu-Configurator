@@ -250,6 +250,53 @@ function transitions.install(common)
     end
   end
 
+  local function drawFlipOverlay(ctx)
+    local runtime = _G and _G.CONFIG_UI
+    if type(runtime) ~= "table" then return end
+    if runtime.sceneFlipActive ~= true then return end
+    local flipType = common.normalizeSceneTransitionType(runtime.sceneFlipType)
+    if flipType ~= "flip_horizontal" and flipType ~= "flip_vertical" then return end
+    local w, h = getTransitionScreenSize(ctx)
+    local axisScale = clamp01(runtime.sceneFlipAxisScale or 1)
+    local fullAlpha = 0x80
+
+    if flipType == "flip_horizontal" then
+      local cx = math.floor(tonumber(runtime.sceneFlipCenterX) or (w / 2))
+      local visibleW = math.max(1, math.floor((w * axisScale) + 0.5))
+      local left = cx - math.floor(visibleW / 2)
+      local right = left + visibleW
+      if left < 0 then
+        right = right - left
+        left = 0
+      end
+      if right > w then
+        left = left - (right - w)
+        right = w
+      end
+      if left < 0 then left = 0 end
+      if right < left then right = left end
+      drawRectSafe(0, 0, left, h, Color.new(0, 0, 0, fullAlpha))
+      drawRectSafe(right, 0, w - right, h, Color.new(0, 0, 0, fullAlpha))
+    else
+      local cy = math.floor(tonumber(runtime.sceneFlipCenterY) or (h / 2))
+      local visibleH = math.max(1, math.floor((h * axisScale) + 0.5))
+      local top = cy - math.floor(visibleH / 2)
+      local bottom = top + visibleH
+      if top < 0 then
+        bottom = bottom - top
+        top = 0
+      end
+      if bottom > h then
+        top = top - (bottom - h)
+        bottom = h
+      end
+      if top < 0 then top = 0 end
+      if bottom < top then bottom = top end
+      drawRectSafe(0, 0, w, top, Color.new(0, 0, 0, fullAlpha))
+      drawRectSafe(0, bottom, w, h - bottom, Color.new(0, 0, 0, fullAlpha))
+    end
+  end
+
   function common.beginSceneTransitionIn(ctx, transitionType, transitionFrames, opts)
     if not ctx then return end
     local t = common.normalizeSceneTransitionType(transitionType)
@@ -290,6 +337,12 @@ function transitions.install(common)
       runtime.sceneDrawCenterY = math.floor((h or 0) / 2)
       runtime.currentSceneWidth = w
       runtime.currentSceneHeight = h
+      runtime.sceneFlipActive = false
+      runtime.sceneFlipType = nil
+      runtime.sceneFlipAxisScale = 1
+      runtime.sceneFlipDirSign = 0
+      runtime.sceneFlipCenterX = runtime.sceneDrawCenterX
+      runtime.sceneFlipCenterY = runtime.sceneDrawCenterY
     end
     if not common.isSceneTransitionInActive(ctx) then
       return 0
@@ -335,31 +388,45 @@ function transitions.install(common)
         local frames = common.normalizeSceneTransitionFrames(tr.frames)
         local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
         local progress = clamp01((frame + 1) / math.max(1, frames))
-        local curved = easeInOutCubic(progress)
-        -- Incoming scene starts edge-on and settles to full size.
-        local axisScale = math.sin((math.pi * 0.5) * curved)
+        local phase = (progress < 0.5) and "out" or "in"
+        local phaseProgress = (phase == "out") and (progress / 0.5) or ((progress - 0.5) / 0.5)
+        local curved = easeInOutCubic(phaseProgress)
+        -- 180-degree flip feel:
+        -- outgoing scene shrinks to edge-on (first 90deg),
+        -- incoming scene expands from edge-on (second 90deg).
+        local axisScale = (phase == "out") and (1 - curved) or curved
         if axisScale < 0 then axisScale = 0 end
         if axisScale > 1 then axisScale = 1 end
         local direction = tostring(tr.direction or "in")
         -- Forward behaves like "down", back/cancel behaves like "up".
-        local dirSign = ((direction == "out" or direction == "back") and -1) or 1
+        local dirSign = ((direction == "out" or direction == "back") and 1) or -1
         local centerX = math.floor((w or 0) / 2)
         local centerY = math.floor((h or 0) / 2)
-        local shiftX = math.floor(((1 - axisScale) * (w * 0.16)) + 0.5)
-        local shiftY = math.floor(((1 - axisScale) * (h * 0.16)) + 0.5)
+        local shiftX = math.floor(((1 - axisScale) * (w * 0.08)) + 0.5)
+        local shiftY = math.floor(((1 - axisScale) * (h * 0.08)) + 0.5)
         if runtime then
-          runtime.sceneDrawScale = axisScale
+          runtime.sceneDrawScale = 1
           runtime.sceneDrawScaleX = 1
           runtime.sceneDrawScaleY = 1
           runtime.sceneDrawCenterX = centerX
           runtime.sceneDrawCenterY = centerY
-          runtime.sceneDrawAlpha = axisScale
+          runtime.sceneDrawAlpha = (phase == "out") and 0 or axisScale
+          runtime.sceneFlipActive = true
+          runtime.sceneFlipType = tr.type
+          runtime.sceneFlipAxisScale = axisScale
+          runtime.sceneFlipDirSign = dirSign
           if tr.type == "flip_horizontal" then
+            local flipCenterX = centerX + (dirSign * shiftX)
+            runtime.sceneFlipCenterX = flipCenterX
+            runtime.sceneFlipCenterY = centerY
+            runtime.sceneDrawCenterX = flipCenterX
             runtime.sceneDrawScaleX = axisScale
-            runtime.sceneDrawCenterX = centerX + (dirSign * shiftX)
           else
+            local flipCenterY = centerY + (dirSign * shiftY)
+            runtime.sceneFlipCenterX = centerX
+            runtime.sceneFlipCenterY = flipCenterY
+            runtime.sceneDrawCenterY = flipCenterY
             runtime.sceneDrawScaleY = axisScale
-            runtime.sceneDrawCenterY = centerY + (dirSign * shiftY)
           end
         end
       end
@@ -388,9 +455,8 @@ function transitions.install(common)
     if not common.isSceneTransitionInActive(ctx) then return false end
     local tr = ctx and ctx.sceneTransitionIn
     local t = common.normalizeSceneTransitionType(tr and tr.type)
-    -- Only dissolve keeps the previous framebuffer. Slide/whip must clear each
-    -- frame to avoid frame accumulation/ghost trails.
-    if t == "cross_dissolve" then
+    -- Dissolve/flip preserve the previous framebuffer.
+    if t == "cross_dissolve" or t == "flip_horizontal" or t == "flip_vertical" then
       return true
     end
     return false
@@ -402,9 +468,8 @@ function transitions.install(common)
     end
     local tr = ctx and ctx.sceneTransitionIn
     local t = common.normalizeSceneTransitionType(tr and tr.type)
-    -- Cross dissolve preserves framebuffer (no clear), so redrawing logos
-    -- every frame would brighten them. Keep the preserved logo instead.
-    if t == "cross_dissolve" then
+    -- Preserve prior logo/background during transitions that keep framebuffer.
+    if t == "cross_dissolve" or t == "flip_horizontal" or t == "flip_vertical" then
       return false
     end
     return true
@@ -452,6 +517,8 @@ function transitions.install(common)
         runtime.sceneDrawScale = 1
         runtime.sceneDrawScaleX = 1
         runtime.sceneDrawScaleY = 1
+        runtime.sceneFlipActive = false
+        runtime.sceneFlipType = nil
       end
       return
     end
@@ -461,13 +528,13 @@ function transitions.install(common)
     if tr.type == "whip_pan" then
       local progress = clamp01((frame + 1) / math.max(1, frames))
       drawWhipPanOverlay(ctx, tr.direction, progress, frame)
+    elseif tr.type == "flip_horizontal" or tr.type == "flip_vertical" then
+      drawFlipOverlay(ctx)
     elseif tr.type == "cross_dissolve" then
       -- True dissolve approximation: preserve previous frame in buffer and
       -- draw incoming scene with rising alpha (handled by sceneDrawAlpha).
     elseif tr.type == "zoom" then
       -- Zoom transition is handled through sceneDrawScale in applySceneDrawOffsetForCurrentFrame.
-    elseif tr.type == "flip_horizontal" or tr.type == "flip_vertical" then
-      -- Flip transitions are handled through sceneDrawScaleX/sceneDrawScaleY in applySceneDrawOffsetForCurrentFrame.
     elseif not isSceneSlideTransition(tr.type) then
       -- For incoming non-slide transitions, start at step 1
       -- to avoid a fully blank first frame right after scene switch.
@@ -490,6 +557,8 @@ function transitions.install(common)
         runtime.sceneDrawScale = 1
         runtime.sceneDrawScaleX = 1
         runtime.sceneDrawScaleY = 1
+        runtime.sceneFlipActive = false
+        runtime.sceneFlipType = nil
       end
     else
       tr.frame = frame
@@ -511,6 +580,8 @@ function transitions.install(common)
       runtime.sceneDrawScale = 1
       runtime.sceneDrawScaleX = 1
       runtime.sceneDrawScaleY = 1
+      runtime.sceneFlipActive = false
+      runtime.sceneFlipType = nil
     end
     local p = (tostring(phase or "out") == "in") and "in" or "out"
     for i = 1, frames do
