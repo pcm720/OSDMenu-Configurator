@@ -736,23 +736,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       if icon and drawIconAlpha > 0.001 then
         local iconColor = iconAlphaColor(drawIconAlpha)
         if Graphics.drawScaleImage then
-          if drawIconAlpha >= 0.999 then
-            local ok = pcall(Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
-            if not ok then
-              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
-            end
-          else
-            Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
-          end
+          Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
         elseif Graphics.drawImage then
-          if drawIconAlpha >= 0.999 then
-            local ok = pcall(Graphics.drawImage, icon, px, iconY)
-            if not ok then
-              Graphics.drawImage(icon, px, iconY, iconColor)
-            end
-          else
-            Graphics.drawImage(icon, px, iconY, iconColor)
-          end
+          Graphics.drawImage(icon, px, iconY, iconColor)
         end
       end
       if drawLabelAlpha > 0.001 and label ~= "" then
@@ -803,10 +789,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
         local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
         local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
-        -- For transition blending, animate active button presence (0/1) to
-        -- avoid color muddiness from mixing through inactive placeholder alpha.
-        local fromIcon = (fromSlot.used == true) and 1 or 0
-        local toIcon = (toSlot.used == true) and 1 or 0
+        -- Blend to/from the same visual alpha used by steady-state rendering
+        -- so icons do not pop at transition boundaries.
+        local fromIcon = getIconVisualAlpha(fromSlot)
+        local toIcon = getIconVisualAlpha(toSlot)
         local fromLabel = tostring(fromSlot.label or "")
         local toLabel = tostring(toSlot.label or "")
         if samePad and sameUsed and sameLabel then

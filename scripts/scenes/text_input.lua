@@ -155,23 +155,9 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     if icon and drawIconAlpha > 0.001 then
       local iconColor = iconAlphaColor(drawIconAlpha)
       if _.Graphics.drawScaleImage then
-        if drawIconAlpha >= 0.999 then
-          local ok = pcall(_.Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
-          if not ok then
-            _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
-          end
-        else
-          _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
-        end
+        _.Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
       elseif _.Graphics.drawImage then
-        if drawIconAlpha >= 0.999 then
-          local ok = pcall(_.Graphics.drawImage, icon, px, iconY)
-          if not ok then
-            _.Graphics.drawImage(icon, px, iconY, iconColor)
-          end
-        else
-          _.Graphics.drawImage(icon, px, iconY, iconColor)
-        end
+        _.Graphics.drawImage(icon, px, iconY, iconColor)
       end
     end
     if drawLabelAlpha > 0.001 and label ~= "" then
