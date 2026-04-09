@@ -1870,6 +1870,14 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   if drawScale <= 0 then drawScale = 1 end
   if drawScale < 0.1 then drawScale = 0.1 end
   if drawScale > 4 then drawScale = 4 end
+  local drawScaleX = tonumber(runtime and runtime.sceneDrawScaleX)
+  if drawScaleX == nil then drawScaleX = drawScale end
+  if drawScaleX < -4 then drawScaleX = -4 end
+  if drawScaleX > 4 then drawScaleX = 4 end
+  local drawScaleY = tonumber(runtime and runtime.sceneDrawScaleY)
+  if drawScaleY == nil then drawScaleY = drawScale end
+  if drawScaleY < -4 then drawScaleY = -4 end
+  if drawScaleY > 4 then drawScaleY = 4 end
   local centerX = tonumber(runtime and runtime.sceneDrawCenterX) or
       ((tonumber(runtime and runtime.currentSceneWidth) or common.DEFAULT_W) / 2)
   local centerY = tonumber(runtime and runtime.sceneDrawCenterY) or
@@ -1885,9 +1893,9 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   end
   local px = tonumber(x) or 0
   local py = tonumber(y) or 0
-  if math.abs(drawScale - 1) > 0.0001 then
-    px = centerX + ((px - centerX) * drawScale)
-    py = centerY + ((py - centerY) * drawScale)
+  if math.abs(drawScaleX - 1) > 0.0001 or math.abs(drawScaleY - 1) > 0.0001 then
+    px = centerX + ((px - centerX) * drawScaleX)
+    py = centerY + ((py - centerY) * drawScaleY)
   end
   local ix = math.floor(px + offsetX)
   local iy = math.floor(py)

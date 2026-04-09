@@ -336,6 +336,28 @@ local function getSceneDrawScale()
   return s
 end
 
+local function getSceneDrawScaleX()
+  local runtime = _G and _G.CONFIG_UI
+  local sx = tonumber(runtime and runtime.sceneDrawScaleX)
+  if sx == nil then
+    return getSceneDrawScale()
+  end
+  if sx < -4 then sx = -4 end
+  if sx > 4 then sx = 4 end
+  return sx
+end
+
+local function getSceneDrawScaleY()
+  local runtime = _G and _G.CONFIG_UI
+  local sy = tonumber(runtime and runtime.sceneDrawScaleY)
+  if sy == nil then
+    return getSceneDrawScale()
+  end
+  if sy < -4 then sy = -4 end
+  if sy > 4 then sy = 4 end
+  return sy
+end
+
 local function getSceneDrawCenter()
   local runtime = _G and _G.CONFIG_UI
   local w = tonumber(runtime and runtime.currentSceneWidth) or common.DEFAULT_W
@@ -348,19 +370,32 @@ end
 local function transformScenePoint(x, y)
   local px = tonumber(x) or 0
   local py = tonumber(y) or 0
-  local scale = getSceneDrawScale()
-  if math.abs(scale - 1) > 0.0001 then
+  local scaleX = getSceneDrawScaleX()
+  local scaleY = getSceneDrawScaleY()
+  if math.abs(scaleX - 1) > 0.0001 or math.abs(scaleY - 1) > 0.0001 then
     local cx, cy = getSceneDrawCenter()
-    px = cx + ((px - cx) * scale)
-    py = cy + ((py - cy) * scale)
+    px = cx + ((px - cx) * scaleX)
+    py = cy + ((py - cy) * scaleY)
   end
   px = px + getSceneDrawOffsetX()
   return px, py
 end
 
+local function scaleSceneLengthX(v)
+  local n = tonumber(v) or 0
+  return n * math.abs(getSceneDrawScaleX())
+end
+
+local function scaleSceneLengthY(v)
+  local n = tonumber(v) or 0
+  return n * math.abs(getSceneDrawScaleY())
+end
+
 local function scaleSceneLength(v)
   local n = tonumber(v) or 0
-  return n * getSceneDrawScale()
+  local sx = math.abs(getSceneDrawScaleX())
+  local sy = math.abs(getSceneDrawScaleY())
+  return n * ((sx + sy) * 0.5)
 end
 
 local function isIdentitySceneTransform()
@@ -369,9 +404,12 @@ local function isIdentitySceneTransform()
   local offsetX = tonumber(runtime.sceneDrawOffsetX) or 0
   local drawAlpha = tonumber(runtime.sceneDrawAlpha)
   if drawAlpha == nil then drawAlpha = 1 end
-  local drawScale = tonumber(runtime.sceneDrawScale)
-  if drawScale == nil then drawScale = 1 end
-  return math.abs(offsetX) < 0.0001 and drawAlpha >= 0.999 and math.abs(drawScale - 1) < 0.0001
+  local sx = tonumber(runtime.sceneDrawScaleX)
+  if sx == nil then sx = tonumber(runtime.sceneDrawScale) or 1 end
+  local sy = tonumber(runtime.sceneDrawScaleY)
+  if sy == nil then sy = tonumber(runtime.sceneDrawScale) or 1 end
+  return math.abs(offsetX) < 0.0001 and drawAlpha >= 0.999 and math.abs(sx - 1) < 0.0001 and
+      math.abs(sy - 1) < 0.0001
 end
 
 local function installSceneDrawOffsetGraphicsProxy()
@@ -405,8 +443,8 @@ local function installSceneDrawOffsetGraphicsProxy()
         end
         local c = (type(color) == "number") and applySceneAlphaToColor(color) or color
         local tx, ty = transformScenePoint(x, y)
-        local tw = math.max(0, scaleSceneLength(width))
-        local th = math.max(0, scaleSceneLength(height))
+        local tw = math.max(0, scaleSceneLengthX(width))
+        local th = math.max(0, scaleSceneLengthY(height))
         return fn(tx, ty, tw, th, c)
       end
     elseif name == "drawPixel" then
@@ -485,19 +523,19 @@ local function installSceneDrawOffsetGraphicsProxy()
         elseif getSceneDrawAlpha() < 0.999 then
           c = applySceneAlphaToColor(0x80808080)
         end
-        local tx, ty = transformScenePoint(x, y)
-        local sceneScale = getSceneDrawScale()
-        if math.abs(sceneScale - 1) > 0.0001 and rawGraphics.drawScaleImage and rawGraphics.getImageWidth and
-            rawGraphics.getImageHeight then
-          local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
-          local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
-          if iw > 0 and ih > 0 then
-            if c ~= nil then
-              return rawGraphics.drawScaleImage(image, tx, ty, iw * sceneScale, ih * sceneScale, c)
-            end
-            return rawGraphics.drawScaleImage(image, tx, ty, iw * sceneScale, ih * sceneScale)
+        local iw = (rawGraphics.getImageWidth and tonumber(rawGraphics.getImageWidth(image))) or 0
+        local ih = (rawGraphics.getImageHeight and tonumber(rawGraphics.getImageHeight(image))) or 0
+        if iw > 0 and ih > 0 and rawGraphics.drawImageQuad then
+          local tx1, ty1 = transformScenePoint(x, y)
+          local tx2, ty2 = transformScenePoint((tonumber(x) or 0), (tonumber(y) or 0) + ih)
+          local tx3, ty3 = transformScenePoint((tonumber(x) or 0) + iw, (tonumber(y) or 0))
+          local tx4, ty4 = transformScenePoint((tonumber(x) or 0) + iw, (tonumber(y) or 0) + ih)
+          if c ~= nil then
+            return rawGraphics.drawImageQuad(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, c)
           end
+          return rawGraphics.drawImageQuad(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4)
         end
+        local tx, ty = transformScenePoint(x, y)
         if c ~= nil then
           return fn(image, tx, ty, c)
         end
@@ -517,10 +555,23 @@ local function installSceneDrawOffsetGraphicsProxy()
         elseif getSceneDrawAlpha() < 0.999 then
           c = applySceneAlphaToColor(0x80808080)
         end
-        local tx, ty = transformScenePoint(x, y)
-        local sceneScale = getSceneDrawScale()
-        local tw = (tonumber(width) or 0) * sceneScale
-        local th = (tonumber(height) or 0) * sceneScale
+        local px = tonumber(x) or 0
+        local py = tonumber(y) or 0
+        local pw = tonumber(width) or 0
+        local ph = tonumber(height) or 0
+        if rawGraphics.drawImageQuad then
+          local tx1, ty1 = transformScenePoint(px, py)
+          local tx2, ty2 = transformScenePoint(px, py + ph)
+          local tx3, ty3 = transformScenePoint(px + pw, py)
+          local tx4, ty4 = transformScenePoint(px + pw, py + ph)
+          if c ~= nil then
+            return rawGraphics.drawImageQuad(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, c)
+          end
+          return rawGraphics.drawImageQuad(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4)
+        end
+        local tx, ty = transformScenePoint(px, py)
+        local tw = scaleSceneLengthX(pw)
+        local th = scaleSceneLengthY(ph)
         if c ~= nil then
           return fn(image, tx, ty, tw, th, c)
         end
@@ -541,17 +592,19 @@ local function installSceneDrawOffsetGraphicsProxy()
           c = applySceneAlphaToColor(0x80808080)
         end
         local tx, ty = transformScenePoint(x, y)
-        local sceneScale = getSceneDrawScale()
-        if math.abs(sceneScale - 1) > 0.0001 and rawGraphics.drawImageExtended and rawGraphics.getImageWidth and
+        local sceneScaleX = math.abs(getSceneDrawScaleX())
+        local sceneScaleY = math.abs(getSceneDrawScaleY())
+        if (math.abs(sceneScaleX - 1) > 0.0001 or math.abs(sceneScaleY - 1) > 0.0001) and rawGraphics.drawImageExtended and
+            rawGraphics.getImageWidth and
             rawGraphics.getImageHeight then
           local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
           local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
           if iw > 0 and ih > 0 then
             if c ~= nil then
-              return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScale, ih * sceneScale,
+              return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScaleX, ih * sceneScaleY,
                 tonumber(angle) or 0, c)
             end
-            return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScale, ih * sceneScale,
+            return rawGraphics.drawImageExtended(image, tx, ty, 0, 0, iw, ih, iw * sceneScaleX, ih * sceneScaleY,
               tonumber(angle) or 0)
           end
         end
@@ -575,9 +628,8 @@ local function installSceneDrawOffsetGraphicsProxy()
           c = applySceneAlphaToColor(0x80808080)
         end
         local tx, ty = transformScenePoint(x, y)
-        local sceneScale = getSceneDrawScale()
-        local sx = (tonumber(scale_x) or tonumber(width) or 0) * sceneScale
-        local sy = (tonumber(scale_y) or tonumber(height) or 0) * sceneScale
+        local sx = (tonumber(scale_x) or tonumber(width) or 0) * math.abs(getSceneDrawScaleX())
+        local sy = (tonumber(scale_y) or tonumber(height) or 0) * math.abs(getSceneDrawScaleY())
         if c ~= nil then
           return fn(image, tx, ty, startx, starty, width, height, sx, sy, angle, c)
         end
@@ -597,21 +649,23 @@ local function installSceneDrawOffsetGraphicsProxy()
         elseif getSceneDrawAlpha() < 0.999 then
           c = applySceneAlphaToColor(0x80808080)
         end
-        local tx, ty = transformScenePoint(x, y)
-        local sceneScale = getSceneDrawScale()
-        if math.abs(sceneScale - 1) > 0.0001 and rawGraphics.drawImageExtended and rawGraphics.getImageWidth and
-            rawGraphics.getImageHeight then
-          local iw = tonumber(rawGraphics.getImageWidth(image)) or 0
-          local ih = tonumber(rawGraphics.getImageHeight(image)) or 0
-          if iw > 0 and ih > 0 then
-            if c ~= nil then
-              return rawGraphics.drawImageExtended(image, tx, ty, startx, starty, endx, endy, iw * sceneScale,
-                ih * sceneScale, 0, c)
-            end
-            return rawGraphics.drawImageExtended(image, tx, ty, startx, starty, endx, endy, iw * sceneScale,
-              ih * sceneScale, 0)
+        local px = tonumber(x) or 0
+        local py = tonumber(y) or 0
+        local pw = (tonumber(endx) or 0) - (tonumber(startx) or 0)
+        local ph = (tonumber(endy) or 0) - (tonumber(starty) or 0)
+        if rawGraphics.drawImageQuadPartial then
+          local tx1, ty1 = transformScenePoint(px, py)
+          local tx2, ty2 = transformScenePoint(px, py + ph)
+          local tx3, ty3 = transformScenePoint(px + pw, py)
+          local tx4, ty4 = transformScenePoint(px + pw, py + ph)
+          if c ~= nil then
+            return rawGraphics.drawImageQuadPartial(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, startx, starty, endx,
+              endy, c)
           end
+          return rawGraphics.drawImageQuadPartial(image, tx1, ty1, tx2, ty2, tx3, ty3, tx4, ty4, startx, starty, endx,
+            endy)
         end
+        local tx, ty = transformScenePoint(px, py)
         if c ~= nil then
           return fn(image, tx, ty, startx, starty, endx, endy, c)
         end
@@ -1735,7 +1789,7 @@ local function mainLoop()
     if common.normalizeSceneTransitionType then
       t = common.normalizeSceneTransitionType(t)
     end
-    return t == "slide" or t == "whip_pan" or t == "zoom"
+    return t == "slide" or t == "whip_pan" or t == "zoom" or t == "flip_horizontal" or t == "flip_vertical"
   end
 
   local sceneSelectionSpecs = {
