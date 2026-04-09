@@ -2153,11 +2153,16 @@ local function mainLoop()
       totalFrames = math.max(2, math.floor(tonumber(totalFrames) or 2))
       local outFrames = math.max(1, math.floor(totalFrames / 2))
       local inFrames = math.max(1, totalFrames - outFrames)
+      local flipBaseSign = ((direction == "out" or direction == "back") and 1) or -1
       local function runFlipPhase(sceneName, phase, frames, lockState)
         c.state = sceneName
         state = sceneName
         c.sceneTransitionIn = nil
-        common.beginSceneTransitionIn(c, normalizedType, frames, { direction = direction, phase = phase })
+        common.beginSceneTransitionIn(c, normalizedType, frames, {
+          direction = direction,
+          phase = phase,
+          flipBaseSign = flipBaseSign,
+        })
         while common.isSceneTransitionInActive(c) do
           local _next, newCtx = runOneFrame(c)
           c = newCtx or c

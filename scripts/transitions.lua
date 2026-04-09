@@ -315,6 +315,17 @@ function transitions.install(common)
       ctx.sceneTransitionIn = nil
       return
     end
+    local baseW, baseH = getTransitionScreenSize(ctx)
+    local centerX = math.floor((tonumber(opts and opts.centerX) or (baseW / 2)) + 0.5)
+    local centerY = math.floor((tonumber(opts and opts.centerY) or (baseH / 2)) + 0.5)
+    local flipBaseSign = tonumber(opts and opts.flipBaseSign)
+    if flipBaseSign ~= nil then
+      if flipBaseSign >= 0 then
+        flipBaseSign = 1
+      else
+        flipBaseSign = -1
+      end
+    end
     ctx.sceneTransitionIn = {
       type = t,
       frames = frames,
@@ -322,6 +333,11 @@ function transitions.install(common)
       direction = (opts and tostring(opts.direction or "")) or "in",
       phase = (opts and tostring(opts.phase or "")) or "in",
       distanceScale = (opts and tonumber(opts.distanceScale)) or 1,
+      baseW = baseW,
+      baseH = baseH,
+      centerX = centerX,
+      centerY = centerY,
+      flipBaseSign = flipBaseSign,
     }
   end
 
@@ -339,6 +355,14 @@ function transitions.install(common)
   function common.applySceneDrawOffsetForCurrentFrame(ctx)
     local runtime = _G and _G.CONFIG_UI
     local w, h = getTransitionScreenSize(ctx)
+    local tr = ctx and ctx.sceneTransitionIn
+    if type(tr) == "table" then
+      local bw = tonumber(tr.baseW)
+      local bh = tonumber(tr.baseH)
+      if bw and bh and bw > 0 and bh > 0 then
+        w, h = math.floor(bw), math.floor(bh)
+      end
+    end
     if runtime then
       runtime.sceneDrawOffsetX = 0
       runtime.sceneDrawAlpha = 1
@@ -366,7 +390,7 @@ function transitions.install(common)
     if not common.isSceneTransitionInActive(ctx) then
       return 0
     end
-    local tr = ctx.sceneTransitionIn
+    tr = ctx.sceneTransitionIn
     if tr.type == "cross_dissolve" then
       local frames = common.normalizeSceneTransitionFrames(tr.frames)
       local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
@@ -406,8 +430,17 @@ function transitions.install(common)
       elseif tr.type == "flip_horizontal" or tr.type == "flip_vertical" then
         local frames = common.normalizeSceneTransitionFrames(tr.frames)
         local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
-        local progress = clamp01((frame + 1) / math.max(1, frames))
-        local curved = easeInOutCubic(progress)
+        -- Match main-logo flip timing semantics:
+        -- use an explicit 0..1 phase span so outgoing starts at 0deg and
+        -- incoming starts at the 90deg handoff orientation.
+        local progress
+        if frames <= 1 then
+          progress = 1
+        else
+          progress = clamp01(frame / math.max(1, (frames - 1)))
+        end
+        -- Keep flip motion linear to avoid "hesitation" at the phase boundary.
+        local curved = progress
         local phase = tostring(tr.phase or "in")
         local incoming = (phase ~= "out")
         -- Flip phase model:
@@ -425,16 +458,22 @@ function transitions.install(common)
         -- forward: phase1 uses one side cue, phase2 uses the opposite side cue
         -- as the new scene emerges from 90deg back to center; back/cancel reverses.
         -- This preserves continuous 180deg flip feel without "90 out + 90 back".
-        local baseDirSign = ((direction == "out" or direction == "back") and 1) or -1
-        local phaseDirSign = incoming and (-baseDirSign) or baseDirSign
-        local centerX = math.floor((w or 0) / 2)
-        local centerY = math.floor((h or 0) / 2)
+        local baseDirSign = tonumber(tr.flipBaseSign)
+        if baseDirSign ~= 1 and baseDirSign ~= -1 then
+          baseDirSign = ((direction == "out" or direction == "back") and 1) or -1
+        end
+        local outgoingDirSign = baseDirSign
+        local incomingDirSign = -baseDirSign
+        local centerX = math.floor((tonumber(tr.centerX) or (w / 2)) + 0.5)
+        local centerY = math.floor((tonumber(tr.centerY) or (h / 2)) + 0.5)
         local halfPi = math.pi * 0.5
         local angle
         if incoming then
-          angle = (-phaseDirSign) * (1 - curved) * halfPi
+          -- Incoming starts from the opposite signed 90deg edge and settles to 0deg.
+          -- This preserves continuous rotational momentum across both halves.
+          angle = incomingDirSign * (1 - curved) * halfPi
         else
-          angle = phaseDirSign * curved * halfPi
+          angle = outgoingDirSign * curved * halfPi
         end
         local yawRad, pitchRad = 0, 0
         if tr.type == "flip_horizontal" then
