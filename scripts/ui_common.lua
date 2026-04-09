@@ -1464,11 +1464,18 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
     if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
-      local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
+      local runtimeCfg = _G.CONFIG_UI
+      local runtimeDrawScale = tonumber(runtimeCfg and runtimeCfg.sceneDrawScale) or 1
       if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
-      if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
+      local minRuntimeDrawScale = 0.25
+      local minWantPx = 10
+      if runtimeCfg and runtimeCfg.sceneFlipActive == true then
+        minRuntimeDrawScale = 0.02
+        minWantPx = 2
+      end
+      if runtimeDrawScale < minRuntimeDrawScale then runtimeDrawScale = minRuntimeDrawScale end
       if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
-      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
+      local wantPx = math.max(minWantPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
       if ctx._ftPixelSizeApplied ~= wantPx then
         pcall(Font.ftSetPixelSize, ctx.font, 0, wantPx)
         ctx._ftPixelSizeApplied = wantPx
@@ -1868,7 +1875,8 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   local offsetX = math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
   local drawScale = tonumber(runtime and runtime.sceneDrawScale) or 1
   if drawScale <= 0 then drawScale = 1 end
-  if drawScale < 0.1 then drawScale = 0.1 end
+  local minDrawScale = (runtime and runtime.sceneFlipActive == true) and 0.02 or 0.1
+  if drawScale < minDrawScale then drawScale = minDrawScale end
   if drawScale > 4 then drawScale = 4 end
   local drawScaleX = tonumber(runtime and runtime.sceneDrawScaleX)
   if drawScaleX == nil then drawScaleX = drawScale end

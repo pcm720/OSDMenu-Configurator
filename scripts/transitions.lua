@@ -390,13 +390,10 @@ function transitions.install(common)
         local frames = common.normalizeSceneTransitionFrames(tr.frames)
         local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
         local progress = clamp01((frame + 1) / math.max(1, frames))
-        local phase = (progress < 0.5) and "out" or "in"
-        local phaseProgress = (phase == "out") and (progress / 0.5) or ((progress - 0.5) / 0.5)
-        local curved = easeInOutCubic(phaseProgress)
-        -- 180-degree flip feel:
-        -- outgoing scene shrinks to edge-on (first 90deg),
-        -- incoming scene expands from edge-on (second 90deg).
-        local axisScale = (phase == "out") and (1 - curved) or curved
+        local curved = easeInOutCubic(progress)
+        -- Render flip transitions as a transformed scene plane (not a wipe mask):
+        -- start edge-on and expand to full view.
+        local axisScale = curved
         if axisScale < 0 then axisScale = 0 end
         if axisScale > 1 then axisScale = 1 end
         local direction = tostring(tr.direction or "in")
@@ -407,17 +404,17 @@ function transitions.install(common)
         local shiftX = math.floor(((1 - axisScale) * (w * 0.08)) + 0.5)
         local shiftY = math.floor(((1 - axisScale) * (h * 0.08)) + 0.5)
         if runtime then
-          runtime.sceneDrawScale = 1
+          runtime.sceneDrawScale = axisScale
           runtime.sceneDrawScaleX = 1
           runtime.sceneDrawScaleY = 1
           runtime.sceneDrawCenterX = centerX
           runtime.sceneDrawCenterY = centerY
-          runtime.sceneDrawAlpha = (phase == "out") and 0 or 1
+          runtime.sceneDrawAlpha = 1
           runtime.sceneFlipActive = true
           runtime.sceneFlipType = tr.type
           runtime.sceneFlipAxisScale = axisScale
           runtime.sceneFlipDirSign = dirSign
-          runtime.sceneFlipPhase = phase
+          runtime.sceneFlipPhase = "in"
           if tr.type == "flip_horizontal" then
             local flipCenterX = centerX + (dirSign * shiftX)
             runtime.sceneFlipCenterX = flipCenterX
@@ -462,12 +459,6 @@ function transitions.install(common)
     if t == "cross_dissolve" then
       return true
     end
-    if t == "flip_horizontal" or t == "flip_vertical" then
-      local frames = common.normalizeSceneTransitionFrames(tr and tr.frames)
-      local frame = math.max(0, math.floor(tonumber(tr and tr.frame) or 0))
-      local progress = clamp01((frame + 1) / math.max(1, frames))
-      return progress < 0.5
-    end
     return false
   end
 
@@ -480,10 +471,6 @@ function transitions.install(common)
     -- Preserve prior logo/background only while framebuffer-preserve phase is active.
     if t == "cross_dissolve" then
       return false
-    end
-    if t == "flip_horizontal" or t == "flip_vertical" then
-      local runtime = _G and _G.CONFIG_UI
-      return tostring(runtime and runtime.sceneFlipPhase or "") ~= "out"
     end
     return true
   end
@@ -542,8 +529,6 @@ function transitions.install(common)
     if tr.type == "whip_pan" then
       local progress = clamp01((frame + 1) / math.max(1, frames))
       drawWhipPanOverlay(ctx, tr.direction, progress, frame)
-    elseif tr.type == "flip_horizontal" or tr.type == "flip_vertical" then
-      drawFlipOverlay(ctx)
     elseif tr.type == "cross_dissolve" then
       -- True dissolve approximation: preserve previous frame in buffer and
       -- draw incoming scene with rising alpha (handled by sceneDrawAlpha).
