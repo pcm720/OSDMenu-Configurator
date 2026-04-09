@@ -322,7 +322,7 @@ strings.options_r3configurator = {
   show_hosdmenu = { label = "Zeige HOSDMenu", desc = "HOSDMenu auf der Hauptseite anzeigen." },
   show_ps2bbl = { label = "Zeige PS2BBL", desc = "PS2BBL auf der Hauptseite anzeigen." },
   show_psxbbl = { label = "Zeige PSXBBL", desc = "PSXBBL auf der Hauptseite anzeigen." },
-  scene_transition = { label = "Szenenuebergang", desc = "Uebergangsstil zwischen Szenen (Bestaetigen/Bearbeiten = hinein, Abbrechen/Zurueck = hinaus)." },
+  scene_transition = { label = "Szenenuebergang", desc = "Animationsstil fuer Seitenwechsel." },
   scene_transition_frames = { label = "Uebergangs-Frames", desc = "Uebergangsgeschwindigkeit in Frames (hoeher = langsamer)." },
   cross = { label = "Farbe Cross", desc = "Farbe des Cross-Hinweistexts." },
   square = { label = "Farbe Square", desc = "Farbe des Square-Hinweistexts." },

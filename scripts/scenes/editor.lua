@@ -2519,11 +2519,17 @@ local function run(ctx)
       end
     end
   else
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.editor_str.no_option_list,
-      _.GRAY)
-    local emptyHints = _.common.withStartHintVisibility(_.editor_str.start_save_circle_back_items, ctx.configModified == true)
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, emptyHints, nil,
-      _.DIM, _.w - 2 * _.MARGIN_X)
+    -- Avoid transient "no option list" flash while transitioning out of editor.
+    -- During outgoing transition we may still render the editor scene for a few
+    -- frames after ctx.lines/currentPath have been cleared for the destination scene.
+    local shouldShowNoOptionList = (ctx.lines ~= nil) or (ctx.currentPath ~= nil)
+    if shouldShowNoOptionList then
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.editor_str.no_option_list,
+        _.GRAY)
+      local emptyHints = _.common.withStartHintVisibility(_.editor_str.start_save_circle_back_items, ctx.configModified == true)
+      _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, emptyHints, nil,
+        _.DIM, _.w - 2 * _.MARGIN_X)
+    end
   end
 
   if ctx.configModified and ((_.padEffective & _.PAD_START) ~= 0) then

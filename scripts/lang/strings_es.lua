@@ -322,7 +322,7 @@ strings.options_r3configurator = {
   show_hosdmenu = { label = "Mostrar HOSDMenu", desc = "Mostrar HOSDMenu en la pagina principal." },
   show_ps2bbl = { label = "Mostrar PS2BBL", desc = "Mostrar PS2BBL en la pagina principal." },
   show_psxbbl = { label = "Mostrar PSXBBL", desc = "Mostrar PSXBBL en la pagina principal." },
-  scene_transition = { label = "Transición de escena", desc = "Estilo de transición entre escenas (confirmar/editar = entrada, cancelar/atrás = salida)." },
+  scene_transition = { label = "Transición de escena", desc = "Estilo de animación para cambios de página." },
   scene_transition_frames = { label = "Frames de transición", desc = "Velocidad de transición en frames (mayor = más lento)." },
   cross = { label = "Color de Cruz", desc = "Color del texto de ayuda de Cruz." },
   square = { label = "Color de Cuadrado", desc = "Color del texto de ayuda de Cuadrado." },
