@@ -726,11 +726,25 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
       local drawLabelAlpha = clamp01(labelAlpha or 0)
       if icon and drawIconAlpha > 0.001 then
-        local iconColor = applyAlpha(Color.new(255, 255, 255, FULL_ALPHA), drawIconAlpha)
+        local iconColor = applyAlpha(0x80FFFFFF, drawIconAlpha)
         if Graphics.drawScaleImage then
-          Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+          if drawIconAlpha >= 0.999 then
+            local ok = pcall(Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
+            if not ok then
+              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+            end
+          else
+            Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+          end
         elseif Graphics.drawImage then
-          Graphics.drawImage(icon, px, iconY, iconColor)
+          if drawIconAlpha >= 0.999 then
+            local ok = pcall(Graphics.drawImage, icon, px, iconY)
+            if not ok then
+              Graphics.drawImage(icon, px, iconY, iconColor)
+            end
+          else
+            Graphics.drawImage(icon, px, iconY, iconColor)
+          end
         end
       end
       if drawLabelAlpha > 0.001 and label ~= "" then
