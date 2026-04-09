@@ -727,12 +727,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local drawLabelAlpha = clamp01(labelAlpha or 0)
       if icon and drawIconAlpha > 0.001 then
         local iconColor = applyAlpha(Color.new(255, 255, 255, FULL_ALPHA), drawIconAlpha)
-        if drawIconAlpha >= 0.999 and Graphics.drawScaleImage then
-          local ok = pcall(Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
-          if not ok then
-            Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
-          end
-        elseif Graphics.drawScaleImage then
+        if Graphics.drawScaleImage then
           Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
         elseif Graphics.drawImage then
           Graphics.drawImage(icon, px, iconY, iconColor)
@@ -765,6 +760,14 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     local function drawBlendedRows(fromSlots, toSlots, progress)
       local p = clamp01(progress)
+      local function splitFadeAlpha(t)
+        local q = clamp01(t)
+        if q < 0.5 then
+          return 1 - (q * 2), 0
+        end
+        return 0, (q - 0.5) * 2
+      end
+      local outAlpha, inAlpha = splitFadeAlpha(p)
       local rowIndex = 0
       local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
@@ -776,24 +779,30 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
         local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
         local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
+        local fromIcon = getIconVisualAlpha(fromSlot)
+        local toIcon = getIconVisualAlpha(toSlot)
         if samePad and sameUsed and sameLabel then
           drawSlot(toSlot, col, rowCenter, iconY, textY, getIconVisualAlpha(toSlot),
             (toSlot.used and tostring(toSlot.label or "") ~= "") and 1 or 0)
         else
-          local fromIcon = getIconVisualAlpha(fromSlot)
-          local toIcon = getIconVisualAlpha(toSlot)
-          if samePad and fromSlot.used == true and toSlot.used == true then
-            -- Same button stays active across scenes: icon should remain stable.
-            fromIcon = 0
-            toIcon = 1
+          if samePad and sameUsed and fromSlot.used == true and toSlot.used == true then
+            -- Same active button in both scenes: keep icon steady.
+            -- Only helper text transitions, and does so as fade-out then fade-in.
+            drawSlot(toSlot, col, rowCenter, iconY, textY, toIcon, 0)
+            if tostring(fromSlot.label or "") ~= "" then
+              drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, outAlpha)
+            end
+            if tostring(toSlot.label or "") ~= "" then
+              drawSlot(toSlot, col, rowCenter, iconY, textY, 0, inAlpha)
+            end
           else
-            fromIcon = fromIcon * (1 - p)
-            toIcon = toIcon * p
+            local fromBlend = fromIcon * outAlpha
+            local toBlend = toIcon * inAlpha
+            drawSlot(fromSlot, col, rowCenter, iconY, textY, fromBlend,
+              (fromSlot.used and tostring(fromSlot.label or "") ~= "") and outAlpha or 0)
+            drawSlot(toSlot, col, rowCenter, iconY, textY, toBlend,
+              (toSlot.used and tostring(toSlot.label or "") ~= "") and inAlpha or 0)
           end
-          drawSlot(fromSlot, col, rowCenter, iconY, textY, fromIcon,
-            (fromSlot.used and tostring(fromSlot.label or "") ~= "") and (1 - p) or 0)
-          drawSlot(toSlot, col, rowCenter, iconY, textY, toIcon,
-            (toSlot.used and tostring(toSlot.label or "") ~= "") and p or 0)
         end
       end
     end
@@ -801,7 +810,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     drawHintsUntransformed(function()
       local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
       local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
-      local transitionFrames = math.max(0, math.floor(tonumber(runtime and runtime.sceneTransitionAnimFrames) or 0))
+      local transitionFrames = math.max(0,
+        math.floor(tonumber(runtime and runtime.sceneTransitionFrames) or
+          tonumber(runtime and runtime.sceneTransitionAnimFrames) or 0))
       local instantHintSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
       if instantHintSwitch then
         if type(runtime) == "table" then
@@ -836,9 +847,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         state.toSlots = cloneSlots(rowSlots)
         state.frame = 0
         state.lastAdvanceFrame = nil
-        local phaseFrames = math.max(1,
-          math.floor(tonumber(runtime.sceneTransitionAnimFrames) or common.SCENE_TRANSITION_DEFAULT_FRAMES))
-        state.frames = phaseFrames
+        local targetFrames = math.max(1, transitionFrames)
+        if targetFrames <= 0 then
+          targetFrames = math.max(1,
+            math.floor(tonumber(runtime.sceneTransitionAnimFrames) or common.SCENE_TRANSITION_DEFAULT_FRAMES))
+        end
+        state.frames = targetFrames
       end
 
       local progress = 1
