@@ -842,9 +842,16 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     drawHintsUntransformed(function()
       local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
       local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
-      local transitionFrames = math.max(0,
-        math.floor(tonumber(runtime and runtime.sceneTransitionFrames) or
-          tonumber(runtime and runtime.sceneTransitionAnimFrames) or 0))
+      local transitionFramesValue
+      if transitionActive then
+        transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
+        if not transitionFramesValue or transitionFramesValue <= 0 then
+          transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
+        end
+      else
+        transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
+      end
+      local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
       local instantHintSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
       if instantHintSwitch then
         if type(runtime) == "table" then

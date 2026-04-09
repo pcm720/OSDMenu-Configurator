@@ -1781,6 +1781,7 @@ local function mainLoop()
       PAD_R2 = PAD_R2,
     }
 
+    local renderedState = state
     if state == "main" then
       main.runMain(ctx, padEffective)
       syncFromS(ctx)
@@ -1863,6 +1864,13 @@ local function mainLoop()
       syncToS(c)
       scene_path_picker.run(c)
       syncFromS(c)
+    end
+
+    -- Keep keyboard shoulder hints transition-consistent across scene changes.
+    -- Non-keyboard scenes drive this row toward empty so it fades out instead of cutting.
+    if renderedState ~= "text_input" and scene_text_input and type(scene_text_input.drawShoulderHints) == "function" then
+      local shoulderTotalWidth = (c.w or common.DEFAULT_W) - (2 * (c.MARGIN_X or common.MARGIN_X))
+      scene_text_input.drawShoulderHints(c, c._, {}, 0.7, shoulderTotalWidth, c.DIM or DIM)
     end
 
     common.refreshConfigModified(c)

@@ -236,9 +236,16 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   drawHintsUntransformed(function()
     local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
     local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
-    local transitionFrames = math.max(0,
-      math.floor(tonumber(runtime and runtime.sceneTransitionFrames) or
-        tonumber(runtime and runtime.sceneTransitionAnimFrames) or 0))
+    local transitionFramesValue
+    if transitionActive then
+      transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
+      if not transitionFramesValue or transitionFramesValue <= 0 then
+        transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
+      end
+    else
+      transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
+    end
+    local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
     local instantSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
     if instantSwitch then
       if type(runtime) == "table" then
@@ -1307,4 +1314,11 @@ local function run(ctx)
   drawKeyboardShoulderHints(ctx, _, shoulderHints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM)
 end
 
-return { run = run }
+local function drawShoulderHints(ctx, _, hintItems, scale, totalWidth, color)
+  drawKeyboardShoulderHints(ctx, _, hintItems or {}, scale or 0.7, totalWidth, color)
+end
+
+return {
+  run = run,
+  drawShoulderHints = drawShoulderHints,
+}
