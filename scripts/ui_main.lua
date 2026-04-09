@@ -737,6 +737,8 @@ local function runMain(s, pad)
     s.mainOverlayLogoKey = entry.logoKey
     s.context = entry.context
     s.fileType = entry.fileType
+    s.selectedKnownPath = nil
+    s.openExplicitPath = nil
     s.chosenMcSlot = nil
     clearLoadChoiceState(s)
     clearPathPickerState(s)
@@ -1430,6 +1432,8 @@ local function applyKnownPathPick(s, pick, main_str, opts)
     if type(directPath) == "string" and directPath ~= "" then
       clearLoadChoiceState(s)
       clearPathPickerState(s)
+      -- Keep the exact single-source device path selected in Free*Boot flows.
+      s.selectedKnownPath = directPath
       s.currentPath = directPath
       s.openExplicitPath = true
       s.state = "open"
@@ -1738,6 +1742,16 @@ local function runOpen(s, pad)
   local H = s.HINT_Y or common.HINT_Y
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
+  if s.fileType == "freemcboot_cnf" and (s.context == "freemcboot" or s.context == "freehddboot") and
+      not s.openExplicitPath then
+    local pinnedPath = s.selectedKnownPath
+    if type(pinnedPath) == "string" and pinnedPath ~= "" then
+      -- Scene transitions should not alter Free*Boot navigation flow:
+      -- device pick always maps to one explicit path.
+      s.currentPath = pinnedPath
+      s.openExplicitPath = true
+    end
+  end
   if s.openExplicitPath and s.currentPath and s.currentPath ~= "" then
     if not pathExists(s.currentPath) then
       openDbg("explicit path missing; creating new in memory", "path=" .. tostring(s.currentPath))

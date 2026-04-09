@@ -2009,7 +2009,10 @@ local function mainLoop()
         c.sceneTransitionIn = nil
         common.beginSceneTransitionIn(c, normalizedType, frames, {
           direction = phaseDirection,
-          phase = phase
+          phase = phase,
+          -- Keep slide handoff bounded to a two-scene span.
+          -- Outgoing moves 0 -> 0.5W, incoming moves 0.5W -> 0.
+          distanceScale = 0.5,
         })
         while common.isSceneTransitionInActive(c) do
           local _next, newCtx = runOneFrame(c)
@@ -2103,7 +2106,10 @@ local function mainLoop()
     ctx = newCtx
     applySceneSelectionNavigationPolicy(ctx, prevScene, nextScene)
     ctx = runSceneTransitionOnStateChange(ctx, prevScene, nextScene) or ctx
-    currentScene = nextScene
+    -- Transition playback can legitimately advance state beyond nextScene
+    -- (e.g. select_config -> open -> editor in one pass).
+    -- Honor the effective state to avoid replaying one-shot scene handlers.
+    currentScene = (ctx and ctx.state) or nextScene
   end
 end
 

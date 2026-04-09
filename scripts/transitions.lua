@@ -312,6 +312,7 @@ function transitions.install(common)
       frame = 0,
       direction = (opts and tostring(opts.direction or "")) or "in",
       phase = (opts and tostring(opts.phase or "")) or "in",
+      distanceScale = (opts and tonumber(opts.distanceScale)) or 1,
     }
   end
 
@@ -407,10 +408,18 @@ function transitions.install(common)
         local direction = tostring(tr.direction or "in")
         -- Forward behaves like "down", back/cancel behaves like "up".
         local dirSign = ((direction == "out" or direction == "back") and -1) or 1
+        -- Use opposite directional cue on incoming half (same idea as the
+        -- main-logo flip) so phase 2 feels like continuation of a 180 flip,
+        -- not "90 out, then 90 back".
+        local phaseDirSign = incoming and (-dirSign) or dirSign
         local centerX = math.floor((w or 0) / 2)
         local centerY = math.floor((h or 0) / 2)
-        local shiftX = math.floor(((1 - axisScale) * (w * 0.16)) + 0.5)
-        local shiftY = math.floor(((1 - axisScale) * (h * 0.16)) + 0.5)
+        -- Bell-shaped shift: zero at both edge-on and fully-open endpoints,
+        -- strongest mid-phase. This avoids midpoint/final jumps while still
+        -- giving directional perspective.
+        local shiftBell = axisScale * (1 - axisScale)
+        local shiftX = math.floor((shiftBell * (w * 0.56)) + 0.5)
+        local shiftY = math.floor((shiftBell * (h * 0.56)) + 0.5)
         if runtime then
           runtime.sceneDrawScale = axisScale
           runtime.sceneDrawScaleX = 1
@@ -421,10 +430,10 @@ function transitions.install(common)
           runtime.sceneFlipPhase = phase
           if tr.type == "flip_horizontal" then
             runtime.sceneDrawScaleX = axisScale
-            runtime.sceneDrawCenterX = centerX + (dirSign * shiftX)
+            runtime.sceneDrawCenterX = centerX + (phaseDirSign * shiftX)
           else
             runtime.sceneDrawScaleY = axisScale
-            runtime.sceneDrawCenterY = centerY + (dirSign * shiftY)
+            runtime.sceneDrawCenterY = centerY + (phaseDirSign * shiftY)
           end
         end
       end
@@ -439,12 +448,16 @@ function transitions.install(common)
     local phase = tostring(tr.phase or "in")
     local direction = tostring(tr.direction or "in")
     local sign = ((direction == "out" or direction == "back") and -1) or 1
+    local distanceScale = tonumber(tr.distanceScale) or 1
+    if distanceScale < 0 then distanceScale = 0 end
+    if distanceScale > 2 then distanceScale = 2 end
+    local travelW = math.max(0, math.floor((w * distanceScale) + 0.5))
     local offsetX
     if phase == "out" then
-      local traveled = math.floor((curved * w) + 0.5)
+      local traveled = math.floor((curved * travelW) + 0.5)
       offsetX = sign * traveled
     else
-      local remaining = math.floor(((1 - curved) * w) + 0.5)
+      local remaining = math.floor(((1 - curved) * travelW) + 0.5)
       offsetX = sign * remaining
     end
     if runtime then
