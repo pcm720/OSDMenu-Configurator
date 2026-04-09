@@ -1164,6 +1164,9 @@ local function run(ctx)
       else
         local selectedCategoryIdx = ctx.optSel
         ctx.editorCategoryIdx = selectedCategoryIdx
+        if isCategorizedFile then
+          ctx.state = "editor"
+        end
         local rawOpts = cat.options or {}
         -- DKWDRV custom path not applicable for HOSDMenu (no MC path)
         if ctx.context == "hosdmenu" and ctx.fileType == "osdmenu_cnf" then
@@ -2614,6 +2617,7 @@ local function run(ctx)
       setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx
       ctx.editorCategoryIdx = 0
+      ctx.state = "editor_categories"
       ctx.optList = nil
       ctx.optSel = prevCategoryIdx
       ctx.saveSplash = nil

@@ -652,7 +652,7 @@ local function setStateAfterLoad(s)
     s.state = "egsm_editor"
     s.egsmSel, s.egsmScroll = 1, 0
   else
-    s.state = "editor"
+    s.state = isCategorized and "editor_categories" or "editor"
     s.editorCategoryIdx = isCategorized and 0 or nil
     s.optList = isCategorized and nil or C.config_options[s.fileType]
     s.optSel, s.optScroll = 1, 0

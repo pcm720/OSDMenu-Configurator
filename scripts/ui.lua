@@ -1796,7 +1796,7 @@ local function mainLoop()
     elseif state == "choose_load" then
       main.runChooseLoad(ctx, padEffective)
       syncFromS(ctx)
-    elseif state == "editor" then
+    elseif state == "editor" or state == "editor_categories" then
       syncToS(c)
       scene_editor.run(c)
       syncFromS(c)
@@ -1911,6 +1911,10 @@ local function mainLoop()
       { field = "loadSel", top = 1 },
     },
     editor = {
+      { field = "optSel", top = 1 },
+      { field = "optScroll", top = 0 },
+    },
+    editor_categories = {
       { field = "optSel", top = 1 },
       { field = "optScroll", top = 0 },
     },
@@ -2198,7 +2202,8 @@ local function mainLoop()
     return c
   end
 
-  local sceneNames = { "main", "choose_mc", "select_config", "initHdd", "open", "choose_load", "editor", "choose_save",
+  local sceneNames = { "main", "choose_mc", "select_config", "initHdd", "open", "choose_load", "editor",
+    "editor_categories", "choose_save",
     "menu_entries", "menu_entry_edit", "entry_cdrom_options", "entry_paths", "entry_args", "bbl_hotkeys",
     "bbl_irx_entries",
     "bbl_hotkey_entries", "bbl_hotkey_entry", "bbl_hotkey_args", "egsm_editor", "egsm_value_edit", "text_input",

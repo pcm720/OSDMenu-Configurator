@@ -686,6 +686,9 @@ local function run(ctx)
     local textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawLabelScale)) or
         (_.KEY_CHAR_W * #label)
     local textX = math.max(kx, math.floor(kx + (w - textW) / 2))
+    if #label == 1 and label:match("%l") then
+      textX = textX - 3
+    end
     local textY = math.floor(ky + (h - _.KEY_LH) / 2) - 2
     _.drawText(_.font, _.drawMode, textX, textY, drawLabelScale, label, sel and _.HIGHLIGHT or _.WHITE)
   end
