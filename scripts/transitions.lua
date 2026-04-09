@@ -443,38 +443,33 @@ function transitions.install(common)
         local curved = progress
         local phase = tostring(tr.phase or "in")
         local incoming = (phase ~= "out")
-        -- Flip phase model:
-        -- out: full -> edge-on, in: edge-on -> full.
-        local axisScale
-        if incoming then
-          axisScale = math.sin((math.pi * 0.5) * curved)
-        else
-          axisScale = math.cos((math.pi * 0.5) * curved)
-        end
-        if axisScale < 0 then axisScale = 0 end
-        if axisScale > 1 then axisScale = 1 end
+        -- Flip phase model uses a single angular motion; projected width/alpha is
+        -- derived from the same angle so visual momentum stays coherent.
+        local axisScale = 1
         local direction = tostring(tr.direction or "in")
-        -- Flip cue model (joystick analogy):
-        -- forward: phase1 uses one side cue, phase2 uses the opposite side cue
-        -- as the new scene emerges from 90deg back to center; back/cancel reverses.
-        -- This preserves continuous 180deg flip feel without "90 out + 90 back".
+        -- Flip cue model (scene pane):
+        -- preserve the same edge orientation across the handoff so the second half
+        -- feels like a continuation of the first half (no side swap at 90deg).
         local baseDirSign = tonumber(tr.flipBaseSign)
         if baseDirSign ~= 1 and baseDirSign ~= -1 then
           baseDirSign = ((direction == "out" or direction == "back") and 1) or -1
         end
         local outgoingDirSign = baseDirSign
-        local incomingDirSign = -baseDirSign
+        local incomingDirSign = baseDirSign
         local centerX = math.floor((tonumber(tr.centerX) or (w / 2)) + 0.5)
         local centerY = math.floor((tonumber(tr.centerY) or (h / 2)) + 0.5)
         local halfPi = math.pi * 0.5
         local angle
         if incoming then
-          -- Incoming starts from the opposite signed 90deg edge and settles to 0deg.
-          -- This preserves continuous rotational momentum across both halves.
+          -- Incoming starts from the same signed 90deg edge and settles to 0deg.
+          -- This keeps side/orientation continuity across the flip handoff.
           angle = incomingDirSign * (1 - curved) * halfPi
         else
           angle = outgoingDirSign * curved * halfPi
         end
+        axisScale = math.abs(math.cos(angle))
+        if axisScale < 0 then axisScale = 0 end
+        if axisScale > 1 then axisScale = 1 end
         local yawRad, pitchRad = 0, 0
         if tr.type == "flip_horizontal" then
           yawRad = angle
