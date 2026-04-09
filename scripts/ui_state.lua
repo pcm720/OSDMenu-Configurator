@@ -12,6 +12,7 @@ local function initContext()
     chosenMcSlot = nil,
     state = "main",
     mainOverlayLogoKey = nil,
+    mainLogoFlip = nil,
     mainLangPrompt = nil,
     mainLangSel = 1,
     mainCreditsPrompt = nil,

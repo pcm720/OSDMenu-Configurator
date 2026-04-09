@@ -679,6 +679,7 @@ local function markNewInMemoryConfigState(s)
 end
 
 local function runMain(s, pad)
+  local MAIN_LOGO_FLIP_FRAMES = 8
   local main_str = (C.strings and C.strings.main) or {}
   local dt, dlr = common.drawText, s.drawListRow
   local M = s.MARGIN_X or common.MARGIN_X
@@ -732,6 +733,7 @@ local function runMain(s, pad)
 
   local function openMainEntry(entry)
     if not entry then return false end
+    s.mainLogoFlip = nil
     s.mainOverlayLogoKey = entry.logoKey
     s.context = entry.context
     s.fileType = entry.fileType
@@ -1083,13 +1085,30 @@ local function runMain(s, pad)
     end
   end
 
+  local prevSel = s.mainSel
+  local navDir = nil
   if (pad & PAD_UP) ~= 0 then
     s.mainSel = common.wrapListSelection(s.mainSel, #s.main, -1)
-  end
-  if (pad & PAD_DOWN) ~= 0 then
+    navDir = "up"
+  elseif (pad & PAD_DOWN) ~= 0 then
     s.mainSel = common.wrapListSelection(s.mainSel, #s.main, 1)
+    navDir = "down"
   end
-  s.mainOverlayLogoKey = getMainOverlayLogoKey(s.mainSel)
+  local newKey = getMainOverlayLogoKey(s.mainSel)
+  if navDir and s.mainSel ~= prevSel then
+    local oldKey = getMainOverlayLogoKey(prevSel)
+    if oldKey and newKey and oldKey ~= newKey then
+      s.mainLogoFlip = {
+        active = true,
+        direction = navDir,
+        frame = 1,
+        frames = MAIN_LOGO_FLIP_FRAMES,
+        fromKey = oldKey,
+        toKey = newKey,
+      }
+    end
+  end
+  s.mainOverlayLogoKey = newKey
   local openedExitPrompt = false
   if (pad & PAD_CIRCLE) ~= 0 and not s.mainExitPrompt then
     s.mainExitPrompt = true

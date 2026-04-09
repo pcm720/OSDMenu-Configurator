@@ -894,7 +894,8 @@ local OVERLAY_LOGO_OPACITY = 0.25 -- 75% transparent
 local OVERLAY_LOGO_OPACITY_R3 = 1.0 -- keep splash/title logo fully visible if selected
 local OVERLAY_LOGO_R3_TITLE_KEY = "__r3_title__"
 local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
-local OVERLAY_LOGO_STICK_DEADZONE = 14
+local OVERLAY_LOGO_STICK_DEADZONE_PERCENT = 0.08
+local OVERLAY_LOGO_STICK_DEADZONE = math.floor((127 * OVERLAY_LOGO_STICK_DEADZONE_PERCENT) + 0.5)
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
 local OVERLAY_LOGO_RADIUS_BASE = 3.00
@@ -1168,19 +1169,17 @@ local function getSelectionOverlayLogoTexture(key)
   return nil
 end
 
-local function drawSelectionOverlayLogo(ctx)
-  if not ctx then return end
-  local isR3SettingsScene = (ctx.state ~= "main") and (ctx.context == "r3configurator")
-  local key = isR3SettingsScene and OVERLAY_LOGO_R3_TITLE_KEY or ctx.mainOverlayLogoKey
-  if not key or key == "" then return end
+local function drawSelectionOverlayLogoKey(ctx, key, isR3SettingsScene, transform)
+  if not ctx then return false end
+  if not key or key == "" then return false end
   local tex = getSelectionOverlayLogoTexture(key)
-  if not tex then return end
+  if not tex then return false end
 
   local sw = ctx.w or common.DEFAULT_W
   local sh = ctx.h or common.DEFAULT_H
   local iw = (Graphics.getImageWidth and Graphics.getImageWidth(tex)) or 0
   local ih = (Graphics.getImageHeight and Graphics.getImageHeight(tex)) or 0
-  if iw <= 0 or ih <= 0 then return end
+  if iw <= 0 or ih <= 0 then return false end
 
   local maxW = math.floor(sw * 0.90)
   local maxH = math.floor(sh * 0.72)
@@ -1190,6 +1189,18 @@ local function drawSelectionOverlayLogo(ctx)
   end
   local analogScaleX, analogScaleY, analogRoll, yawRad, pitchRad, depthOffset =
       getOverlayLogoAnalogTransform(ctx)
+  if type(transform) == "table" then
+    if transform.ignoreAnalog then
+      analogScaleX, analogScaleY, analogRoll = 1, 1, 0
+      yawRad, pitchRad, depthOffset = 0, 0, 0
+    end
+    if transform.scaleX ~= nil then analogScaleX = tonumber(transform.scaleX) or analogScaleX end
+    if transform.scaleY ~= nil then analogScaleY = tonumber(transform.scaleY) or analogScaleY end
+    if transform.roll ~= nil then analogRoll = tonumber(transform.roll) or analogRoll end
+    if transform.yawRad ~= nil then yawRad = tonumber(transform.yawRad) or yawRad end
+    if transform.pitchRad ~= nil then pitchRad = tonumber(transform.pitchRad) or pitchRad end
+    if transform.depthOffset ~= nil then depthOffset = tonumber(transform.depthOffset) or depthOffset end
+  end
   local baseW = math.max(1, math.floor(iw * scale + 0.5))
   local baseH = math.max(1, math.floor(ih * scale + 0.5))
   local halfW = baseW * 0.5
@@ -1227,11 +1238,11 @@ local function drawSelectionOverlayLogo(ctx)
                 ih * v1, color)
             end
           end
-          return
+          return true
         end
       end
       Graphics.drawImageQuad(tex, ulx, uly, blx, bly, urx, ury, brx, bry, color)
-      return
+      return true
     end
   end
 
@@ -1248,6 +1259,64 @@ local function drawSelectionOverlayLogo(ctx)
     local y = math.floor((sh - ih) / 2)
     Graphics.drawImage(tex, x, y, color)
   end
+  return true
+end
+
+local function drawSelectionOverlayLogo(ctx)
+  if not ctx then return end
+  local isR3SettingsScene = (ctx.state ~= "main") and (ctx.context == "r3configurator")
+  if not isR3SettingsScene and ctx.state == "main" then
+    local flip = ctx.mainLogoFlip
+    if type(flip) == "table" and flip.active and flip.fromKey and flip.toKey then
+      local frames = math.max(2, math.floor(tonumber(flip.frames) or 8))
+      local frame = math.floor(tonumber(flip.frame) or 1)
+      if frame < 1 then frame = 1 end
+      if frame > frames then frame = frames end
+      local phase1 = math.max(1, math.floor(frames / 2))
+      local phase2Start = phase1 + 1
+      local phase2Count = math.max(1, frames - phase1)
+      local sign = (flip.direction == "down") and 1 or -1
+      local key = nil
+      local pitchRad = 0
+
+      if frame <= phase1 then
+        local t = frame / phase1
+        pitchRad = sign * t * (math.pi * 0.5)
+        key = flip.fromKey
+      else
+        local t = 0
+        if phase2Count > 1 then
+          t = (frame - phase2Start) / (phase2Count - 1)
+        end
+        if t < 0 then t = 0 end
+        if t > 1 then t = 1 end
+        pitchRad = (-sign) * (1 - t) * (math.pi * 0.5)
+        key = flip.toKey
+      end
+
+      local drawn = drawSelectionOverlayLogoKey(ctx, key, false, {
+        ignoreAnalog = true,
+        yawRad = 0,
+        pitchRad = pitchRad,
+        depthOffset = 0,
+      })
+      if not drawn then
+        drawSelectionOverlayLogoKey(ctx, flip.toKey, false, nil)
+      end
+
+      if frame >= frames then
+        flip.active = false
+        flip.frame = frames
+        ctx.mainOverlayLogoKey = flip.toKey
+      else
+        flip.frame = frame + 1
+      end
+      return
+    end
+  end
+
+  local key = isR3SettingsScene and OVERLAY_LOGO_R3_TITLE_KEY or ctx.mainOverlayLogoKey
+  drawSelectionOverlayLogoKey(ctx, key, isR3SettingsScene, nil)
 end
 
 local function mainLoop()
