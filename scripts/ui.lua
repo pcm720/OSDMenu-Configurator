@@ -1995,13 +1995,43 @@ local function mainLoop()
     if common.normalizeSceneTransitionType then
       normalizedType = common.normalizeSceneTransitionType(transitionType)
     end
+    if normalizedType == "slide" then
+      local totalFrames = common.normalizeSceneTransitionFrames and common.normalizeSceneTransitionFrames(transitionFrames) or
+          transitionFrames
+      totalFrames = math.max(2, math.floor(tonumber(totalFrames) or 2))
+      local outFrames = math.max(1, math.floor(totalFrames / 2))
+      local inFrames = math.max(1, totalFrames - outFrames)
+      local incomingDirection = direction
+      local outgoingDirection = (incomingDirection == "out" or incomingDirection == "back") and "in" or "out"
+      local function runSlidePhase(sceneName, phase, frames, phaseDirection, lockState)
+        c.state = sceneName
+        state = sceneName
+        c.sceneTransitionIn = nil
+        common.beginSceneTransitionIn(c, normalizedType, frames, {
+          direction = phaseDirection,
+          phase = phase
+        })
+        while common.isSceneTransitionInActive(c) do
+          local _next, newCtx = runOneFrame(c)
+          c = newCtx or c
+          if lockState then
+            c.state = sceneName
+            state = sceneName
+          end
+        end
+      end
+      runSlidePhase(prevScene, "out", outFrames, outgoingDirection, true)
+      runSlidePhase(nextScene, "in", inFrames, incomingDirection, false)
+      state = c.state
+      return c
+    end
     if normalizedType == "flip_horizontal" or normalizedType == "flip_vertical" then
       local totalFrames = common.normalizeSceneTransitionFrames and common.normalizeSceneTransitionFrames(transitionFrames) or
           transitionFrames
       totalFrames = math.max(2, math.floor(tonumber(totalFrames) or 2))
       local outFrames = math.max(1, math.floor(totalFrames / 2))
       local inFrames = math.max(1, totalFrames - outFrames)
-      local function runFlipPhase(sceneName, phase, frames)
+      local function runFlipPhase(sceneName, phase, frames, lockState)
         c.state = sceneName
         state = sceneName
         c.sceneTransitionIn = nil
@@ -2009,15 +2039,18 @@ local function mainLoop()
         while common.isSceneTransitionInActive(c) do
           local _next, newCtx = runOneFrame(c)
           c = newCtx or c
-          -- Keep rendering the intended scene for this phase.
-          c.state = sceneName
-          state = sceneName
+          -- Outgoing phase should stay on the source scene plane.
+          -- Incoming phase must be allowed to progress naturally (e.g. open -> editor)
+          -- so one-shot scene actions are not replayed.
+          if lockState then
+            c.state = sceneName
+            state = sceneName
+          end
         end
       end
-      runFlipPhase(prevScene, "out", outFrames)
-      runFlipPhase(nextScene, "in", inFrames)
-      c.state = nextScene
-      state = nextScene
+      runFlipPhase(prevScene, "out", outFrames, true)
+      runFlipPhase(nextScene, "in", inFrames, false)
+      state = c.state
       return c
     end
     if common.normalizeSceneTransitionType and common.normalizeSceneTransitionType(transitionType) == "cross_dissolve" then

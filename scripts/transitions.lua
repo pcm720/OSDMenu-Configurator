@@ -432,16 +432,20 @@ function transitions.install(common)
     end
     local frames = common.normalizeSceneTransitionFrames(tr.frames)
     local frame = math.max(0, math.floor(tonumber(tr.frame) or 0))
-    -- Use a 1-based step for slide-like motion so the very first transition frame
-    -- already shows incoming content (avoids an initial fully blank frame).
+    -- Use a 1-based step for incoming pass so frame 1 already shows incoming content.
     local progress = clamp01((frame + 1) / math.max(1, frames))
     local curved = applySceneMotionCurve(tr.type, progress)
     local w, _h = getTransitionScreenSize(ctx)
-    local remaining = math.floor(((1 - curved) * w) + 0.5)
+    local phase = tostring(tr.phase or "in")
     local direction = tostring(tr.direction or "in")
-    local offsetX = remaining
-    if direction == "out" or direction == "back" then
-      offsetX = -remaining
+    local sign = ((direction == "out" or direction == "back") and -1) or 1
+    local offsetX
+    if phase == "out" then
+      local traveled = math.floor((curved * w) + 0.5)
+      offsetX = sign * traveled
+    else
+      local remaining = math.floor(((1 - curved) * w) + 0.5)
+      offsetX = sign * remaining
     end
     if runtime then
       runtime.sceneDrawOffsetX = offsetX
