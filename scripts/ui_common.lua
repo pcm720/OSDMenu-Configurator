@@ -597,6 +597,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if scaled > 0x80 then scaled = 0x80 end
     return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
   end
+  local function iconAlphaColor(alpha)
+    local a = math.floor(0x80 * clamp01(alpha) + 0.5)
+    if a < 0 then a = 0 end
+    if a > 0x80 then a = 0x80 end
+    return Color.new(255, 255, 255, a)
+  end
   local function cloneSlots(src)
     local out = {}
     for i = 1, #(src or {}) do
@@ -728,7 +734,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
       local drawLabelAlpha = clamp01(labelAlpha or 0)
       if icon and drawIconAlpha > 0.001 then
-        local iconColor = applyAlpha(0x80FFFFFF, drawIconAlpha)
+        local iconColor = iconAlphaColor(drawIconAlpha)
         if Graphics.drawScaleImage then
           if drawIconAlpha >= 0.999 then
             local ok = pcall(Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)

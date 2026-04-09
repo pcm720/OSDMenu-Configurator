@@ -33,6 +33,12 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     if scaled > 0x80 then scaled = 0x80 end
     return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
   end
+  local function iconAlphaColor(alpha)
+    local a = math.floor(0x80 * clamp01(alpha) + 0.5)
+    if a < 0 then a = 0 end
+    if a > 0x80 then a = 0x80 end
+    return Color.new(255, 255, 255, a)
+  end
 
   local function cloneSlots(src)
     local out = {}
@@ -147,7 +153,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
     local px = math.floor(slotCenter - iconW / 2)
     if icon and drawIconAlpha > 0.001 then
-      local iconColor = applyAlpha(0x80FFFFFF, drawIconAlpha)
+      local iconColor = iconAlphaColor(drawIconAlpha)
       if _.Graphics.drawScaleImage then
         if drawIconAlpha >= 0.999 then
           local ok = pcall(_.Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
@@ -871,7 +877,17 @@ local function run(ctx)
     end
     rows = filtered
   end
-  local belEnabled = (ctx.textInputEnableBelKey == true) and (not ctx.textInputTitleIdMode)
+  local runtime = _G and _G.CONFIG_UI
+  local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
+  local transitionPhase = transitionActive and tostring(runtime.sceneTransitionAnimPhase or "") or ""
+  local belEnabledRaw = (ctx.textInputEnableBelKey == true) and (not ctx.textInputTitleIdMode)
+  if belEnabledRaw then
+    ctx.textInputBelHintLatched = true
+  elseif (not transitionActive) or transitionPhase ~= "out" then
+    ctx.textInputBelHintLatched = false
+  end
+  local belEnabled = belEnabledRaw or
+      (transitionActive and transitionPhase == "out" and ctx.textInputBelHintLatched == true)
   local glyphKeyLabel = (_.text_str and _.text_str.glyphs_key_label) or GLYPH_KEY_LABEL_FALLBACK
   local keyList = {}
   local specialKeys = {}
