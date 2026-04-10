@@ -1034,6 +1034,28 @@ local function updateHeldKeyPressState(ctx, _, selectedKeyIdx, suppressPressVisu
     crossHeld = (rawPad & crossMask) ~= 0
   end
 
+  local entryGate = math.max(0, math.floor(tonumber(ctx.textInputPressAnimEntryGate) or 0))
+  if entryGate == 1 then
+    if crossHeld then
+      ctx.textInputPressAnimEntryGate = 2
+      ctx.textInputHeldPressKey = nil
+      ctx.textInputKeyPressAnims = nil
+      ctx.textInputCrossHeldPrev = true
+      return
+    end
+    ctx.textInputPressAnimEntryGate = 0
+  elseif entryGate == 2 then
+    if crossHeld then
+      ctx.textInputHeldPressKey = nil
+      ctx.textInputKeyPressAnims = nil
+      ctx.textInputCrossHeldPrev = true
+      return
+    end
+    ctx.textInputPressAnimEntryGate = 0
+    ctx.textInputCrossHeldPrev = false
+    return
+  end
+
   if suppressPressVisuals == true then
     ctx.textInputHeldPressKey = nil
     ctx.textInputKeyPressAnims = nil
@@ -1183,6 +1205,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
+    ctx.textInputPressAnimEntryGate = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1249,6 +1272,7 @@ local function run(ctx)
   local suppressPressVisualsForFrame = suppressPressVisualFrames > 0
   updateHeldKeyPressState(ctx, _, ctx.textInputGridSel, suppressPressVisualsForFrame)
   advanceKeyPressAnims(ctx)
+  local pressAnimEntryGateActive = (math.max(0, math.floor(tonumber(ctx.textInputPressAnimEntryGate) or 0)) == 2)
   if suppressPressVisualFrames > 0 then
     ctx.textInputSuppressPressVisualFrames = suppressPressVisualFrames - 1
   else
@@ -1672,7 +1696,8 @@ local function run(ctx)
   local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
   if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
   if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
-  local suppressCrossEnter = suppressPressVisualsForFrame or (ctx.textInputIgnoreCrossUntilRelease == true)
+  local suppressCrossEnter = suppressPressVisualsForFrame or pressAnimEntryGateActive or
+      (ctx.textInputIgnoreCrossUntilRelease == true)
   if (not suppressCrossEnter) and ((_.padEffective & _.PAD_CROSS) ~= 0) then
     local selIdx = ctx.textInputGridSel
     local sk = specialKeys[selIdx]
@@ -1745,6 +1770,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
+    ctx.textInputPressAnimEntryGate = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1795,6 +1821,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
+    ctx.textInputPressAnimEntryGate = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1818,12 +1845,13 @@ local function run(ctx)
     end
   end
   local hints = (ctx.textInputTitleIdMode and _.text_str.hint_items_title_id) or _.text_str.hint_items
-  local suppressCrossEnter = suppressPressVisualsForFrame or (ctx.textInputIgnoreCrossUntilRelease == true)
+  local suppressCrossEnter = suppressPressVisualsForFrame or pressAnimEntryGateActive or
+      (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X, {
     disableTransitions = true,
     getIconPressAmount = function(padName)
-      if suppressPressVisualsForFrame then
+      if suppressPressVisualsForFrame or pressAnimEntryGateActive then
         return 0
       end
       local key = tostring(padName or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
