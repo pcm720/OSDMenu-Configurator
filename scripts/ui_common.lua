@@ -2124,6 +2124,8 @@ function common.beginTextInput(ctx, opts)
   ctx.textInputCrossHeldPrev = suppressCrossOnEntry and true or nil
   ctx.textInputHeldPressKey = nil
   ctx.textInputKeyPressAnims = nil
+  ctx.textInputKeyLabelFontByShrinkPx = nil
+  ctx.textInputKeyLabelFontByShrinkPxSig = nil
   ctx.textInputKeyLabelWidthCache = nil
   ctx.textInputKeyLabelWidthCacheSig = nil
   ctx.textInputKeyLabelWidthWarmSig = nil

@@ -813,7 +813,7 @@ local KEY_PRESS_MAX_DARKEN = 0.24
 local KEY_LABEL_SCALE = 0.7
 local KEY_LABEL_FT_FONT_SCALE = 1.0
 local KEY_LABEL_PRESS_SHRINK_PX = 2.0
-local KEY_LABEL_Y_BIAS = -2.0
+local KEY_LABEL_Y_BIAS = -1.0
 
 local function clamp01(v)
   local n = tonumber(v) or 0
@@ -834,11 +834,11 @@ local function easeOutQuad(t)
   return 1 - (a * a)
 end
 
-local function getVisualPressAmount(amount)
-  local t = clamp01(amount)
-  if t <= 0 then return 0 end
-  -- Boost early frames so short taps still visibly shrink the key label.
-  return math.sqrt(t)
+local function getPressShrinkPx(pressAmount)
+  local maxPx = math.max(0, math.floor((tonumber(KEY_LABEL_PRESS_SHRINK_PX) or 0) + 0.5))
+  if maxPx <= 0 then return 0 end
+  local pa = clamp01(pressAmount)
+  return math.max(0, math.min(maxPx, math.floor((maxPx * pa) + 0.5)))
 end
 
 local function darkenColor(color, amount)
@@ -1053,6 +1053,8 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
+    ctx.textInputKeyLabelFontByShrinkPx = nil
+    ctx.textInputKeyLabelFontByShrinkPxSig = nil
     ctx.textInputKeyLabelWidthCache = nil
     ctx.textInputKeyLabelWidthCacheSig = nil
     ctx.textInputKeyLabelWidthWarmSig = nil
@@ -1117,15 +1119,26 @@ local function run(ctx)
   local keyScale = KEY_LABEL_SCALE
   local keyFontBase = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
     { lockSceneScale = true })) or _.font
-  local keyFontPressed = keyFontBase
+  local maxLabelShrinkPx = math.max(0, math.floor((tonumber(KEY_LABEL_PRESS_SHRINK_PX) or 0) + 0.5))
   local keyLabelBasePx = math.max(8, math.floor(((tonumber(_.common and _.common.FT_PIXEL_H) or 18) *
       math.max(0.1, tonumber(runtime and runtime.currentUiScale) or tonumber(ctx.uiScale) or 1)) + 0.5))
-  local keyLabelPressedPx = math.max(8, keyLabelBasePx - KEY_LABEL_PRESS_SHRINK_PX)
-  if _.drawMode == "ftPrint" and _.common and _.common.getHintFont and keyLabelPressedPx < keyLabelBasePx then
-    local pressedScale = keyLabelPressedPx / keyLabelBasePx
-    keyFontPressed = _.common.getHintFont(_.font, _.drawMode, pressedScale, { lockSceneScale = true }) or keyFontBase
+  local keyFontScaleSig = tostring(_.drawMode) .. "|" .. tostring(keyFontBase) .. "|" .. tostring(keyLabelBasePx) ..
+      "|" .. tostring(maxLabelShrinkPx)
+  local keyFontsByShrinkPx = ctx.textInputKeyLabelFontByShrinkPx
+  if type(keyFontsByShrinkPx) ~= "table" or ctx.textInputKeyLabelFontByShrinkPxSig ~= keyFontScaleSig then
+    keyFontsByShrinkPx = { [0] = keyFontBase }
+    if _.drawMode == "ftPrint" and _.common and _.common.getHintFont and keyLabelBasePx > 0 then
+      for shrinkPx = 1, maxLabelShrinkPx do
+        local drawPx = math.max(8, keyLabelBasePx - shrinkPx)
+        local drawScale = drawPx / keyLabelBasePx
+        keyFontsByShrinkPx[shrinkPx] = _.common.getHintFont(_.font, _.drawMode, drawScale, { lockSceneScale = true }) or
+            keyFontBase
+      end
+    end
+    ctx.textInputKeyLabelFontByShrinkPx = keyFontsByShrinkPx
+    ctx.textInputKeyLabelFontByShrinkPxSig = keyFontScaleSig
   end
-  local keyFontCacheSig = tostring(_.drawMode) .. "|" .. tostring(keyFontBase) .. "|" .. tostring(keyFontPressed)
+  local keyFontCacheSig = keyFontScaleSig
   local keyLabelWidthCache = ctx.textInputKeyLabelWidthCache
   if type(keyLabelWidthCache) ~= "table" or ctx.textInputKeyLabelWidthCacheSig ~= keyFontCacheSig then
     keyLabelWidthCache = {}
@@ -1157,30 +1170,31 @@ local function run(ctx)
   end
 
   if _.drawMode == "ftPrint" then
-    local baseFontKey = tostring(keyFontBase)
-    local pressedFontKey = tostring(keyFontPressed)
-    local baseWidths = keyLabelWidthCache[baseFontKey]
-    local pressedWidths = keyLabelWidthCache[pressedFontKey]
-    if type(baseWidths) ~= "table" then
-      baseWidths = {}
-      keyLabelWidthCache[baseFontKey] = baseWidths
-    end
-    if type(pressedWidths) ~= "table" then
-      pressedWidths = {}
-      keyLabelWidthCache[pressedFontKey] = pressedWidths
-    end
     local warmSig = tostring(keyboardLayout.key or "") .. "|" .. keyFontCacheSig
     if ctx.textInputKeyLabelWidthWarmSig ~= warmSig then
+      local fontsToWarm = {}
+      if type(keyFontsByShrinkPx) == "table" then
+        for shrinkPx = 0, maxLabelShrinkPx do
+          fontsToWarm[#fontsToWarm + 1] = keyFontsByShrinkPx[shrinkPx] or keyFontBase
+        end
+      else
+        fontsToWarm[1] = keyFontBase
+      end
       for i = 1, #keyList do
         local label = tostring(keyList[i] or "")
         if label ~= "" then
-          if baseWidths[label] == nil then
-            baseWidths[label] = (_.common.calcTextWidth and _.common.calcTextWidth(keyFontBase, label, keyScale)) or
-                ((_.KEY_CHAR_W or 10) * #label)
-          end
-          if pressedWidths[label] == nil then
-            pressedWidths[label] = (_.common.calcTextWidth and _.common.calcTextWidth(keyFontPressed, label, keyScale)) or
-                ((_.KEY_CHAR_W or 10) * #label)
+          for fIdx = 1, #fontsToWarm do
+            local f = fontsToWarm[fIdx]
+            local key = tostring(f)
+            local widthByLabel = keyLabelWidthCache[key]
+            if type(widthByLabel) ~= "table" then
+              widthByLabel = {}
+              keyLabelWidthCache[key] = widthByLabel
+            end
+            if widthByLabel[label] == nil then
+              widthByLabel[label] = (_.common.calcTextWidth and _.common.calcTextWidth(f, label, keyScale)) or
+                  ((_.KEY_CHAR_W or 10) * #label)
+            end
           end
         end
       end
@@ -1219,7 +1233,7 @@ local function run(ctx)
   local function drawKey(kx, ky, w, h, label, sel, labelScale, keyIdx)
     local drawLabelScale = tonumber(labelScale) or keyScale
     local pressAmount = getKeyPressAnimAmount(ctx, keyIdx)
-    local visualPressAmount = getVisualPressAmount(pressAmount)
+    local labelShrinkPx = getPressShrinkPx(pressAmount)
     local inset = KEY_PRESS_MAX_INSET * pressAmount
     local darken = KEY_PRESS_MAX_DARKEN * pressAmount
     local bg = sel and _.KEY_BG_SEL or _.KEY_BG
@@ -1237,16 +1251,12 @@ local function run(ctx)
     if _.drawMode ~= "ftPrint" then
       -- Font.print/fmPrint can scale per-draw directly.
       local fontBasePx = math.max(1, tonumber(_.KEY_LH) or 14)
-      local pressShrinkMul = 1 - ((KEY_LABEL_PRESS_SHRINK_PX / fontBasePx) * visualPressAmount)
+      local pressShrinkMul = 1 - (labelShrinkPx / fontBasePx)
       if pressShrinkMul < 0.65 then pressShrinkMul = 0.65 end
       drawLabelScale = drawLabelScale * glyphScaleMul * pressShrinkMul
       labelFont = _.font
     else
-      if visualPressAmount > 0.001 then
-        labelFont = keyFontPressed
-      else
-        labelFont = keyFontBase
-      end
+      labelFont = (type(keyFontsByShrinkPx) == "table" and keyFontsByShrinkPx[labelShrinkPx]) or keyFontBase
     end
     -- Hot path optimization: draw key border+fill in 2 rects instead of 5.
     _.Graphics.drawRect(ix, iy, iw, ih, border)
@@ -1261,7 +1271,7 @@ local function run(ctx)
     local textX = math.floor(keyCenterX - (textW * 0.5) + 0.5)
     local textH
     if _.drawMode == "ftPrint" then
-      local drawPx = (labelFont == keyFontPressed) and keyLabelPressedPx or keyLabelBasePx
+      local drawPx = math.max(8, keyLabelBasePx - labelShrinkPx)
       textH = math.max(8, drawPx)
     else
       textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
@@ -1641,6 +1651,8 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
+    ctx.textInputKeyLabelFontByShrinkPx = nil
+    ctx.textInputKeyLabelFontByShrinkPxSig = nil
     ctx.textInputKeyLabelWidthCache = nil
     ctx.textInputKeyLabelWidthCacheSig = nil
     ctx.textInputKeyLabelWidthWarmSig = nil
@@ -1687,6 +1699,8 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
+    ctx.textInputKeyLabelFontByShrinkPx = nil
+    ctx.textInputKeyLabelFontByShrinkPxSig = nil
     ctx.textInputKeyLabelWidthCache = nil
     ctx.textInputKeyLabelWidthCacheSig = nil
     ctx.textInputKeyLabelWidthWarmSig = nil
