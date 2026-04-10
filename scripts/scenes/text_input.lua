@@ -1643,7 +1643,16 @@ local function run(ctx)
     end
     return bestCol
   end
-  local gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+  local blockDpadWhileCrossHeld = isLogicalCrossHeldNow(ctx, _)
+  local gridHorizontalMask = 0
+  if not blockDpadWhileCrossHeld then
+    gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+  else
+    -- Avoid stale repeat carry-over the frame Cross is released.
+    ctx.textInputGridHorizontalPrevHeldMask = 0
+    ctx.textInputGridHorizontalHoldFrames = 0
+    ctx.textInputGridHorizontalHoldCountdown = 0
+  end
   if (gridHorizontalMask & _.PAD_LEFT) ~= 0 then
     local r = rowOf(ctx.textInputGridSel)
     local start = rowStart[r]
@@ -1666,7 +1675,7 @@ local function run(ctx)
       ctx.textInputGridSel = rowAt(r, colInRow)
     end
   end
-  if (_.padEffective & _.PAD_UP) ~= 0 then
+  if (not blockDpadWhileCrossHeld) and ((_.padEffective & _.PAD_UP) ~= 0) then
     local r = rowOf(ctx.textInputGridSel)
     local start = rowStart[r]
     local size = rowSize[r] or 0
@@ -1701,7 +1710,7 @@ local function run(ctx)
       ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
   end
-  if (_.padEffective & _.PAD_DOWN) ~= 0 then
+  if (not blockDpadWhileCrossHeld) and ((_.padEffective & _.PAD_DOWN) ~= 0) then
     local r = rowOf(ctx.textInputGridSel)
     local start = rowStart[r]
     local size = rowSize[r] or 0
