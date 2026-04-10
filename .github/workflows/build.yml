@@ -39,11 +39,11 @@ jobs:
         fi
         echo "CI_VERSION=${VERSION}" >> $GITHUB_ENV
 
-    # - name: Compile non-VFS version
-    #   id: make
-    #   run: |
-    #     cmake -B build -DAPP_VERSION_OVERRIDE=${{ env.CI_VERSION }} -DSAS_TITLE_VERSION=${{ env.CI_VERSION }}
-    #     cmake --build build
+    - name: Compile non-VFS version
+      id: make
+      run: |
+        cmake -B build -DAPP_VERSION_OVERRIDE=${{ env.CI_VERSION }} -DSAS_TITLE_VERSION=${{ env.CI_VERSION }}
+        cmake --build build
 
     - name: Compile VFS version
       id: make-vfs
