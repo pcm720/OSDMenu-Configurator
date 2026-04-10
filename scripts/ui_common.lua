@@ -623,7 +623,10 @@ function common.drawHintSlotsWithTransition(runtime, opts)
     if type(runtime[stableField]) ~= "table" then
       runtime[stableField] = {}
     end
-    runtime[stableField][hintKey] = cloneSlots(rowSlots)
+    local stableSlots = runtime[stableField][hintKey]
+    if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
+      runtime[stableField][hintKey] = cloneSlots(rowSlots)
+    end
     if type(runtime[fadeField]) == "table" then
       runtime[fadeField][hintKey] = nil
     end
@@ -661,7 +664,10 @@ function common.drawHintSlotsWithTransition(runtime, opts)
   end
 
   if slotsEqual(state.fromSlots, state.toSlots) then
-    runtime[stableField][hintKey] = cloneSlots(rowSlots)
+    local stableSlots = runtime[stableField][hintKey]
+    if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
+      runtime[stableField][hintKey] = cloneSlots(rowSlots)
+    end
     drawRow(rowSlots)
     return true
   end

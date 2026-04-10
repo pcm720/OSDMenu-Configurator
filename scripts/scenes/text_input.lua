@@ -725,6 +725,70 @@ local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
+local function ensureKeyboardLayoutCache(ctx, _)
+  local titleMode = ctx.textInputTitleIdMode == true
+  local shiftMode = (not titleMode) and (ctx.textInputShift == true)
+  local hidePipe = ctx.textInputHidePipeBackslash == true
+  local baseRows = titleMode and (_.KEYBOARD_ROWS_TITLE_ID or _.KEYBOARD_ROWS_SHIFTED) or
+      (shiftMode and _.KEYBOARD_ROWS_SHIFTED or _.KEYBOARD_ROWS)
+  local cacheKey = (titleMode and "1" or "0") .. "|" .. (shiftMode and "1" or "0") .. "|" .. (hidePipe and "1" or "0")
+  local cache = ctx.textInputKeyboardLayoutCache
+  if type(cache) == "table" and cache.key == cacheKey and cache.baseRowsRef == baseRows then
+    return cache
+  end
+
+  local rows = {}
+  local rowCount = #(baseRows or {})
+  for i = 1, rowCount do
+    local row = tostring(baseRows[i] or "")
+    if hidePipe then
+      row = row:gsub("\\", "")
+      row = row:gsub("|", "")
+    end
+    rows[i] = row
+  end
+
+  local keyList = {}
+  local specialKeys = {}
+  local rowLen = {}
+  local rowStart = {}
+  local running = 1
+  for r = 1, rowCount do
+    local row = rows[r] or ""
+    rowStart[r] = running
+    local len = #row
+    rowLen[r] = len
+    for i = 1, len do
+      keyList[#keyList + 1] = row:sub(i, i)
+    end
+    running = running + len
+  end
+
+  local spaceIdx = nil
+  if not titleMode then
+    rowStart[rowCount + 1] = running
+    spaceIdx = running
+    keyList[#keyList + 1] = " "
+    specialKeys[spaceIdx] = { kind = "space", label = "" }
+    rowLen[rowCount + 1] = 1
+  end
+
+  cache = {
+    key = cacheKey,
+    baseRowsRef = baseRows,
+    rows = rows,
+    rowCount = rowCount,
+    rowLen = rowLen,
+    rowStart = rowStart,
+    keyList = keyList,
+    specialKeys = specialKeys,
+    spaceIdx = spaceIdx,
+    maxRow = rowCount + ((spaceIdx ~= nil) and 1 or 0),
+  }
+  ctx.textInputKeyboardLayoutCache = cache
+  return cache
+end
+
 local function run(ctx)
   local _ = ctx._
   local belMenuOpenKey = "textInputBelMenuOpen"
@@ -806,18 +870,8 @@ local function run(ctx)
   end
   local beforeDisplay = formatBelForDisplay(beforeCurs)
   local afterDisplay = formatBelForDisplay(afterCurs)
-  local rows = ctx.textInputTitleIdMode and (_.KEYBOARD_ROWS_TITLE_ID or _.KEYBOARD_ROWS_SHIFTED) or
-      (ctx.textInputShift and _.KEYBOARD_ROWS_SHIFTED or _.KEYBOARD_ROWS)
-  if ctx.textInputHidePipeBackslash then
-    local filtered = {}
-    for i = 1, #(rows or {}) do
-      local row = tostring(rows[i] or "")
-      row = row:gsub("\\", "")
-      row = row:gsub("|", "")
-      filtered[#filtered + 1] = row
-    end
-    rows = filtered
-  end
+  local keyboardLayout = ensureKeyboardLayoutCache(ctx, _)
+  local rows = keyboardLayout.rows or {}
   local runtime = _G and _G.CONFIG_UI
   local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
   local transitionPhase = transitionActive and tostring(runtime.sceneTransitionAnimPhase or "") or ""
@@ -830,31 +884,13 @@ local function run(ctx)
   local belEnabled = belEnabledRaw or
       (transitionActive and transitionPhase == "out" and ctx.textInputBelHintLatched == true)
   local glyphKeyLabel = (_.text_str and _.text_str.glyphs_key_label) or GLYPH_KEY_LABEL_FALLBACK
-  local keyList = {}
-  local specialKeys = {}
-  local rowLen = {}
-  local rowStart = {}
-  local rowCount = #rows
-  local running = 1
-  for r = 1, rowCount do
-    local row = rows[r] or ""
-    rowStart[r] = running
-    rowLen[r] = #row
-    for i = 1, #row do
-      keyList[#keyList + 1] = row:sub(i, i)
-    end
-    running = running + rowLen[r]
-  end
-  local spaceIdx = nil
-  if not ctx.textInputTitleIdMode then
-    rowStart[rowCount + 1] = running
-    spaceIdx = running
-    keyList[#keyList + 1] = " "
-    specialKeys[spaceIdx] = { kind = "space", label = "" }
-    running = running + 1
-    rowLen[rowCount + 1] = 1
-  end
-  local maxRow = rowCount + ((spaceIdx ~= nil) and 1 or 0)
+  local keyList = keyboardLayout.keyList or {}
+  local specialKeys = keyboardLayout.specialKeys or {}
+  local rowLen = keyboardLayout.rowLen or {}
+  local rowStart = keyboardLayout.rowStart or {}
+  local rowCount = tonumber(keyboardLayout.rowCount) or #rows
+  local spaceIdx = keyboardLayout.spaceIdx
+  local maxRow = tonumber(keyboardLayout.maxRow) or (rowCount + ((spaceIdx ~= nil) and 1 or 0))
   if ctx.textInputGridSel < 1 then ctx.textInputGridSel = 1 end
   if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = #keyList end
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
@@ -898,8 +934,13 @@ local function run(ctx)
     if w > 2 and h > 2 then
       _.Graphics.drawRect(kx + 1, ky + 1, w - 2, h - 2, bg)
     end
-    local textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawLabelScale)) or
-        (_.KEY_CHAR_W * #label)
+    local textW
+    if #label <= 1 then
+      textW = (_.KEY_CHAR_W or 10) * #label
+    else
+      textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawLabelScale)) or
+          ((_.KEY_CHAR_W or 10) * #label)
+    end
     local textX = math.max(kx, math.floor(kx + (w - textW) / 2))
     if #label == 1 and label:match("%l") then
       textX = textX - 1
