@@ -741,6 +741,17 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
     return drawFn()
   end
+  local function clearHintRowForCrossDissolve(topY, height)
+    if type(runtime) ~= "table" then return end
+    if runtime.sceneTransitionAnimActive ~= true then return end
+    if tostring(runtime.sceneTransitionAnimType or "") ~= "cross_dissolve" then return end
+    if not (Graphics and Graphics.drawRect) then return end
+    local rw = math.max(1, math.floor(tonumber(runtime.currentSceneWidth) or common.DEFAULT_W))
+    local ry = math.floor(tonumber(topY) or 0)
+    local rh = math.max(0, math.floor(tonumber(height) or 0))
+    if rh <= 0 then return end
+    Graphics.drawRect(0, ry, rw, rh, common.BGCOLOR)
+  end
   local function getPadLabelColor(padName, fallbackColor)
     local key = tostring(padName or ""):lower()
     if key == "cross" then return common.PAD_LABEL_CROSS end
@@ -955,6 +966,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     drawHintsUntransformed(function()
+      clearHintRowForCrossDissolve(rowTop - 1, rowH + 2)
       local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
         hintKey = hintKey,
         stableField = "hintRowStableSlots",
@@ -976,6 +988,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
   if textFallback and textFallback ~= "" then
     local rowTop = math.floor(y) - common.PAD_HINT_ROW_H
     drawHintsUntransformed(function()
+      clearHintRowForCrossDissolve(rowTop - 1, common.PAD_HINT_ROW_H + 2)
       common.drawText(font, drawMode, x, rowTop + math.floor((common.PAD_HINT_ROW_H - 16) / 2), scale, textFallback,
         color)
     end)
