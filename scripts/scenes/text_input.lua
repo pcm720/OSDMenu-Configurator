@@ -752,6 +752,8 @@ local function run(ctx)
     ctx.textInputEnableBelKey = nil
     ctx.textInputBelProfile = nil
     ctx.textInputHidePipeBackslash = nil
+    ctx.textInputSpaceReturnFromTopCol = nil
+    ctx.textInputSpaceReturnFromBottomCol = nil
     ctx.textInputCursorPrevHeldMask = nil
     ctx.textInputCursorHoldFrames = nil
     ctx.textInputCursorHoldCountdown = nil
@@ -940,6 +942,10 @@ local function run(ctx)
       specStartX = math.floor(spaceCenterX - (spaceW / 2) + 0.5)
     end
 
+    -- Make spacebar one key wider to the left (keep right edge unchanged).
+    specStartX = specStartX - _.KEY_WIDTH
+    spaceW = spaceW + _.KEY_WIDTH
+
     if spaceW < kw then spaceW = kw end
     drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
   end
@@ -1047,6 +1053,10 @@ local function run(ctx)
   end
   local rowSize = rowLen
   local spaceRow = spaceIdx and (rowCount + 1) or nil
+  if not spaceRow then
+    ctx.textInputSpaceReturnFromTopCol = nil
+    ctx.textInputSpaceReturnFromBottomCol = nil
+  end
   local function rowAt(r, col)
     local start = rowStart[r]
     local size = rowSize[r] or 0
@@ -1130,12 +1140,24 @@ local function run(ctx)
         targetRow = spaceRow or maxRow
       end
       local targetCol
-      if spaceRow and r == spaceRow then
-        local targetSize = rowSize[targetRow] or 1
-        targetCol = math.max(1, math.floor(targetSize / 2) + 1)
-      else
-        local xCenter = keyCenterXForRowCol(r, colInRow)
-        targetCol = nearestColForRowX(targetRow, xCenter)
+      if spaceRow and targetRow == spaceRow and r == 1 then
+        -- Remember top-row origin when wrapping up into the spacebar row.
+        ctx.textInputSpaceReturnFromTopCol = colInRow
+      end
+      if spaceRow and r == spaceRow and targetRow == (spaceRow - 1) then
+        local rememberedCol = tonumber(ctx.textInputSpaceReturnFromBottomCol)
+        if rememberedCol and rememberedCol >= 1 then
+          targetCol = rememberedCol
+        end
+      end
+      if not targetCol then
+        if spaceRow and r == spaceRow then
+          local targetSize = rowSize[targetRow] or 1
+          targetCol = math.max(1, math.floor(targetSize / 2) + 1)
+        else
+          local xCenter = keyCenterXForRowCol(r, colInRow)
+          targetCol = nearestColForRowX(targetRow, xCenter)
+        end
       end
       ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
@@ -1147,8 +1169,21 @@ local function run(ctx)
     if start and size > 0 then
       local colInRow = ctx.textInputGridSel - start + 1
       local targetRow = (r < maxRow) and (r + 1) or 1
-      local xCenter = keyCenterXForRowCol(r, colInRow)
-      local targetCol = nearestColForRowX(targetRow, xCenter)
+      if spaceRow and targetRow == spaceRow and r == (spaceRow - 1) then
+        -- Remember bottom-row origin when moving down into the spacebar row.
+        ctx.textInputSpaceReturnFromBottomCol = colInRow
+      end
+      local targetCol
+      if spaceRow and r == spaceRow and targetRow == 1 then
+        local rememberedCol = tonumber(ctx.textInputSpaceReturnFromTopCol)
+        if rememberedCol and rememberedCol >= 1 then
+          targetCol = rememberedCol
+        end
+      end
+      if not targetCol then
+        local xCenter = keyCenterXForRowCol(r, colInRow)
+        targetCol = nearestColForRowX(targetRow, xCenter)
+      end
       ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
   end
@@ -1195,6 +1230,8 @@ local function run(ctx)
     ctx.textInputEnableBelKey = nil
     ctx.textInputBelProfile = nil
     ctx.textInputHidePipeBackslash = nil
+    ctx.textInputSpaceReturnFromTopCol = nil
+    ctx.textInputSpaceReturnFromBottomCol = nil
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
@@ -1230,6 +1267,8 @@ local function run(ctx)
     ctx.textInputEnableBelKey = nil
     ctx.textInputBelProfile = nil
     ctx.textInputHidePipeBackslash = nil
+    ctx.textInputSpaceReturnFromTopCol = nil
+    ctx.textInputSpaceReturnFromBottomCol = nil
     ctx.textInputBelMenuOpen = nil
     ctx.textInputBelMenuSel = nil
     ctx.textInputBelMenuScroll = nil
