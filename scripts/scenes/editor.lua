@@ -557,6 +557,38 @@ local function removeHintPad(items, padName)
   return out
 end
 
+local function isSceneTransitionTestOption(opt)
+  local key = tostring(opt and opt.key or "")
+  return key == "scene_transition" or key == "scene_transition_frames"
+end
+
+local function beginSceneTransitionSelfTest(ctx, _)
+  if not (ctx and _ and _.common and _.common.beginSceneTransitionIn and _.common.shouldRunSceneTransition) then
+    return
+  end
+  local runtime = _G.CONFIG_UI or {}
+  local transitionType = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, "scene_transition")) or
+      runtime.sceneTransitionType
+  local transitionFrames = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, "scene_transition_frames")) or
+      runtime.sceneTransitionFrames
+  if _.common.normalizeSceneTransitionType then
+    transitionType = _.common.normalizeSceneTransitionType(transitionType)
+  end
+  if _.common.normalizeSceneTransitionFrames then
+    transitionFrames = _.common.normalizeSceneTransitionFrames(transitionFrames)
+  else
+    local n = math.floor(tonumber(transitionFrames) or 10)
+    if n < 1 then n = 1 end
+    if n > 60 then n = 60 end
+    transitionFrames = n
+  end
+  if not _.common.shouldRunSceneTransition(transitionType, transitionFrames) then
+    return
+  end
+  ctx.sceneTransitionIn = nil
+  _.common.beginSceneTransitionIn(ctx, transitionType, transitionFrames, { direction = "in" })
+end
+
 local function prettifyBblGlobalLabel(ctx, o, label)
   if not (ctx and o and label) then return label end
   if (ctx.fileType ~= "ps2bbl_ini" and ctx.fileType ~= "psxbbl_ini") then
@@ -1529,6 +1561,25 @@ local function run(ctx)
         end
       end
     end
+    local canRunSceneTransitionTest = selOpt and
+        not isTemporarilyDisabledEditorOption(ctx, _, selOpt) and
+        isSceneTransitionTestOption(selOpt)
+    if canRunSceneTransitionTest then
+      local testLabel = (_.editor_str and _.editor_str.test_label) or "Test"
+      local squareHint = nil
+      for i = 1, #hintItems do
+        local item = hintItems[i]
+        if tostring(item and item.pad or ""):lower() == "square" then
+          squareHint = item
+          break
+        end
+      end
+      if squareHint then
+        squareHint.label = testLabel
+      else
+        hintItems[#hintItems + 1] = { pad = "square", label = testLabel, row = 1 }
+      end
+    end
     if selOpt and selOpt.optType == "header" then
       hintItems = removeHintPad(hintItems, "cross")
     end
@@ -2472,7 +2523,10 @@ local function run(ctx)
       end
     end
     if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-      if isAutoSlotRow then
+      local o = ctx.optList and ctx.optList[ctx.optSel] or nil
+      if o and not isTemporarilyDisabledEditorOption(ctx, _, o) and isSceneTransitionTestOption(o) then
+        beginSceneTransitionSelfTest(ctx, _)
+      elseif isAutoSlotRow then
         _.common.openActionsMenu(ctx, "editorAutoSlotActionsOpen", "editorAutoSlotActionsSel",
           "editorAutoSlotActionsScroll")
       elseif isEsrPathRow then

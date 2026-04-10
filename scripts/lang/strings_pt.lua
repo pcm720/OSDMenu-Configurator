@@ -62,6 +62,7 @@ strings.editor = {
   cross_open_circle_back_items = { { pad = "cross", label = "Entrar" }, { pad = "start", label = "Guardar" }, { pad = "circle", label = "Voltar" } },
   start_save_circle_back_items = { { pad = "start", label = "Guardar" }, { pad = "circle", label = "Voltar" } },
   hint_edit_items = { { pad = "cross", label = "Editar", row = 1 }, { pad = "triangle", label = "Repor", row = 1 }, { pad = "start", label = "Guardar", row = 1 }, { pad = "circle", label = "Voltar", row = 1 }, { pad = "left", label = "-1", row = 2 }, { pad = "L1", label = "-10", row = 2 }, { pad = "L2", label = "-50", row = 2 }, { pad = "R2", label = "+50", row = 2 }, { pad = "R1", label = "+10", row = 2 }, { pad = "right", label = "+1", row = 2 } },
+  test_label = "Teste",
   no_option_list = "Não há lista de opções para este tipo de ficheiro",
   save_config_to = "Guardar configuração em",
   save_failed = "Falha ao guardar",
