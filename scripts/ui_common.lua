@@ -587,7 +587,7 @@ function common.getHintRowTransitionInfo(runtime)
     transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
   end
   local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
-  local instantSwitch = transitionType == "cut" or transitionFrames <= 1
+  local instantSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
   return {
     active = transitionActive,
     type = transitionType,
@@ -619,6 +619,18 @@ function common.drawHintSlotsWithTransition(runtime, opts)
   local transitionInfo = common.getHintRowTransitionInfo and common.getHintRowTransitionInfo(runtime) or
       { instant = true, frames = 0 }
 
+  if transitionInfo.instant then
+    if type(runtime[stableField]) ~= "table" then
+      runtime[stableField] = {}
+    end
+    runtime[stableField][hintKey] = cloneSlots(rowSlots)
+    if type(runtime[fadeField]) == "table" then
+      runtime[fadeField][hintKey] = nil
+    end
+    drawRow(rowSlots)
+    return true
+  end
+
   if type(runtime[stableField]) ~= "table" then
     runtime[stableField] = {}
   end
@@ -640,20 +652,12 @@ function common.drawHintSlotsWithTransition(runtime, opts)
 
   local changed = not slotsEqual(state.toSlots, rowSlots)
   if changed then
-    local canAnimateNewChange = transitionInfo.active and (not transitionInfo.instant)
-    if canAnimateNewChange then
-      local hasSource = type(stableSlots) == "table" and #stableSlots > 0
-      state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
-      state.toSlots = cloneSlots(rowSlots)
-      state.frame = 0
-      state.lastAdvanceFrame = nil
-      state.frames = math.max(1, transitionInfo.frames)
-    else
-      runtime[stableField][hintKey] = cloneSlots(rowSlots)
-      runtime[fadeField][hintKey] = nil
-      drawRow(rowSlots)
-      return true
-    end
+    local hasSource = type(stableSlots) == "table" and #stableSlots > 0
+    state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
+    state.toSlots = cloneSlots(rowSlots)
+    state.frame = 0
+    state.lastAdvanceFrame = nil
+    state.frames = math.max(1, transitionInfo.frames)
   end
 
   if slotsEqual(state.fromSlots, state.toSlots) then
