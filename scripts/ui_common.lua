@@ -2126,6 +2126,9 @@ function common.beginTextInput(ctx, opts)
   -- Short neutral window on entry so held confirm from previous scene does not
   -- create a visual "pressed" flash on Enter/selected key.
   ctx.textInputSuppressPressVisualFrames = suppressCrossOnEntry and 6 or 0
+  -- Ignore the first keyboard key press animation after entering text input.
+  -- This avoids visual carry-over from the scene-enter confirm press.
+  ctx.textInputSkipNextPressAnim = true
   ctx.textInputHeldPressKey = nil
   ctx.textInputKeyPressAnims = nil
   ctx.textInputKeyboardDrawCache = nil

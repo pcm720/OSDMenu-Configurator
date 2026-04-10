@@ -1063,6 +1063,12 @@ local function updateHeldKeyPressState(ctx, _, selectedKeyIdx, suppressPressVisu
 
   local prevHeld = (ctx.textInputCrossHeldPrev == true)
   if crossHeld and not prevHeld then
+    if ctx.textInputSkipNextPressAnim == true then
+      ctx.textInputSkipNextPressAnim = nil
+      ctx.textInputHeldPressKey = nil
+      ctx.textInputCrossHeldPrev = true
+      return
+    end
     local idx = math.floor(tonumber(selectedKeyIdx or ctx.textInputGridSel) or 0)
     if idx > 0 then
       local oldHeld = math.floor(tonumber(ctx.textInputHeldPressKey) or 0)
@@ -1183,6 +1189,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
+    ctx.textInputSkipNextPressAnim = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1745,6 +1752,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
+    ctx.textInputSkipNextPressAnim = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1795,6 +1803,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
+    ctx.textInputSkipNextPressAnim = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
