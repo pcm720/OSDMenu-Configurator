@@ -789,6 +789,100 @@ local function ensureKeyboardLayoutCache(ctx, _)
   return cache
 end
 
+local KEY_PRESS_IN_FRAMES = 5
+local KEY_PRESS_OUT_FRAMES = 7
+local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
+local KEY_PRESS_MAX_DARKEN = 0.14
+
+local function clamp01(v)
+  local n = tonumber(v) or 0
+  if n < 0 then return 0 end
+  if n > 1 then return 1 end
+  return n
+end
+
+local function easeOutCubic(t)
+  local x = clamp01(t)
+  local a = 1 - x
+  return 1 - (a * a * a)
+end
+
+local function easeOutQuad(t)
+  local x = clamp01(t)
+  local a = 1 - x
+  return 1 - (a * a)
+end
+
+local function darkenColor(color, amount)
+  local raw = tonumber(color)
+  if raw == nil then return color end
+  local base = math.floor(raw)
+  local dark = clamp01(amount)
+  if dark <= 0.0001 then return base end
+  local a = (base >> 24) & 0xFF
+  local b = (base >> 16) & 0xFF
+  local g = (base >> 8) & 0xFF
+  local r = base & 0xFF
+  local scale = 1 - dark
+  r = math.floor((r * scale) + 0.5)
+  g = math.floor((g * scale) + 0.5)
+  b = math.floor((b * scale) + 0.5)
+  return Color.new(r, g, b, a)
+end
+
+local function getKeyPressAnimAmount(ctx, keyIdx)
+  local states = ctx and ctx.textInputKeyPressAnims
+  local st = type(states) == "table" and states[keyIdx] or nil
+  if type(st) ~= "table" then return 0 end
+  local phase = tostring(st.phase or "in")
+  local frame = math.max(0, math.floor(tonumber(st.frame) or 0))
+  if phase == "in" then
+    local t = frame / math.max(1, KEY_PRESS_IN_FRAMES)
+    return easeOutCubic(t)
+  end
+  local t = frame / math.max(1, KEY_PRESS_OUT_FRAMES)
+  return 1 - easeOutQuad(t)
+end
+
+local function triggerKeyPressAnim(ctx, keyIdx)
+  local idx = math.floor(tonumber(keyIdx) or 0)
+  if idx <= 0 then return end
+  if type(ctx.textInputKeyPressAnims) ~= "table" then
+    ctx.textInputKeyPressAnims = {}
+  end
+  ctx.textInputKeyPressAnims[idx] = { phase = "in", frame = 0 }
+end
+
+local function advanceKeyPressAnims(ctx)
+  local states = ctx and ctx.textInputKeyPressAnims
+  if type(states) ~= "table" then return end
+  for idx, st in pairs(states) do
+    if type(st) ~= "table" then
+      states[idx] = nil
+    else
+      local phase = tostring(st.phase or "in")
+      local frame = math.max(0, math.floor(tonumber(st.frame) or 0)) + 1
+      if phase == "in" then
+        if frame >= KEY_PRESS_IN_FRAMES then
+          st.phase = "out"
+          st.frame = 0
+        else
+          st.frame = frame
+        end
+      else
+        if frame >= KEY_PRESS_OUT_FRAMES then
+          states[idx] = nil
+        else
+          st.frame = frame
+        end
+      end
+    end
+  end
+  if next(states) == nil then
+    ctx.textInputKeyPressAnims = nil
+  end
+end
+
 local function run(ctx)
   local _ = ctx._
   local belMenuOpenKey = "textInputBelMenuOpen"
@@ -839,6 +933,7 @@ local function run(ctx)
     ctx.textInputGridHorizontalPrevHeldMask = nil
     ctx.textInputGridHorizontalHoldFrames = nil
     ctx.textInputGridHorizontalHoldCountdown = nil
+    ctx.textInputKeyPressAnims = nil
       ctx.state = ctx.textInputReturnState or "editor"
       return
     end
@@ -870,6 +965,7 @@ local function run(ctx)
   end
   local beforeDisplay = formatBelForDisplay(beforeCurs)
   local afterDisplay = formatBelForDisplay(afterCurs)
+  advanceKeyPressAnims(ctx)
   local keyboardLayout = ensureKeyboardLayoutCache(ctx, _)
   local rows = keyboardLayout.rows or {}
   local runtime = _G and _G.CONFIG_UI
@@ -925,27 +1021,40 @@ local function run(ctx)
     _.drawText(_.font, _.drawMode, x, textY, scale, afterDisplay, _.WHITE)
   end
 
-  local function drawKey(kx, ky, w, h, label, sel, labelScale)
+  local function drawKey(kx, ky, w, h, label, sel, labelScale, keyIdx)
     local drawLabelScale = tonumber(labelScale) or keyScale
+    local pressAmount = getKeyPressAnimAmount(ctx, keyIdx)
+    local inset = KEY_PRESS_MAX_INSET * pressAmount
+    local darken = KEY_PRESS_MAX_DARKEN * pressAmount
     local bg = sel and _.KEY_BG_SEL or _.KEY_BG
     local border = sel and _.KEY_BORDER_SEL or _.KEY_BORDER
+    if darken > 0.0001 then
+      bg = darkenColor(bg, darken)
+      border = darkenColor(border, darken * 0.85)
+    end
+    local ix = math.floor((kx + inset) + 0.5)
+    local iy = math.floor((ky + inset) + 0.5)
+    local iw = math.max(2, math.floor((w - (2 * inset)) + 0.5))
+    local ih = math.max(2, math.floor((h - (2 * inset)) + 0.5))
+    local glyphScaleMul = ih / math.max(1, h)
+    drawLabelScale = drawLabelScale * glyphScaleMul
     -- Hot path optimization: draw key border+fill in 2 rects instead of 5.
-    _.Graphics.drawRect(kx, ky, w, h, border)
-    if w > 2 and h > 2 then
-      _.Graphics.drawRect(kx + 1, ky + 1, w - 2, h - 2, bg)
+    _.Graphics.drawRect(ix, iy, iw, ih, border)
+    if iw > 2 and ih > 2 then
+      _.Graphics.drawRect(ix + 1, iy + 1, iw - 2, ih - 2, bg)
     end
     local textW
-    if #label <= 1 then
+    if #label <= 1 and math.abs(glyphScaleMul - 1) < 0.0001 then
       textW = (_.KEY_CHAR_W or 10) * #label
     else
       textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawLabelScale)) or
           ((_.KEY_CHAR_W or 10) * #label)
     end
-    local textX = math.max(kx, math.floor(kx + (w - textW) / 2))
+    local textX = math.max(ix, math.floor(ix + (iw - textW) / 2))
     if #label == 1 and label:match("%l") then
       textX = textX - 1
     end
-    local textY = math.floor(ky + (h - _.KEY_LH) / 2) - 2
+    local textY = math.floor(iy + (ih - _.KEY_LH) / 2) - 2
     _.drawText(_.font, _.drawMode, textX, textY, drawLabelScale, label, sel and _.HIGHLIGHT or _.WHITE)
   end
   for r = 1, rowCount do
@@ -957,7 +1066,7 @@ local function run(ctx)
       local kx = math.floor(startX + (col - 1) * _.KEY_WIDTH + _.KEY_GAP / 2)
       local ky = math.floor(keyY + (r - 1) * _.KEY_H + _.KEY_GAP / 2)
       local ch = row:sub(col, col)
-      drawKey(kx, ky, kw, kh, ch, idx == ctx.textInputGridSel)
+      drawKey(kx, ky, kw, kh, ch, idx == ctx.textInputGridSel, nil, idx)
     end
   end
   local spaceCenterX = _.KEYBOARD_CENTER_X
@@ -1003,7 +1112,7 @@ local function run(ctx)
 
     if spaceW < kw then spaceW = kw end
     spaceCenterX = specStartX + (spaceW * 0.5)
-    drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
+    drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel, nil, spaceIdx)
   end
 
   local function moveTextCursorWrap(delta)
@@ -1248,6 +1357,7 @@ local function run(ctx)
   if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     local selIdx = ctx.textInputGridSel
+    triggerKeyPressAnim(ctx, selIdx)
     local sk = specialKeys[selIdx]
     if sk and sk.kind == "space" then
       if #ctx.textInputValue < ctx.textInputMaxLen then
