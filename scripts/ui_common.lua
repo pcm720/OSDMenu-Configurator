@@ -284,12 +284,8 @@ local function updateGlobalHintPadPressAnims(runtime)
     end
   end
 
-  if next(states) == nil then
-    runtime.hintPadPressAnims = nil
-    runtime.hintPadPressAnimsFrame = frameCounter
-    return nil
-  end
-
+  -- Keep an empty table instead of nil so repeated calls in the same frame
+  -- can early-return without re-running the whole animation update.
   runtime.hintPadPressAnims = states
   runtime.hintPadPressAnimsFrame = frameCounter
   return states
@@ -2127,6 +2123,9 @@ function common.beginTextInput(ctx, opts)
   ctx.textInputIgnoreCrossUntilRelease = suppressCrossOnEntry and true or nil
   ctx.textInputIgnoreCrossReleaseFrames = suppressCrossOnEntry and 0 or nil
   ctx.textInputCrossHeldPrev = suppressCrossOnEntry and true or nil
+  -- Short neutral window on entry so held confirm from previous scene does not
+  -- create a visual "pressed" flash on Enter/selected key.
+  ctx.textInputSuppressPressVisualFrames = suppressCrossOnEntry and 6 or 0
   ctx.textInputHeldPressKey = nil
   ctx.textInputKeyPressAnims = nil
   ctx.textInputKeyboardDrawCache = nil
@@ -2146,6 +2145,10 @@ function common.beginTextInput(ctx, opts)
     if _G and _G.CONFIG_UI then
       _G.CONFIG_UI.currentRawPad = entryRawPad
     end
+  end
+  if _G and _G.CONFIG_UI then
+    _G.CONFIG_UI.hintPadPressAnims = {}
+    _G.CONFIG_UI.hintPadPressAnimsFrame = nil
   end
   ctx.state = opts.state or "text_input"
 end

@@ -20,6 +20,7 @@ end
 local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, color)
   local labels = buildKeyboardShoulderHints(hintItems)
   local runtime = _G and _G.CONFIG_UI
+  local suppressPressVisuals = math.max(0, math.floor(tonumber(ctx and ctx.textInputSuppressPressVisualFrames) or 0)) > 0
 
   local function clamp01(v)
     local n = tonumber(v) or 0
@@ -168,7 +169,10 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
     local basePx = math.floor(slotCenter - iconW / 2)
     local baseIconY = math.floor(rowCenter - iconH / 2)
-    local pressAmount = (_.common and _.common.getHintPadPressAmount and _.common.getHintPadPressAmount(slot.pad)) or 0
+    local pressAmount = 0
+    if not suppressPressVisuals then
+      pressAmount = (_.common and _.common.getHintPadPressAmount and _.common.getHintPadPressAmount(slot.pad)) or 0
+    end
     local shrinkTotal = KEYBOARD_HINT_ICON_SHRINK_TOTAL * pressAmount
     local inset = math.max(0, shrinkTotal * 0.5)
     local drawIconW = math.max(1, iconW - shrinkTotal)
@@ -1019,7 +1023,7 @@ local function setKeyReleaseAnim(ctx, keyIdx, fromAmount)
   end
 end
 
-local function updateHeldKeyPressState(ctx, _, selectedKeyIdx)
+local function updateHeldKeyPressState(ctx, _, selectedKeyIdx, suppressPressVisuals)
   local crossMask = _.PAD_CROSS or 0
   local crossHeld = false
   if crossMask ~= 0 then
@@ -1028,6 +1032,13 @@ local function updateHeldKeyPressState(ctx, _, selectedKeyIdx)
       rawPad = _.common.remapCrossCircleMask(rawPad)
     end
     crossHeld = (rawPad & crossMask) ~= 0
+  end
+
+  if suppressPressVisuals == true then
+    ctx.textInputHeldPressKey = nil
+    ctx.textInputKeyPressAnims = nil
+    ctx.textInputCrossHeldPrev = crossHeld and true or false
+    return
   end
 
   if ctx.textInputIgnoreCrossUntilRelease == true then
@@ -1171,6 +1182,7 @@ local function run(ctx)
     ctx.textInputCrossHeldPrev = nil
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
+    ctx.textInputSuppressPressVisualFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1233,8 +1245,15 @@ local function run(ctx)
   local maxRow = tonumber(keyboardLayout.maxRow) or (rowCount + ((spaceIdx ~= nil) and 1 or 0))
   if ctx.textInputGridSel < 1 then ctx.textInputGridSel = 1 end
   if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = #keyList end
-  updateHeldKeyPressState(ctx, _, ctx.textInputGridSel)
+  local suppressPressVisualFrames = math.max(0, math.floor(tonumber(ctx.textInputSuppressPressVisualFrames) or 0))
+  local suppressPressVisualsForFrame = suppressPressVisualFrames > 0
+  updateHeldKeyPressState(ctx, _, ctx.textInputGridSel, suppressPressVisualsForFrame)
   advanceKeyPressAnims(ctx)
+  if suppressPressVisualFrames > 0 then
+    ctx.textInputSuppressPressVisualFrames = suppressPressVisualFrames - 1
+  else
+    ctx.textInputSuppressPressVisualFrames = 0
+  end
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = KEY_LABEL_SCALE
@@ -1653,7 +1672,7 @@ local function run(ctx)
   local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
   if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
   if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
-  local suppressCrossEnter = (ctx.textInputIgnoreCrossUntilRelease == true)
+  local suppressCrossEnter = suppressPressVisualsForFrame or (ctx.textInputIgnoreCrossUntilRelease == true)
   if (not suppressCrossEnter) and ((_.padEffective & _.PAD_CROSS) ~= 0) then
     local selIdx = ctx.textInputGridSel
     local sk = specialKeys[selIdx]
@@ -1725,6 +1744,7 @@ local function run(ctx)
     ctx.textInputCrossHeldPrev = nil
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
+    ctx.textInputSuppressPressVisualFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1774,6 +1794,7 @@ local function run(ctx)
     ctx.textInputCrossHeldPrev = nil
     ctx.textInputIgnoreCrossUntilRelease = nil
     ctx.textInputIgnoreCrossReleaseFrames = nil
+    ctx.textInputSuppressPressVisualFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1797,11 +1818,14 @@ local function run(ctx)
     end
   end
   local hints = (ctx.textInputTitleIdMode and _.text_str.hint_items_title_id) or _.text_str.hint_items
-  local suppressCrossEnter = (ctx.textInputIgnoreCrossUntilRelease == true)
+  local suppressCrossEnter = suppressPressVisualsForFrame or (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X, {
     disableTransitions = true,
     getIconPressAmount = function(padName)
+      if suppressPressVisualsForFrame then
+        return 0
+      end
       local key = tostring(padName or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
       if suppressCrossEnter and key == tostring(logicalEnterPad):lower() then
         return 0
