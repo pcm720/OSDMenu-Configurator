@@ -698,7 +698,7 @@ end
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
 -- Single-row 5-slot layout (top row removed in new UX).
 -- totalWidth: optional. y = bottom of hint area.
-function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
+function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth, opts)
   if not color then color = common.DIM end
   local runtime = _G and _G.CONFIG_UI
   local function clamp01(v)
@@ -714,6 +714,22 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if scaled < 0 then scaled = 0 end
     if scaled > 0x80 then scaled = 0x80 end
     return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
+  end
+  local function darkenColor(colorValue, amount)
+    local raw = tonumber(colorValue)
+    if raw == nil then return colorValue end
+    local c = math.floor(raw)
+    local dark = clamp01(amount)
+    if dark <= 0.0001 then return c end
+    local a = (c >> 24) & 0xFF
+    local b = (c >> 16) & 0xFF
+    local g = (c >> 8) & 0xFF
+    local r = c & 0xFF
+    local s = 1 - dark
+    r = math.floor((r * s) + 0.5)
+    g = math.floor((g * s) + 0.5)
+    b = math.floor((b * s) + 0.5)
+    return Color.new(r, g, b, a)
   end
   local function cloneSlots(src)
     local out = {}
@@ -852,29 +868,45 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local icon = common.getPadIcon(padName)
       local slotLeft = xEff + (col - 1) * slotW
       local slotCenter = slotLeft + slotW / 2
-      local px = math.floor(slotCenter - iconW / 2)
+      local basePx = math.floor(slotCenter - iconW / 2)
+      local pressAmount = 0
+      if type(opts) == "table" and type(opts.getIconPressAmount) == "function" then
+        local ok, v = pcall(opts.getIconPressAmount, padName)
+        if ok then
+          pressAmount = clamp01(v)
+        end
+      end
+      local shrinkTotal = math.max(0, tonumber(type(opts) == "table" and opts.iconPressShrinkPx or 0) or 0) * pressAmount
+      local iconDarkenMax = math.max(0, tonumber(type(opts) == "table" and opts.iconPressDarkenMax or 0) or 0)
+      local drawIconW = math.max(1, math.floor((iconW - shrinkTotal) + 0.5))
+      local drawIconH = math.max(1, math.floor((iconH - shrinkTotal) + 0.5))
+      local px = math.floor(slotCenter - drawIconW / 2)
+      local py = math.floor(rowCenter - drawIconH / 2)
       local drawIconAlpha = clamp01(iconAlpha or 0)
       local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
       local drawLabelAlpha = clamp01(labelAlpha or 0)
       if icon and drawIconAlpha > 0.001 then
         local iconColor = applyAlpha(tonumber(common.WHITE) or 0x80FFFFFF, drawIconAlpha)
+        if pressAmount > 0.0001 and iconDarkenMax > 0 then
+          iconColor = darkenColor(iconColor, iconDarkenMax * pressAmount)
+        end
         if Graphics.drawScaleImage then
-          if drawIconAlpha >= 0.999 then
-            local ok = pcall(Graphics.drawScaleImage, icon, px, iconY, iconW, iconH)
+          if drawIconAlpha >= 0.999 and pressAmount <= 0.0001 then
+            local ok = pcall(Graphics.drawScaleImage, icon, basePx, iconY, iconW, iconH)
             if not ok then
-              Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+              Graphics.drawScaleImage(icon, px, py, drawIconW, drawIconH, iconColor)
             end
           else
-            Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, iconColor)
+            Graphics.drawScaleImage(icon, px, py, drawIconW, drawIconH, iconColor)
           end
         elseif Graphics.drawImage then
-          if drawIconAlpha >= 0.999 then
-            local ok = pcall(Graphics.drawImage, icon, px, iconY)
+          if drawIconAlpha >= 0.999 and pressAmount <= 0.0001 then
+            local ok = pcall(Graphics.drawImage, icon, basePx, iconY)
             if not ok then
-              Graphics.drawImage(icon, px, iconY, iconColor)
+              Graphics.drawImage(icon, px, py, iconColor)
             end
           else
-            Graphics.drawImage(icon, px, iconY, iconColor)
+            Graphics.drawImage(icon, px, py, iconColor)
           end
         end
       end
@@ -882,7 +914,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         local textW = getTextWidth(label)
         local textX
         if icon then
-          textX = px + iconW + gap
+          textX = basePx + iconW + gap
         else
           textX = math.floor(slotCenter - textW / 2)
         end
