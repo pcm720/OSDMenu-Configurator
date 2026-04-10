@@ -874,6 +874,10 @@ local KEY_PRESS_IN_FRAMES = 5
 local KEY_PRESS_OUT_FRAMES = 7
 local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
 local KEY_PRESS_MAX_DARKEN = 0.24
+local KEY_LABEL_SCALE = 0.64
+local KEY_LABEL_FT_FONT_SCALE = 0.62
+local KEY_LABEL_HEIGHT_FACTOR = 0.58
+local KEY_LABEL_Y_BIAS = 0.0
 
 local function clamp01(v)
   local n = tonumber(v) or 0
@@ -1144,7 +1148,9 @@ local function run(ctx)
   advanceKeyPressAnims(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
-  local keyScale = 0.7
+  local keyScale = KEY_LABEL_SCALE
+  local keyFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
+    { lockSceneScale = true })) or _.font
   local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
       { 0, 0, 0, 0 }
   local minOffset = 0
@@ -1190,25 +1196,32 @@ local function run(ctx)
     local iw = math.max(2, math.floor((w - (2 * inset)) + 0.5))
     local ih = math.max(2, math.floor((h - (2 * inset)) + 0.5))
     local glyphScaleMul = ih / math.max(1, h)
-    drawLabelScale = drawLabelScale * glyphScaleMul
+    local labelFont = keyFont
+    if _.drawMode ~= "ftPrint" then
+      -- Font.print/fmPrint can scale per-draw; ftPrint uses a dedicated smaller key font.
+      drawLabelScale = drawLabelScale * glyphScaleMul
+      labelFont = _.font
+    end
     -- Hot path optimization: draw key border+fill in 2 rects instead of 5.
     _.Graphics.drawRect(ix, iy, iw, ih, border)
     if iw > 2 and ih > 2 then
       _.Graphics.drawRect(ix + 1, iy + 1, iw - 2, ih - 2, bg)
     end
-    local textW
-    if #label <= 1 and math.abs(glyphScaleMul - 1) < 0.0001 then
-      textW = (_.KEY_CHAR_W or 10) * #label
+    local textW = (_.common.calcTextWidth and _.common.calcTextWidth(labelFont, label, drawLabelScale)) or
+        (((_.KEY_CHAR_W or 10) * #label) * drawLabelScale)
+    -- Anchor label positioning to the original key center so tiny inset-rounding
+    -- differences during press/release do not create 1px jitter.
+    local keyCenterX = (tonumber(kx) or 0) + ((tonumber(w) or 0) * 0.5)
+    local keyCenterY = (tonumber(ky) or 0) + ((tonumber(h) or 0) * 0.5)
+    local textX = math.floor(keyCenterX - (textW * 0.5) + 0.5)
+    local textH
+    if _.drawMode == "ftPrint" then
+      textH = math.max(8, math.floor((h * KEY_LABEL_HEIGHT_FACTOR) + 0.5))
     else
-      textW = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, label, drawLabelScale)) or
-          ((_.KEY_CHAR_W or 10) * #label)
+      textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
     end
-    local textX = math.max(ix, math.floor(ix + (iw - textW) / 2))
-    if #label == 1 and label:match("%l") then
-      textX = textX - 1
-    end
-    local textY = math.floor(iy + (ih - _.KEY_LH) / 2) - 2
-    _.drawText(_.font, _.drawMode, textX, textY, drawLabelScale, label, sel and _.HIGHLIGHT or _.WHITE)
+    local textY = math.floor(keyCenterY - (textH * 0.5) + KEY_LABEL_Y_BIAS + 0.5)
+    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.HIGHLIGHT or _.WHITE)
   end
   for r = 1, rowCount do
     local row = rows[r] or ""
