@@ -715,15 +715,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if scaled > 0x80 then scaled = 0x80 end
     return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
   end
-  local function getIconModulateColor(alpha, darken)
-    local a = math.floor((FULL_ALPHA or 0x80) * clamp01(alpha) + 0.5)
-    if a < 0 then a = 0 end
-    if a > 0x80 then a = 0x80 end
-    local tone = math.floor(255 * (1 - clamp01(darken)) + 0.5)
-    if tone < 0 then tone = 0 end
-    if tone > 255 then tone = 255 end
-    return Color.new(tone, tone, tone, a)
-  end
   local function cloneSlots(src)
     local out = {}
     for i = 1, #(src or {}) do
@@ -880,7 +871,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local drawLabelAlpha = clamp01(labelAlpha or 0)
       if icon and drawIconAlpha > 0.001 then
         local pressDarken = (pressAmount > 0.0001 and iconDarkenMax > 0) and (iconDarkenMax * pressAmount) or 0
-        local iconColor = getIconModulateColor(drawIconAlpha, pressDarken)
+        local dimmedAlpha = drawIconAlpha * (1 - clamp01(pressDarken))
+        local iconColor = applyAlpha(tonumber(common.WHITE) or 0x80FFFFFF, dimmedAlpha)
         if Graphics.drawScaleImage then
           local ok = pcall(Graphics.drawScaleImage, icon, px, py, drawIconW, drawIconH, iconColor)
           if not ok then
