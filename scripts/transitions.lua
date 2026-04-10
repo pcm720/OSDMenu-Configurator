@@ -117,6 +117,63 @@ function transitions.install(common)
     gfx.drawRect(math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0), rw, rh, color)
   end
 
+  local function resetSceneDrawRuntime(runtime, opts)
+    if type(runtime) ~= "table" then return end
+    opts = opts or {}
+    runtime.sceneDrawOffsetX = 0
+    runtime.sceneDrawAlpha = 1
+    runtime.sceneDrawScale = 1
+    runtime.sceneDrawScaleX = 1
+    runtime.sceneDrawScaleY = 1
+    if opts.centerX ~= nil then
+      runtime.sceneDrawCenterX = math.floor((tonumber(opts.centerX) or 0) + 0.5)
+    end
+    if opts.centerY ~= nil then
+      runtime.sceneDrawCenterY = math.floor((tonumber(opts.centerY) or 0) + 0.5)
+    end
+    runtime.sceneDrawProjective = false
+    runtime.sceneDrawYawRad = 0
+    runtime.sceneDrawPitchRad = 0
+    runtime.sceneDrawCameraRadius = 1.0
+    runtime.sceneDrawCameraFocal = 1.0
+    runtime.sceneDrawCameraMinDen = 0.12
+    if opts.sceneW ~= nil then
+      runtime.currentSceneWidth = math.floor((tonumber(opts.sceneW) or 0) + 0.5)
+    end
+    if opts.sceneH ~= nil then
+      runtime.currentSceneHeight = math.floor((tonumber(opts.sceneH) or 0) + 0.5)
+    end
+  end
+
+  local function resetSceneFlipRuntime(runtime, opts)
+    if type(runtime) ~= "table" then return end
+    opts = opts or {}
+    runtime.sceneFlipActive = false
+    runtime.sceneFlipType = nil
+    runtime.sceneFlipAxisScale = 1
+    runtime.sceneFlipDirSign = 0
+    if opts.centerX ~= nil then
+      runtime.sceneFlipCenterX = math.floor((tonumber(opts.centerX) or 0) + 0.5)
+    elseif runtime.sceneFlipCenterX == nil and runtime.sceneDrawCenterX ~= nil then
+      runtime.sceneFlipCenterX = runtime.sceneDrawCenterX
+    end
+    if opts.centerY ~= nil then
+      runtime.sceneFlipCenterY = math.floor((tonumber(opts.centerY) or 0) + 0.5)
+    elseif runtime.sceneFlipCenterY == nil and runtime.sceneDrawCenterY ~= nil then
+      runtime.sceneFlipCenterY = runtime.sceneDrawCenterY
+    end
+    runtime.sceneFlipPhase = nil
+  end
+
+  local function resetSceneTransitionAnimRuntime(runtime)
+    if type(runtime) ~= "table" then return end
+    runtime.sceneTransitionAnimActive = false
+    runtime.sceneTransitionAnimType = nil
+    runtime.sceneTransitionAnimPhase = nil
+    runtime.sceneTransitionAnimFrame = 0
+    runtime.sceneTransitionAnimFrames = 0
+  end
+
   function common.drawSceneTransitionOverlay(ctx, spec)
     if not (spec and Graphics and Graphics.drawRect and Color and Color.new) then return end
     local phase = tostring(spec.phase or "in")
@@ -259,54 +316,6 @@ function transitions.install(common)
     end
   end
 
-  local function drawFlipOverlay(ctx)
-    local runtime = _G and _G.CONFIG_UI
-    if type(runtime) ~= "table" then return end
-    if runtime.sceneFlipActive ~= true then return end
-    if tostring(runtime.sceneFlipPhase or "") ~= "out" then return end
-    local flipType = common.normalizeSceneTransitionType(runtime.sceneFlipType)
-    if flipType ~= "flip_horizontal" and flipType ~= "flip_vertical" then return end
-    local w, h = getTransitionScreenSize(ctx)
-    local axisScale = clamp01(runtime.sceneFlipAxisScale or 1)
-    local fullAlpha = 0x80
-
-    if flipType == "flip_horizontal" then
-      local cx = math.floor(tonumber(runtime.sceneFlipCenterX) or (w / 2))
-      local visibleW = math.max(1, math.floor((w * axisScale) + 0.5))
-      local left = cx - math.floor(visibleW / 2)
-      local right = left + visibleW
-      if left < 0 then
-        right = right - left
-        left = 0
-      end
-      if right > w then
-        left = left - (right - w)
-        right = w
-      end
-      if left < 0 then left = 0 end
-      if right < left then right = left end
-      drawRectSafe(0, 0, left, h, Color.new(0, 0, 0, fullAlpha))
-      drawRectSafe(right, 0, w - right, h, Color.new(0, 0, 0, fullAlpha))
-    else
-      local cy = math.floor(tonumber(runtime.sceneFlipCenterY) or (h / 2))
-      local visibleH = math.max(1, math.floor((h * axisScale) + 0.5))
-      local top = cy - math.floor(visibleH / 2)
-      local bottom = top + visibleH
-      if top < 0 then
-        bottom = bottom - top
-        top = 0
-      end
-      if bottom > h then
-        top = top - (bottom - h)
-        bottom = h
-      end
-      if top < 0 then top = 0 end
-      if bottom < top then bottom = top end
-      drawRectSafe(0, 0, w, top, Color.new(0, 0, 0, fullAlpha))
-      drawRectSafe(0, bottom, w, h - bottom, Color.new(0, 0, 0, fullAlpha))
-    end
-  end
-
   function common.beginSceneTransitionIn(ctx, transitionType, transitionFrames, opts)
     if not ctx then return end
     local t = common.normalizeSceneTransitionType(transitionType)
@@ -364,33 +373,11 @@ function transitions.install(common)
       end
     end
     if runtime then
-      runtime.sceneDrawOffsetX = 0
-      runtime.sceneDrawAlpha = 1
-      runtime.sceneDrawScale = 1
-      runtime.sceneDrawScaleX = 1
-      runtime.sceneDrawScaleY = 1
-      runtime.sceneDrawCenterX = math.floor((w or 0) / 2)
-      runtime.sceneDrawCenterY = math.floor((h or 0) / 2)
-      runtime.sceneDrawProjective = false
-      runtime.sceneDrawYawRad = 0
-      runtime.sceneDrawPitchRad = 0
-      runtime.sceneDrawCameraRadius = 1.0
-      runtime.sceneDrawCameraFocal = 1.0
-      runtime.sceneDrawCameraMinDen = 0.12
-      runtime.currentSceneWidth = w
-      runtime.currentSceneHeight = h
-      runtime.sceneFlipActive = false
-      runtime.sceneFlipType = nil
-      runtime.sceneFlipAxisScale = 1
-      runtime.sceneFlipDirSign = 0
-      runtime.sceneFlipCenterX = runtime.sceneDrawCenterX
-      runtime.sceneFlipCenterY = runtime.sceneDrawCenterY
-      runtime.sceneFlipPhase = nil
-      runtime.sceneTransitionAnimActive = false
-      runtime.sceneTransitionAnimType = nil
-      runtime.sceneTransitionAnimPhase = nil
-      runtime.sceneTransitionAnimFrame = 0
-      runtime.sceneTransitionAnimFrames = 0
+      local centerX = math.floor((w or 0) / 2)
+      local centerY = math.floor((h or 0) / 2)
+      resetSceneDrawRuntime(runtime, { centerX = centerX, centerY = centerY, sceneW = w, sceneH = h })
+      resetSceneFlipRuntime(runtime, { centerX = centerX, centerY = centerY })
+      resetSceneTransitionAnimRuntime(runtime)
     end
     if not common.isSceneTransitionInActive(ctx) then
       return 0
@@ -580,17 +567,7 @@ function transitions.install(common)
     local prevCamRadius = runtime.sceneDrawCameraRadius
     local prevCamFocal = runtime.sceneDrawCameraFocal
     local prevCamMinDen = runtime.sceneDrawCameraMinDen
-    runtime.sceneDrawOffsetX = 0
-    runtime.sceneDrawAlpha = 1
-    runtime.sceneDrawScale = 1
-    runtime.sceneDrawScaleX = 1
-    runtime.sceneDrawScaleY = 1
-    runtime.sceneDrawProjective = false
-    runtime.sceneDrawYawRad = 0
-    runtime.sceneDrawPitchRad = 0
-    runtime.sceneDrawCameraRadius = 1.0
-    runtime.sceneDrawCameraFocal = 1.0
-    runtime.sceneDrawCameraMinDen = 0.12
+    resetSceneDrawRuntime(runtime)
     local ok, r1, r2, r3, r4 = pcall(drawFn)
     runtime.sceneDrawOffsetX = prevOffsetX
     runtime.sceneDrawAlpha = prevAlpha
@@ -616,25 +593,9 @@ function transitions.install(common)
       if ctx then ctx.sceneTransitionIn = nil end
       local runtime = _G and _G.CONFIG_UI
       if runtime then
-        runtime.sceneDrawOffsetX = 0
-        runtime.sceneDrawAlpha = 1
-        runtime.sceneDrawScale = 1
-        runtime.sceneDrawScaleX = 1
-        runtime.sceneDrawScaleY = 1
-        runtime.sceneDrawProjective = false
-        runtime.sceneDrawYawRad = 0
-        runtime.sceneDrawPitchRad = 0
-        runtime.sceneDrawCameraRadius = 1.0
-        runtime.sceneDrawCameraFocal = 1.0
-        runtime.sceneDrawCameraMinDen = 0.12
-        runtime.sceneFlipActive = false
-        runtime.sceneFlipType = nil
-        runtime.sceneFlipPhase = nil
-        runtime.sceneTransitionAnimActive = false
-        runtime.sceneTransitionAnimType = nil
-        runtime.sceneTransitionAnimPhase = nil
-        runtime.sceneTransitionAnimFrame = 0
-        runtime.sceneTransitionAnimFrames = 0
+        resetSceneDrawRuntime(runtime)
+        resetSceneFlipRuntime(runtime)
+        resetSceneTransitionAnimRuntime(runtime)
       end
       return
     end
@@ -668,25 +629,9 @@ function transitions.install(common)
       ctx.sceneTransitionIn = nil
       local runtime = _G and _G.CONFIG_UI
       if runtime then
-        runtime.sceneDrawOffsetX = 0
-        runtime.sceneDrawAlpha = 1
-        runtime.sceneDrawScale = 1
-        runtime.sceneDrawScaleX = 1
-        runtime.sceneDrawScaleY = 1
-        runtime.sceneDrawProjective = false
-        runtime.sceneDrawYawRad = 0
-        runtime.sceneDrawPitchRad = 0
-        runtime.sceneDrawCameraRadius = 1.0
-        runtime.sceneDrawCameraFocal = 1.0
-        runtime.sceneDrawCameraMinDen = 0.12
-        runtime.sceneFlipActive = false
-        runtime.sceneFlipType = nil
-        runtime.sceneFlipPhase = nil
-        runtime.sceneTransitionAnimActive = false
-        runtime.sceneTransitionAnimType = nil
-        runtime.sceneTransitionAnimPhase = nil
-        runtime.sceneTransitionAnimFrame = 0
-        runtime.sceneTransitionAnimFrames = 0
+        resetSceneDrawRuntime(runtime)
+        resetSceneFlipRuntime(runtime)
+        resetSceneTransitionAnimRuntime(runtime)
       end
     else
       tr.frame = frame
@@ -707,20 +652,8 @@ function transitions.install(common)
     end
     local runtime = _G and _G.CONFIG_UI
     if runtime then
-      runtime.sceneDrawOffsetX = 0
-      runtime.sceneDrawAlpha = 1
-      runtime.sceneDrawScale = 1
-      runtime.sceneDrawScaleX = 1
-      runtime.sceneDrawScaleY = 1
-      runtime.sceneDrawProjective = false
-      runtime.sceneDrawYawRad = 0
-      runtime.sceneDrawPitchRad = 0
-      runtime.sceneDrawCameraRadius = 1.0
-      runtime.sceneDrawCameraFocal = 1.0
-      runtime.sceneDrawCameraMinDen = 0.12
-      runtime.sceneFlipActive = false
-      runtime.sceneFlipType = nil
-      runtime.sceneFlipPhase = nil
+      resetSceneDrawRuntime(runtime)
+      resetSceneFlipRuntime(runtime)
     end
     local p = (tostring(phase or "out") == "in") and "in" or "out"
     for i = 1, frames do

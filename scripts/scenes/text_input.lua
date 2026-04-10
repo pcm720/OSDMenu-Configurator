@@ -234,70 +234,18 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   end
 
   drawHintsUntransformed(function()
-    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
-    local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
-    local transitionFramesValue
-    if transitionActive then
-      transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
-      if not transitionFramesValue or transitionFramesValue <= 0 then
-        transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
-      end
-    else
-      transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
-    end
-    local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
-    local instantSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
-    if instantSwitch then
-      if type(runtime) == "table" then
-        runtime.keyboardShoulderStableSlots = runtime.keyboardShoulderStableSlots or {}
-        runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(rowSlots)
-        if type(runtime.keyboardShoulderFadeStates) == "table" then
-          runtime.keyboardShoulderFadeStates[hintKey] = nil
-        end
-      end
+    local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
+      hintKey = hintKey,
+      stableField = "keyboardShoulderStableSlots",
+      fadeField = "keyboardShoulderFadeStates",
+      rowSlots = rowSlots,
+      cloneSlots = cloneSlots,
+      slotsEqual = slotsEqual,
+      drawRow = drawRow,
+      drawBlendedRows = drawBlendedRows,
+    })
+    if not handled then
       drawRow(rowSlots)
-      return
-    end
-
-    local frameCounter = math.floor(tonumber(runtime and runtime.uiFrameCounter) or 0)
-    runtime.keyboardShoulderStableSlots = runtime.keyboardShoulderStableSlots or {}
-    runtime.keyboardShoulderFadeStates = runtime.keyboardShoulderFadeStates or {}
-    local stableSlots = runtime.keyboardShoulderStableSlots[hintKey]
-    local state = runtime.keyboardShoulderFadeStates[hintKey] or {}
-    runtime.keyboardShoulderFadeStates[hintKey] = state
-
-    if type(state.fromSlots) ~= "table" then
-      state.fromSlots = cloneSlots(stableSlots or rowSlots)
-    end
-    if type(state.toSlots) ~= "table" then
-      state.toSlots = cloneSlots(state.fromSlots)
-    end
-
-    if not slotsEqual(state.toSlots, rowSlots) then
-      local hasSource = type(stableSlots) == "table" and #stableSlots > 0
-      state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
-      state.toSlots = cloneSlots(rowSlots)
-      state.frame = 0
-      state.lastAdvanceFrame = nil
-      state.frames = math.max(1, transitionFrames)
-    end
-
-    local progress = 1
-    local frames = math.max(1, math.floor(tonumber(state.frames) or 1))
-    if not slotsEqual(state.fromSlots, state.toSlots) then
-      if state.lastAdvanceFrame ~= frameCounter then
-        state.frame = math.max(0, math.floor(tonumber(state.frame) or 0)) + 1
-        if state.frame > frames then state.frame = frames end
-        state.lastAdvanceFrame = frameCounter
-      end
-      progress = clamp01((tonumber(state.frame) or frames) / frames)
-    end
-
-    drawBlendedRows(state.fromSlots, state.toSlots, progress)
-
-    if progress >= 1 then
-      state.fromSlots = cloneSlots(state.toSlots)
-      runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(state.toSlots)
     end
   end)
 end
@@ -914,13 +862,13 @@ local function run(ctx)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = 0.7
   local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
-      { 0, 0.5, 0.85, 1.2 }
+      { 0, 0, 0, 0 }
   local minOffset = 0
   local maxExtent = 0
   for r = 1, rowCount do
     local off = tonumber(rowOffsets[r]) or 0
     if r == 1 or off < minOffset then minOffset = off end
-    -- Keep classic qwerty alignment centered from the base character rows only.
+    -- Keep keyboard block centered from the base character rows.
     local extent = off + #(rows[r] or "")
     if extent > maxExtent then maxExtent = extent end
   end

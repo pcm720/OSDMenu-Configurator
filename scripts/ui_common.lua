@@ -577,6 +577,114 @@ function common.getHintLabelTextHeight(opts)
   return math.max(10, math.floor(basePx * ts + 0.5))
 end
 
+function common.getHintRowTransitionInfo(runtime)
+  local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
+  local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
+  -- Use configured scene-transition frames for hint fades so button/helper
+  -- transitions keep consistent timing across transition styles.
+  local transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
+  if not transitionFramesValue or transitionFramesValue <= 0 then
+    transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
+  end
+  local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
+  local instantSwitch = transitionType == "cut" or transitionFrames <= 1
+  return {
+    active = transitionActive,
+    type = transitionType,
+    frames = transitionFrames,
+    instant = instantSwitch,
+  }
+end
+
+function common.drawHintSlotsWithTransition(runtime, opts)
+  if type(opts) ~= "table" then return false end
+  local rowSlots = opts.rowSlots
+  local cloneSlots = opts.cloneSlots
+  local slotsEqual = opts.slotsEqual
+  local drawRow = opts.drawRow
+  local drawBlendedRows = opts.drawBlendedRows
+  if type(rowSlots) ~= "table" or type(cloneSlots) ~= "function" or type(slotsEqual) ~= "function" or
+      type(drawRow) ~= "function" or type(drawBlendedRows) ~= "function" then
+    return false
+  end
+
+  if type(runtime) ~= "table" then
+    drawRow(rowSlots)
+    return true
+  end
+
+  local hintKey = tostring(opts.hintKey or "__hint_row__")
+  local stableField = tostring(opts.stableField or "hintRowStableSlots")
+  local fadeField = tostring(opts.fadeField or "hintRowFadeStates")
+  local transitionInfo = common.getHintRowTransitionInfo and common.getHintRowTransitionInfo(runtime) or
+      { instant = true, frames = 0 }
+
+  if type(runtime[stableField]) ~= "table" then
+    runtime[stableField] = {}
+  end
+  if type(runtime[fadeField]) ~= "table" then
+    runtime[fadeField] = {}
+  end
+
+  local frameCounter = math.floor(tonumber(runtime.uiFrameCounter) or 0)
+  local stableSlots = runtime[stableField][hintKey]
+  local state = runtime[fadeField][hintKey] or {}
+  runtime[fadeField][hintKey] = state
+
+  if type(state.fromSlots) ~= "table" then
+    state.fromSlots = cloneSlots(stableSlots or rowSlots)
+  end
+  if type(state.toSlots) ~= "table" then
+    state.toSlots = cloneSlots(state.fromSlots)
+  end
+
+  local changed = not slotsEqual(state.toSlots, rowSlots)
+  if changed then
+    local canAnimateNewChange = transitionInfo.active and (not transitionInfo.instant)
+    if canAnimateNewChange then
+      local hasSource = type(stableSlots) == "table" and #stableSlots > 0
+      state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
+      state.toSlots = cloneSlots(rowSlots)
+      state.frame = 0
+      state.lastAdvanceFrame = nil
+      state.frames = math.max(1, transitionInfo.frames)
+    else
+      runtime[stableField][hintKey] = cloneSlots(rowSlots)
+      runtime[fadeField][hintKey] = nil
+      drawRow(rowSlots)
+      return true
+    end
+  end
+
+  if slotsEqual(state.fromSlots, state.toSlots) then
+    runtime[stableField][hintKey] = cloneSlots(rowSlots)
+    drawRow(rowSlots)
+    return true
+  end
+
+  local frames = math.max(1, math.floor(tonumber(state.frames) or 1))
+  local frame = math.max(0, math.floor(tonumber(state.frame) or 0))
+  if frame > frames then frame = frames end
+  local progress = frame / frames
+  if progress < 0 then progress = 0 end
+  if progress > 1 then progress = 1 end
+
+  drawBlendedRows(state.fromSlots, state.toSlots, progress)
+
+  if state.lastAdvanceFrame ~= frameCounter then
+    frame = frame + 1
+    if frame > frames then frame = frames end
+    state.frame = frame
+    state.lastAdvanceFrame = frameCounter
+  end
+
+  if frame >= frames then
+    state.fromSlots = cloneSlots(state.toSlots)
+    runtime[stableField][hintKey] = cloneSlots(state.toSlots)
+  end
+  return true
+end
+
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
 -- Single-row 5-slot layout (top row removed in new UX).
 -- totalWidth: optional. y = bottom of hint area.
@@ -763,7 +871,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     local function drawRow(slots, rowIndex)
-      local rTop = rowTop + rowIndex * rowH
+      local idx = tonumber(rowIndex) or 0
+      local rTop = rowTop + idx * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
@@ -842,76 +951,20 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     drawHintsUntransformed(function()
-      local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
-      local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
-      local transitionFramesValue
-      if transitionActive then
-        transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
-        if not transitionFramesValue or transitionFramesValue <= 0 then
-          transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
-        end
-      else
-        transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
-      end
-      local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
-      local instantHintSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
-      if instantHintSwitch then
-        if type(runtime) == "table" then
-          runtime.hintRowStableSlots = runtime.hintRowStableSlots or {}
-          runtime.hintRowStableSlots[hintKey] = cloneSlots(rowSlots)
-          if type(runtime.hintRowFadeStates) == "table" then
-            runtime.hintRowFadeStates[hintKey] = nil
-          end
-        end
+      local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
+        hintKey = hintKey,
+        stableField = "hintRowStableSlots",
+        fadeField = "hintRowFadeStates",
+        rowSlots = rowSlots,
+        cloneSlots = cloneSlots,
+        slotsEqual = slotsEqual,
+        drawRow = function(slots)
+          drawRow(slots, 0)
+        end,
+        drawBlendedRows = drawBlendedRows,
+      })
+      if not handled then
         drawRow(rowSlots, 0)
-        return
-      end
-
-      local frameCounter = math.floor(tonumber(runtime and runtime.uiFrameCounter) or 0)
-      runtime.hintRowStableSlots = runtime.hintRowStableSlots or {}
-      runtime.hintRowFadeStates = runtime.hintRowFadeStates or {}
-      local stableSlots = runtime.hintRowStableSlots[hintKey]
-      local state = runtime.hintRowFadeStates[hintKey] or {}
-      runtime.hintRowFadeStates[hintKey] = state
-
-      if type(state.fromSlots) ~= "table" then
-        state.fromSlots = cloneSlots(stableSlots or rowSlots)
-      end
-      if type(state.toSlots) ~= "table" then
-        state.toSlots = cloneSlots(state.fromSlots)
-      end
-
-      if not slotsEqual(state.toSlots, rowSlots) then
-        -- Start a new per-row fade only when hints actually changed.
-        local hasSource = type(stableSlots) == "table" and #stableSlots > 0
-        state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
-        state.toSlots = cloneSlots(rowSlots)
-        state.frame = 0
-        state.lastAdvanceFrame = nil
-        local targetFrames = math.max(1, transitionFrames)
-        if targetFrames <= 0 then
-          targetFrames = math.max(1,
-            math.floor(tonumber(runtime.sceneTransitionAnimFrames) or common.SCENE_TRANSITION_DEFAULT_FRAMES))
-        end
-        state.frames = targetFrames
-      end
-
-      local progress = 1
-      local frames = math.max(1, math.floor(tonumber(state.frames) or 1))
-      if not slotsEqual(state.fromSlots, state.toSlots) then
-        if state.lastAdvanceFrame ~= frameCounter then
-          state.frame = math.max(0, math.floor(tonumber(state.frame) or 0)) + 1
-          if state.frame > frames then state.frame = frames end
-          state.lastAdvanceFrame = frameCounter
-        end
-        progress = clamp01((tonumber(state.frame) or frames) / frames)
-      end
-
-      drawBlendedRows(state.fromSlots, state.toSlots, progress)
-
-      if progress >= 1 then
-        state.fromSlots = cloneSlots(state.toSlots)
-        runtime.hintRowStableSlots[hintKey] = cloneSlots(state.toSlots)
       end
     end)
     return
@@ -1046,8 +1099,9 @@ common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]\\", "asdfghjkl;'", "zxcvb
 common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?" }
 -- Title ID only: digits + uppercase letters, no shift (e.g. eGSM AAAA_000.00). No symbols.
 common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
-common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.5, 0.85, 1.2 }
-common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.5, 0.85, 1.2 }
+-- Ortholinear layout: keep all rows on the same X grid for d-pad navigation.
+common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.0, 0.0, 0.0 }
+common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.0, 0.0, 0.0 }
 common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y = 320, 220
 common.KEY_WIDTH, common.KEY_HEIGHT = 34, 26
 common.KEY_GAP = 2
