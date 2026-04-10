@@ -236,12 +236,14 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local rowCenter = topRowTop + (rowH / 2)
     local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
     local basePx = math.floor(slotCenter - iconW / 2)
+    local baseIconY = math.floor(rowCenter - iconH / 2)
     local pressAmount = getHintPadPressAmount(ctx, slot.pad)
     local shrinkTotal = KEYBOARD_HINT_ICON_SHRINK_TOTAL * pressAmount
-    local drawIconW = math.max(1, math.floor((iconW - shrinkTotal) + 0.5))
-    local drawIconH = math.max(1, math.floor((iconH - shrinkTotal) + 0.5))
-    local px = math.floor(slotCenter - drawIconW / 2)
-    local iconY = math.floor(rowCenter - drawIconH / 2)
+    local inset = math.max(0, shrinkTotal * 0.5)
+    local drawIconW = math.max(1, iconW - shrinkTotal)
+    local drawIconH = math.max(1, iconH - shrinkTotal)
+    local px = basePx + inset
+    local iconY = baseIconY + inset
     if icon and drawIconAlpha > 0.001 then
       local pressDarken = (pressAmount > 0.0001) and (KEYBOARD_HINT_ICON_DARKEN_MAX * pressAmount) or 0
       local dimmedAlpha = drawIconAlpha * (1 - clamp01(pressDarken))

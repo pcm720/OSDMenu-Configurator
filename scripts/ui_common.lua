@@ -869,10 +869,11 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
       local shrinkTotal = math.max(0, tonumber(type(opts) == "table" and opts.iconPressShrinkPx or 0) or 0) * pressAmount
       local iconDarkenMax = math.max(0, tonumber(type(opts) == "table" and opts.iconPressDarkenMax or 0) or 0)
-      local drawIconW = math.max(1, math.floor((iconW - shrinkTotal) + 0.5))
-      local drawIconH = math.max(1, math.floor((iconH - shrinkTotal) + 0.5))
-      local px = math.floor(slotCenter - drawIconW / 2)
-      local py = math.floor(rowCenter - drawIconH / 2)
+      local inset = math.max(0, shrinkTotal * 0.5)
+      local drawIconW = math.max(1, iconW - shrinkTotal)
+      local drawIconH = math.max(1, iconH - shrinkTotal)
+      local px = basePx + inset
+      local py = math.floor(iconY) + inset
       local drawIconAlpha = clamp01(iconAlpha or 0)
       local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
       local drawLabelAlpha = clamp01(labelAlpha or 0)
