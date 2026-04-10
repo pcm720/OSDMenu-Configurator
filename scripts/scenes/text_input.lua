@@ -794,21 +794,6 @@ local function run(ctx)
   end
   local beforeDisplay = formatBelForDisplay(beforeCurs)
   local afterDisplay = formatBelForDisplay(afterCurs)
-  local baseX = _.KEYBOARD_CENTER_X - 200
-  local textY = _.scaleY(108)
-  local scale = 0.9
-  _.drawText(_.font, _.drawMode, _.KEYBOARD_CENTER_X - 200, _.scaleY(88), 0.9,
-    ctx.textInputPrompt or _.common_str.enter_text, _.DIM)
-  local x = baseX
-  if beforeDisplay ~= "" then
-    _.drawText(_.font, _.drawMode, x, textY, scale, beforeDisplay, _.WHITE)
-    x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, beforeDisplay, scale) or (#beforeDisplay * 10))
-  end
-  _.drawText(_.font, _.drawMode, x, textY, scale, "|", _.TEXT_CURSOR_COLOR or _.WHITE)
-  x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, "|", scale) or 10)
-  if afterDisplay ~= "" then
-    _.drawText(_.font, _.drawMode, x, textY, scale, afterDisplay, _.WHITE)
-  end
   local rows = ctx.textInputTitleIdMode and (_.KEYBOARD_ROWS_TITLE_ID or _.KEYBOARD_ROWS_SHIFTED) or
       (ctx.textInputShift and _.KEYBOARD_ROWS_SHIFTED or _.KEYBOARD_ROWS)
   if ctx.textInputHidePipeBackslash then
@@ -876,6 +861,21 @@ local function run(ctx)
   end
   local keyboardBlockW = math.max(_.KEY_WIDTH, (maxExtent - minOffset) * _.KEY_WIDTH)
   local keyboardLeft = _.KEYBOARD_CENTER_X - keyboardBlockW / 2 - (minOffset * _.KEY_WIDTH)
+  local textY = _.scaleY(108)
+  local scale = 0.9
+  local textLeftX = math.floor(keyboardLeft + (_.KEY_GAP / 2) + 0.5)
+  _.drawText(_.font, _.drawMode, textLeftX, _.scaleY(88), 0.9,
+    ctx.textInputPrompt or _.common_str.enter_text, _.DIM)
+  local x = textLeftX
+  if beforeDisplay ~= "" then
+    _.drawText(_.font, _.drawMode, x, textY, scale, beforeDisplay, _.WHITE)
+    x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, beforeDisplay, scale) or (#beforeDisplay * 10))
+  end
+  _.drawText(_.font, _.drawMode, x, textY, scale, "|", _.TEXT_CURSOR_COLOR or _.WHITE)
+  x = x + (_.common.calcTextWidth and _.common.calcTextWidth(_.font, "|", scale) or 10)
+  if afterDisplay ~= "" then
+    _.drawText(_.font, _.drawMode, x, textY, scale, afterDisplay, _.WHITE)
+  end
 
   local function drawKey(kx, ky, w, h, label, sel, labelScale)
     local drawLabelScale = tonumber(labelScale) or keyScale
