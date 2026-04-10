@@ -581,15 +581,26 @@ local function buildBelMenuLayoutMetrics(_, rowsByPage)
   return columnMinWidths, maxIntrinsicW
 end
 
-local function getTextInputCursorHoldRepeatMask(ctx, _)
-  if not (Pads and Pads.get) then
-    return 0
+local function getRawPadNow(ctx)
+  local raw = tonumber(ctx and ctx._rawPadNow)
+  if type(raw) == "number" then
+    return raw
   end
+  if Pads and Pads.get then
+    local ok, v = pcall(Pads.get, 0)
+    if ok and type(v) == "number" then
+      return v
+    end
+  end
+  return 0
+end
+
+local function getTextInputCursorHoldRepeatMask(ctx, _)
   local l1r1Mask = (_.PAD_L1 or 0) | (_.PAD_R1 or 0)
   if l1r1Mask == 0 then
     return 0
   end
-  local rawPad = Pads.get(0)
+  local rawPad = getRawPadNow(ctx)
   local heldMask = rawPad & l1r1Mask
   local prevHeldMask = tonumber(ctx.textInputCursorPrevHeldMask) or 0
   local repeatMask = 0
@@ -634,14 +645,11 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
 end
 
 local function getTextInputBackspaceHoldRepeatMask(ctx, _)
-  if not (Pads and Pads.get) then
-    return 0
-  end
   local backspaceMask = (_.PAD_SQUARE or 0)
   if backspaceMask == 0 then
     return 0
   end
-  local rawPad = Pads.get(0)
+  local rawPad = getRawPadNow(ctx)
   local heldMask = rawPad & backspaceMask
   local prevHeldMask = tonumber(ctx.textInputBackspacePrevHeldMask) or 0
   local repeatMask = 0
@@ -686,14 +694,11 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
 end
 
 local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
-  if not (Pads and Pads.get) then
-    return 0
-  end
   local lrMask = (_.PAD_LEFT or 0) | (_.PAD_RIGHT or 0)
   if lrMask == 0 then
     return 0
   end
-  local rawPad = Pads.get(0)
+  local rawPad = getRawPadNow(ctx)
   local heldMask = rawPad & lrMask
   local prevHeldMask = tonumber(ctx.textInputGridHorizontalPrevHeldMask) or 0
   local repeatMask = 0
@@ -807,12 +812,8 @@ local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
 local KEY_PRESS_MAX_DARKEN = 0.24
 local KEY_LABEL_SCALE = 0.7
 local KEY_LABEL_FT_FONT_SCALE = 1.0
-local KEY_LABEL_FT_PRESS_SHRINK_MAX = 0.14
-local KEY_LABEL_FT_SCALE_STEP = 0.01
-local KEY_LABEL_FT_MIN_SCALE = 0.80
-local KEY_LABEL_HEIGHT_FACTOR = 0.58
+local KEY_LABEL_PRESS_SHRINK_PX = 2.0
 local KEY_LABEL_Y_BIAS = -2.0
-local KEY_LABEL_PRESS_SHRINK_EXTRA = 0.08
 
 local function clamp01(v)
   local n = tonumber(v) or 0
@@ -902,24 +903,31 @@ local function updateHeldKeyPressState(ctx, _, selectedKeyIdx)
   local crossMask = _.PAD_CROSS or 0
   local crossHeld = false
   if crossMask ~= 0 then
-    if Pads and Pads.get then
-      local rawPad = Pads.get(0)
-      if _.common and _.common.remapCrossCircleMask then
-        rawPad = _.common.remapCrossCircleMask(rawPad)
-      end
-      crossHeld = (rawPad & crossMask) ~= 0
-    else
-      crossHeld = ((_.padEffective or 0) & crossMask) ~= 0
+    local rawPad = getRawPadNow(ctx)
+    if _.common and _.common.remapCrossCircleMask then
+      rawPad = _.common.remapCrossCircleMask(rawPad)
     end
+    crossHeld = (rawPad & crossMask) ~= 0
   end
 
   if ctx.textInputIgnoreCrossUntilRelease == true then
     if crossHeld then
+      ctx.textInputIgnoreCrossReleaseFrames = 0
+      ctx.textInputHeldPressKey = nil
+      ctx.textInputCrossHeldPrev = true
+      return
+    end
+    local releaseFrames = math.max(0, math.floor(tonumber(ctx.textInputIgnoreCrossReleaseFrames) or 0)) + 1
+    ctx.textInputIgnoreCrossReleaseFrames = releaseFrames
+    if releaseFrames < 2 then
       ctx.textInputHeldPressKey = nil
       ctx.textInputCrossHeldPrev = false
       return
     end
     ctx.textInputIgnoreCrossUntilRelease = nil
+    ctx.textInputIgnoreCrossReleaseFrames = nil
+    ctx.textInputCrossHeldPrev = false
+    return
   end
 
   local prevHeld = (ctx.textInputCrossHeldPrev == true)
@@ -1042,12 +1050,12 @@ local function run(ctx)
     ctx.textInputHeldPressKey = nil
     ctx.textInputCrossHeldPrev = nil
     ctx.textInputIgnoreCrossUntilRelease = nil
+    ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
-    ctx.textInputKeyFontPressCache = nil
-    ctx.textInputKeyFontPressCacheSig = nil
     ctx.textInputKeyLabelWidthCache = nil
     ctx.textInputKeyLabelWidthCacheSig = nil
+    ctx.textInputKeyLabelWidthWarmSig = nil
       ctx.state = ctx.textInputReturnState or "editor"
       return
     end
@@ -1109,13 +1117,15 @@ local function run(ctx)
   local keyScale = KEY_LABEL_SCALE
   local keyFontBase = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
     { lockSceneScale = true })) or _.font
-  local keyFontCacheSig = tostring(_.drawMode) .. "|" .. tostring(keyFontBase)
-  local keyFontPressCache = ctx.textInputKeyFontPressCache
-  if type(keyFontPressCache) ~= "table" or ctx.textInputKeyFontPressCacheSig ~= keyFontCacheSig then
-    keyFontPressCache = {}
-    ctx.textInputKeyFontPressCache = keyFontPressCache
-    ctx.textInputKeyFontPressCacheSig = keyFontCacheSig
+  local keyFontPressed = keyFontBase
+  local keyLabelBasePx = math.max(8, math.floor(((tonumber(_.common and _.common.FT_PIXEL_H) or 18) *
+      math.max(0.1, tonumber(runtime and runtime.currentUiScale) or tonumber(ctx.uiScale) or 1)) + 0.5))
+  local keyLabelPressedPx = math.max(8, keyLabelBasePx - KEY_LABEL_PRESS_SHRINK_PX)
+  if _.drawMode == "ftPrint" and _.common and _.common.getHintFont and keyLabelPressedPx < keyLabelBasePx then
+    local pressedScale = keyLabelPressedPx / keyLabelBasePx
+    keyFontPressed = _.common.getHintFont(_.font, _.drawMode, pressedScale, { lockSceneScale = true }) or keyFontBase
   end
+  local keyFontCacheSig = tostring(_.drawMode) .. "|" .. tostring(keyFontBase) .. "|" .. tostring(keyFontPressed)
   local keyLabelWidthCache = ctx.textInputKeyLabelWidthCache
   if type(keyLabelWidthCache) ~= "table" or ctx.textInputKeyLabelWidthCacheSig ~= keyFontCacheSig then
     keyLabelWidthCache = {}
@@ -1146,39 +1156,35 @@ local function run(ctx)
         (((_.KEY_CHAR_W or 10) * #label) * drawLabelScale)
   end
 
-  local function getKeyFtFontForPress(visualPressAmount)
-    if _.drawMode ~= "ftPrint" then return keyFontBase end
-    if not _.common.getHintFont then return keyFontBase end
-    local pa = tonumber(visualPressAmount) or 0
-    if pa <= 0.001 then return keyFontBase end
-    local ftScale = KEY_LABEL_FT_FONT_SCALE - (pa * KEY_LABEL_FT_PRESS_SHRINK_MAX)
-    if ftScale < KEY_LABEL_FT_MIN_SCALE then ftScale = KEY_LABEL_FT_MIN_SCALE end
-    if KEY_LABEL_FT_SCALE_STEP > 0 then
-      ftScale = math.floor((ftScale / KEY_LABEL_FT_SCALE_STEP) + 0.5) * KEY_LABEL_FT_SCALE_STEP
-    end
-    if ftScale >= (KEY_LABEL_FT_FONT_SCALE - 0.0001) then
-      return keyFontBase
-    end
-    local cacheKey = math.floor((ftScale * 1000) + 0.5)
-    local cached = keyFontPressCache[cacheKey]
-    if cached ~= nil then return cached end
-    local resolved = _.common.getHintFont(_.font, _.drawMode, ftScale, { lockSceneScale = true }) or keyFontBase
-    keyFontPressCache[cacheKey] = resolved
-    return resolved
-  end
   if _.drawMode == "ftPrint" then
     local baseFontKey = tostring(keyFontBase)
+    local pressedFontKey = tostring(keyFontPressed)
     local baseWidths = keyLabelWidthCache[baseFontKey]
+    local pressedWidths = keyLabelWidthCache[pressedFontKey]
     if type(baseWidths) ~= "table" then
       baseWidths = {}
       keyLabelWidthCache[baseFontKey] = baseWidths
     end
-    for i = 1, #keyList do
-      local label = tostring(keyList[i] or "")
-      if label ~= "" and baseWidths[label] == nil then
-        baseWidths[label] = (_.common.calcTextWidth and _.common.calcTextWidth(keyFontBase, label, keyScale)) or
-            ((_.KEY_CHAR_W or 10) * #label)
+    if type(pressedWidths) ~= "table" then
+      pressedWidths = {}
+      keyLabelWidthCache[pressedFontKey] = pressedWidths
+    end
+    local warmSig = tostring(keyboardLayout.key or "") .. "|" .. keyFontCacheSig
+    if ctx.textInputKeyLabelWidthWarmSig ~= warmSig then
+      for i = 1, #keyList do
+        local label = tostring(keyList[i] or "")
+        if label ~= "" then
+          if baseWidths[label] == nil then
+            baseWidths[label] = (_.common.calcTextWidth and _.common.calcTextWidth(keyFontBase, label, keyScale)) or
+                ((_.KEY_CHAR_W or 10) * #label)
+          end
+          if pressedWidths[label] == nil then
+            pressedWidths[label] = (_.common.calcTextWidth and _.common.calcTextWidth(keyFontPressed, label, keyScale)) or
+                ((_.KEY_CHAR_W or 10) * #label)
+          end
+        end
       end
+      ctx.textInputKeyLabelWidthWarmSig = warmSig
     end
   end
   local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
@@ -1230,11 +1236,17 @@ local function run(ctx)
     local labelFont = keyFontBase
     if _.drawMode ~= "ftPrint" then
       -- Font.print/fmPrint can scale per-draw directly.
-      local pressShrinkMul = 1 - (KEY_LABEL_PRESS_SHRINK_EXTRA * visualPressAmount)
+      local fontBasePx = math.max(1, tonumber(_.KEY_LH) or 14)
+      local pressShrinkMul = 1 - ((KEY_LABEL_PRESS_SHRINK_PX / fontBasePx) * visualPressAmount)
+      if pressShrinkMul < 0.65 then pressShrinkMul = 0.65 end
       drawLabelScale = drawLabelScale * glyphScaleMul * pressShrinkMul
       labelFont = _.font
     else
-      labelFont = getKeyFtFontForPress(visualPressAmount)
+      if visualPressAmount > 0.001 then
+        labelFont = keyFontPressed
+      else
+        labelFont = keyFontBase
+      end
     end
     -- Hot path optimization: draw key border+fill in 2 rects instead of 5.
     _.Graphics.drawRect(ix, iy, iw, ih, border)
@@ -1249,7 +1261,8 @@ local function run(ctx)
     local textX = math.floor(keyCenterX - (textW * 0.5) + 0.5)
     local textH
     if _.drawMode == "ftPrint" then
-      textH = math.max(8, math.floor((h * KEY_LABEL_HEIGHT_FACTOR) + 0.5))
+      local drawPx = (labelFont == keyFontPressed) and keyLabelPressedPx or keyLabelBasePx
+      textH = math.max(8, drawPx)
     else
       textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
     end
@@ -1625,12 +1638,12 @@ local function run(ctx)
     ctx.textInputHeldPressKey = nil
     ctx.textInputCrossHeldPrev = nil
     ctx.textInputIgnoreCrossUntilRelease = nil
+    ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
-    ctx.textInputKeyFontPressCache = nil
-    ctx.textInputKeyFontPressCacheSig = nil
     ctx.textInputKeyLabelWidthCache = nil
     ctx.textInputKeyLabelWidthCacheSig = nil
+    ctx.textInputKeyLabelWidthWarmSig = nil
     -- Callback sets ctx.state (e.g. applyManualPath -> entry_paths); do not overwrite
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
@@ -1671,12 +1684,12 @@ local function run(ctx)
     ctx.textInputHeldPressKey = nil
     ctx.textInputCrossHeldPrev = nil
     ctx.textInputIgnoreCrossUntilRelease = nil
+    ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
-    ctx.textInputKeyFontPressCache = nil
-    ctx.textInputKeyFontPressCacheSig = nil
     ctx.textInputKeyLabelWidthCache = nil
     ctx.textInputKeyLabelWidthCacheSig = nil
+    ctx.textInputKeyLabelWidthWarmSig = nil
     ctx.state = ctx.textInputReturnState or "menu_entry_edit"
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and not ctx.textInputTitleIdMode then

@@ -251,7 +251,9 @@ local function updateGlobalHintPadPressAnims(runtime)
   end
 
   local rawPad = 0
-  if Pads and Pads.get then
+  if type(runtime.currentRawPad) == "number" then
+    rawPad = runtime.currentRawPad
+  elseif Pads and Pads.get then
     local ok, v = pcall(Pads.get, 0)
     if ok and type(v) == "number" then
       rawPad = v
@@ -2024,6 +2026,13 @@ end
 -- Repeat ramps from REPEAT_START_HZ to REPEAT_END_HZ over REPEAT_ACCEL_SECONDS while held.
 function common.getPadEffective(ctx)
   local pad = Pads.get(0)
+  if type(ctx) == "table" then
+    ctx._rawPadNow = pad
+    ctx._rawPadLogicalNow = common.remapCrossCircleMask(pad)
+  end
+  if _G and _G.CONFIG_UI then
+    _G.CONFIG_UI.currentRawPad = pad
+  end
   local prevPad = ctx.prevPad or 0
   local padJust = pad & ~prevPad
   local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
@@ -2056,7 +2065,11 @@ function common.getPadEffective(ctx)
     ctx.holdRepeatCountdown = 0
   end
   ctx.prevPad = pad
-  return common.remapCrossCircleMask(padJust | padRepeat)
+  local effective = common.remapCrossCircleMask(padJust | padRepeat)
+  if type(ctx) == "table" then
+    ctx._rawPadEffectiveNow = padJust | padRepeat
+  end
+  return effective
 end
 
 function common.loadCustomFont()
@@ -2076,9 +2089,11 @@ function common.beginTextInput(ctx, opts)
   -- Reset per-key held-repeat state so each text-input session starts clean.
   ctx._holdRepeatStates = nil
   local suppressCrossOnEntry = false
+  local entryRawPad = nil
   if Pads and Pads.get then
     local okPad, rawPad = pcall(Pads.get, 0)
     if okPad and type(rawPad) == "number" then
+      entryRawPad = rawPad
       local logicalPad = rawPad
       if common.remapCrossCircleMask then
         logicalPad = common.remapCrossCircleMask(logicalPad)
@@ -2105,13 +2120,25 @@ function common.beginTextInput(ctx, opts)
   ctx.textInputCursor = math.max(1, math.floor(tonumber(opts.cursor) or (#ctx.textInputValue + 1)))
   ctx.textInputScroll = math.max(1, math.floor(tonumber(opts.scroll) or 1))
   ctx.textInputIgnoreCrossUntilRelease = suppressCrossOnEntry and true or nil
+  ctx.textInputIgnoreCrossReleaseFrames = suppressCrossOnEntry and 0 or nil
   ctx.textInputCrossHeldPrev = suppressCrossOnEntry and true or nil
   ctx.textInputHeldPressKey = nil
   ctx.textInputKeyPressAnims = nil
-  ctx.textInputKeyFontPressCache = nil
-  ctx.textInputKeyFontPressCacheSig = nil
   ctx.textInputKeyLabelWidthCache = nil
   ctx.textInputKeyLabelWidthCacheSig = nil
+  ctx.textInputKeyLabelWidthWarmSig = nil
+  -- Prevent carry-over repeats/held edges from the previous scene when entering
+  -- text input while Enter is still physically held.
+  ctx.holdFrameCount = 0
+  ctx.holdRepeatCountdown = 0
+  if type(entryRawPad) == "number" then
+    ctx.prevPad = entryRawPad
+    ctx._rawPadNow = entryRawPad
+    ctx._rawPadLogicalNow = common.remapCrossCircleMask(entryRawPad)
+    if _G and _G.CONFIG_UI then
+      _G.CONFIG_UI.currentRawPad = entryRawPad
+    end
+  end
   ctx.state = opts.state or "text_input"
 end
 
