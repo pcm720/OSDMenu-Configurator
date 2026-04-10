@@ -715,21 +715,14 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if scaled > 0x80 then scaled = 0x80 end
     return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
   end
-  local function darkenColor(colorValue, amount)
-    local raw = tonumber(colorValue)
-    if raw == nil then return colorValue end
-    local c = math.floor(raw)
-    local dark = clamp01(amount)
-    if dark <= 0.0001 then return c end
-    local a = (c >> 24) & 0xFF
-    local b = (c >> 16) & 0xFF
-    local g = (c >> 8) & 0xFF
-    local r = c & 0xFF
-    local s = 1 - dark
-    r = math.floor((r * s) + 0.5)
-    g = math.floor((g * s) + 0.5)
-    b = math.floor((b * s) + 0.5)
-    return Color.new(r, g, b, a)
+  local function getIconModulateColor(alpha, darken)
+    local a = math.floor((FULL_ALPHA or 0x80) * clamp01(alpha) + 0.5)
+    if a < 0 then a = 0 end
+    if a > 0x80 then a = 0x80 end
+    local tone = math.floor(255 * (1 - clamp01(darken)) + 0.5)
+    if tone < 0 then tone = 0 end
+    if tone > 255 then tone = 255 end
+    return Color.new(tone, tone, tone, a)
   end
   local function cloneSlots(src)
     local out = {}
@@ -886,27 +879,17 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
       local drawLabelAlpha = clamp01(labelAlpha or 0)
       if icon and drawIconAlpha > 0.001 then
-        local iconColor = applyAlpha(tonumber(common.WHITE) or 0x80FFFFFF, drawIconAlpha)
-        if pressAmount > 0.0001 and iconDarkenMax > 0 then
-          iconColor = darkenColor(iconColor, iconDarkenMax * pressAmount)
-        end
+        local pressDarken = (pressAmount > 0.0001 and iconDarkenMax > 0) and (iconDarkenMax * pressAmount) or 0
+        local iconColor = getIconModulateColor(drawIconAlpha, pressDarken)
         if Graphics.drawScaleImage then
-          if drawIconAlpha >= 0.999 and pressAmount <= 0.0001 then
-            local ok = pcall(Graphics.drawScaleImage, icon, basePx, iconY, iconW, iconH)
-            if not ok then
-              Graphics.drawScaleImage(icon, px, py, drawIconW, drawIconH, iconColor)
-            end
-          else
-            Graphics.drawScaleImage(icon, px, py, drawIconW, drawIconH, iconColor)
+          local ok = pcall(Graphics.drawScaleImage, icon, px, py, drawIconW, drawIconH, iconColor)
+          if not ok then
+            Graphics.drawScaleImage(icon, px, py, drawIconW, drawIconH)
           end
         elseif Graphics.drawImage then
-          if drawIconAlpha >= 0.999 and pressAmount <= 0.0001 then
-            local ok = pcall(Graphics.drawImage, icon, basePx, iconY)
-            if not ok then
-              Graphics.drawImage(icon, px, py, iconColor)
-            end
-          else
-            Graphics.drawImage(icon, px, py, iconColor)
+          local ok = pcall(Graphics.drawImage, icon, px, py, iconColor)
+          if not ok then
+            Graphics.drawImage(icon, px, py)
           end
         end
       end
