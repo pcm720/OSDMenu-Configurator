@@ -2127,6 +2127,7 @@ function common.beginTextInput(ctx, opts)
   -- 1 = undecided on first text-input frame (check if Enter is currently held)
   -- 2 = Enter was held; keep press visuals suppressed until full release.
   ctx.textInputPressAnimEntryGate = 1
+  ctx.textInputPressGateSceneEpoch = nil
   -- Short neutral window on entry so held confirm from previous scene does not
   -- create a visual "pressed" flash on Enter/selected key.
   ctx.textInputSuppressPressVisualFrames = suppressCrossOnEntry and 6 or 0

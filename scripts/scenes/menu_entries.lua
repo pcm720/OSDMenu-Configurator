@@ -230,15 +230,14 @@ local function run(ctx)
     end
     if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
     local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
-    ctx.textInputTitleIdMode = nil
-    ctx.textInputPrompt = _.menu_str.entry_name_prompt
-    ctx.textInputValue = currentNameDisplay
-    ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+    local prompt = _.menu_str.entry_name_prompt
+    local initialValue = currentNameDisplay
+    local maxLen = _.config_parse.LIMIT_NAME
     _.common.configureBelTextInput(ctx, {
       allow = allowBelKey,
       context = ctx.context,
     })
-    ctx.textInputCallback = function(val)
+    local onSubmit = function(val)
       local nameText = tostring(val or "")
       if nameText:sub(1, 2) == "$!" then
         nameText = nameText:sub(3)
@@ -251,11 +250,18 @@ local function run(ctx)
       focusEntryByIdx(idx)
       ctx.state = "menu_entries"
     end
-    ctx.textInputReturnState = "menu_entries"
-    ctx.textInputGridSel = 1
-    ctx.textInputCursor = #ctx.textInputValue + 1
-    ctx.textInputScroll = 1
-    ctx.state = "text_input"
+    _.common.beginTextInput(ctx, {
+      titleIdMode = nil,
+      prompt = prompt,
+      value = initialValue,
+      maxLen = maxLen,
+      callback = onSubmit,
+      returnState = "menu_entries",
+      gridSel = 1,
+      cursor = #initialValue + 1,
+      scroll = 1,
+      state = "text_input",
+    })
     return true
   end
 

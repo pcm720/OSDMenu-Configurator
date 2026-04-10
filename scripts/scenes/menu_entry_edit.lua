@@ -406,8 +406,7 @@ local function run(ctx)
     local row = subRows[ctx.entryEditSub]
     if row.kind == "name" then
       local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
-      ctx.textInputTitleIdMode = nil
-      ctx.textInputPrompt = _.menu_str.entry_name_prompt
+      local prompt = _.menu_str.entry_name_prompt
       local currentNameRaw = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
       local editingSeparator = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
           _.config_parse.isMenuEntrySeparatorName(currentNameRaw)
@@ -416,13 +415,13 @@ local function run(ctx)
         currentNameDisplay = _.config_parse.getMenuEntrySeparatorText(currentNameRaw) or ""
       end
       if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
-      ctx.textInputValue = currentNameDisplay
-      ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+      local initialValue = currentNameDisplay
+      local maxLen = _.config_parse.LIMIT_NAME
       _.common.configureBelTextInput(ctx, {
         allow = allowBelKey,
         context = ctx.context,
       })
-      ctx.textInputCallback = function(val)
+      local onSubmit = function(val)
         local saveVal = val or ""
         if editingSeparator and saveVal:sub(1, 2) ~= "$!" then
           saveVal = "$!" .. saveVal
@@ -438,11 +437,18 @@ local function run(ctx)
         ctx.configModified = true
         ctx.state = "menu_entry_edit"
       end
-      ctx.textInputReturnState = "menu_entry_edit"
-      ctx.textInputGridSel = 1
-      ctx.textInputCursor = #ctx.textInputValue + 1
-      ctx.textInputScroll = 1
-      ctx.state = "text_input"
+      _.common.beginTextInput(ctx, {
+        titleIdMode = nil,
+        prompt = prompt,
+        value = initialValue,
+        maxLen = maxLen,
+        callback = onSubmit,
+        returnState = "menu_entry_edit",
+        gridSel = 1,
+        cursor = #initialValue + 1,
+        scroll = 1,
+        state = "text_input",
+      })
     elseif row.kind == "path" and isFmcbEntry then
       if canOperateFmcbPathRow(row) then
         if row.hasValue then

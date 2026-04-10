@@ -451,20 +451,25 @@ local function run(ctx)
         return
       end
       local currentName = _.config_parse.getBblHotkeyName(ctx.lines, keyId) or ""
-      ctx.textInputTitleIdMode = nil
-      ctx.textInputPrompt = "NAME_" .. keyId
-      ctx.textInputValue = currentName
-      ctx.textInputMaxLen = 64
-      ctx.textInputCallback = function(val)
+      local prompt = "NAME_" .. keyId
+      local initialValue = currentName
+      local onSubmit = function(val)
         _.config_parse.setBblHotkeyName(ctx.lines, keyId, val or "")
         markConfigMutated()
         ctx.state = "bbl_hotkey_entries"
       end
-      ctx.textInputReturnState = "bbl_hotkey_entries"
-      ctx.textInputGridSel = 1
-      ctx.textInputCursor = #ctx.textInputValue + 1
-      ctx.textInputScroll = 1
-      ctx.state = "text_input"
+      _.common.beginTextInput(ctx, {
+        titleIdMode = nil,
+        prompt = prompt,
+        value = initialValue,
+        maxLen = 64,
+        callback = onSubmit,
+        returnState = "bbl_hotkey_entries",
+        gridSel = 1,
+        cursor = #initialValue + 1,
+        scroll = 1,
+        state = "text_input",
+      })
     elseif sel.kind == "entry" then
       if selBlockedByE1 then
         -- E1-exclusive commands lock later slots from editing.

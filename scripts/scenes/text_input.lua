@@ -604,6 +604,16 @@ local function getRawPadNow(ctx)
   return 0
 end
 
+local function isLogicalCrossHeldNow(ctx, _)
+  local crossMask = _.PAD_CROSS or 0
+  if crossMask == 0 then return false end
+  local rawPad = getRawPadNow(ctx)
+  if _.common and _.common.remapCrossCircleMask then
+    rawPad = _.common.remapCrossCircleMask(rawPad)
+  end
+  return (rawPad & crossMask) ~= 0
+end
+
 local function getTextInputCursorHoldRepeatMask(ctx, _)
   local l1r1Mask = (_.PAD_L1 or 0) | (_.PAD_R1 or 0)
   if l1r1Mask == 0 then
@@ -1206,6 +1216,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
     ctx.textInputPressAnimEntryGate = nil
+    ctx.textInputPressGateSceneEpoch = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1216,6 +1227,28 @@ local function run(ctx)
     ctx.textInputKeyLabelWidthWarmSig = nil
       ctx.state = ctx.textInputReturnState or "editor"
       return
+    end
+  end
+  local sceneEpoch = math.max(0, math.floor(tonumber(ctx._sceneEpoch) or 0))
+  if math.max(-1, math.floor(tonumber(ctx.textInputPressGateSceneEpoch) or -1)) ~= sceneEpoch then
+    ctx.textInputPressGateSceneEpoch = sceneEpoch
+    local crossHeldOnEntry = isLogicalCrossHeldNow(ctx, _)
+    if crossHeldOnEntry then
+      ctx.textInputPressAnimEntryGate = 2
+      ctx.textInputIgnoreCrossUntilRelease = true
+      ctx.textInputIgnoreCrossReleaseFrames = 0
+      ctx.textInputCrossHeldPrev = true
+      ctx.textInputHeldPressKey = nil
+      ctx.textInputKeyPressAnims = nil
+      local suppressFrames = math.max(0, math.floor(tonumber(ctx.textInputSuppressPressVisualFrames) or 0))
+      if suppressFrames < 6 then
+        ctx.textInputSuppressPressVisualFrames = 6
+      end
+    else
+      ctx.textInputPressAnimEntryGate = 1
+      if ctx.textInputCrossHeldPrev == nil then
+        ctx.textInputCrossHeldPrev = false
+      end
     end
   end
   if ctx._textInputBelBaselineCallback ~= ctx.textInputCallback then
@@ -1771,6 +1804,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
     ctx.textInputPressAnimEntryGate = nil
+    ctx.textInputPressGateSceneEpoch = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil
@@ -1822,6 +1856,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputSuppressPressVisualFrames = nil
     ctx.textInputPressAnimEntryGate = nil
+    ctx.textInputPressGateSceneEpoch = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
     ctx.textInputKeyboardDrawCache = nil

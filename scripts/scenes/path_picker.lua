@@ -1278,22 +1278,27 @@ local function run(ctx)
           local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
           if includeManualEntry and selectedRawIdx == 1 then
             local prefill = getManualPathPrefillValue(ctx)
-            ctx.textInputTitleIdMode = nil
-            ctx.textInputPrompt = _.path_str.enter_path_prompt
-            ctx.textInputValue = prefill
-            ctx.textInputMaxLen = 79
+            local prompt = _.path_str.enter_path_prompt
+            local initialValue = prefill
             _.common.configureBelTextInput(ctx, {
               allow = false,
               hidePipeBackslash = true,
             })
-            ctx.textInputCallback = function(val)
+            local onSubmit = function(val)
               applyManualPath(ctx, val)
             end
-            ctx.textInputReturnState = "path_picker"
-            ctx.textInputGridSel = 1
-            ctx.textInputCursor = #ctx.textInputValue + 1
-            ctx.textInputScroll = 1
-            ctx.state = "text_input"
+            _.common.beginTextInput(ctx, {
+              titleIdMode = nil,
+              prompt = prompt,
+              value = initialValue,
+              maxLen = 79,
+              callback = onSubmit,
+              returnState = "path_picker",
+              gridSel = 1,
+              cursor = #initialValue + 1,
+              scroll = 1,
+              state = "text_input",
+            })
           else
             if not isSelectableDisplay(ctx.pathPickerSel) then
               -- Unselectable helper/inactive rows ignore Cross.

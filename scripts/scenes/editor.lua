@@ -2245,25 +2245,31 @@ local function run(ctx)
       elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and (o.optType == "text" or o.optType == "string") then
         local allowBelKey = (o.key == "OSDSYS_left_cursor" or o.key == "OSDSYS_right_cursor" or
           o.key == "OSDSYS_menu_top_delimiter" or o.key == "OSDSYS_menu_bottom_delimiter")
-        ctx.textInputTitleIdMode = nil
-        ctx.textInputPrompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
+        local prompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
             o.label or _.common_str.enter_text
-        ctx.textInputValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
-        ctx.textInputMaxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
+        local initialValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+        local maxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
         _.common.configureBelTextInput(ctx, {
           allow = allowBelKey,
           context = ctx.context,
         })
-        ctx.textInputCallback = function(val)
+        local onSubmit = function(val)
           setConfigValue(ctx, _, o.key, val or "")
           markConfigMutated(ctx)
           ctx.state = "editor"
         end
-        ctx.textInputReturnState = "editor"
-        ctx.textInputGridSel = 1
-        ctx.textInputCursor = #ctx.textInputValue + 1
-        ctx.textInputScroll = 1
-        ctx.state = "text_input"
+        _.common.beginTextInput(ctx, {
+          titleIdMode = nil,
+          prompt = prompt,
+          value = initialValue,
+          maxLen = maxLen,
+          callback = onSubmit,
+          returnState = "editor",
+          gridSel = 1,
+          cursor = #initialValue + 1,
+          scroll = 1,
+          state = "text_input",
+        })
       elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_menu_entries" then
         ctx.state = "menu_entries"
         ctx.entryList = _.config_parse.getMenuEntryIndices(ctx.lines)

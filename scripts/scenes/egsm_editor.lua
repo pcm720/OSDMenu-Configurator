@@ -138,11 +138,9 @@ local function run(ctx)
   end
 
   local function beginInsertEgsmEntry()
-    ctx.textInputPrompt = _.strings.egsm.title_id_prompt
-    ctx.textInputValue = ""
-    ctx.textInputMaxLen = 15
-    ctx.textInputTitleIdMode = true
-    ctx.textInputCallback = function(val)
+    local prompt = _.strings.egsm.title_id_prompt
+    local initialValue = ""
+    local onSubmit = function(val)
       local id = _.config_parse.parseTitleIdInput and _.config_parse.parseTitleIdInput(val or "")
       if id and _.config_parse.isValidTitleId(id) then
         _.config_parse.setEgsmEntry(ctx.lines, id, "", true)
@@ -157,11 +155,18 @@ local function run(ctx)
       end
       ctx.state = "egsm_editor"
     end
-    ctx.textInputReturnState = "egsm_editor"
-    ctx.textInputGridSel = 1
-    ctx.textInputCursor = 1
-    ctx.textInputScroll = 1
-    ctx.state = "text_input"
+    _.common.beginTextInput(ctx, {
+      titleIdMode = true,
+      prompt = prompt,
+      value = initialValue,
+      maxLen = 15,
+      callback = onSubmit,
+      returnState = "egsm_editor",
+      gridSel = 1,
+      cursor = 1,
+      scroll = 1,
+      state = "text_input",
+    })
   end
 
   local function removeSelectedEgsmEntry()
