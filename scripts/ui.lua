@@ -1045,6 +1045,7 @@ local function resolveNextOsdItemKey(lines)
 end
 
 local overlayLogoCache = {}
+local overlayLogoKeepDigest = nil
 local OVERLAY_LOGO_OPACITY = 0.25 -- 75% transparent
 local OVERLAY_LOGO_OPACITY_R3 = 1.0 -- keep splash/title logo fully visible if selected
 local OVERLAY_LOGO_R3_TITLE_KEY = "__r3_title__"
@@ -1275,6 +1276,76 @@ flushOverlayLogoCache = function()
       overlayLogoCache[key] = nil
     end
   end
+  overlayLogoKeepDigest = nil
+end
+
+local function digestOverlayLogoKeepSet(keepSet)
+  local keys = {}
+  for key, keep in pairs(keepSet or {}) do
+    if keep == true then
+      keys[#keys + 1] = tostring(key)
+    end
+  end
+  table.sort(keys)
+  return table.concat(keys, "|")
+end
+
+local function pruneOverlayLogoCache(keepSet)
+  if Graphics and Graphics.freeImage then
+    for key, tex in pairs(overlayLogoCache) do
+      if not keepSet[key] then
+        if isValidImageHandle(tex) then
+          pcall(Graphics.freeImage, tex)
+        end
+        overlayLogoCache[key] = nil
+      end
+    end
+  else
+    for key in pairs(overlayLogoCache) do
+      if not keepSet[key] then
+        overlayLogoCache[key] = nil
+      end
+    end
+  end
+end
+
+local function buildOverlayLogoKeepSet(ctx, isR3SettingsScene)
+  local keep = {}
+  if type(ctx) ~= "table" then return keep end
+
+  if isR3SettingsScene then
+    keep[OVERLAY_LOGO_R3_TITLE_KEY] = true
+    return keep
+  end
+
+  if ctx.state == "main" and type(ctx.mainEntries) == "table" and #ctx.mainEntries > 0 then
+    local count = #ctx.mainEntries
+    local sel = math.floor(tonumber(ctx.mainSel) or 1)
+    if sel < 1 then sel = 1 end
+    if sel > count then sel = count end
+    local function addByIndex(i)
+      local idx = i
+      if idx < 1 then idx = count end
+      if idx > count then idx = 1 end
+      local entry = ctx.mainEntries[idx]
+      local key = tostring(entry and entry.logoKey or "")
+      if key ~= "" then
+        keep[key] = true
+      end
+    end
+    -- Keep only current + one above + one below (with wraparound).
+    addByIndex(sel)
+    addByIndex(sel - 1)
+    addByIndex(sel + 1)
+    return keep
+  end
+
+  -- Once a main entry is selected and we leave main, keep only the in-use logo.
+  local key = tostring(ctx.mainOverlayLogoKey or "")
+  if key ~= "" then
+    keep[key] = true
+  end
+  return keep
 end
 
 local function getOverlayLogoColor(key)
@@ -1420,6 +1491,12 @@ end
 local function drawSelectionOverlayLogo(ctx)
   if not ctx then return end
   local isR3SettingsScene = (ctx.state ~= "main") and (ctx.context == "r3configurator")
+  local keepSet = buildOverlayLogoKeepSet(ctx, isR3SettingsScene)
+  local keepDigest = digestOverlayLogoKeepSet(keepSet)
+  if keepDigest ~= overlayLogoKeepDigest then
+    pruneOverlayLogoCache(keepSet)
+    overlayLogoKeepDigest = keepDigest
+  end
   if not isR3SettingsScene and ctx.state == "main" then
     local flip = ctx.mainLogoFlip
     if type(flip) == "table" and flip.active and flip.fromKey and flip.toKey then

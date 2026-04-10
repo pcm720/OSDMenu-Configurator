@@ -998,8 +998,11 @@ local function run(ctx)
     -- Make spacebar one key wider to the left (keep right edge unchanged).
     specStartX = specStartX - _.KEY_WIDTH
     spaceW = spaceW + _.KEY_WIDTH
+    -- Move spacebar right by one key.
+    specStartX = specStartX + _.KEY_WIDTH
 
     if spaceW < kw then spaceW = kw end
+    spaceCenterX = specStartX + (spaceW * 0.5)
     drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel)
   end
 

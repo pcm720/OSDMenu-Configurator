@@ -1122,9 +1122,9 @@ common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvb
 common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"|", "ZXCVBNM<>?" }
 -- Title ID only: digits + uppercase letters, no shift (e.g. eGSM AAAA_000.00). No symbols.
 common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
--- Ortholinear layout: keep all rows on the same X grid for d-pad navigation.
-common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.0, 0.0, 0.0 }
-common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.0, 0.0, 0.0 }
+-- Shift the row above spacebar right by one key for both layouts.
+common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.0, 0.0, 1.0 }
+common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.0, 0.0, 1.0 }
 common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y = 320, 220
 common.KEY_WIDTH, common.KEY_HEIGHT = 34, 26
 common.KEY_GAP = 2
