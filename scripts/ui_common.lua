@@ -80,6 +80,10 @@ common.PAD_HINT_GRID_X_SHIFT       = -55
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
+common.PAD_HINT_ICON_PRESS_SHRINK_TOTAL = 1.0
+common.PAD_HINT_ICON_DARKEN_MAX = 0.24
+common.PAD_HINT_ICON_PRESS_LERP_IN = 0.55
+common.PAD_HINT_ICON_PRESS_LERP_OUT = 0.35
 local padIconCache                 = {}
 local hintFtFontCache              = {}
 local function normalize3(xv, yv, zv)
@@ -200,6 +204,101 @@ local function canOpenPath(path)
     return true
   end
   return false
+end
+
+local function clampHintUnit(v)
+  local n = tonumber(v) or 0
+  if n < 0 then return 0 end
+  if n > 1 then return 1 end
+  return n
+end
+
+local function normalizeHintPadName(name)
+  return tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+end
+
+local function getHintPadMask(name)
+  local key = normalizeHintPadName(name)
+  if key == "cross" then return common.PAD_CROSS or 0 end
+  if key == "circle" then return common.PAD_CIRCLE or 0 end
+  if key == "square" then return common.PAD_SQUARE or 0 end
+  if key == "triangle" then return common.PAD_TRIANGLE or 0 end
+  if key == "l1" then return common.PAD_L1 or 0 end
+  if key == "r1" then return common.PAD_R1 or 0 end
+  if key == "l2" then return common.PAD_L2 or 0 end
+  if key == "r2" then return common.PAD_R2 or 0 end
+  if key == "l3" then return common.PAD_L3 or 0 end
+  if key == "r3" then return common.PAD_R3 or 0 end
+  if key == "start" then return common.PAD_START or 0 end
+  if key == "select" then return common.PAD_SELECT or 0 end
+  if key == "up" then return common.PAD_UP or 0 end
+  if key == "down" then return common.PAD_DOWN or 0 end
+  if key == "left" then return common.PAD_LEFT or 0 end
+  if key == "right" then return common.PAD_RIGHT or 0 end
+  return 0
+end
+
+local function updateGlobalHintPadPressAnims(runtime)
+  if type(runtime) ~= "table" then return nil end
+
+  local frameCounter = math.max(0, math.floor(tonumber(runtime.uiFrameCounter) or 0))
+  local states = runtime.hintPadPressAnims
+  if runtime.hintPadPressAnimsFrame == frameCounter and type(states) == "table" then
+    return states
+  end
+  if type(states) ~= "table" then
+    states = {}
+  end
+
+  local rawPad = 0
+  if Pads and Pads.get then
+    local ok, v = pcall(Pads.get, 0)
+    if ok and type(v) == "number" then
+      rawPad = v
+    end
+  end
+
+  local pressIn = clampHintUnit(common.PAD_HINT_ICON_PRESS_LERP_IN or 0.55)
+  local pressOut = clampHintUnit(common.PAD_HINT_ICON_PRESS_LERP_OUT or 0.35)
+  local animatedPads = {
+    "cross", "circle", "square", "triangle",
+    "l1", "r1", "l2", "r2", "l3", "r3",
+    "start", "select", "up", "down", "left", "right"
+  }
+
+  for i = 1, #animatedPads do
+    local padName = animatedPads[i]
+    local mask = getHintPadMask(padName)
+    local held = (mask ~= 0) and ((rawPad & mask) ~= 0)
+    local target = held and 1 or 0
+    local current = clampHintUnit(states[padName])
+    local speed = held and pressIn or pressOut
+    local nextValue = current + ((target - current) * speed)
+    if math.abs(nextValue - target) <= 0.001 then nextValue = target end
+    if nextValue <= 0.001 and target == 0 then
+      states[padName] = nil
+    else
+      states[padName] = clampHintUnit(nextValue)
+    end
+  end
+
+  if next(states) == nil then
+    runtime.hintPadPressAnims = nil
+    runtime.hintPadPressAnimsFrame = frameCounter
+    return nil
+  end
+
+  runtime.hintPadPressAnims = states
+  runtime.hintPadPressAnimsFrame = frameCounter
+  return states
+end
+
+function common.getHintPadPressAmount(padName)
+  local runtime = _G and _G.CONFIG_UI
+  local states = updateGlobalHintPadPressAnims(runtime)
+  if type(states) ~= "table" then return 0 end
+  local key = normalizeHintPadName(padName)
+  return clampHintUnit(states[key])
 end
 local padIconNames                 = {
   up = "up",
@@ -974,9 +1073,15 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         if ok then
           pressAmount = clamp01(v)
         end
+      elseif common.getHintPadPressAmount then
+        pressAmount = clamp01(common.getHintPadPressAmount(padName))
       end
-      local shrinkTotal = math.max(0, tonumber(type(opts) == "table" and opts.iconPressShrinkPx or 0) or 0) * pressAmount
-      local iconDarkenMax = math.max(0, tonumber(type(opts) == "table" and opts.iconPressDarkenMax or 0) or 0)
+      local defaultShrink = tonumber(common.PAD_HINT_ICON_PRESS_SHRINK_TOTAL) or 0
+      local defaultDarken = tonumber(common.PAD_HINT_ICON_DARKEN_MAX) or 0
+      local shrinkTotal = math.max(0, tonumber(type(opts) == "table" and opts.iconPressShrinkPx or defaultShrink) or defaultShrink) *
+          pressAmount
+      local iconDarkenMax = math.max(0, tonumber(type(opts) == "table" and opts.iconPressDarkenMax or defaultDarken) or
+        defaultDarken)
       local inset = math.max(0, shrinkTotal * 0.5)
       local drawIconW = math.max(1, iconW - shrinkTotal)
       local drawIconH = math.max(1, iconH - shrinkTotal)

@@ -4,75 +4,6 @@ local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local KEYBOARD_HINT_ICON_SHRINK_TOTAL = 1.0 -- total px shrink
 local KEYBOARD_HINT_ICON_DARKEN_MAX = 0.24
-local KEYBOARD_HINT_ICON_PRESS_LERP_IN = 0.55
-local KEYBOARD_HINT_ICON_PRESS_LERP_OUT = 0.35
-
-local function clampUnit(v)
-  local n = tonumber(v) or 0
-  if n < 0 then return 0 end
-  if n > 1 then return 1 end
-  return n
-end
-
-local function normalizeHintPadName(name)
-  return tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
-end
-
-local function isAnimatedHintPad(name)
-  local key = normalizeHintPadName(name)
-  return key == "square" or key == "triangle" or key == "l1" or key == "r1"
-end
-
-local function getHintPadMask(_, padName)
-  local key = normalizeHintPadName(padName)
-  if key == "square" then return _.PAD_SQUARE or 0 end
-  if key == "triangle" then return _.PAD_TRIANGLE or 0 end
-  if key == "l1" then return _.PAD_L1 or 0 end
-  if key == "r1" then return _.PAD_R1 or 0 end
-  return 0
-end
-
-local function updateHintPadPressAnims(ctx, _)
-  if type(ctx) ~= "table" or type(_) ~= "table" then return end
-  if type(ctx.textInputHintPadPressAnims) ~= "table" then
-    ctx.textInputHintPadPressAnims = {}
-  end
-  local states = ctx.textInputHintPadPressAnims
-  local rawPad = 0
-  if Pads and Pads.get then
-    rawPad = Pads.get(0)
-  else
-    rawPad = _.padEffective or 0
-  end
-
-  local pads = { "square", "triangle", "l1", "r1" }
-  for i = 1, #pads do
-    local padName = pads[i]
-    local mask = getHintPadMask(_, padName)
-    local held = (mask ~= 0) and ((rawPad & mask) ~= 0)
-    local target = held and 1 or 0
-    local current = clampUnit(states[padName])
-    local speed = held and KEYBOARD_HINT_ICON_PRESS_LERP_IN or KEYBOARD_HINT_ICON_PRESS_LERP_OUT
-    local nextValue = current + ((target - current) * speed)
-    if math.abs(nextValue - target) <= 0.001 then nextValue = target end
-    if nextValue <= 0.001 and target == 0 then
-      states[padName] = nil
-    else
-      states[padName] = clampUnit(nextValue)
-    end
-  end
-
-  if next(states) == nil then
-    ctx.textInputHintPadPressAnims = nil
-  end
-end
-
-local function getHintPadPressAmount(ctx, padName)
-  if not isAnimatedHintPad(padName) then return 0 end
-  local states = type(ctx) == "table" and ctx.textInputHintPadPressAnims or nil
-  if type(states) ~= "table" then return 0 end
-  return clampUnit(states[normalizeHintPadName(padName)])
-end
 
 local function buildKeyboardShoulderHints(hintItems)
   local out = {}
@@ -237,7 +168,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
     local basePx = math.floor(slotCenter - iconW / 2)
     local baseIconY = math.floor(rowCenter - iconH / 2)
-    local pressAmount = getHintPadPressAmount(ctx, slot.pad)
+    local pressAmount = (_.common and _.common.getHintPadPressAmount and _.common.getHintPadPressAmount(slot.pad)) or 0
     local shrinkTotal = KEYBOARD_HINT_ICON_SHRINK_TOTAL * pressAmount
     local inset = math.max(0, shrinkTotal * 0.5)
     local drawIconW = math.max(1, iconW - shrinkTotal)
@@ -874,8 +805,11 @@ local KEY_PRESS_IN_FRAMES = 5
 local KEY_PRESS_OUT_FRAMES = 7
 local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
 local KEY_PRESS_MAX_DARKEN = 0.24
-local KEY_LABEL_SCALE = 0.64
-local KEY_LABEL_FT_FONT_SCALE = 0.62
+local KEY_LABEL_SCALE = 0.7
+local KEY_LABEL_FT_FONT_SCALE = 1.0
+local KEY_LABEL_FT_PRESS_SHRINK_MAX = 0.10
+local KEY_LABEL_FT_SCALE_STEP = 0.02
+local KEY_LABEL_FT_MIN_SCALE = 0.80
 local KEY_LABEL_HEIGHT_FACTOR = 0.58
 local KEY_LABEL_Y_BIAS = 0.0
 
@@ -1144,13 +1078,33 @@ local function run(ctx)
   if ctx.textInputGridSel < 1 then ctx.textInputGridSel = 1 end
   if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = #keyList end
   updateHeldKeyPressState(ctx, _, ctx.textInputGridSel)
-  updateHintPadPressAnims(ctx, _)
   advanceKeyPressAnims(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = KEY_LABEL_SCALE
-  local keyFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
+  local keyFontBase = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
     { lockSceneScale = true })) or _.font
+  local keyFontPressCache = {}
+  local function getKeyFtFontForPress(pressAmount)
+    if _.drawMode ~= "ftPrint" then return keyFontBase end
+    if not _.common.getHintFont then return keyFontBase end
+    local pa = tonumber(pressAmount) or 0
+    if pa <= 0.001 then return keyFontBase end
+    local ftScale = KEY_LABEL_FT_FONT_SCALE - (pa * KEY_LABEL_FT_PRESS_SHRINK_MAX)
+    if ftScale < KEY_LABEL_FT_MIN_SCALE then ftScale = KEY_LABEL_FT_MIN_SCALE end
+    if KEY_LABEL_FT_SCALE_STEP > 0 then
+      ftScale = math.floor((ftScale / KEY_LABEL_FT_SCALE_STEP) + 0.5) * KEY_LABEL_FT_SCALE_STEP
+    end
+    if ftScale >= (KEY_LABEL_FT_FONT_SCALE - 0.0001) then
+      return keyFontBase
+    end
+    local cacheKey = math.floor((ftScale * 1000) + 0.5)
+    local cached = keyFontPressCache[cacheKey]
+    if cached ~= nil then return cached end
+    local resolved = _.common.getHintFont(_.font, _.drawMode, ftScale, { lockSceneScale = true }) or keyFontBase
+    keyFontPressCache[cacheKey] = resolved
+    return resolved
+  end
   local rowOffsets = (ctx.textInputTitleIdMode and _.KEYBOARD_ROW_OFFSETS_TITLE_ID) or _.KEYBOARD_ROW_OFFSETS or
       { 0, 0, 0, 0 }
   local minOffset = 0
@@ -1196,11 +1150,13 @@ local function run(ctx)
     local iw = math.max(2, math.floor((w - (2 * inset)) + 0.5))
     local ih = math.max(2, math.floor((h - (2 * inset)) + 0.5))
     local glyphScaleMul = ih / math.max(1, h)
-    local labelFont = keyFont
+    local labelFont = keyFontBase
     if _.drawMode ~= "ftPrint" then
-      -- Font.print/fmPrint can scale per-draw; ftPrint uses a dedicated smaller key font.
+      -- Font.print/fmPrint can scale per-draw directly.
       drawLabelScale = drawLabelScale * glyphScaleMul
       labelFont = _.font
+    else
+      labelFont = getKeyFtFontForPress(pressAmount)
     end
     -- Hot path optimization: draw key border+fill in 2 rects instead of 5.
     _.Graphics.drawRect(ix, iy, iw, ih, border)
@@ -1648,14 +1604,7 @@ local function run(ctx)
     end
   end
   local hints = (ctx.textInputTitleIdMode and _.text_str.hint_items_title_id) or _.text_str.hint_items
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM,
-    _.w - 2 * _.MARGIN_X, {
-      getIconPressAmount = function(padName)
-        return getHintPadPressAmount(ctx, padName)
-      end,
-      iconPressShrinkPx = KEYBOARD_HINT_ICON_SHRINK_TOTAL,
-      iconPressDarkenMax = KEYBOARD_HINT_ICON_DARKEN_MAX,
-    })
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
   local shoulderHints = hints
   if belEnabled then
     shoulderHints = {}
