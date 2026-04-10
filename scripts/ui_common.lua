@@ -2075,6 +2075,20 @@ function common.beginTextInput(ctx, opts)
   if not ctx or type(opts) ~= "table" then return end
   -- Reset per-key held-repeat state so each text-input session starts clean.
   ctx._holdRepeatStates = nil
+  local suppressCrossOnEntry = false
+  if Pads and Pads.get then
+    local okPad, rawPad = pcall(Pads.get, 0)
+    if okPad and type(rawPad) == "number" then
+      local logicalPad = rawPad
+      if common.remapCrossCircleMask then
+        logicalPad = common.remapCrossCircleMask(logicalPad)
+      end
+      suppressCrossOnEntry = (logicalPad & (common.PAD_CROSS or 0)) ~= 0
+    end
+  else
+    local lastMask = tonumber(ctx._lastPadEffective) or 0
+    suppressCrossOnEntry = (lastMask & (common.PAD_CROSS or 0)) ~= 0
+  end
   if opts.clearArgEditIdx then
     ctx.argEditIdx = nil
   end
@@ -2090,6 +2104,14 @@ function common.beginTextInput(ctx, opts)
   ctx.textInputGridSel = math.max(1, math.floor(tonumber(opts.gridSel) or 1))
   ctx.textInputCursor = math.max(1, math.floor(tonumber(opts.cursor) or (#ctx.textInputValue + 1)))
   ctx.textInputScroll = math.max(1, math.floor(tonumber(opts.scroll) or 1))
+  ctx.textInputIgnoreCrossUntilRelease = suppressCrossOnEntry and true or nil
+  ctx.textInputCrossHeldPrev = suppressCrossOnEntry and true or nil
+  ctx.textInputHeldPressKey = nil
+  ctx.textInputKeyPressAnims = nil
+  ctx.textInputKeyFontPressCache = nil
+  ctx.textInputKeyFontPressCacheSig = nil
+  ctx.textInputKeyLabelWidthCache = nil
+  ctx.textInputKeyLabelWidthCacheSig = nil
   ctx.state = opts.state or "text_input"
 end
 
