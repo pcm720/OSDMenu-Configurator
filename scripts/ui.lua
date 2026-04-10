@@ -373,63 +373,10 @@ local function isProjectiveSceneTransformActive()
 end
 
 local function projectScenePoint(px, py)
-  local runtime = _G and _G.CONFIG_UI
-  if type(runtime) ~= "table" or runtime.sceneDrawProjective ~= true then
-    return nil
+  if common and common.projectScenePoint then
+    return common.projectScenePoint(px, py)
   end
-
-  local w = tonumber(runtime.currentSceneWidth) or common.DEFAULT_W
-  local h = tonumber(runtime.currentSceneHeight) or common.DEFAULT_H
-  local cx = tonumber(runtime.sceneDrawCenterX) or (w / 2)
-  local cy = tonumber(runtime.sceneDrawCenterY) or (h / 2)
-  local yaw = tonumber(runtime.sceneDrawYawRad) or 0
-  local pitch = tonumber(runtime.sceneDrawPitchRad) or 0
-  local radius = tonumber(runtime.sceneDrawCameraRadius) or 1.0
-  local focal = tonumber(runtime.sceneDrawCameraFocal) or radius
-  local minDen = tonumber(runtime.sceneDrawCameraMinDen) or 0.12
-  if radius < 0.10 then radius = 0.10 end
-  if focal < 0.10 then focal = 0.10 end
-  if minDen < 0.05 then minDen = 0.05 end
-
-  local function normalize3(x, y, z)
-    local l = math.sqrt((x * x) + (y * y) + (z * z))
-    if l <= 0.000001 then return 0, 0, 1 end
-    return x / l, y / l, z / l
-  end
-
-  local function cross3(ax, ay, az, bx, by, bz)
-    return (ay * bz) - (az * by), (az * bx) - (ax * bz), (ax * by) - (ay * bx)
-  end
-
-  local function dot3(ax, ay, az, bx, by, bz)
-    return (ax * bx) + (ay * by) + (az * bz)
-  end
-
-  local cyaw, syaw = math.cos(yaw), math.sin(yaw)
-  local cpitch, spitch = math.cos(pitch), math.sin(pitch)
-  local camX = radius * syaw * cpitch
-  local camY = radius * spitch
-  local camZ = radius * cyaw * cpitch
-  local fwdX, fwdY, fwdZ = normalize3(-syaw * cpitch, -spitch, -cyaw * cpitch)
-  local rightX, rightY, rightZ = normalize3(cyaw, 0, -syaw)
-  local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
-  upX, upY, upZ = normalize3(upX, upY, upZ)
-
-  local nx = ((tonumber(px) or 0) - cx) / math.max(1, (w * 0.5))
-  local ny = ((tonumber(py) or 0) - cy) / math.max(1, (h * 0.5))
-  local pX, pY, pZ = nx, ny, 0
-  local vX = pX - camX
-  local vY = pY - camY
-  local vZ = pZ - camZ
-  local xCam = dot3(vX, vY, vZ, rightX, rightY, rightZ)
-  local yCam = dot3(vX, vY, vZ, upX, upY, upZ)
-  local zCam = dot3(vX, vY, vZ, fwdX, fwdY, fwdZ)
-  if zCam < minDen then zCam = minDen end
-  local p = focal / zCam
-
-  local outX = cx + (xCam * (w * 0.5) * p)
-  local outY = cy + (yCam * (h * 0.5) * p)
-  return outX, outY
+  return nil
 end
 
 local function transformScenePoint(x, y)

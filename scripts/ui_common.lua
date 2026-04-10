@@ -82,6 +82,114 @@ common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+local function normalize3(xv, yv, zv)
+  local l = math.sqrt((xv * xv) + (yv * yv) + (zv * zv))
+  if l <= 0.000001 then return 0, 0, 1 end
+  return xv / l, yv / l, zv / l
+end
+
+local function cross3(ax, ay, az, bx, by, bz)
+  return (ay * bz) - (az * by), (az * bx) - (ax * bz), (ax * by) - (ay * bx)
+end
+
+local function dot3(ax, ay, az, bx, by, bz)
+  return (ax * bx) + (ay * by) + (az * bz)
+end
+
+local function getSceneProjectiveState(runtime)
+  if type(runtime) ~= "table" or runtime.sceneDrawProjective ~= true then
+    return nil
+  end
+
+  local w = tonumber(runtime.currentSceneWidth) or common.DEFAULT_W
+  local h = tonumber(runtime.currentSceneHeight) or common.DEFAULT_H
+  local cx = tonumber(runtime.sceneDrawCenterX) or (w / 2)
+  local cy = tonumber(runtime.sceneDrawCenterY) or (h / 2)
+  local yaw = tonumber(runtime.sceneDrawYawRad) or 0
+  local pitch = tonumber(runtime.sceneDrawPitchRad) or 0
+  local radius = tonumber(runtime.sceneDrawCameraRadius) or 1.0
+  local focal = tonumber(runtime.sceneDrawCameraFocal) or radius
+  local minDen = tonumber(runtime.sceneDrawCameraMinDen) or 0.12
+
+  if radius < 0.10 then radius = 0.10 end
+  if focal < 0.10 then focal = 0.10 end
+  if minDen < 0.05 then minDen = 0.05 end
+
+  local cache = runtime._sceneProjectiveStateCache
+  if type(cache) == "table" and
+      cache.w == w and cache.h == h and
+      cache.cx == cx and cache.cy == cy and
+      cache.yaw == yaw and cache.pitch == pitch and
+      cache.radius == radius and cache.focal == focal and cache.minDen == minDen then
+    return cache
+  end
+
+  local cyaw, syaw = math.cos(yaw), math.sin(yaw)
+  local cpitch, spitch = math.cos(pitch), math.sin(pitch)
+  local camX = radius * syaw * cpitch
+  local camY = radius * spitch
+  local camZ = radius * cyaw * cpitch
+  local fwdX, fwdY, fwdZ = normalize3(-syaw * cpitch, -spitch, -cyaw * cpitch)
+  local rightX, rightY, rightZ = normalize3(cyaw, 0, -syaw)
+  local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
+  upX, upY, upZ = normalize3(upX, upY, upZ)
+
+  cache = {
+    w = w,
+    h = h,
+    cx = cx,
+    cy = cy,
+    halfW = math.max(1, (w * 0.5)),
+    halfH = math.max(1, (h * 0.5)),
+    yaw = yaw,
+    pitch = pitch,
+    radius = radius,
+    focal = focal,
+    minDen = minDen,
+    camX = camX,
+    camY = camY,
+    camZ = camZ,
+    rightX = rightX,
+    rightY = rightY,
+    rightZ = rightZ,
+    upX = upX,
+    upY = upY,
+    upZ = upZ,
+    fwdX = fwdX,
+    fwdY = fwdY,
+    fwdZ = fwdZ,
+  }
+  runtime._sceneProjectiveStateCache = cache
+  return cache
+end
+
+function common.getSceneProjectiveState()
+  local runtime = _G and _G.CONFIG_UI
+  return getSceneProjectiveState(runtime)
+end
+
+function common.projectScenePoint(px, py)
+  local runtime = _G and _G.CONFIG_UI
+  local st = getSceneProjectiveState(runtime)
+  if not st then return nil end
+
+  local nx = ((tonumber(px) or 0) - st.cx) / st.halfW
+  local ny = ((tonumber(py) or 0) - st.cy) / st.halfH
+  local pX, pY, pZ = nx, ny, 0
+  local vX = pX - st.camX
+  local vY = pY - st.camY
+  local vZ = pZ - st.camZ
+  local xCam = dot3(vX, vY, vZ, st.rightX, st.rightY, st.rightZ)
+  local yCam = dot3(vX, vY, vZ, st.upX, st.upY, st.upZ)
+  local zCam = dot3(vX, vY, vZ, st.fwdX, st.fwdY, st.fwdZ)
+  if zCam < st.minDen then zCam = st.minDen end
+  local p = st.focal / zCam
+
+  local outX = st.cx + (xCam * st.halfW * p)
+  local outY = st.cy + (yCam * st.halfH * p)
+  return outX, outY
+end
+
 local function canOpenPath(path)
   if not (System and System.openFile and System.closeFile) then
     return true
@@ -2198,49 +2306,10 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   local py = tonumber(y) or 0
   local projective = (type(runtime) == "table" and runtime.sceneDrawProjective == true)
   if projective then
-    local w = tonumber(runtime and runtime.currentSceneWidth) or common.DEFAULT_W
-    local h = tonumber(runtime and runtime.currentSceneHeight) or common.DEFAULT_H
-    local yaw = tonumber(runtime and runtime.sceneDrawYawRad) or 0
-    local pitch = tonumber(runtime and runtime.sceneDrawPitchRad) or 0
-    local radius = tonumber(runtime and runtime.sceneDrawCameraRadius) or 1.0
-    local focal = tonumber(runtime and runtime.sceneDrawCameraFocal) or radius
-    local minDen = tonumber(runtime and runtime.sceneDrawCameraMinDen) or 0.12
-    if radius < 0.10 then radius = 0.10 end
-    if focal < 0.10 then focal = 0.10 end
-    if minDen < 0.05 then minDen = 0.05 end
-    local function normalize3(xv, yv, zv)
-      local l = math.sqrt((xv * xv) + (yv * yv) + (zv * zv))
-      if l <= 0.000001 then return 0, 0, 1 end
-      return xv / l, yv / l, zv / l
+    local projX, projY = common.projectScenePoint(px, py)
+    if projX ~= nil and projY ~= nil then
+      px, py = projX, projY
     end
-    local function cross3(ax, ay, az, bx, by, bz)
-      return (ay * bz) - (az * by), (az * bx) - (ax * bz), (ax * by) - (ay * bx)
-    end
-    local function dot3(ax, ay, az, bx, by, bz)
-      return (ax * bx) + (ay * by) + (az * bz)
-    end
-    local cyaw, syaw = math.cos(yaw), math.sin(yaw)
-    local cpitch, spitch = math.cos(pitch), math.sin(pitch)
-    local camX = radius * syaw * cpitch
-    local camY = radius * spitch
-    local camZ = radius * cyaw * cpitch
-    local fwdX, fwdY, fwdZ = normalize3(-syaw * cpitch, -spitch, -cyaw * cpitch)
-    local rightX, rightY, rightZ = normalize3(cyaw, 0, -syaw)
-    local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
-    upX, upY, upZ = normalize3(upX, upY, upZ)
-    local nx = (px - centerX) / math.max(1, (w * 0.5))
-    local ny = (py - centerY) / math.max(1, (h * 0.5))
-    local pX, pY, pZ = nx, ny, 0
-    local vX = pX - camX
-    local vY = pY - camY
-    local vZ = pZ - camZ
-    local xCam = dot3(vX, vY, vZ, rightX, rightY, rightZ)
-    local yCam = dot3(vX, vY, vZ, upX, upY, upZ)
-    local zCam = dot3(vX, vY, vZ, fwdX, fwdY, fwdZ)
-    if zCam < minDen then zCam = minDen end
-    local p = focal / zCam
-    px = centerX + (xCam * (w * 0.5) * p)
-    py = centerY + (yCam * (h * 0.5) * p)
   elseif math.abs(drawScaleX - 1) > 0.0001 or math.abs(drawScaleY - 1) > 0.0001 then
     px = centerX + ((px - centerX) * drawScaleX)
     py = centerY + ((py - centerY) * drawScaleY)
