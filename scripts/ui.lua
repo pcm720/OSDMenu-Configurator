@@ -1652,7 +1652,8 @@ local function mainLoop()
       _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
-    if c.drawBackgroundLayer and
+    local drawSceneBackgroundLayer = (state ~= "text_input")
+    if drawSceneBackgroundLayer and c.drawBackgroundLayer and
         (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(c) ~= false) then
       if common.drawWithoutSceneTransform then
         common.drawWithoutSceneTransform(function()

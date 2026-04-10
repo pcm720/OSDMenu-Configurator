@@ -1203,20 +1203,25 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     drawHintsUntransformed(function()
       clearHintRowForCrossDissolve(rowTop - 1, rowH + 2)
-      local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
-        hintKey = hintKey,
-        stableField = "hintRowStableSlots",
-        fadeField = "hintRowFadeStates",
-        rowSlots = rowSlots,
-        cloneSlots = cloneSlots,
-        slotsEqual = slotsEqual,
-        drawRow = function(slots)
-          drawRow(slots, 0)
-        end,
-        drawBlendedRows = drawBlendedRows,
-      })
-      if not handled then
+      local disableTransitions = (type(opts) == "table" and opts.disableTransitions == true)
+      if disableTransitions then
         drawRow(rowSlots, 0)
+      else
+        local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
+          hintKey = hintKey,
+          stableField = "hintRowStableSlots",
+          fadeField = "hintRowFadeStates",
+          rowSlots = rowSlots,
+          cloneSlots = cloneSlots,
+          slotsEqual = slotsEqual,
+          drawRow = function(slots)
+            drawRow(slots, 0)
+          end,
+          drawBlendedRows = drawBlendedRows,
+        })
+        if not handled then
+          drawRow(rowSlots, 0)
+        end
       end
     end)
     return
@@ -2124,6 +2129,7 @@ function common.beginTextInput(ctx, opts)
   ctx.textInputCrossHeldPrev = suppressCrossOnEntry and true or nil
   ctx.textInputHeldPressKey = nil
   ctx.textInputKeyPressAnims = nil
+  ctx.textInputKeyboardDrawCache = nil
   ctx.textInputKeyLabelFontByShrinkPx = nil
   ctx.textInputKeyLabelFontByShrinkPxSig = nil
   ctx.textInputKeyLabelWidthCache = nil

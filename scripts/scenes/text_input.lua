@@ -258,18 +258,23 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   drawHintsUntransformed(function()
     clearShoulderHintRowForCrossDissolve()
-    local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
-      hintKey = hintKey,
-      stableField = "keyboardShoulderStableSlots",
-      fadeField = "keyboardShoulderFadeStates",
-      rowSlots = rowSlots,
-      cloneSlots = cloneSlots,
-      slotsEqual = slotsEqual,
-      drawRow = drawRow,
-      drawBlendedRows = drawBlendedRows,
-    })
-    if not handled then
+    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
+    if not transitionActive then
       drawRow(rowSlots)
+    else
+      local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
+        hintKey = hintKey,
+        stableField = "keyboardShoulderStableSlots",
+        fadeField = "keyboardShoulderFadeStates",
+        rowSlots = rowSlots,
+        cloneSlots = cloneSlots,
+        slotsEqual = slotsEqual,
+        drawRow = drawRow,
+        drawBlendedRows = drawBlendedRows,
+      })
+      if not handled then
+        drawRow(rowSlots)
+      end
     end
   end)
 end
@@ -806,6 +811,121 @@ local function ensureKeyboardLayoutCache(ctx, _)
   return cache
 end
 
+local function buildRowOffsetsKey(rowOffsets, rowCount)
+  if type(rowOffsets) ~= "table" then
+    return ""
+  end
+  local parts = {}
+  for i = 1, rowCount do
+    parts[i] = tostring(tonumber(rowOffsets[i]) or 0)
+  end
+  return table.concat(parts, ",")
+end
+
+local function ensureKeyboardDrawCache(ctx, _, keyboardLayout, keyboardLeft, keyY, kw, kh, rowOffsets)
+  if type(ctx) ~= "table" or type(keyboardLayout) ~= "table" then
+    return nil
+  end
+  local rows = keyboardLayout.rows or {}
+  local rowStart = keyboardLayout.rowStart or {}
+  local rowCount = tonumber(keyboardLayout.rowCount) or #rows
+  local spaceIdx = keyboardLayout.spaceIdx
+  local offsetsKey = buildRowOffsetsKey(rowOffsets, rowCount)
+  local cacheSig = table.concat({
+    tostring(keyboardLayout.key or ""),
+    tostring(math.floor((tonumber(keyboardLeft) or 0) + 0.5)),
+    tostring(math.floor((tonumber(keyY) or 0) + 0.5)),
+    tostring(math.floor((tonumber(kw) or 0) + 0.5)),
+    tostring(math.floor((tonumber(kh) or 0) + 0.5)),
+    tostring(math.floor((tonumber(_.KEY_WIDTH) or 0) + 0.5)),
+    tostring(math.floor((tonumber(_.KEY_H) or 0) + 0.5)),
+    tostring(math.floor((tonumber(_.KEY_GAP) or 0) + 0.5)),
+    offsetsKey,
+  }, "|")
+
+  local cache = ctx.textInputKeyboardDrawCache
+  if type(cache) == "table" and cache.sig == cacheSig then
+    return cache
+  end
+
+  local keys = {}
+  for r = 1, rowCount do
+    local row = rows[r] or ""
+    local n = #row
+    local startX = keyboardLeft + (tonumber(rowOffsets[r]) or 0) * _.KEY_WIDTH
+    local ky = math.floor(keyY + (r - 1) * _.KEY_H + _.KEY_GAP / 2)
+    for col = 1, n do
+      local idx = rowStart[r] + col - 1
+      local kx = math.floor(startX + (col - 1) * _.KEY_WIDTH + _.KEY_GAP / 2)
+      keys[#keys + 1] = {
+        idx = idx,
+        kx = kx,
+        ky = ky,
+        label = row:sub(col, col),
+      }
+    end
+  end
+
+  local spaceSpec = nil
+  if spaceIdx then
+    local specY = keyY + rowCount * _.KEY_H
+    local ky = math.floor(specY + _.KEY_GAP / 2)
+    local function findAdjacentGapX(leftCh, rightCh)
+      local needle = string.lower(tostring(leftCh or "") .. tostring(rightCh or ""))
+      if #needle ~= 2 then return nil end
+      for r = 1, rowCount do
+        local row = rows[r] or ""
+        local pos = string.lower(row):find(needle, 1, true)
+        if pos then
+          local rowStartX = keyboardLeft + (tonumber(rowOffsets[r]) or 0) * _.KEY_WIDTH
+          return rowStartX + (pos * _.KEY_WIDTH)
+        end
+      end
+      return nil
+    end
+
+    local spaceCenterX = _.KEYBOARD_CENTER_X
+    local leftGapX = findAdjacentGapX("e", "r")
+    local rightGapX = findAdjacentGapX("k", "l")
+    local specStartX
+    local spaceW
+
+    if leftGapX and rightGapX and rightGapX > leftGapX then
+      spaceCenterX = (leftGapX + rightGapX) * 0.5
+      specStartX = math.floor(leftGapX + (_.KEY_GAP / 2) + 0.5)
+      spaceW = math.floor((rightGapX - leftGapX) - _.KEY_GAP + 0.5)
+    else
+      local specSlotW = _.KEY_WIDTH * 2.2
+      spaceW = math.floor(specSlotW * 2 - _.KEY_GAP)
+      specStartX = math.floor(spaceCenterX - (spaceW / 2) + 0.5)
+    end
+
+    -- Make spacebar one key wider to the left (keep right edge unchanged).
+    specStartX = specStartX - _.KEY_WIDTH
+    spaceW = spaceW + _.KEY_WIDTH
+    -- Move spacebar right by one key.
+    specStartX = specStartX + _.KEY_WIDTH
+
+    if spaceW < kw then spaceW = kw end
+    spaceCenterX = specStartX + (spaceW * 0.5)
+    spaceSpec = {
+      idx = spaceIdx,
+      kx = specStartX,
+      ky = ky,
+      w = spaceW,
+      centerX = spaceCenterX,
+    }
+  end
+
+  cache = {
+    sig = cacheSig,
+    keys = keys,
+    space = spaceSpec,
+  }
+  ctx.textInputKeyboardDrawCache = cache
+  return cache
+end
+
 local KEY_PRESS_IN_FRAMES = 5
 local KEY_PRESS_OUT_FRAMES = 7
 local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
@@ -1053,6 +1173,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
+    ctx.textInputKeyboardDrawCache = nil
     ctx.textInputKeyLabelFontByShrinkPx = nil
     ctx.textInputKeyLabelFontByShrinkPxSig = nil
     ctx.textInputKeyLabelWidthCache = nil
@@ -1279,62 +1400,17 @@ local function run(ctx)
     local textY = math.floor(keyCenterY - (textH * 0.5) + KEY_LABEL_Y_BIAS + 0.5)
     _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.HIGHLIGHT or _.WHITE)
   end
-  for r = 1, rowCount do
-    local row = rows[r] or ""
-    local n = #row
-    local startX = keyboardLeft + (tonumber(rowOffsets[r]) or 0) * _.KEY_WIDTH
-    for col = 1, n do
-      local idx = rowStart[r] + col - 1
-      local kx = math.floor(startX + (col - 1) * _.KEY_WIDTH + _.KEY_GAP / 2)
-      local ky = math.floor(keyY + (r - 1) * _.KEY_H + _.KEY_GAP / 2)
-      local ch = row:sub(col, col)
-      drawKey(kx, ky, kw, kh, ch, idx == ctx.textInputGridSel, nil, idx)
-    end
+  local drawCache = ensureKeyboardDrawCache(ctx, _, keyboardLayout, keyboardLeft, keyY, kw, kh, rowOffsets) or {}
+  local keysToDraw = drawCache.keys or {}
+  for i = 1, #keysToDraw do
+    local item = keysToDraw[i]
+    drawKey(item.kx, item.ky, kw, kh, item.label, item.idx == ctx.textInputGridSel, nil, item.idx)
   end
   local spaceCenterX = _.KEYBOARD_CENTER_X
-  if spaceIdx then
-    local specY = keyY + rowCount * _.KEY_H
-    local ky = math.floor(specY + _.KEY_GAP / 2)
-    local function findAdjacentGapX(leftCh, rightCh)
-      local needle = string.lower(tostring(leftCh or "") .. tostring(rightCh or ""))
-      if #needle ~= 2 then return nil end
-      for r = 1, rowCount do
-        local row = rows[r] or ""
-        local pos = string.lower(row):find(needle, 1, true)
-        if pos then
-          local rowStartX = keyboardLeft + (tonumber(rowOffsets[r]) or 0) * _.KEY_WIDTH
-          return rowStartX + (pos * _.KEY_WIDTH)
-        end
-      end
-      return nil
-    end
-
-    local leftGapX = findAdjacentGapX("e", "r")
-    local rightGapX = findAdjacentGapX("k", "l")
-    local specStartX
-    local spaceW
-
-    if leftGapX and rightGapX and rightGapX > leftGapX then
-      -- Spacebar spans visually from the e/r gap to the k/l gap.
-      spaceCenterX = (leftGapX + rightGapX) * 0.5
-      specStartX = math.floor(leftGapX + (_.KEY_GAP / 2) + 0.5)
-      spaceW = math.floor((rightGapX - leftGapX) - _.KEY_GAP + 0.5)
-    else
-      -- Fallback for non-standard layouts.
-      local specSlotW = _.KEY_WIDTH * 2.2
-      spaceW = math.floor(specSlotW * 2 - _.KEY_GAP)
-      specStartX = math.floor(spaceCenterX - (spaceW / 2) + 0.5)
-    end
-
-    -- Make spacebar one key wider to the left (keep right edge unchanged).
-    specStartX = specStartX - _.KEY_WIDTH
-    spaceW = spaceW + _.KEY_WIDTH
-    -- Move spacebar right by one key.
-    specStartX = specStartX + _.KEY_WIDTH
-
-    if spaceW < kw then spaceW = kw end
-    spaceCenterX = specStartX + (spaceW * 0.5)
-    drawKey(specStartX, ky, spaceW, kh, "", spaceIdx == ctx.textInputGridSel, nil, spaceIdx)
+  local spaceSpec = drawCache.space
+  if type(spaceSpec) == "table" then
+    spaceCenterX = tonumber(spaceSpec.centerX) or spaceCenterX
+    drawKey(spaceSpec.kx, spaceSpec.ky, spaceSpec.w, kh, "", spaceSpec.idx == ctx.textInputGridSel, nil, spaceSpec.idx)
   end
 
   local function moveTextCursorWrap(delta)
@@ -1651,6 +1727,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
+    ctx.textInputKeyboardDrawCache = nil
     ctx.textInputKeyLabelFontByShrinkPx = nil
     ctx.textInputKeyLabelFontByShrinkPxSig = nil
     ctx.textInputKeyLabelWidthCache = nil
@@ -1699,6 +1776,7 @@ local function run(ctx)
     ctx.textInputIgnoreCrossReleaseFrames = nil
     ctx.textInputKeyPressAnims = nil
     ctx.textInputHintPadPressAnims = nil
+    ctx.textInputKeyboardDrawCache = nil
     ctx.textInputKeyLabelFontByShrinkPx = nil
     ctx.textInputKeyLabelFontByShrinkPxSig = nil
     ctx.textInputKeyLabelWidthCache = nil
@@ -1722,6 +1800,7 @@ local function run(ctx)
   local suppressCrossEnter = (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X, {
+    disableTransitions = true,
     getIconPressAmount = function(padName)
       local key = tostring(padName or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
       if suppressCrossEnter and key == tostring(logicalEnterPad):lower() then
