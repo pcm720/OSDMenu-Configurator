@@ -44,7 +44,7 @@ function transitions.install(common)
   -- Flip-transition camera tuning.
   -- Radius > focal keeps the scene visually "further away" from the pivot.
   local FLIP_CAMERA_RADIUS = 1.4
-  local FLIP_CAMERA_FOCAL = 1.0
+  local FLIP_CAMERA_FOCAL = 1.4
   local FLIP_CAMERA_MIN_DEN = 0.12
 
   local function applySceneMotionCurve(transitionType, progress, phase)
