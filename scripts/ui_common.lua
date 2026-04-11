@@ -2008,6 +2008,12 @@ end
 -- Shared scene loop: clear, layout, getPadEffective, runHandler(ctx, pad), exit when ctx.state ~= sceneName.
 function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
+    if ctx and type(ctx._preSceneFrameHook) == "function" then
+      ctx._preSceneFrameHook(ctx, sceneName, 0)
+      if ctx.state ~= sceneName then
+        return ctx.state, ctx
+      end
+    end
     if _G and _G.CONFIG_UI then
       _G.CONFIG_UI.uiFrameCounter = (tonumber(_G.CONFIG_UI.uiFrameCounter) or 0) + 1
     end

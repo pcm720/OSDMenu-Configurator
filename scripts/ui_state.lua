@@ -97,6 +97,10 @@ local function initContext()
     returnToSelectConfigAfterSaveFlash = nil,
     returnStateAfterSaveFlash = nil,
     openExplicitPath = nil,
+    katamariEasterEggReturnState = nil,
+    _katamariStickActiveFrames = 0,
+    _katamariStickRequireRelease = nil,
+    _katamariEasterEggTriggered = nil,
   }
 end
 

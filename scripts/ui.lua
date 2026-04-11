@@ -820,6 +820,7 @@ local scene_text_input = dofile("scripts/scenes/text_input.lua")
 local scene_path_picker = dofile("scripts/scenes/path_picker.lua")
 local scene_egsm_editor = dofile("scripts/scenes/egsm_editor.lua")
 local scene_egsm_value_edit = dofile("scripts/scenes/egsm_value_edit.lua")
+local scene_katamari_easter_egg = dofile("scripts/scenes/katamari_easter_egg.lua")
 
 local strings = _G.CONFIG_UI.strings
 local editor_str = strings.editor
@@ -1011,6 +1012,10 @@ local OVERLAY_LOGO_CAMERA_MIN_DENOM = 0.20
 local OVERLAY_LOGO_PERSPECTIVE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MIN_ABS = 0.04
 local OVERLAY_LOGO_SCALE_MAX_ABS = 2.40
+local KATAMARI_EASTER_EGG_STATE = "katamari_easter_egg"
+local KATAMARI_EASTER_EGG_TRIGGER_SECONDS = 10
+local KATAMARI_EASTER_EGG_TRIGGER_FRAMES = math.max(1,
+  math.floor((KATAMARI_EASTER_EGG_TRIGGER_SECONDS * 60) + 0.5))
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
@@ -1046,6 +1051,56 @@ local function readStickNormalized(getFn)
   local rawX = tonumber(x) or 0
   local rawY = tonumber(y) or 0
   return normalizeStickAxis(rawX), normalizeStickAxis(rawY), true, rawX, rawY
+end
+
+local function isAnyStickActive()
+  local lx, ly, leftOk, lRawX, lRawY = readStickNormalized(Pads and Pads.getLeftStick)
+  local rx, ry, rightOk, rRawX, rRawY = readStickNormalized(Pads and Pads.getRightStick)
+  if not leftOk and not rightOk then
+    return false
+  end
+  local invalidSignature = (math.abs(lRawX) >= 126 and math.abs(lRawY) >= 126 and
+      math.abs(rRawX) >= 126 and math.abs(rRawY) >= 126)
+  if invalidSignature then
+    return false
+  end
+  return not (lx == 0 and ly == 0 and rx == 0 and ry == 0)
+end
+
+local function updateKatamariEasterEggTrigger(ctx, sceneName)
+  if type(ctx) ~= "table" then return false end
+  if ctx._katamariEasterEggTriggered == true then
+    ctx._katamariStickActiveFrames = 0
+    return false
+  end
+  if sceneName == KATAMARI_EASTER_EGG_STATE or ctx.state == KATAMARI_EASTER_EGG_STATE then
+    ctx._katamariStickActiveFrames = 0
+    return false
+  end
+  local stickActive = isAnyStickActive()
+  local requireRelease = (ctx._katamariStickRequireRelease == true)
+  if stickActive then
+    if requireRelease then
+      ctx._katamariStickActiveFrames = 0
+      return false
+    end
+    local heldFrames = math.max(0, math.floor(tonumber(ctx._katamariStickActiveFrames) or 0)) + 1
+    ctx._katamariStickActiveFrames = heldFrames
+    if heldFrames >= KATAMARI_EASTER_EGG_TRIGGER_FRAMES then
+      ctx._katamariStickActiveFrames = 0
+      ctx._katamariStickRequireRelease = true
+      ctx._katamariEasterEggTriggered = true
+      ctx.katamariEasterEggReturnState = sceneName
+      ctx.state = KATAMARI_EASTER_EGG_STATE
+      return true
+    end
+    return false
+  end
+  ctx._katamariStickActiveFrames = 0
+  if requireRelease then
+    ctx._katamariStickRequireRelease = nil
+  end
+  return false
 end
 
 local function getOverlayLogoAnalogTransform(ctx)
@@ -1507,6 +1562,9 @@ local function mainLoop()
   local ctx = scene_module.initContext()
   ctx.font, ctx.drawMode, ctx.drawListRow = font, drawMode, drawListRow
   ctx.drawBackgroundLayer = drawSelectionOverlayLogo
+  ctx._preSceneFrameHook = function(c, sceneName)
+    return updateKatamariEasterEggTrigger(c, sceneName)
+  end
   ctx.main = {
     (strings.main.main_freemcboot or "FreeMCBoot"),
     (strings.main.main_freehddboot or "FreeHDBoot"),
@@ -1633,6 +1691,12 @@ local function mainLoop()
   -- One-frame dispatch for all states. Main-flow states use runSceneLoop; others use this.
   local function runOneFrame(c)
     syncFromS(c)
+    if type(c._preSceneFrameHook) == "function" then
+      c._preSceneFrameHook(c, state, 0)
+      if type(c.state) == "string" and c.state ~= "" then
+        state = c.state
+      end
+    end
     refreshRuntimeColorAliases()
     if _G and _G.CONFIG_UI then
       _G.CONFIG_UI.uiFrameCounter = (tonumber(_G.CONFIG_UI.uiFrameCounter) or 0) + 1
@@ -1652,7 +1716,7 @@ local function mainLoop()
       _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
-    local drawSceneBackgroundLayer = (state ~= "text_input")
+    local drawSceneBackgroundLayer = (state ~= "text_input" and state ~= KATAMARI_EASTER_EGG_STATE)
     if drawSceneBackgroundLayer and c.drawBackgroundLayer and
         (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(c) ~= false) then
       if common.drawWithoutSceneTransform then
@@ -1862,6 +1926,10 @@ local function mainLoop()
       syncToS(c)
       scene_egsm_value_edit.run(c)
       syncFromS(c)
+    elseif state == KATAMARI_EASTER_EGG_STATE then
+      syncToS(c)
+      scene_katamari_easter_egg.run(c)
+      syncFromS(c)
     elseif state == "text_input" then
       syncToS(c)
       scene_text_input.run(c)
@@ -1874,7 +1942,8 @@ local function mainLoop()
 
     -- Keep keyboard shoulder hints transition-consistent across scene changes.
     -- Non-keyboard scenes drive this row toward empty so it fades out instead of cutting.
-    if renderedState ~= "text_input" and scene_text_input and type(scene_text_input.drawShoulderHints) == "function" then
+    if renderedState ~= "text_input" and renderedState ~= KATAMARI_EASTER_EGG_STATE and scene_text_input and
+        type(scene_text_input.drawShoulderHints) == "function" then
       local shoulderTotalWidth = (c.w or common.DEFAULT_W) - (2 * (c.MARGIN_X or common.MARGIN_X))
       local ok, err = pcall(scene_text_input.drawShoulderHints, c, c._, {}, 0.7, shoulderTotalWidth, c.DIM or DIM)
       if not ok and c then
@@ -1886,7 +1955,9 @@ local function mainLoop()
     end
 
     common.refreshConfigModified(c)
-    common.drawSaveSplash(c)
+    if renderedState ~= KATAMARI_EASTER_EGG_STATE then
+      common.drawSaveSplash(c)
+    end
     common.drawAndAdvanceSceneTransitionIn(c)
     syncFromS(c)
     if padEffective ~= 0 then
@@ -2121,6 +2192,7 @@ local function mainLoop()
   local function applySceneSelectionNavigationPolicy(c, prevScene, nextScene)
     if not c then return end
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
+    if prevScene == KATAMARI_EASTER_EGG_STATE or nextScene == KATAMARI_EASTER_EGG_STATE then return end
     local direction = getSceneNavigationDirection(c, nextScene)
     if direction == "out" then
       restoreSceneSelectionOnBack(c, nextScene)
@@ -2133,6 +2205,10 @@ local function mainLoop()
   local function runSceneTransitionOnStateChange(c, prevScene, nextScene)
     if not c then return end
     if type(prevScene) ~= "string" or type(nextScene) ~= "string" or prevScene == nextScene then return end
+    if prevScene == KATAMARI_EASTER_EGG_STATE or nextScene == KATAMARI_EASTER_EGG_STATE then
+      c.sceneTransitionIn = nil
+      return c
+    end
     local direction = getSceneNavigationDirection(c, nextScene)
     -- Some scene changes (notably * -> open) are one-shot loaders that can
     -- immediately resolve to editor/choose_load. Resolve once up-front so
@@ -2242,7 +2318,7 @@ local function mainLoop()
     "menu_entries", "menu_entry_edit", "entry_cdrom_options", "entry_paths", "entry_args", "bbl_hotkeys",
     "bbl_irx_entries",
     "bbl_hotkey_entries", "bbl_hotkey_entry", "bbl_hotkey_args", "egsm_editor", "egsm_value_edit", "text_input",
-    "path_picker" }
+    "path_picker", KATAMARI_EASTER_EGG_STATE }
   local scenes = {}
   for _, name in ipairs(sceneNames) do scenes[name] = { run = runOneFrame } end
   -- Main-flow scenes use runSceneLoop (clear, layout, handler, flip until state change).
