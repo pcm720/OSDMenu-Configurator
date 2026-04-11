@@ -41,6 +41,12 @@ function transitions.install(common)
     return x * x * x
   end
 
+  -- Flip-transition camera tuning.
+  -- Radius > focal keeps the scene visually "further away" from the pivot.
+  local FLIP_CAMERA_RADIUS = 1.4
+  local FLIP_CAMERA_FOCAL = 1.0
+  local FLIP_CAMERA_MIN_DEN = 0.12
+
   local function applySceneMotionCurve(transitionType, progress, phase)
     local t = common.normalizeSceneTransitionType(transitionType)
     if t == "slide" then
@@ -483,9 +489,9 @@ function transitions.install(common)
           runtime.sceneDrawProjective = true
           runtime.sceneDrawYawRad = yawRad
           runtime.sceneDrawPitchRad = pitchRad
-          runtime.sceneDrawCameraRadius = 1.0
-          runtime.sceneDrawCameraFocal = 1.0
-          runtime.sceneDrawCameraMinDen = 0.12
+          runtime.sceneDrawCameraRadius = FLIP_CAMERA_RADIUS
+          runtime.sceneDrawCameraFocal = FLIP_CAMERA_FOCAL
+          runtime.sceneDrawCameraMinDen = FLIP_CAMERA_MIN_DEN
           runtime.sceneDrawScale = axisScale
           runtime.sceneDrawScaleX = 1
           runtime.sceneDrawScaleY = 1
