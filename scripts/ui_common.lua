@@ -721,6 +721,52 @@ local function getRuntimeFtPixelBase(opts)
   return tonumber(common.FT_PIXEL_H) or 18
 end
 
+function common.applyFtPixelSize(ctx, font, drawMode, optsOrUiScale, usePcall)
+  local opts = (type(optsOrUiScale) == "table") and optsOrUiScale or nil
+  local runtime = _G and _G.CONFIG_UI
+  if not (ctx and drawMode == "ftPrint" and font and Font and Font.ftSetPixelSize) then
+    if runtime then
+      runtime.currentFtPixelH = nil
+    end
+    return nil
+  end
+
+  local uiScale = tonumber((opts and opts.uiScale) or optsOrUiScale) or tonumber(ctx.uiScale) or 1
+  if uiScale <= 0 then uiScale = 1 end
+  local usePcallSafe = ((opts and opts.usePcall) ~= false) and (usePcall ~= false)
+  local runtimeDrawScale = tonumber(runtime and runtime.sceneDrawScale) or 1
+  if runtime and runtime.sceneDrawProjective == true then
+    local trType = tostring(runtime.sceneTransitionAnimType or "")
+    if trType == "flip_horizontal" then
+      -- Keep glyph pixel height stable during horizontal flip; horizontal
+      -- foreshortening is handled in the projected per-glyph draw path.
+      runtimeDrawScale = 1
+    end
+  end
+  if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
+  if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
+  if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
+
+  local minFtPx = 10
+  if runtime and runtime.sceneDrawProjective == true then
+    minFtPx = 2
+  end
+
+  local wantPx = math.max(minFtPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
+  if ctx._ftPixelSizeApplied ~= wantPx then
+    if usePcallSafe then
+      pcall(Font.ftSetPixelSize, font, 0, wantPx)
+    else
+      Font.ftSetPixelSize(font, 0, wantPx)
+    end
+    ctx._ftPixelSizeApplied = wantPx
+  end
+  if runtime then
+    runtime.currentFtPixelH = wantPx
+  end
+  return wantPx
+end
+
 local function loadFtFontWithFallback()
   if not (Font and Font.ftLoad) then return nil end
   local cwdCandidates = { "font.ttf" }
@@ -1978,34 +2024,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
-    if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
-      local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
-      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
-        local trType = tostring(_G.CONFIG_UI.sceneTransitionAnimType or "")
-        if trType == "flip_horizontal" then
-          -- Keep glyph pixel height stable during horizontal flip; horizontal
-          -- foreshortening is handled in the projected per-glyph draw path.
-          runtimeDrawScale = 1
-        end
-      end
-      if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
-      if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
-      if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
-      local minFtPx = 10
-      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
-        minFtPx = 2
-      end
-      local wantPx = math.max(minFtPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
-      if ctx._ftPixelSizeApplied ~= wantPx then
-        pcall(Font.ftSetPixelSize, ctx.font, 0, wantPx)
-        ctx._ftPixelSizeApplied = wantPx
-      end
-      if _G.CONFIG_UI then
-        _G.CONFIG_UI.currentFtPixelH = wantPx
-      end
-    elseif _G.CONFIG_UI then
-      _G.CONFIG_UI.currentFtPixelH = nil
-    end
+    common.applyFtPixelSize(ctx, ctx and ctx.font, ctx and ctx.drawMode, uiScale, true)
     if ctx and ctx.drawBackgroundLayer and
         (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(ctx) ~= false) then
       if common.drawWithoutSceneTransform then

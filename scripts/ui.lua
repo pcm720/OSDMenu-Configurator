@@ -1677,34 +1677,7 @@ local function mainLoop()
     local KEY_G = c.KEY_GAP or math.max(1, scaleX(common.KEY_GAP))
     local KEY_CW = c.KEY_CHAR_W or math.max(1, scaleX(common.KEY_CHAR_W))
     local KEY_LH = c.KEY_LINE_H or math.max(1, scaleY(common.KEY_LINE_H))
-    if drawMode == "ftPrint" and font then
-      local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
-      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
-        local trType = tostring(_G.CONFIG_UI.sceneTransitionAnimType or "")
-        if trType == "flip_horizontal" then
-          -- Keep glyph pixel height stable during horizontal flip; horizontal
-          -- foreshortening is handled in the projected per-glyph draw path.
-          runtimeDrawScale = 1
-        end
-      end
-      if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
-      if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
-      if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
-      local minFtPx = 10
-      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
-        minFtPx = 2
-      end
-      local wantPx = math.max(minFtPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
-      if c._ftPixelSizeApplied ~= wantPx then
-        Font.ftSetPixelSize(font, 0, wantPx)
-        c._ftPixelSizeApplied = wantPx
-      end
-      if _G.CONFIG_UI then
-        _G.CONFIG_UI.currentFtPixelH = wantPx
-      end
-    elseif _G.CONFIG_UI then
-      _G.CONFIG_UI.currentFtPixelH = nil
-    end
+    common.applyFtPixelSize(c, font, drawMode, uiScale, false)
     c.prevPad = prevPad
     c.holdFrameCount = holdFrameCount
     c.holdRepeatCountdown = holdRepeatCountdown

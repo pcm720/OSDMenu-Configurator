@@ -463,20 +463,6 @@ static int lua_exit(lua_State *L) {
   return 0;
 }
 
-void recursive_mkdir(char *dir) {
-  char *p = dir;
-  while (p) {
-    char *p2 = strstr(p, "/");
-    if (p2) {
-      p2[0] = 0;
-      mkdir(dir, 0777);
-      p = p2 + 1;
-      p2[0] = '/';
-    } else
-      break;
-  }
-}
-
 static int lua_getmcinfo(lua_State *L) {
   int argc = lua_gettop(L);
   int type, freespace, format, result;

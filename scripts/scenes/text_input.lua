@@ -1160,13 +1160,79 @@ local function advanceKeyPressAnims(ctx)
   end
 end
 
+local TEXT_INPUT_BEL_MENU_OPEN_KEY = "textInputBelMenuOpen"
+local TEXT_INPUT_BEL_MENU_ANIM_KEY = TEXT_INPUT_BEL_MENU_OPEN_KEY .. "_anim"
+local TEXT_INPUT_BEL_MENU_CLOSING_KEY = TEXT_INPUT_BEL_MENU_OPEN_KEY .. "_closing"
+local TEXT_INPUT_BEL_MENU_ROWS_CACHE_KEY = TEXT_INPUT_BEL_MENU_OPEN_KEY .. "_rowsCache"
+local TEXT_INPUT_BEL_MENU_HINTS_CACHE_KEY = TEXT_INPUT_BEL_MENU_OPEN_KEY .. "_hintsCache"
+
+local TEXT_INPUT_RUNTIME_CLEAR_FIELDS = {
+  "_textInputBelBaselineCallback",
+  "textInputBelBaseline",
+  "textInputAllowBelAdd",
+  "textInputEnableBelKey",
+  "textInputBelProfile",
+  "textInputHidePipeBackslash",
+  "textInputSpaceReturnFromTopCol",
+  "textInputSpaceReturnFromBottomCol",
+  "textInputBelMenuOpen",
+  "textInputBelMenuSel",
+  "textInputBelMenuScroll",
+  "textInputBelRowsByPage",
+  "textInputBelRowsProfile",
+  "textInputBelRowsText",
+  "textInputBelPage",
+  "textInputBelColumnMinWidths",
+  "textInputBelMinIntrinsicW",
+  "textInputBelLayoutProfile",
+  "textInputBelLayoutScale",
+  "textInputBelLayoutText",
+  "textInputCursorPrevHeldMask",
+  "textInputCursorHoldFrames",
+  "textInputCursorHoldCountdown",
+  "textInputBackspacePrevHeldMask",
+  "textInputBackspaceHoldFrames",
+  "textInputBackspaceHoldCountdown",
+  "textInputGridHorizontalPrevHeldMask",
+  "textInputGridHorizontalHoldFrames",
+  "textInputGridHorizontalHoldCountdown",
+  "textInputHeldPressKey",
+  "textInputCrossHeldPrev",
+  "textInputIgnoreCrossUntilRelease",
+  "textInputIgnoreCrossReleaseFrames",
+  "textInputSuppressPressVisualFrames",
+  "textInputPressAnimEntryGate",
+  "textInputPressGateSceneEpoch",
+  "textInputKeyPressAnims",
+  "textInputHintPadPressAnims",
+  "textInputKeyboardDrawCache",
+  "textInputKeyLabelFontByShrinkPx",
+  "textInputKeyLabelFontByShrinkPxSig",
+  "textInputKeyLabelWidthCache",
+  "textInputKeyLabelWidthCacheSig",
+  "textInputKeyLabelWidthWarmSig",
+}
+
+local function resetTextInputRuntime(ctx, clearCallback)
+  if clearCallback == true then
+    ctx.textInputCallback = nil
+  end
+  for i = 1, #TEXT_INPUT_RUNTIME_CLEAR_FIELDS do
+    ctx[TEXT_INPUT_RUNTIME_CLEAR_FIELDS[i]] = nil
+  end
+  ctx[TEXT_INPUT_BEL_MENU_ANIM_KEY] = nil
+  ctx[TEXT_INPUT_BEL_MENU_CLOSING_KEY] = nil
+  ctx[TEXT_INPUT_BEL_MENU_ROWS_CACHE_KEY] = nil
+  ctx[TEXT_INPUT_BEL_MENU_HINTS_CACHE_KEY] = nil
+end
+
 local function run(ctx)
   local _ = ctx._
-  local belMenuOpenKey = "textInputBelMenuOpen"
-  local belMenuAnimKey = belMenuOpenKey .. "_anim"
-  local belMenuClosingKey = belMenuOpenKey .. "_closing"
-  local belMenuRowsCacheKey = belMenuOpenKey .. "_rowsCache"
-  local belMenuHintsCacheKey = belMenuOpenKey .. "_hintsCache"
+  local belMenuOpenKey = TEXT_INPUT_BEL_MENU_OPEN_KEY
+  local belMenuAnimKey = TEXT_INPUT_BEL_MENU_ANIM_KEY
+  local belMenuClosingKey = TEXT_INPUT_BEL_MENU_CLOSING_KEY
+  local belMenuRowsCacheKey = TEXT_INPUT_BEL_MENU_ROWS_CACHE_KEY
+  local belMenuHintsCacheKey = TEXT_INPUT_BEL_MENU_HINTS_CACHE_KEY
   local transitionRenderPass = (_.common and _.common.isSceneTransitionInActive and _.common.isSceneTransitionInActive(ctx)) or
       false
   if not ctx.textInputCallback then
@@ -1177,54 +1243,7 @@ local function run(ctx)
       -- Keep drawing with existing text/layout snapshot; input is already
       -- blocked by transition gate in ui.lua.
     else
-    ctx.textInputBelMenuOpen = nil
-    ctx.textInputBelMenuSel = nil
-    ctx.textInputBelMenuScroll = nil
-    ctx.textInputBelRowsByPage = nil
-    ctx.textInputBelRowsProfile = nil
-    ctx.textInputBelRowsText = nil
-    ctx.textInputBelPage = nil
-    ctx.textInputBelColumnMinWidths = nil
-    ctx.textInputBelMinIntrinsicW = nil
-    ctx.textInputBelLayoutProfile = nil
-    ctx.textInputBelLayoutScale = nil
-    ctx.textInputBelLayoutText = nil
-    ctx[belMenuAnimKey] = nil
-    ctx[belMenuClosingKey] = nil
-    ctx[belMenuRowsCacheKey] = nil
-    ctx[belMenuHintsCacheKey] = nil
-    ctx._textInputBelBaselineCallback = nil
-    ctx.textInputBelBaseline = nil
-    ctx.textInputAllowBelAdd = nil
-    ctx.textInputEnableBelKey = nil
-    ctx.textInputBelProfile = nil
-    ctx.textInputHidePipeBackslash = nil
-    ctx.textInputSpaceReturnFromTopCol = nil
-    ctx.textInputSpaceReturnFromBottomCol = nil
-    ctx.textInputCursorPrevHeldMask = nil
-    ctx.textInputCursorHoldFrames = nil
-    ctx.textInputCursorHoldCountdown = nil
-    ctx.textInputBackspacePrevHeldMask = nil
-    ctx.textInputBackspaceHoldFrames = nil
-    ctx.textInputBackspaceHoldCountdown = nil
-    ctx.textInputGridHorizontalPrevHeldMask = nil
-    ctx.textInputGridHorizontalHoldFrames = nil
-    ctx.textInputGridHorizontalHoldCountdown = nil
-    ctx.textInputHeldPressKey = nil
-    ctx.textInputCrossHeldPrev = nil
-    ctx.textInputIgnoreCrossUntilRelease = nil
-    ctx.textInputIgnoreCrossReleaseFrames = nil
-    ctx.textInputSuppressPressVisualFrames = nil
-    ctx.textInputPressAnimEntryGate = nil
-    ctx.textInputPressGateSceneEpoch = nil
-    ctx.textInputKeyPressAnims = nil
-    ctx.textInputHintPadPressAnims = nil
-    ctx.textInputKeyboardDrawCache = nil
-    ctx.textInputKeyLabelFontByShrinkPx = nil
-    ctx.textInputKeyLabelFontByShrinkPxSig = nil
-    ctx.textInputKeyLabelWidthCache = nil
-    ctx.textInputKeyLabelWidthCacheSig = nil
-    ctx.textInputKeyLabelWidthWarmSig = nil
+      resetTextInputRuntime(ctx, false)
       ctx.state = ctx.textInputReturnState or "editor"
       return
     end
@@ -1773,107 +1792,11 @@ local function run(ctx)
       submitValue = clampBelCharsToBaseline(submitValue, ctx.textInputBelBaseline or "")
     end
     ctx.textInputCallback(submitValue)
-    ctx.textInputCallback = nil
-    ctx._textInputBelBaselineCallback = nil
-    ctx.textInputBelBaseline = nil
-    ctx.textInputAllowBelAdd = nil
-    ctx.textInputEnableBelKey = nil
-    ctx.textInputBelProfile = nil
-    ctx.textInputHidePipeBackslash = nil
-    ctx.textInputSpaceReturnFromTopCol = nil
-    ctx.textInputSpaceReturnFromBottomCol = nil
-    ctx.textInputBelMenuOpen = nil
-    ctx.textInputBelMenuSel = nil
-    ctx.textInputBelMenuScroll = nil
-    ctx.textInputBelRowsByPage = nil
-    ctx.textInputBelRowsProfile = nil
-    ctx.textInputBelRowsText = nil
-    ctx.textInputBelPage = nil
-    ctx.textInputBelColumnMinWidths = nil
-    ctx.textInputBelMinIntrinsicW = nil
-    ctx.textInputBelLayoutProfile = nil
-    ctx.textInputBelLayoutScale = nil
-    ctx.textInputBelLayoutText = nil
-    ctx[belMenuAnimKey] = nil
-    ctx[belMenuClosingKey] = nil
-    ctx[belMenuRowsCacheKey] = nil
-    ctx[belMenuHintsCacheKey] = nil
-    ctx.textInputCursorPrevHeldMask = nil
-    ctx.textInputCursorHoldFrames = nil
-    ctx.textInputCursorHoldCountdown = nil
-    ctx.textInputBackspacePrevHeldMask = nil
-    ctx.textInputBackspaceHoldFrames = nil
-    ctx.textInputBackspaceHoldCountdown = nil
-    ctx.textInputGridHorizontalPrevHeldMask = nil
-    ctx.textInputGridHorizontalHoldFrames = nil
-    ctx.textInputGridHorizontalHoldCountdown = nil
-    ctx.textInputHeldPressKey = nil
-    ctx.textInputCrossHeldPrev = nil
-    ctx.textInputIgnoreCrossUntilRelease = nil
-    ctx.textInputIgnoreCrossReleaseFrames = nil
-    ctx.textInputSuppressPressVisualFrames = nil
-    ctx.textInputPressAnimEntryGate = nil
-    ctx.textInputPressGateSceneEpoch = nil
-    ctx.textInputKeyPressAnims = nil
-    ctx.textInputHintPadPressAnims = nil
-    ctx.textInputKeyboardDrawCache = nil
-    ctx.textInputKeyLabelFontByShrinkPx = nil
-    ctx.textInputKeyLabelFontByShrinkPxSig = nil
-    ctx.textInputKeyLabelWidthCache = nil
-    ctx.textInputKeyLabelWidthCacheSig = nil
-    ctx.textInputKeyLabelWidthWarmSig = nil
+    resetTextInputRuntime(ctx, true)
     -- Callback sets ctx.state (e.g. applyManualPath -> entry_paths); do not overwrite
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
-    ctx.textInputCallback = nil
-    ctx._textInputBelBaselineCallback = nil
-    ctx.textInputBelBaseline = nil
-    ctx.textInputAllowBelAdd = nil
-    ctx.textInputEnableBelKey = nil
-    ctx.textInputBelProfile = nil
-    ctx.textInputHidePipeBackslash = nil
-    ctx.textInputSpaceReturnFromTopCol = nil
-    ctx.textInputSpaceReturnFromBottomCol = nil
-    ctx.textInputBelMenuOpen = nil
-    ctx.textInputBelMenuSel = nil
-    ctx.textInputBelMenuScroll = nil
-    ctx.textInputBelRowsByPage = nil
-    ctx.textInputBelRowsProfile = nil
-    ctx.textInputBelRowsText = nil
-    ctx.textInputBelPage = nil
-    ctx.textInputBelColumnMinWidths = nil
-    ctx.textInputBelMinIntrinsicW = nil
-    ctx.textInputBelLayoutProfile = nil
-    ctx.textInputBelLayoutScale = nil
-    ctx.textInputBelLayoutText = nil
-    ctx[belMenuAnimKey] = nil
-    ctx[belMenuClosingKey] = nil
-    ctx[belMenuRowsCacheKey] = nil
-    ctx[belMenuHintsCacheKey] = nil
-    ctx.textInputCursorPrevHeldMask = nil
-    ctx.textInputCursorHoldFrames = nil
-    ctx.textInputCursorHoldCountdown = nil
-    ctx.textInputBackspacePrevHeldMask = nil
-    ctx.textInputBackspaceHoldFrames = nil
-    ctx.textInputBackspaceHoldCountdown = nil
-    ctx.textInputGridHorizontalPrevHeldMask = nil
-    ctx.textInputGridHorizontalHoldFrames = nil
-    ctx.textInputGridHorizontalHoldCountdown = nil
-    ctx.textInputHeldPressKey = nil
-    ctx.textInputCrossHeldPrev = nil
-    ctx.textInputIgnoreCrossUntilRelease = nil
-    ctx.textInputIgnoreCrossReleaseFrames = nil
-    ctx.textInputSuppressPressVisualFrames = nil
-    ctx.textInputPressAnimEntryGate = nil
-    ctx.textInputPressGateSceneEpoch = nil
-    ctx.textInputKeyPressAnims = nil
-    ctx.textInputHintPadPressAnims = nil
-    ctx.textInputKeyboardDrawCache = nil
-    ctx.textInputKeyLabelFontByShrinkPx = nil
-    ctx.textInputKeyLabelFontByShrinkPxSig = nil
-    ctx.textInputKeyLabelWidthCache = nil
-    ctx.textInputKeyLabelWidthCacheSig = nil
-    ctx.textInputKeyLabelWidthWarmSig = nil
+    resetTextInputRuntime(ctx, true)
     ctx.state = ctx.textInputReturnState or "menu_entry_edit"
   end
   if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and not ctx.textInputTitleIdMode then
