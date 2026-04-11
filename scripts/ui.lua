@@ -1895,7 +1895,13 @@ local function mainLoop()
     -- Non-keyboard scenes drive this row toward empty so it fades out instead of cutting.
     if renderedState ~= "text_input" and scene_text_input and type(scene_text_input.drawShoulderHints) == "function" then
       local shoulderTotalWidth = (c.w or common.DEFAULT_W) - (2 * (c.MARGIN_X or common.MARGIN_X))
-      scene_text_input.drawShoulderHints(c, c._, {}, 0.7, shoulderTotalWidth, c.DIM or DIM)
+      local ok, err = pcall(scene_text_input.drawShoulderHints, c, c._, {}, 0.7, shoulderTotalWidth, c.DIM or DIM)
+      if not ok and c then
+        if c._keyboardShoulderHintDrawErrorReported ~= true then
+          c._keyboardShoulderHintDrawErrorReported = true
+          print("ui: warning: drawShoulderHints failed (" .. tostring(err) .. ")")
+        end
+      end
     end
 
     common.refreshConfigModified(c)

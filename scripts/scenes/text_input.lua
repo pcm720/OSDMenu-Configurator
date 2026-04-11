@@ -81,14 +81,14 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     end
     return drawFn()
   end
-  local function clearShoulderHintRowForCrossDissolve()
+  local function clearShoulderHintRowForCrossDissolve(topY, height)
     if type(runtime) ~= "table" then return end
     if runtime.sceneTransitionAnimActive ~= true then return end
     if tostring(runtime.sceneTransitionAnimType or "") ~= "cross_dissolve" then return end
     if not (_.Graphics and _.Graphics.drawRect) then return end
     local rw = math.max(1, math.floor(tonumber(runtime.currentSceneWidth) or (_.w or _.common.DEFAULT_W)))
-    local ry = math.floor(topRowTop - 1)
-    local rh = math.max(0, math.floor(rowH + 2))
+    local ry = math.floor((tonumber(topY) or 0) - 1)
+    local rh = math.max(0, math.floor((tonumber(height) or 0) + 2))
     if rh <= 0 then return end
     _.Graphics.drawRect(0, ry, rw, rh, _.common.BGCOLOR)
   end
@@ -261,7 +261,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   end
 
   drawHintsUntransformed(function()
-    clearShoulderHintRowForCrossDissolve()
+    clearShoulderHintRowForCrossDissolve(topRowTop, rowH)
     local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
     if not transitionActive then
       drawRow(rowSlots)
