@@ -1679,6 +1679,14 @@ local function mainLoop()
     local KEY_LH = c.KEY_LINE_H or math.max(1, scaleY(common.KEY_LINE_H))
     if drawMode == "ftPrint" and font then
       local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
+      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
+        local trType = tostring(_G.CONFIG_UI.sceneTransitionAnimType or "")
+        if trType == "flip_horizontal" then
+          -- Keep glyph pixel height stable during horizontal flip; horizontal
+          -- foreshortening is handled in the projected per-glyph draw path.
+          runtimeDrawScale = 1
+        end
+      end
       if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
       if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
       if runtimeDrawScale > 4 then runtimeDrawScale = 4 end

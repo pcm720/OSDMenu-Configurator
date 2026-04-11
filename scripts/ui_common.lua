@@ -1980,6 +1980,14 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
     end
     if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
       local runtimeDrawScale = tonumber(_G.CONFIG_UI and _G.CONFIG_UI.sceneDrawScale) or 1
+      if _G.CONFIG_UI and _G.CONFIG_UI.sceneDrawProjective == true then
+        local trType = tostring(_G.CONFIG_UI.sceneTransitionAnimType or "")
+        if trType == "flip_horizontal" then
+          -- Keep glyph pixel height stable during horizontal flip; horizontal
+          -- foreshortening is handled in the projected per-glyph draw path.
+          runtimeDrawScale = 1
+        end
+      end
       if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
       if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
       if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
@@ -2494,7 +2502,41 @@ function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
     local w = (_G.CONFIG_UI and _G.CONFIG_UI.currentDrawWidth) or common.FT_DRAW_W
     local h = (drawHeight and drawHeight > 0) and drawHeight or (_G.CONFIG_UI and _G.CONFIG_UI.currentDrawHeight) or
         common.FT_DRAW_H
-    Font.ftPrint(font, ix, iy, 0, w, h, s, c)
+    local drewProjectedGlyphRun = false
+    if projective and type(s) == "string" and #s > 1 and (not s:find("[\128-\255]")) and
+        Font and Font.ftCalcDimensions and Font.ftPrint then
+      local trType = tostring(runtime and runtime.sceneTransitionAnimType or "")
+      if trType == "flip_horizontal" or trType == "flip_vertical" then
+        local logicalX = tonumber(x) or 0
+        local logicalY = tonumber(y) or 0
+        local cursorX = logicalX
+        local fallbackAdvance = math.max(1,
+          math.floor(((tonumber(_G.CONFIG_UI and _G.CONFIG_UI.currentFtPixelH) or common.FT_PIXEL_H or 18) * 0.6) + 0.5))
+        for i = 1, #s do
+          local ch = s:sub(i, i)
+          local chX, chY = common.projectScenePoint(cursorX, logicalY)
+          if chX == nil or chY == nil then
+            chX, chY = logicalX, logicalY
+          end
+          local chIx = math.floor(chX + offsetX)
+          local chIy = math.floor(chY)
+          Font.ftPrint(font, chIx, chIy, 0, w, h, ch, c)
+          local adv = tonumber(Font.ftCalcDimensions(font, ch)) or 0
+          if adv <= 0 then
+            if ch == " " then
+              adv = math.max(1, math.floor((fallbackAdvance * 0.5) + 0.5))
+            else
+              adv = fallbackAdvance
+            end
+          end
+          cursorX = cursorX + adv
+        end
+        drewProjectedGlyphRun = true
+      end
+    end
+    if not drewProjectedGlyphRun then
+      Font.ftPrint(font, ix, iy, 0, w, h, s, c)
+    end
   else
     Font.print(font, ix, iy, scaleN * drawScale, s, c)
   end
