@@ -4,7 +4,7 @@ local MESSAGE_LINES = {
   "We love Katamari too!",
   "However please refrain from",
   "flicking your stick and play",
-  "We Love Katamari.",
+  "your PlayStation 2.",
 }
 
 local MESSAGE_SCALE = 0.9
