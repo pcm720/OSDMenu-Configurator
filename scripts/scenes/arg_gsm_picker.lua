@@ -30,6 +30,7 @@ function arg_gsm_picker.clearState(ctx, keys)
   ctx[keys.selKey] = nil
   ctx[keys.videoKey] = nil
   ctx[keys.compatKey] = nil
+  if keys.compatSelectedKey then ctx[keys.compatSelectedKey] = nil end
   ctx[keys.argKeyKey] = nil
   if keys.lastVideoKey then ctx[keys.lastVideoKey] = nil end
   if keys.editIdxKey then ctx[keys.editIdxKey] = nil end
@@ -47,7 +48,7 @@ local function normalizeCompatIdx(compatIdx)
   return ci
 end
 
-function arg_gsm_picker.open(ctx, keys, argKey, initialVideoIdx, initialCompatIdx)
+function arg_gsm_picker.open(ctx, keys, argKey, initialVideoIdx, initialCompatIdx, initialCompatSelected)
   if type(ctx) ~= "table" or type(keys) ~= "table" then return end
   arg_gsm_picker.clearState(ctx, keys)
   local videoIdx = normalizeVideoIdx(initialVideoIdx)
@@ -56,6 +57,13 @@ function arg_gsm_picker.open(ctx, keys, argKey, initialVideoIdx, initialCompatId
   ctx[keys.selKey] = videoIdx and (NUM_VIDEO_OPTS + compatIdx) or 1
   ctx[keys.videoKey] = videoIdx
   ctx[keys.compatKey] = compatIdx
+  if keys.compatSelectedKey then
+    local compatSelected = (initialCompatSelected == true)
+    if initialCompatSelected == nil and videoIdx and compatIdx and compatIdx > 1 then
+      compatSelected = true
+    end
+    ctx[keys.compatSelectedKey] = compatSelected
+  end
   if keys.lastVideoKey then
     ctx[keys.lastVideoKey] = videoIdx or 2
   end
@@ -106,6 +114,12 @@ function arg_gsm_picker.run(ctx, opts)
   local total = NUM_VIDEO_OPTS + NUM_COMPAT_OPTS
   local videoIdx = normalizeVideoIdx(ctx[keys.videoKey])
   local compatIdx = normalizeCompatIdx(ctx[keys.compatKey])
+  local compatSelected = false
+  if keys.compatSelectedKey and ctx[keys.compatSelectedKey] ~= nil then
+    compatSelected = ctx[keys.compatSelectedKey] and true or false
+  elseif videoIdx and compatIdx and compatIdx > 1 then
+    compatSelected = true
+  end
   local hasVideo = (videoIdx ~= nil)
   local selectableTotal = hasVideo and total or NUM_VIDEO_OPTS
   local sel = math.floor(tonumber(ctx[keys.selKey]) or 1)
@@ -159,15 +173,34 @@ function arg_gsm_picker.run(ctx, opts)
     local y = startY + row * _.LINE_H
     local col = compatDim and _.DIM_COLOR or ((isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
-    if isActive and hasVideo then
+    if isActive and hasVideo and compatSelected then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
     row = row + 1
   end
 
+  local doneLabel = "Done"
+  do
+    local textInputHints = _.strings and _.strings.text_input and _.strings.text_input.hint_items_title_id
+    if type(textInputHints) ~= "table" then
+      textInputHints = _.strings and _.strings.text_input and _.strings.text_input.hint_items
+    end
+    if type(textInputHints) == "table" then
+      for _, item in ipairs(textInputHints) do
+        if type(item) == "table" and item.pad == "start" and type(item.label) == "string" and item.label ~= "" then
+          doneLabel = item.label
+          break
+        end
+      end
+    end
+  end
+  local baseHints = s.value_edit_hint or {}
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7,
-    s.value_edit_hint or
-    { { pad = "cross", label = (_.menu_str.enter_label or "Select"), row = 1 }, { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 } },
+    {
+      { pad = "cross", label = (baseHints[1] and baseHints[1].label) or (_.menu_str.enter_label or "Select"), row = 1 },
+      { pad = "start", label = doneLabel, row = 1 },
+      { pad = "circle", label = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back"), row = 1 },
+    },
     nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
@@ -205,16 +238,23 @@ function arg_gsm_picker.run(ctx, opts)
       end
       compatIdx = sel - NUM_VIDEO_OPTS
       ctx[keys.compatKey] = compatIdx
-      local arg = arg_gsm_picker.buildArg(_, ctx[keys.argKeyKey], videoIdx, compatIdx)
-      local editIdx = keys.editIdxKey and ctx[keys.editIdxKey] or nil
-      arg_gsm_picker.clearState(ctx, keys)
-      if arg and arg ~= "" and opts.onSubmit then
-        opts.onSubmit(arg, editIdx)
-      elseif opts.onCancel then
-        opts.onCancel(editIdx)
+      if keys.compatSelectedKey then
+        ctx[keys.compatSelectedKey] = true
       end
       return true
     end
+  end
+
+  if (_.padEffective & _.PAD_START) ~= 0 then
+    local arg = arg_gsm_picker.buildArg(_, ctx[keys.argKeyKey], videoIdx, compatIdx)
+    local editIdx = keys.editIdxKey and ctx[keys.editIdxKey] or nil
+    arg_gsm_picker.clearState(ctx, keys)
+    if arg and arg ~= "" and opts.onSubmit then
+      opts.onSubmit(arg, editIdx)
+    elseif opts.onCancel then
+      opts.onCancel(editIdx)
+    end
+    return true
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

@@ -172,6 +172,7 @@ local function run(ctx)
     selKey = "bblArgGsmPickerSel",
     videoKey = "bblArgGsmVideoIdx",
     compatKey = "bblArgGsmCompatIdx",
+    compatSelectedKey = "bblArgGsmCompatSelected",
     argKeyKey = "bblArgGsmArgKey",
     lastVideoKey = "bblArgGsmLastVideoIdx",
     editIdxKey = "bblArgGsmEditIdx",
