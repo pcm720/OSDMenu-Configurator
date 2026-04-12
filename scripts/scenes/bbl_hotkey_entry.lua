@@ -63,7 +63,7 @@ local function run(ctx)
 
   for i = 1, #rows do
     local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
-    local col = (i == ctx.bblEntryDetailSel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.bblEntryDetailSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     local line = (rows[i] == "path") and pathLine or argsLine
     if _.common.fitListRowText then
       local key = (rows[i] == "path") and "bbl_hotkey_entry_path" or "bbl_hotkey_entry_args"
@@ -72,7 +72,7 @@ local function run(ctx)
       line = _.common.truncateTextToWidth(_.font, line, maxLabelW, _.FONT_SCALE)
     end
     if rows[i] == "path" and (data.disabled or keyDisabled) then
-      col = (i == ctx.bblEntryDetailSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      col = (i == ctx.bblEntryDetailSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblEntryDetailSel, line, col)
   end
@@ -192,7 +192,7 @@ local function run(ctx)
       { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
     }
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.bblEntryDetailSel = ctx.bblEntryDetailSel - 1

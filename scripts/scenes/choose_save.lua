@@ -22,7 +22,7 @@ local function run(ctx)
       scrollRows = scroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
   for i = scroll + 1, math.min(scroll + maxVis, total) do
@@ -37,11 +37,11 @@ local function run(ctx)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local y = startY + (i - scroll - 1) * _.LINE_H
-    local col = (i == ctx.saveSel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.saveSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.saveSel, label, col)
   end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.cross_save_circle_cancel_items, nil,
-    _.DIM, _.w - 2 * _.MARGIN_X)
+    _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.saveSel = ctx.saveSel - 1; if ctx.saveSel < 1 then ctx.saveSel = #choices end
   end

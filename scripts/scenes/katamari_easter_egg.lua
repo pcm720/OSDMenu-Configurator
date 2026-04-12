@@ -36,7 +36,7 @@ local function run(ctx)
     _.drawText(_.font, _.drawMode, x, y, MESSAGE_SCALE, line, bodyColor)
   end
 
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     local returnState = tostring(ctx.katamariEasterEggReturnState or "")

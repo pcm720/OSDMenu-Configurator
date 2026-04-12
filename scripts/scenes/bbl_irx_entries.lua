@@ -129,7 +129,7 @@ local function run(ctx)
   local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
   local hintScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(_.common.PAD_HINT_BASE_SCALE or 0.7)) or
       0.525
-  local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+  local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
   local hintW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, irxOrderHint, hintScale)) or (#irxOrderHint * 8)
   local hintX = (_.common.centerX and _.common.centerX(_, hintW)) or _.MARGIN_X
   _.drawText(hintFont, _.drawMode, hintX, (_.DESC_Y_BOTTOM or (_.HINT_Y - _.scaleY(22))), hintScale, irxOrderHint, hintColor)
@@ -155,7 +155,7 @@ local function run(ctx)
       scrollRows = ctx.bblIrxScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
 
@@ -166,12 +166,12 @@ local function run(ctx)
     local value = entryValueByIdx[idx] or ""
     local label = "E" .. tostring(idx) .. ": " .. ((value ~= "" and value) or _.common_str.empty)
     local y = startY + (i - ctx.bblIrxScroll - 1) * _.LINE_H
-    local col = (i == ctx.bblIrxSel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.bblIrxSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     if value == "" then
-      col = (i == ctx.bblIrxSel) and _.SELECTED_ENTRY or _.DIM
+      col = (i == ctx.bblIrxSel) and _.SELECTED_COLOR or _.DIM_COLOR
     end
     if ent.disabled then
-      col = (i == ctx.bblIrxSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      col = (i == ctx.bblIrxSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
     end
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "bbl_irx_row_" .. tostring(i), _.font, label, maxLabelW, _.FONT_SCALE,
@@ -213,7 +213,7 @@ local function run(ctx)
       row = 1
     },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   local function addIrxEntry()
     if not canAddEntry then return end

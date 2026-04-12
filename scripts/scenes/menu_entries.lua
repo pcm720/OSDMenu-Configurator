@@ -343,7 +343,7 @@ local function run(ctx)
       scrollRows = ctx.entryScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
 
@@ -385,13 +385,13 @@ local function run(ctx)
     end
     label = formatBelForDisplay(label)
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
-    local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.entrySel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     local effectiveDisabled = ent.disabled or ((not isSeparator) and (not hasActivePath))
     if usesPlaceholder then
-      col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.DIM
+      col = (i == ctx.entrySel) and _.SELECTED_COLOR or _.DIM_COLOR
     end
     if effectiveDisabled then
-      col = (i == ctx.entrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      col = (i == ctx.entrySel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
     end
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "menu_entries_row_" .. tostring(i), _.font, label, maxLabelW, _.FONT_SCALE,
@@ -434,7 +434,7 @@ local function run(ctx)
       row = 1
     },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if ctx.menuEntriesActionsOpen then
     local actionRows = {}

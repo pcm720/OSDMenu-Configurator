@@ -43,10 +43,10 @@ local function run(ctx)
 
   local pathStr = ctx.currentPath or ""
   if #pathStr > 56 then
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr:sub(1, 56), _.DIM)
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(18), 0.8, pathStr:sub(57), _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr:sub(1, 56), _.DIM_COLOR)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(18), 0.8, pathStr:sub(57), _.DIM_COLOR)
   else
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr, _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr, _.DIM_COLOR)
   end
 
   if ctx.saveSplash and ctx.saveSplash.framesLeft > 0 and ctx.saveSplash.kind == "saved" and ctx.returnToSelectConfigAfterSaveFlash then
@@ -74,24 +74,24 @@ local function run(ctx)
       scrollRows = ctx.egsmScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
   for i = ctx.egsmScroll + 1, math.min(ctx.egsmScroll + maxVis, total) do
     local y = startY + (i - ctx.egsmScroll - 1) * _.LINE_H
-    local col = (i == ctx.egsmSel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.egsmSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     if i == 1 then
       if defCommented then
-        col = (i == ctx.egsmSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or
-            (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.egsmSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or
+            (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.egsmSel, _.strings.egsm.default_label, col)
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, (defValue == "" and "—") or defValue, col)
     else
       local ent = entries[i - 1]
       if ent.commented then
-        col = (i == ctx.egsmSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or
-            (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.egsmSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or
+            (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.egsmSel, ent.titleId, col)
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, (ent.value == "" and "—") or ent.value, col)
@@ -111,7 +111,7 @@ local function run(ctx)
     { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
   hintItems = _.common.withStartHintVisibility(hintItems, ctx.configModified == true)
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if not ctx.egsmActionsOpen then
     if (_.padEffective & _.PAD_UP) ~= 0 then

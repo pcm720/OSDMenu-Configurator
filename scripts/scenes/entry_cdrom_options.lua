@@ -77,7 +77,7 @@ local function run(ctx)
     table.insert(argList, insertAt, { value = key, disabled = false })
   end
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.launch_disc_options_title, _.WHITE)
-  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8, _.menu_str.launch_disc_options_sub, _.DIM)
+  _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8, _.menu_str.launch_disc_options_sub, _.DIM_COLOR)
   local startY = _.MARGIN_Y + _.scaleY(50)
   local maxLabelW = (_.VALUE_X or 360) - (_.MARGIN_X + 20) - 14
   local cdromStrings = _.strings.cdrom_options or {}
@@ -86,7 +86,7 @@ local function run(ctx)
     local o = opts[i]
     local y = startY + (i - 1) * _.LINE_H
     local on = hasArg(o.key)
-    local col = (i == ctx.cdromOptSel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.cdromOptSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     local coSt = cdromStrings[cdromStringKey(o.key)]
     local rowLabel = (coSt and coSt.label) or o.key
     if _.common.fitListRowText then
@@ -97,7 +97,7 @@ local function run(ctx)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.cdromOptSel, rowLabel, col)
     _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, on and _.common_str.on or _.common_str.off,
-      on and _.GRAY or _.DIM)
+      on and _.UNSELECTED_COLOR or _.DIM_COLOR)
   end
   local selOpt = opts[ctx.cdromOptSel]
   local selCoSt = selOpt and cdromStrings[cdromStringKey(selOpt.key)]
@@ -107,7 +107,7 @@ local function run(ctx)
     local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
     local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
         math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
-    local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+    local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
     local tw = _.common.calcTextWidth(hintFont, selCoSt.desc, hintDrawScale)
     local x = _.common.centerX(_, tw)
     _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selCoSt.desc, hintColor, hintTextH)
@@ -127,7 +127,7 @@ local function run(ctx)
   for i = 3, #baseHints do
     cdromHints[#cdromHints + 1] = baseHints[i]
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, cdromHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, cdromHints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.cdromOptSel = ctx.cdromOptSel - 1; if ctx.cdromOptSel < 1 then ctx.cdromOptSel = #opts end
   end

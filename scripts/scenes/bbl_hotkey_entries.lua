@@ -180,7 +180,7 @@ local function run(ctx)
       scrollRows = ctx.bblEntryScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
 
@@ -211,13 +211,13 @@ local function run(ctx)
   for i = ctx.bblEntryScroll + 1, math.min(ctx.bblEntryScroll + _.MAX_VISIBLE_LIST, #rows) do
     local row = rows[i]
     local y = startY + (i - ctx.bblEntryScroll - 1) * _.LINE_H
-    local col = (i == ctx.bblEntrySel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.bblEntrySel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     local text = ""
     if row.kind == "name" then
       local disp = (row.nameVal ~= "" and row.nameVal) or nameNotDefined
       text = (_.menu_str.name or "Name: ") .. disp
       if keyDisabled then
-        col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.bblEntrySel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
     elseif row.kind == "entry" then
       local slot = row.data
@@ -233,9 +233,9 @@ local function run(ctx)
         text = p .. " " .. formatArgCount(slot.argCount)
       end
       if isEntryBlockedByE1(row) then
-        col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.bblEntrySel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       elseif keyDisabled or slot.disabled then
-        col = (i == ctx.bblEntrySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.bblEntrySel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
     elseif row.kind == "empty" then
       text = _.common_str.none or _.common_str.empty
@@ -293,7 +293,7 @@ local function run(ctx)
       row = 1
     },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   local function beginPathPickerForSlot(slotNum, slotDisabled, returnStateOverride)
     local sNum = tonumber(slotNum)

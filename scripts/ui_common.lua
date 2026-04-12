@@ -23,13 +23,13 @@ common.SWAP_CROSS_CIRCLE           = false
 -- Colors
 local FULL_ALPHA                   = 0x80
 common.WHITE                       = Color.new(255, 255, 255, FULL_ALPHA)
-common.GRAY                        = Color.new(160, 160, 160, FULL_ALPHA)
-common.DIM                         = Color.new(96, 96, 96, FULL_ALPHA)
+common.UNSELECTED_COLOR                        = Color.new(160, 160, 160, FULL_ALPHA)
+common.DIM_COLOR                         = Color.new(96, 96, 96, FULL_ALPHA)
 common.ERROR                       = Color.new(255, 64, 64, FULL_ALPHA)
-common.BGCOLOR                     = Color.new(20, 20, 20, FULL_ALPHA)
-common.HIGHLIGHT                   = Color.new(255, 220, 100, FULL_ALPHA)
-common.SELECTED_ENTRY              = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
-common.SELECTED_ENTRY_DIM          = Color.new(0, 50, 80, FULL_ALPHA)
+common.BACKGROUND_COLOR                     = Color.new(20, 20, 20, FULL_ALPHA)
+common.KEYBOARD_SELECTED_COLOR                   = Color.new(255, 220, 100, FULL_ALPHA)
+common.SELECTED_COLOR              = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
+common.SELECTED_DIM_COLOR          = Color.new(0, 50, 80, FULL_ALPHA)
 common.TEXT_CURSOR_COLOR           = Color.new(0x00, 0x72, 0xA0, FULL_ALPHA)
 common.OPTION_HINT_COLOR           = Color.new(246, 231, 173, FULL_ALPHA) -- Manila yellow for option descriptions/hints.
 common.PREFIX_W                    = 16
@@ -46,7 +46,7 @@ common.MARGIN_X, common.MARGIN_Y   = 40, 28
 common.DEFAULT_W, common.DEFAULT_H = 640, 448
 common.MAX_VISIBLE                 = 10
 common.MAX_VISIBLE_LIST            = 12                    -- menu entries, path picker, entry paths, entry args, eGSM editor
-common.DIM_ENTRY                   = Color.new(56, 56, 56, FULL_ALPHA) -- darker than DIM for disabled list rows
+common.DISABLED_DIM_COLOR                   = Color.new(56, 56, 56, FULL_ALPHA) -- darker than DIM_COLOR for disabled list rows
 common.VALUE_X                     = 360
 common.VALUE_MAX_LEN               = 38
 common.VALUE_MAX_LEN_LONG          = 22
@@ -950,7 +950,7 @@ end
 -- Single-row 5-slot layout (top row removed in new UX).
 -- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth, opts)
-  if not color then color = common.DIM end
+  if not color then color = common.DIM_COLOR end
   local runtime = _G and _G.CONFIG_UI
   local function clamp01(v)
     local n = tonumber(v) or 0
@@ -1014,7 +1014,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local ry = math.floor(tonumber(topY) or 0)
     local rh = math.max(0, math.floor(tonumber(height) or 0))
     if rh <= 0 then return end
-    Graphics.drawRect(0, ry, rw, rh, common.BGCOLOR)
+    Graphics.drawRect(0, ry, rw, rh, common.BACKGROUND_COLOR)
   end
   local function getPadLabelColor(padName, fallbackColor)
     local key = tostring(padName or ""):lower()
@@ -1344,7 +1344,7 @@ function common.drawCenteredPromptModal(_, promptText, opts)
   local boxH = lineH + (padY * 2)
   local boxX = math.floor(((_.w or common.DEFAULT_W) - boxW) / 2)
   local boxY = math.floor(((_.h or common.DEFAULT_H) - boxH) / 2)
-  local bg = opts.bgColor or (Color and Color.new and Color.new(40, 40, 48, 110)) or common.DIM
+  local bg = opts.bgColor or (Color and Color.new and Color.new(40, 40, 48, 110)) or common.DIM_COLOR
   if _.Graphics and _.Graphics.drawRect then
     _.Graphics.drawRect(boxX, boxY, boxW, boxH, bg)
   end
@@ -1373,7 +1373,7 @@ function common.handleLeaveSavePrompt(ctx, opts)
   else
     common.drawCenteredPromptModal(_, prompt)
   end
-  common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM,
+  common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM_COLOR,
     _.w - 2 * _.MARGIN_X)
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     ctx.editorLeavePrompt = nil
@@ -2018,7 +2018,7 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       _G.CONFIG_UI.uiFrameCounter = (tonumber(_G.CONFIG_UI.uiFrameCounter) or 0) + 1
     end
     if not common.shouldSkipSceneClearForTransition(ctx) then
-      Screen.clear(common.BGCOLOR)
+      Screen.clear(common.BACKGROUND_COLOR)
     end
     common.runLayout(ctx)
     common.applySceneDrawOffsetForCurrentFrame(ctx)
@@ -2301,7 +2301,7 @@ function common.drawListScrollbar(_, opts)
   if scrollRows < 0 then scrollRows = 0 end
   if scrollRows > maxScroll then scrollRows = maxScroll end
 
-  local color = (opts and opts.color) or _.DIM or common.DIM
+  local color = (opts and opts.color) or _.DIM_COLOR or common.DIM_COLOR
   local trackX = math.floor(x + 0.5)
   local trackY = math.floor(rowTopY + 0.5)
   local trackW = math.max(1, barWidth)
@@ -2613,7 +2613,7 @@ function common.drawSaveSplash(ctx)
   local lineH = _.LINE_H or common.LINE_H
   local isFailed = (sp.kind == "failed")
   local title = sp.title or (isFailed and "Save Failed!" or (_.editor_str.saved or "Saved"))
-  local textColor = sp.textColor or (isFailed and common.ERROR or _.HIGHLIGHT)
+  local textColor = sp.textColor or (isFailed and common.ERROR or _.KEYBOARD_SELECTED_COLOR)
   local tw = common.calcTextWidth(_.font, title, 1) or (#title * 14)
   local detailStr = (sp.detail and sp.detail ~= "") and tostring(sp.detail) or ""
   if #detailStr > 52 then detailStr = detailStr:sub(1, 49) .. "..." end

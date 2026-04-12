@@ -689,7 +689,7 @@ local function runMain(s, pad)
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
-  local SE = common.SELECTED_ENTRY
+  local SE = common.SELECTED_COLOR
 
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
@@ -757,13 +757,13 @@ local function runMain(s, pad)
         (main_str.version_unknown or "unknown")
     local vw = common.calcTextWidth(s.font, versionStr, 0.75) or (#versionStr * 9)
     local viewW = s.w or 640
-    dt(s.font, s.drawMode, viewW - M - vw, MY, 0.75, versionStr, common.DIM)
-    dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM)
+    dt(s.font, s.drawMode, viewW - M - vw, MY, 0.75, versionStr, common.DIM_COLOR)
+    dt(s.font, s.drawMode, M, MY + sc(22), 0.75, main_str.main_sub or "", common.DIM_COLOR)
     local hintItems = buildMainBaseHintItems(main_str)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems or {}, nil, common.DIM_COLOR)
     for i, label in ipairs(s.main) do
       local y = MY + sc(50) + (i - 1) * L
-      local col = (i == s.mainSel) and SE or common.GRAY
+      local col = (i == s.mainSel) and SE or common.UNSELECTED_COLOR
       dlr(M + 20, y, i == s.mainSel, label, col)
     end
   end
@@ -892,7 +892,7 @@ local function runMain(s, pad)
       elseif common.truncateTextToWidth then
         label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
       end
-      local col = (i == s.mainLangSel) and SE or common.GRAY
+      local col = (i == s.mainLangSel) and SE or common.UNSELECTED_COLOR
       if i == s.mainLangSel then
         dt(hintFont, s.drawMode, rowMarkerX, y, rowScale, ">", col)
       end
@@ -900,13 +900,13 @@ local function runMain(s, pad)
     end
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
-      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
+      local hintBg = (common and common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
       local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
       Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
     end
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM_COLOR)
     if not closing then
       if (pad & PAD_UP) ~= 0 then
         s.mainLangSel = common.wrapListSelection(s.mainLangSel, total, -1)
@@ -1045,13 +1045,13 @@ local function runMain(s, pad)
 
     local hintItems = buildMainCreditsOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
-      local hintBg = (common and common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
+      local hintBg = (common and common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
       local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
       Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
     end
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, hintItems, nil, common.DIM_COLOR)
 
     if not closing then
       if (pad & PAD_TRIANGLE) ~= 0 or (pad & PAD_CIRCLE) ~= 0 then
@@ -1135,7 +1135,7 @@ local function runMain(s, pad)
     local cy = boxY + math.floor((boxH - lineH) / 2)
     dt(s.font, s.drawMode, math.max(M, cx), cy, 1.1, msg, common.WHITE)
     common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.main_exit_hint_items or main_str.circle_back_items, nil,
-      common.DIM)
+      common.DIM_COLOR)
     if (pad & PAD_CROSS) ~= 0 then System.exitToBrowser() end
     if (pad & PAD_CIRCLE) ~= 0 and not openedExitPrompt then s.mainExitPrompt = nil end
     return
@@ -1157,7 +1157,7 @@ local function runChooseMc(s, pad)
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
-  local SE = common.SELECTED_ENTRY
+  local SE = common.SELECTED_COLOR
   local slots = getPresentMcSlotsCached(s)
   if #slots == 0 then
     if s.context == "freemcboot" and s.fileType == "freemcboot_cnf" then
@@ -1167,22 +1167,22 @@ local function runChooseMc(s, pad)
       return
     end
     dt(s.font, s.drawMode, M, MY, 1.1, main_str.no_memory_card, common.WHITE)
-    dt(s.font, s.drawMode, M, MY + sc(30), 0.8, main_str.insert_mc, common.GRAY)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM)
+    dt(s.font, s.drawMode, M, MY + sc(30), 0.8, main_str.insert_mc, common.UNSELECTED_COLOR)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM_COLOR)
     if (pad & PAD_CIRCLE) ~= 0 then s.state = "main" end
   elseif #slots == 1 then
     s.chosenMcSlot = slots[1]
     s.state = nextStateAfterMcSelection(s)
   else
     dt(s.font, s.drawMode, M, MY, 1.1, main_str.select_memory_card, common.WHITE)
-    dt(s.font, s.drawMode, M, MY + sc(24), 0.8, main_str.config_card_hint, common.DIM)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM)
+    dt(s.font, s.drawMode, M, MY + sc(24), 0.8, main_str.config_card_hint, common.DIM_COLOR)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM_COLOR)
     if s.mcSel < 1 then s.mcSel = 1 end
     if s.mcSel > #slots then s.mcSel = #slots end
     for i = 1, #slots do
       local y = MY + sc(50) + (i - 1) * L
       local label = (slots[i] == 0 and main_str.memory_card_1_slot) or main_str.memory_card_2_slot
-      local col = (i == s.mcSel) and SE or common.GRAY
+      local col = (i == s.mcSel) and SE or common.UNSELECTED_COLOR
       dlr(M + 20, y, i == s.mcSel, label, col)
     end
     if (pad & PAD_UP) ~= 0 then
@@ -1475,7 +1475,7 @@ local function runSelectConfig(s, pad)
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
-  local SE = common.SELECTED_ENTRY
+  local SE = common.SELECTED_COLOR
 
   if s.context == "osdmenu" or s.context == "hosdmenu" then
     local options = {
@@ -1488,10 +1488,10 @@ local function runSelectConfig(s, pad)
     setSelectConfigSel(s, sel)
 
     dt(s.font, s.drawMode, M, MY, 1.1, main_str.which_file, common.WHITE)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM_COLOR)
     for i, opt in ipairs(options) do
       local y = MY + sc(50) + (i - 1) * L
-      local col = (i == sel) and SE or common.GRAY
+      local col = (i == sel) and SE or common.UNSELECTED_COLOR
       dlr(M + 20, y, i == sel, opt.label or "", col)
     end
 
@@ -1545,10 +1545,10 @@ local function runSelectConfig(s, pad)
     setSelectConfigSel(s, sel)
 
     dt(s.font, s.drawMode, M, MY, 1.1, main_str.which_file, common.WHITE)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM_COLOR)
     for i, opt in ipairs(options) do
       local y = MY + sc(50) + (i - 1) * L
-      local col = (i == sel) and SE or common.GRAY
+      local col = (i == sel) and SE or common.UNSELECTED_COLOR
       dlr(M + 20, y, i == sel, opt.label or "", col)
     end
     if (pad & PAD_UP) ~= 0 and sel > 1 then sel = sel - 1 end
@@ -1604,12 +1604,12 @@ local function runSelectConfig(s, pad)
     if common.truncateTextToWidth then
       hint = common.truncateTextToWidth(s.font, hint, (s.w or 640) - (M * 2), 0.55)
     end
-    dt(s.font, s.drawMode, M, MY + sc(20), 0.55, hint, common.DIM)
+    dt(s.font, s.drawMode, M, MY + sc(20), 0.55, hint, common.DIM_COLOR)
   end
-  common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM)
+  common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_select_circle_back_items, nil, common.DIM_COLOR)
   for i, opt in ipairs(options) do
     local y = MY + sc(50) + (i - 1) * L
-    local col = (i == sel) and SE or common.GRAY
+    local col = (i == sel) and SE or common.UNSELECTED_COLOR
     dlr(M + 20, y, i == sel, opt.label or "", col)
   end
   if (pad & PAD_UP) ~= 0 and sel > 1 then sel = sel - 1 end
@@ -1663,7 +1663,7 @@ local function runInitHdd(s, pad)
     local titleY = math.floor((h - blockH) / 2)
     local descY = titleY + lineH + gap
     dt(s.font, s.drawMode, math.max(M, cx1), titleY, 1.1, main_str.init_hdd_title, common.WHITE)
-    dt(s.font, s.drawMode, math.max(M, cx2), descY, 0.85, main_str.init_hdd_sub, common.DIM)
+    dt(s.font, s.drawMode, math.max(M, cx2), descY, 0.85, main_str.init_hdd_sub, common.DIM_COLOR)
     -- Show this frame on vblank before module load to avoid a visible full-screen flash.
     Screen.waitVblankStart()
     Screen.flip()
@@ -1705,8 +1705,8 @@ local function runInitHdd(s, pad)
       local titleY = math.floor((h - blockH) / 2)
       local descY = titleY + lineH + gap
       dt(s.font, s.drawMode, math.max(M, cx1), titleY, 1.1, main_str.init_hdd_title, common.WHITE)
-      dt(s.font, s.drawMode, math.max(M, cx2), descY, 0.85, main_str.init_hdd_sub, common.DIM)
-      common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM)
+      dt(s.font, s.drawMode, math.max(M, cx2), descY, 0.85, main_str.init_hdd_sub, common.DIM_COLOR)
+      common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM_COLOR)
       return
     end
   end
@@ -1718,7 +1718,7 @@ local function runInitHdd(s, pad)
     local cx = math.floor((w - tw) / 2)
     local cy = math.floor((MY + H) / 2) - math.floor((s.LINE_H or common.LINE_H) / 2)
     dt(s.font, s.drawMode, math.max(M, cx), cy, 1.1, msg, common.WHITE)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM_COLOR)
     if (pad & PAD_CIRCLE) ~= 0 then
       s.state = s.initHddCancelState or "main"
       s.initHddPhase = nil
@@ -1775,8 +1775,8 @@ local function runOpen(s, pad)
     end
     openDbg("explicit path load failed", "path=" .. tostring(s.currentPath), "error=" .. tostring(loadErr))
     dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.failed_to_load .. tostring(s.currentPath),
-      common.GRAY)
-    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM)
+      common.UNSELECTED_COLOR)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM_COLOR)
     if (pad & PAD_CROSS) ~= 0 then
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
@@ -1828,8 +1828,8 @@ local function runOpen(s, pad)
     end
     if not s.currentPath then
       openDbg("open failed", "reason=no location found")
-      dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.no_location, common.GRAY)
-      common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM)
+      dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.no_location, common.UNSELECTED_COLOR)
+      common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM_COLOR)
       if (pad & PAD_CROSS) ~= 0 then s.state = getOpenParentState(s) end
     else
       openDbg("no existing file; creating new in memory", "path=" .. tostring(s.currentPath))
@@ -1845,8 +1845,8 @@ local function runOpen(s, pad)
     if not loaded then
       openDbg("single path load failed", "path=" .. tostring(s.currentPath), "error=" .. tostring(loadErr))
       dt(s.font, s.drawMode, M, MY + sc(60), common.FONT_SCALE, main_str.failed_to_load .. tostring(s.currentPath),
-        common.GRAY)
-      common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM)
+        common.UNSELECTED_COLOR)
+      common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_back_items, nil, common.DIM_COLOR)
       if (pad & PAD_CROSS) ~= 0 then s.state = getOpenParentState(s) end
     else
       s.lines = loaded
@@ -1887,7 +1887,7 @@ local function runChooseLoad(s, pad)
   local L = s.LINE_H or common.LINE_H
   local MY = s.MARGIN_Y or common.MARGIN_Y
   local sc = s.scaleY or function(y) return y end
-  local SE = common.SELECTED_ENTRY
+  local SE = common.SELECTED_COLOR
   local choices = s.loadChoices or {}
   local allowCreate = (s.loadAllowCreate == true)
   if s.loadSel < 1 then s.loadSel = 1 end
@@ -1929,10 +1929,10 @@ local function runChooseLoad(s, pad)
       label = common.truncateTextToWidth(s.font, label or "", maxLabelW, common.FONT_SCALE)
     end
     local y = MY + sc(50) + (i - scroll - 1) * L
-    local col = (idx == s.loadSel) and SE or common.GRAY
+    local col = (idx == s.loadSel) and SE or common.UNSELECTED_COLOR
     dlr(M + 20, y, idx == s.loadSel, label, col)
   end
-  common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_load_circle_back_items, nil, common.DIM)
+  common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_load_circle_back_items, nil, common.DIM_COLOR)
   if (pad & PAD_UP) ~= 0 then
     s.loadSel = s.loadSel - 1; if s.loadSel < 1 then s.loadSel = #choices end
   end

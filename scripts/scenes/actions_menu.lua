@@ -375,7 +375,7 @@ function actions_menu.run(ctx, opts)
       scrollRows = ctx[scrollKey],
       rowTopY = rowStartY,
       rowHeight = rowStep,
-      color = _.DIM,
+      color = _.DIM_COLOR,
       barWidth = barWidth,
       x = (boxX + boxW - padX - barWidth),
       minBarHeight = (_.scaleY and _.scaleY(4)) or 4,
@@ -385,7 +385,7 @@ function actions_menu.run(ctx, opts)
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
     local shouldTicker = (i == ctx[selKey]) or (row.raw and row.raw.forceTicker == true)
-    local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.GRAY) or (_.DIM_ENTRY or _.DIM)
+    local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_COLOR or _.UNSELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
     if i == ctx[selKey] then
       _.drawText(hintFont, _.drawMode, rowMarkerX, y, rowScale, ">", col, textH)
     end
@@ -447,13 +447,13 @@ function actions_menu.run(ctx, opts)
     hintItems = buildOverlayHints(_, opts.hints, anchorPad, anchorLabel)
   end
   if _.Graphics and _.Graphics.drawRect then
-    local hintBg = (_.common and _.common.BGCOLOR) or Color.new(20, 20, 20, 0x80)
+    local hintBg = (_.common and _.common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
     local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * 0.75 + 0.5))
     local hintRowTop = math.floor(_.HINT_Y) - hintRowH
     local hintW = (_.w or 640) - (2 * (_.MARGIN_X or 0))
     _.Graphics.drawRect(_.MARGIN_X or 0, hintRowTop, hintW, hintRowH, hintBg)
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if not closing then
     if (_.padEffective & _.PAD_UP) ~= 0 then

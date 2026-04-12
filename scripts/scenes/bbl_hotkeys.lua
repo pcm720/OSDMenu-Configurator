@@ -171,7 +171,7 @@ local function run(ctx)
       scrollRows = ctx.bblHotkeyScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
 
@@ -222,9 +222,9 @@ local function run(ctx)
       line = _.common.truncateTextToWidth(_.font, line, lineMaxW, _.FONT_SCALE)
     end
     local y = startY + (i - ctx.bblHotkeyScroll - 1) * _.LINE_H
-    local col = (i == ctx.bblHotkeySel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.bblHotkeySel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     if effectiveDisabled then
-      col = (i == ctx.bblHotkeySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      col = (i == ctx.bblHotkeySel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
     end
     if keyIcon then
       local iconY = y + math.floor(((_.LINE_H or iconH) - iconH) / 2)
@@ -259,7 +259,7 @@ local function run(ctx)
     },
     { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.bblHotkeySel = ctx.bblHotkeySel - 1

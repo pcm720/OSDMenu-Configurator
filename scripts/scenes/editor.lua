@@ -67,11 +67,11 @@ local R3_COLOR_KEY_TO_FIELD = {
   square = "PAD_LABEL_SQUARE",
   triangle = "PAD_LABEL_TRIANGLE",
   circle = "PAD_LABEL_CIRCLE",
-  selected = "SELECTED_ENTRY",
-  selected_dim = "SELECTED_ENTRY_DIM",
-  unselected = "GRAY",
-  dim = "DIM",
-  background = "BGCOLOR",
+  selected = "SELECTED_COLOR",
+  selected_dim = "SELECTED_DIM_COLOR",
+  unselected = "UNSELECTED_COLOR",
+  dim = "DIM_COLOR",
+  background = "BACKGROUND_COLOR",
 }
 
 local R3_BUTTON_COLOR_PRESET = {
@@ -325,16 +325,19 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
   if not r then return end
   local color = _.Color.new(r, g, b, 0x80)
   _.common[field] = color
-  if field == "SELECTED_ENTRY" then
-    _.SELECTED_ENTRY = color
+  if field == "SELECTED_COLOR" then
+    _.SELECTED_COLOR = color
     _.common.TEXT_CURSOR_COLOR = color
     _.TEXT_CURSOR_COLOR = color
-  elseif field == "SELECTED_ENTRY_DIM" then
-    _.SELECTED_ENTRY_DIM = color
-  elseif field == "GRAY" then
-    _.GRAY = color
-  elseif field == "DIM" then
-    _.DIM = color
+  elseif field == "SELECTED_DIM_COLOR" then
+    _.SELECTED_DIM_COLOR = color
+  elseif field == "UNSELECTED_COLOR" then
+    _.UNSELECTED_COLOR = color
+  elseif field == "DIM_COLOR" then
+    _.DIM_COLOR = color
+    -- Keep disabled-row dim tone in sync with configured dim color.
+    _.common.DISABLED_DIM_COLOR = color
+    _.DISABLED_DIM_COLOR = color
   end
 end
 
@@ -648,14 +651,14 @@ local function drawTimerDigitInlineValue(_, edit, x, y, scale)
   local cursorX = x
   for i = 1, #valueText do
     local ch = valueText:sub(i, i)
-    local col = (i == selectedCharIndex) and (_.SELECTED_ENTRY or _.WHITE) or _.GRAY
+    local col = (i == selectedCharIndex) and (_.SELECTED_COLOR or _.WHITE) or _.UNSELECTED_COLOR
     _.drawText(_.font, _.drawMode, cursorX, y, scale, ch, col)
     local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, scale)) or 10
     cursorX = cursorX + cw
   end
   local secondsLabel = (_.common_str and _.common_str.seconds) or "seconds"
   if secondsLabel ~= "" then
-    _.drawText(_.font, _.drawMode, cursorX, y, scale, " " .. tostring(secondsLabel), _.GRAY)
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, " " .. tostring(secondsLabel), _.UNSELECTED_COLOR)
   end
 end
 
@@ -777,9 +780,9 @@ local function drawIntDigitInlineValue(_, edit, x, y, scale)
   for i = 1, #valueText do
     local ch = valueText:sub(i, i)
     local isSign = edit.showSign and (i == 1)
-    local col = isSign and _.DIM or _.GRAY
+    local col = isSign and _.DIM_COLOR or _.UNSELECTED_COLOR
     if i == selectedCharIndex then
-      col = _.SELECTED_ENTRY or _.WHITE
+      col = _.SELECTED_COLOR or _.WHITE
     end
     _.drawText(_.font, _.drawMode, cursorX, y, scale, ch, col)
     local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, scale)) or 10
@@ -909,12 +912,12 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
     local valStr = channelBlocks[ch] and channelBlocks[ch].valStr or "000"
     for i = 1, #valStr do
       local digit = valStr:sub(i, i)
-      local col = (ch == edit.channel and i == edit.digit) and (_.SELECTED_ENTRY or _.WHITE) or _.GRAY
+      local col = (ch == edit.channel and i == edit.digit) and (_.SELECTED_COLOR or _.WHITE) or _.UNSELECTED_COLOR
       _.drawText(_.font, _.drawMode, cursorX, y, scale, digit, col)
       cursorX = cursorX + textWidth(digit)
     end
     if ch < channelCount then
-      _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.GRAY)
+      _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.UNSELECTED_COLOR)
       cursorX = cursorX + blockGap
     end
   end
@@ -1036,12 +1039,12 @@ local function run(ctx)
     elseif _.common and _.common.truncateTextToWidth then
       drawPath = _.common.truncateTextToWidth(_.font, pathStr, maxPathW, pathScale)
     end
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, pathScale, drawPath, _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, pathScale, drawPath, _.DIM_COLOR)
   elseif #pathStr > 56 then
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr:sub(1, 56), _.DIM)
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(18), 0.8, pathStr:sub(57), _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr:sub(1, 56), _.DIM_COLOR)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(18), 0.8, pathStr:sub(57), _.DIM_COLOR)
   else
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr, _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.8, pathStr, _.DIM_COLOR)
   end
 
   if ctx.saveSplash and ctx.saveSplash.framesLeft > 0 and ctx.saveSplash.kind == "saved" and ctx.returnToSelectConfigAfterSaveFlash then
@@ -1122,14 +1125,14 @@ local function run(ctx)
         scrollRows = ctx.optScroll,
         rowTopY = startY,
         rowHeight = _.ROW_H,
-        color = _.DIM,
+        color = _.DIM_COLOR,
       })
     end
     local maxCatLabelW = (_.w or 640) - (_.MARGIN_X + 16) - (_.MARGIN_X + 8)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #cats) do
       local cat = cats[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
-      local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.GRAY
+      local col = (i == ctx.optSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
       local catLabel = cat.name or _.common_str.empty
       if ctx.fileType == "osdmenu_cnf" then
         catLabel = (_.strings.categories and _.strings.categories[i]) or catLabel
@@ -1147,7 +1150,7 @@ local function run(ctx)
     end
     local categoryHints = _.common.withStartHintVisibility(_.editor_str.cross_open_circle_back_items, ctx.configModified == true)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, categoryHints, nil,
-      _.DIM, _.w - 2 * _.MARGIN_X)
+      _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_UP) ~= 0 then
       ctx.optSel = _.common.wrapListSelection(ctx.optSel, #cats, -1)
     end
@@ -1220,13 +1223,13 @@ local function run(ctx)
         scrollRows = ctx.optScroll,
         rowTopY = startY,
         rowHeight = _.ROW_H,
-        color = _.DIM,
+        color = _.DIM_COLOR,
       })
     end
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #ctx.optList) do
       local o = ctx.optList[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
-      local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.GRAY
+      local col = (i == ctx.optSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
       local bootKeyDisabled = false
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       lab = prettifyBblGlobalLabel(ctx, o, lab)
@@ -1344,7 +1347,7 @@ local function run(ctx)
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
         end
         if pathCommented then
-          col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+          col = (i == ctx.optSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
         end
         valDisplay = ""
       elseif o.optType == "bbl_slot" and (o.bblKeyId == "AUTO" or (o.key and o.key:match("^_auto_e%d+$"))) then
@@ -1367,15 +1370,15 @@ local function run(ctx)
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
         end
         if slot and (slot.used or slot.pathExists) and slot.disabled then
-          col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+          col = (i == ctx.optSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
         end
         valDisplay = ""
       end
       if o.optType == "boot_paths" and bootKeyDisabled then
-        col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.optSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
       if optionDisabled then
-        col = (i == ctx.optSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.optSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
       if inlineAutoRow then
         local maxInlineW = (_.w or 640) - (_.MARGIN_X + 16) - (_.MARGIN_X + 8)
@@ -1440,11 +1443,11 @@ local function run(ctx)
         if valDisplay ~= "" then
           local valCol
           if valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or optionDisabled then
-            valCol = _.DIM
+            valCol = _.DIM_COLOR
           elseif o.optType == "bool" and valDisplay == _.common_str.on then
-            valCol = _.GRAY
+            valCol = _.UNSELECTED_COLOR
           else
-            valCol = ((i == ctx.optSel) and _.WHITE or _.GRAY)
+            valCol = ((i == ctx.optSel) and _.WHITE or _.UNSELECTED_COLOR)
           end
           local valDisplayDraw = formatBelForDisplay(valDisplay)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
@@ -1488,7 +1491,7 @@ local function run(ctx)
         local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
         local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
             math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
-        local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+        local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
         local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
         if _.common.fitListRowText then
           descStr = _.common.fitListRowText(ctx,
@@ -1985,7 +1988,7 @@ local function run(ctx)
     end
 
     hintItems = _.common.withStartHintVisibility(hintItems, ctx.configModified == true)
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
     if runTimerDigitInlineInput(ctx, _) then
       return
@@ -2591,10 +2594,10 @@ local function run(ctx)
     local shouldShowNoOptionList = (ctx.lines ~= nil) or (ctx.currentPath ~= nil)
     if shouldShowNoOptionList then
       _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.editor_str.no_option_list,
-        _.GRAY)
+        _.UNSELECTED_COLOR)
       local emptyHints = _.common.withStartHintVisibility(_.editor_str.start_save_circle_back_items, ctx.configModified == true)
       _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, emptyHints, nil,
-        _.DIM, _.w - 2 * _.MARGIN_X)
+        _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
     end
   end
 

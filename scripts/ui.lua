@@ -835,9 +835,9 @@ local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = common.PAD_UP, common.PAD_DOWN, co
 local PAD_CROSS, PAD_CIRCLE, PAD_SELECT, PAD_START, PAD_TRIANGLE, PAD_SQUARE = common.PAD_CROSS, common.PAD_CIRCLE,
     common.PAD_SELECT, common.PAD_START, common.PAD_TRIANGLE, common.PAD_SQUARE
 local PAD_L1, PAD_R1, PAD_L2, PAD_R2 = common.PAD_L1, common.PAD_R1, common.PAD_L2, common.PAD_R2
-local WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
-local HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
-local SELECTED_ENTRY_DIM = common.SELECTED_ENTRY_DIM
+local WHITE, UNSELECTED_COLOR, DIM_COLOR, DISABLED_DIM_COLOR, BLACK = common.WHITE, common.UNSELECTED_COLOR, common.DIM_COLOR, common.DISABLED_DIM_COLOR, common.BACKGROUND_COLOR
+local KEYBOARD_SELECTED_COLOR, SELECTED_COLOR, PREFIX_W = common.KEYBOARD_SELECTED_COLOR, common.SELECTED_COLOR, common.PREFIX_W
+local SELECTED_DIM_COLOR = common.SELECTED_DIM_COLOR
 local TEXT_CURSOR_COLOR = common.TEXT_CURSOR_COLOR
 local FONT_SCALE = common.FONT_SCALE
 local VALUE_MAX_LEN, VALUE_MAX_LEN_LONG = common.VALUE_MAX_LEN, common.VALUE_MAX_LEN_LONG
@@ -849,9 +849,9 @@ local KEY_BG, KEY_BG_SEL, KEY_BORDER, KEY_BORDER_SEL = common.KEY_BG, common.KEY
     common.KEY_BORDER_SEL
 
 local function refreshRuntimeColorAliases()
-  WHITE, GRAY, DIM, DIM_ENTRY, BLACK = common.WHITE, common.GRAY, common.DIM, common.DIM_ENTRY, common.BGCOLOR
-  HIGHLIGHT, SELECTED_ENTRY, PREFIX_W = common.HIGHLIGHT, common.SELECTED_ENTRY, common.PREFIX_W
-  SELECTED_ENTRY_DIM = common.SELECTED_ENTRY_DIM
+  WHITE, UNSELECTED_COLOR, DIM_COLOR, DISABLED_DIM_COLOR, BLACK = common.WHITE, common.UNSELECTED_COLOR, common.DIM_COLOR, common.DISABLED_DIM_COLOR, common.BACKGROUND_COLOR
+  KEYBOARD_SELECTED_COLOR, SELECTED_COLOR, PREFIX_W = common.KEYBOARD_SELECTED_COLOR, common.SELECTED_COLOR, common.PREFIX_W
+  SELECTED_DIM_COLOR = common.SELECTED_DIM_COLOR
   TEXT_CURSOR_COLOR = common.TEXT_CURSOR_COLOR
 end
 
@@ -895,43 +895,83 @@ local function parseStartupColorValue(raw)
   return nil
 end
 
+local STARTUP_COLOR_KEYS = {
+  "cross", "square", "triangle", "circle",
+  "selected", "selected_dim", "unselected", "dim", "background",
+}
+
+local STARTUP_COLOR_FIELDS = {
+  cross = { "PAD_LABEL_CROSS" },
+  square = { "PAD_LABEL_SQUARE" },
+  triangle = { "PAD_LABEL_TRIANGLE" },
+  circle = { "PAD_LABEL_CIRCLE" },
+  selected = { "SELECTED_COLOR" },
+  selected_dim = { "SELECTED_DIM_COLOR" },
+  unselected = { "UNSELECTED_COLOR" },
+  dim = { "DIM_COLOR", "DISABLED_DIM_COLOR" },
+  background = { "BACKGROUND_COLOR" },
+}
+
+local STARTUP_DEFAULT_COLOR_FIELDS = {
+  PAD_LABEL_CROSS = common.PAD_LABEL_CROSS,
+  PAD_LABEL_SQUARE = common.PAD_LABEL_SQUARE,
+  PAD_LABEL_TRIANGLE = common.PAD_LABEL_TRIANGLE,
+  PAD_LABEL_CIRCLE = common.PAD_LABEL_CIRCLE,
+  SELECTED_COLOR = common.SELECTED_COLOR,
+  SELECTED_DIM_COLOR = common.SELECTED_DIM_COLOR,
+  UNSELECTED_COLOR = common.UNSELECTED_COLOR,
+  DIM_COLOR = common.DIM_COLOR,
+  DISABLED_DIM_COLOR = common.DISABLED_DIM_COLOR,
+  BACKGROUND_COLOR = common.BACKGROUND_COLOR,
+}
+
+local function applyStartupColorByKey(colorKey, raw)
+  local r, g, b, a = parseStartupColorValue(raw)
+  if not r then return false end
+  local fields = STARTUP_COLOR_FIELDS[colorKey] or {}
+  for i = 1, #fields do
+    common[fields[i]] = Color.new(r, g, b, a)
+  end
+  return true
+end
+
+local function applyStartupDefaultColors()
+  for field, color in pairs(STARTUP_DEFAULT_COLOR_FIELDS) do
+    common[field] = color
+  end
+end
+
 local function applyStartupColorsCnf()
-  if not (STARTUP_CFG and STARTUP_CFG.path) then return end
-  local kv = STARTUP_CFG.colors or {}
+  -- Always seed from built-in defaults first, then override from cnf keys (if present/valid).
+  applyStartupDefaultColors()
 
+  local hasStartupCnf = (STARTUP_CFG and STARTUP_CFG.path) and true or false
+  local kv = hasStartupCnf and (STARTUP_CFG.colors or {}) or {}
   local applied = 0
-  local function applyColor(field, key)
+  local seen = 0
+  for i = 1, #STARTUP_COLOR_KEYS do
+    local key = STARTUP_COLOR_KEYS[i]
     local raw = kv[key]
-    local usedKey = key
-    if not raw then return end
-
-    local r, g, b, a = parseStartupColorValue(raw)
-    if not r then
-      print("ui: r3configurator.cnf invalid value for " .. tostring(usedKey) .. ": " .. tostring(raw))
-      return
+    if raw and raw ~= "" then
+      seen = seen + 1
+      if applyStartupColorByKey(key, raw) then
+        applied = applied + 1
+      else
+        print("ui: r3configurator.cnf invalid value for " .. tostring(key) .. ": " .. tostring(raw))
+      end
     end
-
-    common[field] = Color.new(r, g, b, a)
-    applied = applied + 1
   end
 
-  applyColor("PAD_LABEL_CROSS", "cross")
-  applyColor("PAD_LABEL_SQUARE", "square")
-  applyColor("PAD_LABEL_TRIANGLE", "triangle")
-  applyColor("PAD_LABEL_CIRCLE", "circle")
-  applyColor("SELECTED_ENTRY", "selected")
-  applyColor("SELECTED_ENTRY_DIM", "selected_dim")
-  applyColor("GRAY", "unselected")
-  applyColor("DIM", "dim")
-  applyColor("BGCOLOR", "background")
-
   refreshRuntimeColorAliases()
-
-  _G.CONFIG_UI.colorsCnfActive = true
-  if applied > 0 then
+  _G.CONFIG_UI.colorsCnfActive = hasStartupCnf and (applied > 0) or false
+  if not hasStartupCnf then
+    print("ui: startup colors using built-in defaults (r3configurator.cnf missing or unreadable)")
+  elseif applied > 0 then
     print("ui: startup colors override from r3configurator.cnf (" .. tostring(applied) .. " key(s) applied)")
+  elseif seen > 0 then
+    print("ui: startup colors override from r3configurator.cnf (all provided color values invalid; using defaults)")
   else
-    print("ui: startup colors override from r3configurator.cnf (no valid keys found)")
+    print("ui: startup colors override from r3configurator.cnf (no color keys found; using defaults)")
   end
 end
 
@@ -1822,13 +1862,13 @@ local function mainLoop()
       VALUE_MAX_LEN_LONG = VALUE_MAX_LEN_LONG,
       DESC_Y_BOTTOM = DESC_Y_BOTTOM,
       HINT_Y = HINT_Y,
-      SELECTED_ENTRY = SELECTED_ENTRY,
-      SELECTED_ENTRY_DIM = SELECTED_ENTRY_DIM,
+      SELECTED_COLOR = SELECTED_COLOR,
+      SELECTED_DIM_COLOR = SELECTED_DIM_COLOR,
       WHITE = WHITE,
-      GRAY = GRAY,
-      DIM = DIM,
-      DIM_ENTRY = DIM_ENTRY,
-      HIGHLIGHT = HIGHLIGHT,
+      UNSELECTED_COLOR = UNSELECTED_COLOR,
+      DIM_COLOR = DIM_COLOR,
+      DISABLED_DIM_COLOR = DISABLED_DIM_COLOR,
+      KEYBOARD_SELECTED_COLOR = KEYBOARD_SELECTED_COLOR,
       TEXT_CURSOR_COLOR = TEXT_CURSOR_COLOR,
       drawText = drawText,
       common = common,
@@ -1976,7 +2016,7 @@ local function mainLoop()
     if renderedState ~= "text_input" and renderedState ~= KATAMARI_EASTER_EGG_STATE and scene_text_input and
         type(scene_text_input.drawShoulderHints) == "function" then
       local shoulderTotalWidth = (c.w or common.DEFAULT_W) - (2 * (c.MARGIN_X or common.MARGIN_X))
-      local ok, err = pcall(scene_text_input.drawShoulderHints, c, c._, {}, 0.7, shoulderTotalWidth, c.DIM or DIM)
+      local ok, err = pcall(scene_text_input.drawShoulderHints, c, c._, {}, 0.7, shoulderTotalWidth, c.DIM_COLOR or DIM_COLOR)
       if not ok and c then
         if c._keyboardShoulderHintDrawErrorReported ~= true then
           c._keyboardShoulderHintDrawErrorReported = true

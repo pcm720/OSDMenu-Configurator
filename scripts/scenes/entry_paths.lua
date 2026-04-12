@@ -177,7 +177,7 @@ local function run(ctx)
       scrollRows = ctx.entryPathScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
   local argsRow = pathRows + 1
@@ -217,9 +217,9 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
-    local col = (i == ctx.entryPathSel) and _.SELECTED_ENTRY or _.GRAY
+    local col = (i == ctx.entryPathSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     if i <= pathRows and type(paths[i]) == "table" and (parentPathsDisabled or paths[i].disabled) then
-      col = (i == ctx.entryPathSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+      col = (i == ctx.entryPathSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
     end
     if canMovePaths and ctx.entryPathGrab and i == ctx.entryPathSel and i <= pathRows then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
@@ -264,7 +264,7 @@ local function run(ctx)
       row = 1
     },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, pathHints, nil, _.DIM,
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, pathHints, nil, _.DIM_COLOR,
     _.w - 2 * _.MARGIN_X)
 
   local function markConfigMutated()

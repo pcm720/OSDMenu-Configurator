@@ -85,7 +85,7 @@ function arg_add_menu.run(ctx, opts)
       scrollRows = ctx[scrollKey],
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
 
@@ -106,7 +106,7 @@ function arg_add_menu.run(ctx, opts)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local y = startY + (i - ctx[scrollKey] - 1) * _.LINE_H
-    local col = disabled and (_.DIM_ENTRY or _.DIM) or ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.GRAY)
+    local col = disabled and (_.DISABLED_DIM_COLOR or _.DIM_COLOR) or ((i == ctx[selKey]) and _.SELECTED_COLOR or _.UNSELECTED_COLOR)
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx[selKey], label, col)
   end
 
@@ -117,7 +117,7 @@ function arg_add_menu.run(ctx, opts)
     local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
     local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
         math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
-    local hintColor = (_.common.OPTION_HINT_COLOR or _.HIGHLIGHT or _.WHITE)
+    local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
     local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
     if _.common.fitListRowText then
       desc = _.common.fitListRowText(ctx, (rowStateKeyPrefix or "arg_add_row_") .. "desc", hintFont, desc, descMaxW,
@@ -130,7 +130,7 @@ function arg_add_menu.run(ctx, opts)
     _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, desc, hintColor, hintTextH)
   end
 
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, opts.hints or buildDefaultHints(_), nil, _.DIM,
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, opts.hints or buildDefaultHints(_), nil, _.DIM_COLOR,
     _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then

@@ -668,7 +668,7 @@ local function applyManualPath(ctx, val)
       ctx.saveSplash = {
         kind = "failed",
         title = (_.editor_str and _.editor_str.save_failed) or "Save failed",
-        textColor = _.HIGHLIGHT,
+        textColor = _.KEYBOARD_SELECTED_COLOR,
         detail = (_.path_str and _.path_str.irx_extension_required) or "Path must end in .irx",
         framesLeft = 60
       }
@@ -901,8 +901,8 @@ local function run(ctx)
     local val = ctx.pathPickerPendingPath
     local mode = ctx.pathPickerWildcardMode or "single"
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.path_str.wildcard_confirm_title, _.WHITE)
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(28), _.FONT_SCALE, val, _.GRAY)
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.path_str.wildcard_confirm_hint, nil, _.DIM,
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(28), _.FONT_SCALE, val, _.UNSELECTED_COLOR)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.path_str.wildcard_confirm_hint, nil, _.DIM_COLOR,
       _.w - 2 * _.MARGIN_X)
     local function applyAndExit(chosenVal)
       ctx._configModifiedCache = nil
@@ -990,7 +990,7 @@ local function run(ctx)
         _.drawText(_.font, _.drawMode, cx, cy, 1, msg, _.WHITE)
       end
       _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7,
-        _.path_str.circle_back_items, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+        _.path_str.circle_back_items, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
       ctx.pathPickerLoadingFrames = (ctx.pathPickerLoadingFrames or 0) + 1
       -- Load drivers on frame 2 so the first splash frame is presented before blocking (same for all HDD/BDM)
       if ctx.pathPickerLoadingFrames == 2 and not ctx.pathPickerModulesLoaded and load.deviceType and System and System.loadModules then
@@ -1052,7 +1052,7 @@ local function run(ctx)
         local tw = _.common.calcTextWidth(_.font, msg, _.FONT_SCALE)
         local cx = _.common.centerX(_, tw)
         local cy = math.floor((_.MARGIN_Y + _.HINT_Y) / 2) - math.floor(_.LINE_H / 2)
-        _.drawText(_.font, _.drawMode, cx, cy, _.FONT_SCALE, msg, _.DIM)
+        _.drawText(_.font, _.drawMode, cx, cy, _.FONT_SCALE, msg, _.DIM_COLOR)
       end
     end
     if not ctx.pathPickerLoadingTimeoutMsg and not ctx.pathPickerLoading then
@@ -1065,7 +1065,7 @@ local function run(ctx)
         if _.common.truncateTextToWidth then
           hint = _.common.truncateTextToWidth(_.font, hint, _.w - (_.MARGIN_X * 2), 0.55)
         end
-        _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(20), 0.55, hint, _.DIM)
+        _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(20), 0.55, hint, _.DIM_COLOR)
       end
       if ctx.pathList and #ctx.pathList > 0 and not ctx.pathPickerLoading then
         local lockedConfigBrowse = isConfigOpenTarget(ctx) and ctx.pathPickerLockedDevice
@@ -1167,7 +1167,7 @@ local function run(ctx)
             scrollRows = ctx.pathPickerScroll,
             rowTopY = startY,
             rowHeight = _.LINE_H,
-            color = _.DIM,
+            color = _.DIM_COLOR,
           })
         end
         local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
@@ -1196,9 +1196,9 @@ local function run(ctx)
           local y = startY + (i - 1) * _.LINE_H
           local isSelectedEntryRow = (row.kind == "entry") and isSelectableDisplay(displayIdx) and
               (displayIdx == ctx.pathPickerSel)
-          local col = _.DIM
+          local col = _.DIM_COLOR
           if row.kind ~= "separator" then
-            col = greyed and _.DIM or (isSelectedEntryRow and _.SELECTED_ENTRY or _.GRAY)
+            col = greyed and _.DIM_COLOR or (isSelectedEntryRow and _.SELECTED_COLOR or _.UNSELECTED_COLOR)
           end
           if _.common.fitListRowText then
             local rowStateKey = (row.kind == "separator") and "path_picker_device_sep" or
@@ -1252,7 +1252,7 @@ local function run(ctx)
             end
             local tw = _.common.calcTextWidth(hintFont, selectedHelper, hintDrawScale)
             local x = _.common.centerX(_, tw)
-            local hintColor = (_.common.OPTION_HINT_COLOR or _.DIM)
+            local hintColor = (_.common.OPTION_HINT_COLOR or _.DIM_COLOR)
             _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selectedHelper, hintColor, hintTextH)
           end
         end
@@ -1351,16 +1351,16 @@ local function run(ctx)
         end
       else
         _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.path_str.no_devices, _
-          .GRAY)
+          .UNSELECTED_COLOR)
       end
     end
     if ctx.pathPickerLoading then
     elseif ctx.pathPickerLoadingTimeoutMsg then
-      _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.path_str.circle_back_items, nil, _.DIM,
+      _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.path_str.circle_back_items, nil, _.DIM_COLOR,
         _.w - 2 * _.MARGIN_X)
     else
       _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.path_str.cross_select_circle_back_items, nil,
-        _.DIM, _.w - 2 * _.MARGIN_X)
+        _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
     end
     if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
       if isConfigOpenTarget(ctx) and ctx.pathPickerLockedDevice then
@@ -1427,7 +1427,7 @@ local function run(ctx)
         scrollRows = ctx.pathPickerScroll,
         rowTopY = startY,
         rowHeight = _.LINE_H,
-        color = _.DIM,
+        color = _.DIM_COLOR,
       })
     end
     local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
@@ -1435,7 +1435,7 @@ local function run(ctx)
       local p = parts[i]
       if not p then break end
       local y = startY + (i - ctx.pathPickerScroll - 1) * _.LINE_H
-      local col = (i == ctx.pathPickerSel) and _.SELECTED_ENTRY or _.GRAY
+      local col = (i == ctx.pathPickerSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
       local label = p.name or _.common_str.empty
       if _.common.fitListRowText then
         label = _.common.fitListRowText(ctx, "path_picker_part_row_" .. tostring(i), _.font, label, maxLabelW,
@@ -1447,14 +1447,14 @@ local function run(ctx)
     end
     if #parts == 0 then
       _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.path_str.no_partitions, _
-        .DIM)
+        .DIM_COLOR)
     end
     local hasFileFilter = type(ctx.pathPickerFileExts) == "table" and #ctx.pathPickerFileExts > 0
     local allowPatinfo = (not isConfigOpenTarget(ctx)) and (not hasFileFilter)
     local partHint = isConfigOpenTarget(ctx) and _.path_str.cross_open_circle_back_items or
         (allowPatinfo and (_.path_str.cross_open_square_patinfo_circle_back_items or _.path_str.cross_open_circle_back_items) or
           _.path_str.cross_open_circle_back_items)
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, partHint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, partHint, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_UP) ~= 0 then
       ctx.pathPickerSel = ctx.pathPickerSel - 1; if ctx.pathPickerSel < 1 then ctx.pathPickerSel = #parts end
     end
@@ -1540,7 +1540,7 @@ local function run(ctx)
       local display = pfsToPartitionPath(headerPath, partPath)
       if display then headerPath = display end
     end
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.9, headerPath, _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 0.9, headerPath, _.DIM_COLOR)
     local show = ctx.pathList or {}
     if #show == 0 then
       ctx.pathPickerSel = 0
@@ -1562,7 +1562,7 @@ local function run(ctx)
         scrollRows = ctx.pathPickerScroll,
         rowTopY = startY,
         rowHeight = _.LINE_H,
-        color = _.DIM,
+        color = _.DIM_COLOR,
       })
     end
     local maxLabelW = (_.w or 640) - (_.MARGIN_X + 20) - _.MARGIN_X
@@ -1572,7 +1572,7 @@ local function run(ctx)
       local y = startY + (i - ctx.pathPickerScroll - 1) * _.LINE_H
       local label = e.name or _.common_str.empty
       if e.directory and label ~= "" then label = label .. "/" end
-      local col = (i == ctx.pathPickerSel) and _.SELECTED_ENTRY or _.GRAY
+      local col = (i == ctx.pathPickerSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
       if _.common.fitListRowText then
         label = _.common.fitListRowText(ctx, "path_picker_browse_row_" .. tostring(i), _.font, label, maxLabelW,
           _.FONT_SCALE, i == ctx.pathPickerSel)
@@ -1590,7 +1590,7 @@ local function run(ctx)
       else
         noFilesLabel = _.path_str.no_elf_files
       end
-      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(55), _.FONT_SCALE, noFilesLabel, _.DIM)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(55), _.FONT_SCALE, noFilesLabel, _.DIM_COLOR)
     end
     local canCreateConfigIni = isConfigOpenTarget(ctx) and ctx.pathBrowsePath
     if not canCreateConfigIni then
@@ -1614,7 +1614,7 @@ local function run(ctx)
       { pad = canCreateConfigIni and "square" or "", label = canCreateConfigIni and (_.menu_str.actions_label or "Actions") or "", row = 1 },
       { pad = "circle", label = (_.path_str.cross_select_file_items and _.path_str.cross_select_file_items[2] and _.path_str.cross_select_file_items[2].label) or "Back", row = 1 },
     }
-    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, browseHint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, browseHint, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
     local function createConfigIniInBrowseDir()
       local dir = tostring(ctx.pathBrowsePath):gsub("/$", "")

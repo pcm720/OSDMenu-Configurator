@@ -90,10 +90,10 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local ry = math.floor((tonumber(topY) or 0) - 1)
     local rh = math.max(0, math.floor((tonumber(height) or 0) + 2))
     if rh <= 0 then return end
-    _.Graphics.drawRect(0, ry, rw, rh, _.common.BGCOLOR)
+    _.Graphics.drawRect(0, ry, rw, rh, _.common.BACKGROUND_COLOR)
   end
 
-  local drawColor = _.WHITE or color or _.DIM
+  local drawColor = _.WHITE or color or _.DIM_COLOR
   local iconScale = 0.6
   local textScale = 0.75
   local drawScale = (scale or 0.7) * textScale
@@ -1434,7 +1434,7 @@ local function run(ctx)
   local scale = 0.9
   local textLeftX = math.floor(keyboardLeft + (_.KEY_GAP / 2) + 0.5)
   _.drawText(_.font, _.drawMode, textLeftX, _.scaleY(88), 0.9,
-    ctx.textInputPrompt or _.common_str.enter_text, _.DIM)
+    ctx.textInputPrompt or _.common_str.enter_text, _.DIM_COLOR)
   local x = textLeftX
   if beforeDisplay ~= "" then
     _.drawText(_.font, _.drawMode, x, textY, scale, beforeDisplay, _.WHITE)
@@ -1493,7 +1493,7 @@ local function run(ctx)
       textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
     end
     local textY = math.floor(keyCenterY - (textH * 0.5) + KEY_LABEL_Y_BIAS + 0.5)
-    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.HIGHLIGHT or _.WHITE)
+    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.KEYBOARD_SELECTED_COLOR or _.WHITE)
   end
   local drawCache = ensureKeyboardDrawCache(ctx, _, keyboardLayout, keyboardLeft, keyY, kw, kh, rowOffsets) or {}
   local keysToDraw = drawCache.keys or {}
@@ -1815,7 +1815,7 @@ local function run(ctx)
   local suppressCrossEnter = suppressPressVisualsForFrame or pressAnimEntryGateActive or
       (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM, _.w - 2 * _.MARGIN_X, {
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X, {
     disableTransitions = true,
     getIconPressAmount = function(padName)
       if suppressPressVisualsForFrame or pressAnimEntryGateActive then
@@ -1839,7 +1839,7 @@ local function run(ctx)
     end
     shoulderHints[#shoulderHints + 1] = { pad = "select", label = glyphKeyLabel, row = 2 }
   end
-  drawKeyboardShoulderHints(ctx, _, shoulderHints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM)
+  drawKeyboardShoulderHints(ctx, _, shoulderHints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM_COLOR)
 end
 
 local function drawShoulderHints(ctx, _, hintItems, scale, totalWidth, color)

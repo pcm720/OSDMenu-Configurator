@@ -118,9 +118,9 @@ local function run(ctx)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
     _.menu_str.name .. (nameDisplay == "" and (_.common_str.name_not_defined or _.common_str.empty) or
-      formatBelForDisplay(nameDisplay):sub(1, 40)), _.DIM)
+      formatBelForDisplay(nameDisplay):sub(1, 40)), _.DIM_COLOR)
   if not isFmcbEntry then
-    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM)
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM_COLOR)
   end
   if allowArgs and hasCdromPathConflict then
     local warn = _.menu_str.cdrom_exclusive_warning or
@@ -128,12 +128,12 @@ local function run(ctx)
     if _.common.fitListRowText then
       local warnFit = _.common.fitListRowText(ctx, "menu_entry_edit_cdrom_warning", _.font, warn,
         (_.w or 640) - 2 * _.MARGIN_X, 0.6, true)
-      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.HIGHLIGHT or _.DIM)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.KEYBOARD_SELECTED_COLOR or _.DIM_COLOR)
     elseif _.common.truncateTextToWidth then
       local warnFit = _.common.truncateTextToWidth(_.font, warn, (_.w or 640) - 2 * _.MARGIN_X, 0.6)
-      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.HIGHLIGHT or _.DIM)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warnFit, _.KEYBOARD_SELECTED_COLOR or _.DIM_COLOR)
     else
-      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warn, _.HIGHLIGHT or _.DIM)
+      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(64), 0.6, warn, _.KEYBOARD_SELECTED_COLOR or _.DIM_COLOR)
     end
   end
   if ctx.entryEditSub < 1 then ctx.entryEditSub = 1 end
@@ -144,12 +144,12 @@ local function run(ctx)
     local row = subRows[i]
     local y = listTopY + (i - 1) * _.LINE_H
     local isSelected = (i == ctx.entryEditSub)
-    local col = isSelected and _.SELECTED_ENTRY or _.GRAY
+    local col = isSelected and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     if row.kind == "path" then
       if parentEntryDisabled or row.disabled then
-        col = isSelected and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = isSelected and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       elseif not row.hasValue then
-        col = isSelected and _.SELECTED_ENTRY or (_.DIM_ENTRY or _.DIM)
+        col = isSelected and _.SELECTED_COLOR or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
     end
     local label = row.label
@@ -272,7 +272,7 @@ local function run(ctx)
     },
     { pad = "circle", label = backLabel, row = 1 },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, entryEditHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, entryEditHints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
   local function openPathPicker(editIdx)
     local pickerContext = isFmcbEntry and "fmcb_entry" or "osdmenu"
     ctx.editKey = nil

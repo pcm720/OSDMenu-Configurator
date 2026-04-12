@@ -47,7 +47,7 @@ local function run(ctx)
 
   local resultStr = _.config_parse.buildEgsmValue(ctx.egsmVideoIdx, ctx.egsmCompatIdx)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(22), 0.85,
-    _.strings.egsm.result_prefix .. (resultStr == "" and "—" or resultStr), _.GRAY)
+    _.strings.egsm.result_prefix .. (resultStr == "" and "—" or resultStr), _.UNSELECTED_COLOR)
 
   local startY = _.MARGIN_Y + _.scaleY(50)
   local row = 0
@@ -58,7 +58,7 @@ local function run(ctx)
     local headerText = _.strings.egsm.video_header
     local tw = _.common.calcTextWidth(_.font, headerText, 0.85)
     local x = _.common.centerX(_, tw)
-    _.drawText(_.font, _.drawMode, x, startY + row * LINE_H, 0.85, headerText, _.DIM)
+    _.drawText(_.font, _.drawMode, x, startY + row * LINE_H, 0.85, headerText, _.DIM_COLOR)
   end
   row = row + 1
   for i = 1, NUM_VIDEO_OPTS do
@@ -69,9 +69,9 @@ local function run(ctx)
     local selForThisRow = row -- sel 1..5 for video
     local isCur = (ctx.egsmValueSel == selForThisRow)
     local isActive = (ctx.egsmVideoIdx == vi)
-    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_ENTRY) or _.GRAY)
+    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     if isActive then
-      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)
+      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
     row = row + 1
   end
@@ -81,7 +81,7 @@ local function run(ctx)
     local headerText = _.strings.egsm.compat_header
     local tw = _.common.calcTextWidth(_.font, headerText, 0.85)
     local x = _.common.centerX(_, tw)
-    _.drawText(_.font, _.drawMode, x, startY + row * LINE_H, 0.85, headerText, _.DIM)
+    _.drawText(_.font, _.drawMode, x, startY + row * LINE_H, 0.85, headerText, _.DIM_COLOR)
   end
   row = row + 1
   local compatDim = not hasVideo
@@ -93,10 +93,10 @@ local function run(ctx)
     local selForThisRow = row - 1 -- sel 6..9 for compat
     local isCur = (ctx.egsmValueSel == selForThisRow)
     local isActive = (ctx.egsmCompatIdx == i)
-    local col = compatDim and _.DIM or ((isCur and _.SELECTED_ENTRY) or _.GRAY)
+    local col = compatDim and _.DIM_COLOR or ((isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
     if isActive and hasVideo then
-      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)
+      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
     row = row + 1
   end
@@ -113,7 +113,7 @@ local function run(ctx)
     },
     { pad = "circle", label = backLabel, row = 1 },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, valueEditHints, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, valueEditHints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     ctx.egsmValueSel = ctx.egsmValueSel - 1

@@ -119,14 +119,14 @@ function arg_gsm_picker.run(ctx, opts)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, s.value_edit_title or "eGSM value", _.WHITE)
   local preview = (_.config_parse and _.config_parse.buildEgsmValue and _.config_parse.buildEgsmValue(videoIdx, compatIdx)) or ""
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(22), 0.85,
-    (s.result_prefix or "Value: ") .. ((preview == "" and "—") or preview), _.GRAY)
+    (s.result_prefix or "Value: ") .. ((preview == "" and "—") or preview), _.UNSELECTED_COLOR)
 
   local startY = _.MARGIN_Y + _.scaleY(50)
   local row = 0
 
   local videoHeader = s.video_header or "Video mode"
   _.drawText(_.font, _.drawMode, _.common.centerX(_, _.common.calcTextWidth(_.font, videoHeader, 0.85)),
-    startY + row * _.LINE_H, 0.85, videoHeader, _.DIM)
+    startY + row * _.LINE_H, 0.85, videoHeader, _.DIM_COLOR)
   row = row + 1
 
   for i = 1, NUM_VIDEO_OPTS do
@@ -136,16 +136,16 @@ function arg_gsm_picker.run(ctx, opts)
     local isActive = (videoIdx == (i + 1))
     label = fitLabel(ctx, (keys.rowStateKeyPrefix or "arg_gsm_picker_row_") .. "video_" .. tostring(i), label, isCur)
     local y = startY + row * _.LINE_H
-    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_ENTRY) or _.GRAY)
+    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     if isActive then
-      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)
+      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
     row = row + 1
   end
 
   local compatHeader = s.compat_header or "Compatibility"
   _.drawText(_.font, _.drawMode, _.common.centerX(_, _.common.calcTextWidth(_.font, compatHeader, 0.85)),
-    startY + row * _.LINE_H, 0.85, compatHeader, _.DIM)
+    startY + row * _.LINE_H, 0.85, compatHeader, _.DIM_COLOR)
   row = row + 1
 
   local compatDim = not hasVideo
@@ -157,10 +157,10 @@ function arg_gsm_picker.run(ctx, opts)
     local isActive = (compatIdx == i)
     label = fitLabel(ctx, (keys.rowStateKeyPrefix or "arg_gsm_picker_row_") .. "compat_" .. tostring(i), label, isCur)
     local y = startY + row * _.LINE_H
-    local col = compatDim and _.DIM or ((isCur and _.SELECTED_ENTRY) or _.GRAY)
+    local col = compatDim and _.DIM_COLOR or ((isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
     if isActive and hasVideo then
-      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)
+      _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
     row = row + 1
   end
@@ -168,7 +168,7 @@ function arg_gsm_picker.run(ctx, opts)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7,
     s.value_edit_hint or
     { { pad = "cross", label = (_.menu_str.enter_label or "Select"), row = 1 }, { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 } },
-    nil, _.DIM, _.w - 2 * _.MARGIN_X)
+    nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     sel = sel - 1

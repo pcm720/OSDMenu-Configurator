@@ -318,13 +318,13 @@ local function run(ctx)
       scrollRows = ctx.bblArgScroll,
       rowTopY = startY,
       rowHeight = _.LINE_H,
-      color = _.DIM,
+      color = _.DIM_COLOR,
     })
   end
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
   if total == 0 then
     _.drawText(_.font, _.drawMode, _.MARGIN_X + 20, startY, _.FONT_SCALE,
-      _.common_str.none or _.common_str.empty, _.DIM)
+      _.common_str.none or _.common_str.empty, _.DIM_COLOR)
   else
     for i = ctx.bblArgScroll + 1, math.min(ctx.bblArgScroll + _.MAX_VISIBLE_LIST, total) do
       local y = startY + (i - ctx.bblArgScroll - 1) * _.LINE_H
@@ -340,9 +340,9 @@ local function run(ctx)
       elseif _.common.truncateTextToWidth then
         text = _.common.truncateTextToWidth(_.font, text, maxLabelW, _.FONT_SCALE)
       end
-      local col = (i == ctx.bblArgSel) and _.SELECTED_ENTRY or _.GRAY
+      local col = (i == ctx.bblArgSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
       if keyDisabled or (a and a.disabled) then
-        col = (i == ctx.bblArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
+        col = (i == ctx.bblArgSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
       _.drawListRow(_.MARGIN_X + 20, y, i == ctx.bblArgSel, text, col)
     end
@@ -383,7 +383,7 @@ local function run(ctx)
       row = 1
     },
   }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hint, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   local function moveSelectedArg(step)
     if not hasSelection or total <= 1 then return end
