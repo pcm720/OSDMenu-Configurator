@@ -152,6 +152,14 @@ local function run(ctx)
             break
           end
         end
+        ctx.egsmEditDefault = false
+        ctx.egsmEditTitleId = id
+        ctx.egsmEditCommented = true
+        ctx.egsmVideoIdx = nil
+        ctx.egsmCompatIdx = nil
+        ctx.egsmCompatSelected = nil
+        ctx.state = "egsm_value_edit"
+        return
       end
       ctx.state = "egsm_editor"
     end
