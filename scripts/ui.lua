@@ -1038,7 +1038,7 @@ local OVERLAY_LOGO_OPACITY = 0.25 -- 75% transparent
 local OVERLAY_LOGO_OPACITY_R3 = 1.0 -- keep splash/title logo fully visible if selected
 local OVERLAY_LOGO_R3_TITLE_KEY = "__r3_title__"
 local OVERLAY_LOGO_R3_TITLE_SCALE = 0.50
-local OVERLAY_LOGO_STICK_DEADZONE_PERCENT = 0.08
+local OVERLAY_LOGO_STICK_DEADZONE_PERCENT = 0.13
 local OVERLAY_LOGO_STICK_DEADZONE = math.floor((127 * OVERLAY_LOGO_STICK_DEADZONE_PERCENT) + 0.5)
 local OVERLAY_LOGO_STICK_SMOOTH = 0.22
 local OVERLAY_LOGO_ROTATION_MAX_DEG = 180.0
@@ -1059,6 +1059,7 @@ local KATAMARI_EASTER_EGG_TRIGGER_FRAMES = math.max(1,
 local KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_SECONDS = 0.5
 local KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_FRAMES = math.max(0,
   math.floor((KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_SECONDS * 60) + 0.5))
+local KATAMARI_EASTER_EGG_MOVE_THRESHOLD_NORMALIZED = 0.05
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
@@ -1096,24 +1097,29 @@ local function readStickNormalized(getFn)
   return normalizeStickAxis(rawX), normalizeStickAxis(rawY), true, rawX, rawY
 end
 
-local function isAnyStickActive()
+local function readAnyStickState()
   local lx, ly, leftOk, lRawX, lRawY = readStickNormalized(Pads and Pads.getLeftStick)
   local rx, ry, rightOk, rRawX, rRawY = readStickNormalized(Pads and Pads.getRightStick)
   if not leftOk and not rightOk then
-    return false
+    return 0, 0, 0, 0, false
   end
   local invalidSignature = (math.abs(lRawX) >= 126 and math.abs(lRawY) >= 126 and
       math.abs(rRawX) >= 126 and math.abs(rRawY) >= 126)
   if invalidSignature then
-    return false
+    return 0, 0, 0, 0, false
   end
-  return not (lx == 0 and ly == 0 and rx == 0 and ry == 0)
+  local stickActive = not (lx == 0 and ly == 0 and rx == 0 and ry == 0)
+  return lx, ly, rx, ry, stickActive
 end
 
 local function resetKatamariEasterEggCounters(ctx)
   ctx._katamariStickActiveFrames = 0
   ctx._katamariStickCountdownFrames = 0
   ctx._katamariStickNeutralFrames = 0
+  ctx._katamariPrevLx = 0
+  ctx._katamariPrevLy = 0
+  ctx._katamariPrevRx = 0
+  ctx._katamariPrevRy = 0
 end
 
 local function updateKatamariEasterEggTrigger(ctx, sceneName)
@@ -1127,7 +1133,7 @@ local function updateKatamariEasterEggTrigger(ctx, sceneName)
     return false
   end
 
-  local stickActive = isAnyStickActive()
+  local lx, ly, rx, ry, stickActive = readAnyStickState()
   local requireRelease = (ctx._katamariStickRequireRelease == true)
 
   if requireRelease then
@@ -1141,8 +1147,22 @@ local function updateKatamariEasterEggTrigger(ctx, sceneName)
   local countdownFrames = math.max(0, math.floor(tonumber(ctx._katamariStickCountdownFrames) or 0))
   local activeFrames = math.max(0, math.floor(tonumber(ctx._katamariStickActiveFrames) or 0))
   local neutralFrames = math.max(0, math.floor(tonumber(ctx._katamariStickNeutralFrames) or 0))
+  local prevLx = tonumber(ctx._katamariPrevLx) or 0
+  local prevLy = tonumber(ctx._katamariPrevLy) or 0
+  local prevRx = tonumber(ctx._katamariPrevRx) or 0
+  local prevRy = tonumber(ctx._katamariPrevRy) or 0
+  local moveThreshold = tonumber(KATAMARI_EASTER_EGG_MOVE_THRESHOLD_NORMALIZED) or 0.05
+  if moveThreshold < 0 then moveThreshold = 0 end
 
-  if stickActive then
+  local movementDelta = math.abs(lx - prevLx) + math.abs(ly - prevLy) + math.abs(rx - prevRx) + math.abs(ry - prevRy)
+  local stickMoving = (stickActive and movementDelta >= moveThreshold)
+
+  ctx._katamariPrevLx = lx
+  ctx._katamariPrevLy = ly
+  ctx._katamariPrevRx = rx
+  ctx._katamariPrevRy = ry
+
+  if stickMoving then
     countdownFrames = countdownFrames + 1
     activeFrames = activeFrames + 1
   elseif countdownFrames > 0 then

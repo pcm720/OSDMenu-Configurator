@@ -47,6 +47,10 @@ local function run(ctx)
     ctx._katamariStickActiveFrames = 0
     ctx._katamariStickCountdownFrames = 0
     ctx._katamariStickNeutralFrames = 0
+    ctx._katamariPrevLx = 0
+    ctx._katamariPrevLy = 0
+    ctx._katamariPrevRx = 0
+    ctx._katamariPrevRy = 0
     ctx.state = returnState
   end
 end

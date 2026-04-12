@@ -101,6 +101,10 @@ local function initContext()
     _katamariStickActiveFrames = 0,
     _katamariStickCountdownFrames = 0,
     _katamariStickNeutralFrames = 0,
+    _katamariPrevLx = 0,
+    _katamariPrevLy = 0,
+    _katamariPrevRx = 0,
+    _katamariPrevRy = 0,
     _katamariStickRequireRelease = nil,
     _katamariEasterEggTriggered = nil,
   }
