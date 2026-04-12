@@ -648,14 +648,14 @@ local function drawTimerDigitInlineValue(_, edit, x, y, scale)
   local cursorX = x
   for i = 1, #valueText do
     local ch = valueText:sub(i, i)
-    local col = (i == selectedCharIndex) and (_.SELECTED_ENTRY or _.WHITE) or _.WHITE
+    local col = (i == selectedCharIndex) and (_.SELECTED_ENTRY or _.WHITE) or _.GRAY
     _.drawText(_.font, _.drawMode, cursorX, y, scale, ch, col)
     local cw = (_.common.calcTextWidth and _.common.calcTextWidth(_.font, ch, scale)) or 10
     cursorX = cursorX + cw
   end
   local secondsLabel = (_.common_str and _.common_str.seconds) or "seconds"
   if secondsLabel ~= "" then
-    _.drawText(_.font, _.drawMode, cursorX, y, scale, " " .. tostring(secondsLabel), _.WHITE)
+    _.drawText(_.font, _.drawMode, cursorX, y, scale, " " .. tostring(secondsLabel), _.GRAY)
   end
 end
 
@@ -777,7 +777,7 @@ local function drawIntDigitInlineValue(_, edit, x, y, scale)
   for i = 1, #valueText do
     local ch = valueText:sub(i, i)
     local isSign = edit.showSign and (i == 1)
-    local col = isSign and _.DIM or _.WHITE
+    local col = isSign and _.DIM or _.GRAY
     if i == selectedCharIndex then
       col = _.SELECTED_ENTRY or _.WHITE
     end
@@ -909,12 +909,12 @@ local function drawInlineColorEditValue(_, edit, x, y, scale)
     local valStr = channelBlocks[ch] and channelBlocks[ch].valStr or "000"
     for i = 1, #valStr do
       local digit = valStr:sub(i, i)
-      local col = (ch == edit.channel and i == edit.digit) and (_.SELECTED_ENTRY or _.WHITE) or _.WHITE
+      local col = (ch == edit.channel and i == edit.digit) and (_.SELECTED_ENTRY or _.WHITE) or _.GRAY
       _.drawText(_.font, _.drawMode, cursorX, y, scale, digit, col)
       cursorX = cursorX + textWidth(digit)
     end
     if ch < channelCount then
-      _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.WHITE)
+      _.drawText(_.font, _.drawMode, cursorX, y, scale, " ", _.GRAY)
       cursorX = cursorX + blockGap
     end
   end
@@ -1129,7 +1129,7 @@ local function run(ctx)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #cats) do
       local cat = cats[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
-      local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.WHITE
+      local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.GRAY
       local catLabel = cat.name or _.common_str.empty
       if ctx.fileType == "osdmenu_cnf" then
         catLabel = (_.strings.categories and _.strings.categories[i]) or catLabel
@@ -1226,7 +1226,7 @@ local function run(ctx)
     for i = ctx.optScroll + 1, math.min(ctx.optScroll + maxVis, #ctx.optList) do
       local o = ctx.optList[i]
       local y = startY + (i - ctx.optScroll - 1) * _.ROW_H
-      local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.WHITE
+      local col = (i == ctx.optSel) and _.SELECTED_ENTRY or _.GRAY
       local bootKeyDisabled = false
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       lab = prettifyBblGlobalLabel(ctx, o, lab)
@@ -1438,8 +1438,14 @@ local function run(ctx)
         drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
       elseif valDisplay then
         if valDisplay ~= "" then
-          local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or optionDisabled) and _.DIM or
-              ((i == ctx.optSel) and _.WHITE or _.GRAY)
+          local valCol
+          if valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or optionDisabled then
+            valCol = _.DIM
+          elseif o.optType == "bool" and valDisplay == _.common_str.on then
+            valCol = _.GRAY
+          else
+            valCol = ((i == ctx.optSel) and _.WHITE or _.GRAY)
+          end
           local valDisplayDraw = formatBelForDisplay(valDisplay)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
           local drawVal

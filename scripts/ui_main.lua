@@ -892,7 +892,7 @@ local function runMain(s, pad)
       elseif common.truncateTextToWidth then
         label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
       end
-      local col = (i == s.mainLangSel) and SE or common.WHITE
+      local col = (i == s.mainLangSel) and SE or common.GRAY
       if i == s.mainLangSel then
         dt(hintFont, s.drawMode, rowMarkerX, y, rowScale, ">", col)
       end
@@ -1182,7 +1182,7 @@ local function runChooseMc(s, pad)
     for i = 1, #slots do
       local y = MY + sc(50) + (i - 1) * L
       local label = (slots[i] == 0 and main_str.memory_card_1_slot) or main_str.memory_card_2_slot
-      local col = (i == s.mcSel) and SE or common.WHITE
+      local col = (i == s.mcSel) and SE or common.GRAY
       dlr(M + 20, y, i == s.mcSel, label, col)
     end
     if (pad & PAD_UP) ~= 0 then
@@ -1929,7 +1929,7 @@ local function runChooseLoad(s, pad)
       label = common.truncateTextToWidth(s.font, label or "", maxLabelW, common.FONT_SCALE)
     end
     local y = MY + sc(50) + (i - scroll - 1) * L
-    local col = (idx == s.loadSel) and SE or common.WHITE
+    local col = (idx == s.loadSel) and SE or common.GRAY
     dlr(M + 20, y, idx == s.loadSel, label, col)
   end
   common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.cross_load_circle_back_items, nil, common.DIM)

@@ -385,7 +385,7 @@ function actions_menu.run(ctx, opts)
     local row = rows[i]
     local y = rowStartY + (i - ctx[scrollKey] - 1) * rowStep
     local shouldTicker = (i == ctx[selKey]) or (row.raw and row.raw.forceTicker == true)
-    local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE) or (_.DIM_ENTRY or _.DIM)
+    local col = row.enabled and ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.GRAY) or (_.DIM_ENTRY or _.DIM)
     if i == ctx[selKey] then
       _.drawText(hintFont, _.drawMode, rowMarkerX, y, rowScale, ">", col, textH)
     end

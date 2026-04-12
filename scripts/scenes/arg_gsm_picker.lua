@@ -136,7 +136,7 @@ function arg_gsm_picker.run(ctx, opts)
     local isActive = (videoIdx == (i + 1))
     label = fitLabel(ctx, (keys.rowStateKeyPrefix or "arg_gsm_picker_row_") .. "video_" .. tostring(i), label, isCur)
     local y = startY + row * _.LINE_H
-    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_ENTRY) or (isActive and _.WHITE) or _.GRAY)
+    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_ENTRY) or _.GRAY)
     if isActive then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)
     end
@@ -157,7 +157,7 @@ function arg_gsm_picker.run(ctx, opts)
     local isActive = (compatIdx == i)
     label = fitLabel(ctx, (keys.rowStateKeyPrefix or "arg_gsm_picker_row_") .. "compat_" .. tostring(i), label, isCur)
     local y = startY + row * _.LINE_H
-    local col = compatDim and _.DIM or ((isCur and _.SELECTED_ENTRY) or (isActive and _.WHITE) or _.GRAY)
+    local col = compatDim and _.DIM or ((isCur and _.SELECTED_ENTRY) or _.GRAY)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
     if isActive and hasVideo then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)

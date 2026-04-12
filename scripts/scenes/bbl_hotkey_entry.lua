@@ -63,7 +63,7 @@ local function run(ctx)
 
   for i = 1, #rows do
     local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
-    local col = (i == ctx.bblEntryDetailSel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.bblEntryDetailSel) and _.SELECTED_ENTRY or _.GRAY
     local line = (rows[i] == "path") and pathLine or argsLine
     if _.common.fitListRowText then
       local key = (rows[i] == "path") and "bbl_hotkey_entry_path" or "bbl_hotkey_entry_args"

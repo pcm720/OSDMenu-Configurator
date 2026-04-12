@@ -166,7 +166,7 @@ local function run(ctx)
     local value = entryValueByIdx[idx] or ""
     local label = "E" .. tostring(idx) .. ": " .. ((value ~= "" and value) or _.common_str.empty)
     local y = startY + (i - ctx.bblIrxScroll - 1) * _.LINE_H
-    local col = (i == ctx.bblIrxSel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.bblIrxSel) and _.SELECTED_ENTRY or _.GRAY
     if value == "" then
       col = (i == ctx.bblIrxSel) and _.SELECTED_ENTRY or _.DIM
     end

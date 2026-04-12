@@ -79,7 +79,7 @@ local function run(ctx)
   end
   for i = ctx.egsmScroll + 1, math.min(ctx.egsmScroll + maxVis, total) do
     local y = startY + (i - ctx.egsmScroll - 1) * _.LINE_H
-    local col = (i == ctx.egsmSel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.egsmSel) and _.SELECTED_ENTRY or _.GRAY
     if i == 1 then
       if defCommented then
         col = (i == ctx.egsmSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or

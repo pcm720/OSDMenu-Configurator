@@ -144,7 +144,7 @@ local function run(ctx)
     local row = subRows[i]
     local y = listTopY + (i - 1) * _.LINE_H
     local isSelected = (i == ctx.entryEditSub)
-    local col = isSelected and _.SELECTED_ENTRY or _.WHITE
+    local col = isSelected and _.SELECTED_ENTRY or _.GRAY
     if row.kind == "path" then
       if parentEntryDisabled or row.disabled then
         col = isSelected and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)

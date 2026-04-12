@@ -472,7 +472,7 @@ local function run(ctx)
     elseif _.common.truncateTextToWidth then
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
-    local col = (i == ctx.entryArgSel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.entryArgSel) and _.SELECTED_ENTRY or _.GRAY
     if type(a) == "table" and (parentArgsDisabled or a.disabled) then
       col = (i == ctx.entryArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end

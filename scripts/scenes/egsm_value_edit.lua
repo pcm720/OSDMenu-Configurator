@@ -69,7 +69,7 @@ local function run(ctx)
     local selForThisRow = row -- sel 1..5 for video
     local isCur = (ctx.egsmValueSel == selForThisRow)
     local isActive = (ctx.egsmVideoIdx == vi)
-    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_ENTRY) or (isActive and _.WHITE) or _.GRAY)
+    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_ENTRY) or _.GRAY)
     if isActive then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)
     end
@@ -93,7 +93,7 @@ local function run(ctx)
     local selForThisRow = row - 1 -- sel 6..9 for compat
     local isCur = (ctx.egsmValueSel == selForThisRow)
     local isActive = (ctx.egsmCompatIdx == i)
-    local col = compatDim and _.DIM or ((isCur and _.SELECTED_ENTRY) or (isActive and _.WHITE) or _.GRAY)
+    local col = compatDim and _.DIM or ((isCur and _.SELECTED_ENTRY) or _.GRAY)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
     if isActive and hasVideo then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.GRAY)

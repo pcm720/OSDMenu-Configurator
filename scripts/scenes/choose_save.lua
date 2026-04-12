@@ -37,7 +37,7 @@ local function run(ctx)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local y = startY + (i - scroll - 1) * _.LINE_H
-    local col = (i == ctx.saveSel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.saveSel) and _.SELECTED_ENTRY or _.GRAY
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.saveSel, label, col)
   end
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.cross_save_circle_cancel_items, nil,

@@ -211,7 +211,7 @@ local function run(ctx)
   for i = ctx.bblEntryScroll + 1, math.min(ctx.bblEntryScroll + _.MAX_VISIBLE_LIST, #rows) do
     local row = rows[i]
     local y = startY + (i - ctx.bblEntryScroll - 1) * _.LINE_H
-    local col = (i == ctx.bblEntrySel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.bblEntrySel) and _.SELECTED_ENTRY or _.GRAY
     local text = ""
     if row.kind == "name" then
       local disp = (row.nameVal ~= "" and row.nameVal) or nameNotDefined

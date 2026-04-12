@@ -340,7 +340,7 @@ local function run(ctx)
       elseif _.common.truncateTextToWidth then
         text = _.common.truncateTextToWidth(_.font, text, maxLabelW, _.FONT_SCALE)
       end
-      local col = (i == ctx.bblArgSel) and _.SELECTED_ENTRY or _.WHITE
+      local col = (i == ctx.bblArgSel) and _.SELECTED_ENTRY or _.GRAY
       if keyDisabled or (a and a.disabled) then
         col = (i == ctx.bblArgSel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
       end

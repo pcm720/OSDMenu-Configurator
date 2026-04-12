@@ -385,7 +385,7 @@ local function run(ctx)
     end
     label = formatBelForDisplay(label)
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
-    local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.GRAY
     local effectiveDisabled = ent.disabled or ((not isSeparator) and (not hasActivePath))
     if usesPlaceholder then
       col = (i == ctx.entrySel) and _.SELECTED_ENTRY or _.DIM

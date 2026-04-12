@@ -222,7 +222,7 @@ local function run(ctx)
       line = _.common.truncateTextToWidth(_.font, line, lineMaxW, _.FONT_SCALE)
     end
     local y = startY + (i - ctx.bblHotkeyScroll - 1) * _.LINE_H
-    local col = (i == ctx.bblHotkeySel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.bblHotkeySel) and _.SELECTED_ENTRY or _.GRAY
     if effectiveDisabled then
       col = (i == ctx.bblHotkeySel) and (_.SELECTED_ENTRY_DIM or _.SELECTED_ENTRY) or (_.DIM_ENTRY or _.DIM)
     end

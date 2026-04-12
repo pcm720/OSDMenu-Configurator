@@ -106,7 +106,7 @@ function arg_add_menu.run(ctx, opts)
       label = _.common.truncateTextToWidth(_.font, label, maxLabelW, _.FONT_SCALE)
     end
     local y = startY + (i - ctx[scrollKey] - 1) * _.LINE_H
-    local col = disabled and (_.DIM_ENTRY or _.DIM) or ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.WHITE)
+    local col = disabled and (_.DIM_ENTRY or _.DIM) or ((i == ctx[selKey]) and _.SELECTED_ENTRY or _.GRAY)
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx[selKey], label, col)
   end
 

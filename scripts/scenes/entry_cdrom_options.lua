@@ -86,7 +86,7 @@ local function run(ctx)
     local o = opts[i]
     local y = startY + (i - 1) * _.LINE_H
     local on = hasArg(o.key)
-    local col = (i == ctx.cdromOptSel) and _.SELECTED_ENTRY or _.WHITE
+    local col = (i == ctx.cdromOptSel) and _.SELECTED_ENTRY or _.GRAY
     local coSt = cdromStrings[cdromStringKey(o.key)]
     local rowLabel = (coSt and coSt.label) or o.key
     if _.common.fitListRowText then
@@ -97,7 +97,7 @@ local function run(ctx)
     end
     _.drawListRow(_.MARGIN_X + 20, y, i == ctx.cdromOptSel, rowLabel, col)
     _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, on and _.common_str.on or _.common_str.off,
-      on and _.WHITE or _.DIM)
+      on and _.GRAY or _.DIM)
   end
   local selOpt = opts[ctx.cdromOptSel]
   local selCoSt = selOpt and cdromStrings[cdromStringKey(selOpt.key)]
