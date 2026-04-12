@@ -72,6 +72,9 @@ end
 
 local function run(ctx)
   local _ = ctx._
+  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
+    return tostring(text or ""):gsub(string.char(7), "\226\150\161")
+  end
   if not ctx.lines then
     ctx.state = "editor"
     return
@@ -166,34 +169,15 @@ local function run(ctx)
   end
 
   local function saveFromMenuEntries()
-    ctx.saveSplash = nil
-    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
-    if ctx.fileType == "osdmenu_cnf" and #locations >= 2 then
-      ctx.saveChoices = locations
-      ctx.saveSel = ctx.saveSel or 1
-      ctx.returnToMenuEntriesAfterSave = true
-      ctx.state = "choose_save"
-      return
-    end
-    local path = ctx.currentPath or (locations and locations[1])
-    if path and path ~= "" then
-      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-      invalidateMenuEntriesCache()
-      local parentDir = path:match("^(.+)/[^/]+$")
-      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
-      if ok then
-        ctx.currentPath = path
-        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
-      else
-        ctx.saveSplash = {
-          kind = "failed",
-          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
-          framesLeft = 120
-        }
-      end
-    else
-      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
-    end
+    _.common.saveCurrentConfig(ctx, {
+      allowChoose = (ctx.fileType == "osdmenu_cnf"),
+      beforeChooseSave = function()
+        ctx.returnToMenuEntriesAfterSave = true
+      end,
+      beforeSave = function()
+        invalidateMenuEntriesCache()
+      end,
+    })
   end
 
   local function openPathPickerForEntry(entryIdx)
@@ -246,16 +230,14 @@ local function run(ctx)
     end
     if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
     local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
-    local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
-    ctx.textInputTitleIdMode = nil
-    ctx.textInputPrompt = _.menu_str.entry_name_prompt
-    ctx.textInputValue = currentNameDisplay
-    ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
-    ctx.textInputEnableBelKey = allowBelKey and true or nil
-    ctx.textInputBelProfile = allowBelKey and belProfile or nil
-    ctx.textInputAllowBelAdd = allowBelKey and true or nil
-    ctx.textInputHidePipeBackslash = nil
-    ctx.textInputCallback = function(val)
+    local prompt = _.menu_str.entry_name_prompt
+    local initialValue = currentNameDisplay
+    local maxLen = _.config_parse.LIMIT_NAME
+    _.common.configureBelTextInput(ctx, {
+      allow = allowBelKey,
+      context = ctx.context,
+    })
+    local onSubmit = function(val)
       local nameText = tostring(val or "")
       if nameText:sub(1, 2) == "$!" then
         nameText = nameText:sub(3)
@@ -268,11 +250,18 @@ local function run(ctx)
       focusEntryByIdx(idx)
       ctx.state = "menu_entries"
     end
-    ctx.textInputReturnState = "menu_entries"
-    ctx.textInputGridSel = 1
-    ctx.textInputCursor = #ctx.textInputValue + 1
-    ctx.textInputScroll = 1
-    ctx.state = "text_input"
+    _.common.beginTextInput(ctx, {
+      titleIdMode = nil,
+      prompt = prompt,
+      value = initialValue,
+      maxLen = maxLen,
+      callback = onSubmit,
+      returnState = "menu_entries",
+      gridSel = 1,
+      cursor = #initialValue + 1,
+      scroll = 1,
+      state = "text_input",
+    })
     return true
   end
 
@@ -394,6 +383,7 @@ local function run(ctx)
     if canMoveEntries and ctx.menuEntryGrab and i == ctx.entrySel then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
+    label = formatBelForDisplay(label)
     local y = startY + (i - ctx.entryScroll - 1) * _.LINE_H
     local col = (i == ctx.entrySel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
     local effectiveDisabled = ent.disabled or ((not isSeparator) and (not hasActivePath))
@@ -562,9 +552,7 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    ctx.menuEntriesActionsOpen = true
-    ctx.menuEntriesActionsSel = ctx.menuEntriesActionsSel or 1
-    ctx.menuEntriesActionsScroll = ctx.menuEntriesActionsScroll or 0
+    _.common.openActionsMenu(ctx, "menuEntriesActionsOpen", "menuEntriesActionsSel", "menuEntriesActionsScroll")
   end
 
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then

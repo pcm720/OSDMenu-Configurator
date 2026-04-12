@@ -11,24 +11,6 @@ local function egsmStrings(_)
   return (_ and _.strings and _.strings.egsm) or {}
 end
 
-local function findHintLabel(items, padName)
-  local target = tostring(padName or ""):lower()
-  for i = 1, #(items or {}) do
-    local item = items[i]
-    if tostring(item and item.pad or ""):lower() == target then
-      local lbl = tostring(item and item.label or "")
-      if lbl ~= "" then return lbl end
-    end
-  end
-  return nil
-end
-
-local function resolveDoneLabel(_)
-  local fromTextInput = findHintLabel(_ and _.text_str and _.text_str.hint_items, "start")
-  if fromTextInput and fromTextInput ~= "" then return fromTextInput end
-  return "Done"
-end
-
 local function trimText(s)
   return tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")
 end
@@ -125,7 +107,7 @@ function arg_gsm_picker.run(ctx, opts)
   local videoIdx = normalizeVideoIdx(ctx[keys.videoKey])
   local compatIdx = normalizeCompatIdx(ctx[keys.compatKey])
   local hasVideo = (videoIdx ~= nil)
-  local selectableTotal = total
+  local selectableTotal = hasVideo and total or NUM_VIDEO_OPTS
   local sel = math.floor(tonumber(ctx[keys.selKey]) or 1)
   if sel < 1 then sel = 1 end
   if sel > selectableTotal then sel = selectableTotal end
@@ -154,7 +136,7 @@ function arg_gsm_picker.run(ctx, opts)
     local isActive = (videoIdx == (i + 1))
     label = fitLabel(ctx, (keys.rowStateKeyPrefix or "arg_gsm_picker_row_") .. "video_" .. tostring(i), label, isCur)
     local y = startY + row * _.LINE_H
-    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_COLOR) or (isActive and _.WHITE) or _.UNSELECTED_COLOR)
+    _.drawListRow(_.MARGIN_X + 20, y, isCur, label, (isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     if isActive then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
@@ -175,7 +157,7 @@ function arg_gsm_picker.run(ctx, opts)
     local isActive = (compatIdx == i)
     label = fitLabel(ctx, (keys.rowStateKeyPrefix or "arg_gsm_picker_row_") .. "compat_" .. tostring(i), label, isCur)
     local y = startY + row * _.LINE_H
-    local col = compatDim and _.DIM_COLOR or ((isCur and _.SELECTED_COLOR) or (isActive and _.WHITE) or _.UNSELECTED_COLOR)
+    local col = compatDim and _.DIM_COLOR or ((isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
     if isActive and hasVideo then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
@@ -183,15 +165,10 @@ function arg_gsm_picker.run(ctx, opts)
     row = row + 1
   end
 
-  local baseHints = s.value_edit_hint or {}
-  local crossLabel = findHintLabel(baseHints, "cross") or (_.menu_str.enter_label or "Select")
-  local cancelLabel = (_.menu_str.cancel_label or "Cancel")
-  local valueEditHints = {
-    { pad = "cross", label = crossLabel, row = 1 },
-    { pad = "start", label = resolveDoneLabel(_), row = 1 },
-    { pad = "circle", label = cancelLabel, row = 1 },
-  }
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, valueEditHints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7,
+    s.value_edit_hint or
+    { { pad = "cross", label = (_.menu_str.enter_label or "Select"), row = 1 }, { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 } },
+    nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if (_.padEffective & _.PAD_UP) ~= 0 then
     sel = sel - 1
@@ -219,23 +196,25 @@ function arg_gsm_picker.run(ctx, opts)
       return true
     end
 
-    if sel > NUM_VIDEO_OPTS and hasVideo then
+    if sel > NUM_VIDEO_OPTS then
+      if not hasVideo then
+        local fallbackVideo = normalizeVideoIdx(keys.lastVideoKey and ctx[keys.lastVideoKey] or nil) or 2
+        videoIdx = fallbackVideo
+        ctx[keys.videoKey] = videoIdx
+        hasVideo = true
+      end
       compatIdx = sel - NUM_VIDEO_OPTS
       ctx[keys.compatKey] = compatIdx
+      local arg = arg_gsm_picker.buildArg(_, ctx[keys.argKeyKey], videoIdx, compatIdx)
+      local editIdx = keys.editIdxKey and ctx[keys.editIdxKey] or nil
+      arg_gsm_picker.clearState(ctx, keys)
+      if arg and arg ~= "" and opts.onSubmit then
+        opts.onSubmit(arg, editIdx)
+      elseif opts.onCancel then
+        opts.onCancel(editIdx)
+      end
       return true
     end
-  end
-
-  if (_.padEffective & _.PAD_START) ~= 0 then
-    local arg = arg_gsm_picker.buildArg(_, ctx[keys.argKeyKey], videoIdx, compatIdx)
-    local editIdx = keys.editIdxKey and ctx[keys.editIdxKey] or nil
-    arg_gsm_picker.clearState(ctx, keys)
-    if arg and arg ~= "" and opts.onSubmit then
-      opts.onSubmit(arg, editIdx)
-    elseif opts.onCancel then
-      opts.onCancel(editIdx)
-    end
-    return true
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

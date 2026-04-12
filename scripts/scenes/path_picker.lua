@@ -200,7 +200,11 @@ local function isE1LockedPath(ctx, pathVal)
   return false
 end
 
-local function isBblE1ExclusivePath(pathVal)
+local function isBblE1ExclusivePath(ctx, pathVal)
+  local common = ctx and ctx._ and ctx._.common
+  if common and common.isBblSpecialExclusivePath then
+    return common.isBblSpecialExclusivePath(pathVal)
+  end
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
   return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
 end
@@ -297,7 +301,7 @@ local function getCachedBblPickerSelectionStats(ctx, keyId, slot, maxEntries)
     local first = slots[1]
     local firstPv = first and first.path or nil
     if first and first.hasValue then
-      stats.firstExclusive = (isE1LockedPath(ctx, firstPv) or isBblE1ExclusivePath(firstPv)) and true or false
+      stats.firstExclusive = (isE1LockedPath(ctx, firstPv) or isBblE1ExclusivePath(ctx, firstPv)) and true or false
       stats.firstCdrom = (type(firstPv) == "string" and firstPv:lower() == "cdrom") and true or false
     end
   end
@@ -374,7 +378,7 @@ local function isFmcbLaunchE1LockedPath(ctx, pathVal)
 end
 
 local function isE1RestrictedPathForContext(ctx, pathVal)
-  if isBblE1ExclusivePath(pathVal) then return true end
+  if isBblE1ExclusivePath(ctx, pathVal) then return true end
   if isFmcbEntryE1LockedPath(ctx, pathVal) then return true end
   if isFmcbLaunchE1LockedPath(ctx, pathVal) then return true end
   return false
@@ -572,7 +576,7 @@ local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
     showExclusivePathWarning(ctx, pathVal)
     return false
   end
-  if targetIndex and isBblE1ExclusivePath(pathVal) then
+  if targetIndex and isBblE1ExclusivePath(ctx, pathVal) then
     if stats.count == 0 then return true end
     showExclusivePathWarning(ctx, pathVal)
     return false
@@ -1274,22 +1278,27 @@ local function run(ctx)
           local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
           if includeManualEntry and selectedRawIdx == 1 then
             local prefill = getManualPathPrefillValue(ctx)
-            ctx.textInputTitleIdMode = nil
-            ctx.textInputPrompt = _.path_str.enter_path_prompt
-            ctx.textInputValue = prefill
-            ctx.textInputMaxLen = 79
-            ctx.textInputEnableBelKey = nil
-            ctx.textInputBelProfile = nil
-            ctx.textInputAllowBelAdd = nil
-            ctx.textInputHidePipeBackslash = true
-            ctx.textInputCallback = function(val)
+            local prompt = _.path_str.enter_path_prompt
+            local initialValue = prefill
+            _.common.configureBelTextInput(ctx, {
+              allow = false,
+              hidePipeBackslash = true,
+            })
+            local onSubmit = function(val)
               applyManualPath(ctx, val)
             end
-            ctx.textInputReturnState = "path_picker"
-            ctx.textInputGridSel = 1
-            ctx.textInputCursor = #ctx.textInputValue + 1
-            ctx.textInputScroll = 1
-            ctx.state = "text_input"
+            _.common.beginTextInput(ctx, {
+              titleIdMode = nil,
+              prompt = prompt,
+              value = initialValue,
+              maxLen = 79,
+              callback = onSubmit,
+              returnState = "path_picker",
+              gridSel = 1,
+              cursor = #initialValue + 1,
+              scroll = 1,
+              state = "text_input",
+            })
           else
             if not isSelectableDisplay(ctx.pathPickerSel) then
               -- Unselectable helper/inactive rows ignore Cross.
@@ -1638,9 +1647,7 @@ local function run(ctx)
     end
 
     if canCreateConfigIni and (_.padEffective & _.PAD_SQUARE) ~= 0 then
-      ctx.pathBrowseActionsOpen = true
-      ctx.pathBrowseActionsSel = ctx.pathBrowseActionsSel or 1
-      ctx.pathBrowseActionsScroll = ctx.pathBrowseActionsScroll or 0
+      _.common.openActionsMenu(ctx, "pathBrowseActionsOpen", "pathBrowseActionsSel", "pathBrowseActionsScroll")
       return
     end
     if #show > 0 then
