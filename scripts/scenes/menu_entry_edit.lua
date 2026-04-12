@@ -4,9 +4,6 @@ local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function run(ctx)
   local _ = ctx._
-  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
-    return tostring(text or ""):gsub(string.char(7), "\226\150\161")
-  end
   if not ctx.lines or not ctx.entryIdx then
     ctx.state = "menu_entries"; ctx.entryIdx = nil; return
   end
@@ -118,7 +115,7 @@ local function run(ctx)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.entry_index .. ctx.entryIdx, _.WHITE)
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(24), 0.8,
     _.menu_str.name .. (nameDisplay == "" and (_.common_str.name_not_defined or _.common_str.empty) or
-      formatBelForDisplay(nameDisplay):sub(1, 40)), _.DIM_COLOR)
+      nameDisplay:sub(1, 40)), _.DIM_COLOR)
   if not isFmcbEntry then
     _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(44), 0.8, summaryStr, _.DIM_COLOR)
   end
@@ -156,7 +153,6 @@ local function run(ctx)
     if row.kind == "path" and ctx.fmcbEntryPathGrab and i == ctx.entryEditSub then
       label = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. label
     end
-    label = formatBelForDisplay(label)
     if _.common.fitListRowText then
       label = _.common.fitListRowText(ctx, "menu_entry_edit_row_" .. tostring(row.id or i), _.font, label, maxLabelW,
         _.FONT_SCALE, isSelected)
@@ -384,6 +380,28 @@ local function run(ctx)
     end
   end
 
+  local function saveAndStay()
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    local path = ctx.currentPath or (locations and locations[1])
+    if path and path ~= "" then
+      ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+      local parentDir = path:match("^(.+)/[^/]+$")
+      local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+      if ok then
+        ctx.currentPath = path
+        ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+      else
+        ctx.saveSplash = {
+          kind = "failed",
+          detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+          framesLeft = 120
+        }
+      end
+    else
+      ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+    end
+  end
   if (_.padEffective & _.PAD_UP) ~= 0 then
     if isFmcbEntry and ctx.fmcbEntryPathGrab then
       swapSelectedPath(-1)
@@ -406,7 +424,9 @@ local function run(ctx)
     local row = subRows[ctx.entryEditSub]
     if row.kind == "name" then
       local allowBelKey = (ctx.fileType == "freemcboot_cnf" or ctx.fileType == "osdmenu_cnf")
-      local prompt = _.menu_str.entry_name_prompt
+      local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
+      ctx.textInputTitleIdMode = nil
+      ctx.textInputPrompt = _.menu_str.entry_name_prompt
       local currentNameRaw = _.config_parse.getMenuEntryName(ctx.lines, ctx.entryIdx) or ""
       local editingSeparator = (not isFmcbEntry) and _.config_parse.isMenuEntrySeparatorName and
           _.config_parse.isMenuEntrySeparatorName(currentNameRaw)
@@ -415,13 +435,13 @@ local function run(ctx)
         currentNameDisplay = _.config_parse.getMenuEntrySeparatorText(currentNameRaw) or ""
       end
       if currentNameDisplay == _.menu_str.add_entry_label then currentNameDisplay = "" end
-      local initialValue = currentNameDisplay
-      local maxLen = _.config_parse.LIMIT_NAME
-      _.common.configureBelTextInput(ctx, {
-        allow = allowBelKey,
-        context = ctx.context,
-      })
-      local onSubmit = function(val)
+      ctx.textInputValue = currentNameDisplay
+      ctx.textInputMaxLen = _.config_parse.LIMIT_NAME
+      ctx.textInputEnableBelKey = allowBelKey and true or nil
+      ctx.textInputBelProfile = allowBelKey and belProfile or nil
+      ctx.textInputAllowBelAdd = allowBelKey and true or nil
+      ctx.textInputHidePipeBackslash = nil
+      ctx.textInputCallback = function(val)
         local saveVal = val or ""
         if editingSeparator and saveVal:sub(1, 2) ~= "$!" then
           saveVal = "$!" .. saveVal
@@ -437,18 +457,11 @@ local function run(ctx)
         ctx.configModified = true
         ctx.state = "menu_entry_edit"
       end
-      _.common.beginTextInput(ctx, {
-        titleIdMode = nil,
-        prompt = prompt,
-        value = initialValue,
-        maxLen = maxLen,
-        callback = onSubmit,
-        returnState = "menu_entry_edit",
-        gridSel = 1,
-        cursor = #initialValue + 1,
-        scroll = 1,
-        state = "text_input",
-      })
+      ctx.textInputReturnState = "menu_entry_edit"
+      ctx.textInputGridSel = 1
+      ctx.textInputCursor = #ctx.textInputValue + 1
+      ctx.textInputScroll = 1
+      ctx.state = "text_input"
     elseif row.kind == "path" and isFmcbEntry then
       if canOperateFmcbPathRow(row) then
         if row.hasValue then
@@ -488,7 +501,9 @@ local function run(ctx)
   if isFmcbEntry and (_.padEffective & _.PAD_SQUARE) ~= 0 then
     local row = subRows[ctx.entryEditSub]
     if row and row.kind == "path" and canOpenFmcbPathActions(row) then
-      _.common.openActionsMenu(ctx, "fmcbEntryPathActionsOpen", "fmcbEntryPathActionsSel", "fmcbEntryPathActionsScroll")
+      ctx.fmcbEntryPathActionsOpen = true
+      ctx.fmcbEntryPathActionsSel = ctx.fmcbEntryPathActionsSel or 1
+      ctx.fmcbEntryPathActionsScroll = ctx.fmcbEntryPathActionsScroll or 0
     end
   end
   if isFmcbEntry and (not ctx.fmcbEntryPathGrab) and (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
@@ -498,7 +513,7 @@ local function run(ctx)
     end
   end
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    _.common.saveCurrentConfig(ctx)
+    saveAndStay()
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     if isFmcbEntry and ctx.fmcbEntryPathGrab then

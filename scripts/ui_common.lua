@@ -66,12 +66,6 @@ common.DESC_TO_HINT_MARGIN         = 20
 common.DESC_Y_BOTTOM               = common.HINT_Y - common.PAD_HINT_TOTAL_H - common.DESC_TO_HINT_MARGIN
 common.LIST_BOTTOM_CLEAR_ROWS      = 1 -- keep at least one full blank selectable row above bottom hints/description area
 
--- Scene transitions
-common.SCENE_TRANSITION_DEFAULT_TYPE = "cut"
-common.SCENE_TRANSITION_DEFAULT_FRAMES = 10
-common.SCENE_TRANSITION_MIN_FRAMES = 1
-common.SCENE_TRANSITION_MAX_FRAMES = 60
-
 -- Hint-row geometry tuning (single-row 5-slot layout).
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_GRID_EXTRA_W       = 60
@@ -80,120 +74,8 @@ common.PAD_HINT_GRID_X_SHIFT       = -55
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
 common.PAD_HINT_UNUSED_ALPHA       = 13 -- ~5% opaque = ~95% transparent
-common.PAD_HINT_ICON_PRESS_SHRINK_TOTAL = 1.0
-common.PAD_HINT_ICON_DARKEN_MAX = 0.24
-common.PAD_HINT_ICON_PRESS_LERP_IN = 0.55
-common.PAD_HINT_ICON_PRESS_LERP_OUT = 0.35
 local padIconCache                 = {}
 local hintFtFontCache              = {}
-local function normalize3(xv, yv, zv)
-  local l = math.sqrt((xv * xv) + (yv * yv) + (zv * zv))
-  if l <= 0.000001 then return 0, 0, 1 end
-  return xv / l, yv / l, zv / l
-end
-
-local function cross3(ax, ay, az, bx, by, bz)
-  return (ay * bz) - (az * by), (az * bx) - (ax * bz), (ax * by) - (ay * bx)
-end
-
-local function dot3(ax, ay, az, bx, by, bz)
-  return (ax * bx) + (ay * by) + (az * bz)
-end
-
-local function getSceneProjectiveState(runtime)
-  if type(runtime) ~= "table" or runtime.sceneDrawProjective ~= true then
-    return nil
-  end
-
-  local w = tonumber(runtime.currentSceneWidth) or common.DEFAULT_W
-  local h = tonumber(runtime.currentSceneHeight) or common.DEFAULT_H
-  local cx = tonumber(runtime.sceneDrawCenterX) or (w / 2)
-  local cy = tonumber(runtime.sceneDrawCenterY) or (h / 2)
-  local yaw = tonumber(runtime.sceneDrawYawRad) or 0
-  local pitch = tonumber(runtime.sceneDrawPitchRad) or 0
-  local radius = tonumber(runtime.sceneDrawCameraRadius) or 1.0
-  local focal = tonumber(runtime.sceneDrawCameraFocal) or radius
-  local minDen = tonumber(runtime.sceneDrawCameraMinDen) or 0.12
-
-  if radius < 0.10 then radius = 0.10 end
-  if focal < 0.10 then focal = 0.10 end
-  if minDen < 0.05 then minDen = 0.05 end
-
-  local cache = runtime._sceneProjectiveStateCache
-  if type(cache) == "table" and
-      cache.w == w and cache.h == h and
-      cache.cx == cx and cache.cy == cy and
-      cache.yaw == yaw and cache.pitch == pitch and
-      cache.radius == radius and cache.focal == focal and cache.minDen == minDen then
-    return cache
-  end
-
-  local cyaw, syaw = math.cos(yaw), math.sin(yaw)
-  local cpitch, spitch = math.cos(pitch), math.sin(pitch)
-  local camX = radius * syaw * cpitch
-  local camY = radius * spitch
-  local camZ = radius * cyaw * cpitch
-  local fwdX, fwdY, fwdZ = normalize3(-syaw * cpitch, -spitch, -cyaw * cpitch)
-  local rightX, rightY, rightZ = normalize3(cyaw, 0, -syaw)
-  local upX, upY, upZ = cross3(rightX, rightY, rightZ, fwdX, fwdY, fwdZ)
-  upX, upY, upZ = normalize3(upX, upY, upZ)
-
-  cache = {
-    w = w,
-    h = h,
-    cx = cx,
-    cy = cy,
-    halfW = math.max(1, (w * 0.5)),
-    halfH = math.max(1, (h * 0.5)),
-    yaw = yaw,
-    pitch = pitch,
-    radius = radius,
-    focal = focal,
-    minDen = minDen,
-    camX = camX,
-    camY = camY,
-    camZ = camZ,
-    rightX = rightX,
-    rightY = rightY,
-    rightZ = rightZ,
-    upX = upX,
-    upY = upY,
-    upZ = upZ,
-    fwdX = fwdX,
-    fwdY = fwdY,
-    fwdZ = fwdZ,
-  }
-  runtime._sceneProjectiveStateCache = cache
-  return cache
-end
-
-function common.getSceneProjectiveState()
-  local runtime = _G and _G.CONFIG_UI
-  return getSceneProjectiveState(runtime)
-end
-
-function common.projectScenePoint(px, py)
-  local runtime = _G and _G.CONFIG_UI
-  local st = getSceneProjectiveState(runtime)
-  if not st then return nil end
-
-  local nx = ((tonumber(px) or 0) - st.cx) / st.halfW
-  local ny = ((tonumber(py) or 0) - st.cy) / st.halfH
-  local pX, pY, pZ = nx, ny, 0
-  local vX = pX - st.camX
-  local vY = pY - st.camY
-  local vZ = pZ - st.camZ
-  local xCam = dot3(vX, vY, vZ, st.rightX, st.rightY, st.rightZ)
-  local yCam = dot3(vX, vY, vZ, st.upX, st.upY, st.upZ)
-  local zCam = dot3(vX, vY, vZ, st.fwdX, st.fwdY, st.fwdZ)
-  if zCam < st.minDen then zCam = st.minDen end
-  local p = st.focal / zCam
-
-  local outX = st.cx + (xCam * st.halfW * p)
-  local outY = st.cy + (yCam * st.halfH * p)
-  return outX, outY
-end
-
 local function canOpenPath(path)
   if not (System and System.openFile and System.closeFile) then
     return true
@@ -204,99 +86,6 @@ local function canOpenPath(path)
     return true
   end
   return false
-end
-
-local function clampHintUnit(v)
-  local n = tonumber(v) or 0
-  if n < 0 then return 0 end
-  if n > 1 then return 1 end
-  return n
-end
-
-local function normalizeHintPadName(name)
-  return tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
-end
-
-local function getHintPadMask(name)
-  local key = normalizeHintPadName(name)
-  if key == "cross" then return common.PAD_CROSS or 0 end
-  if key == "circle" then return common.PAD_CIRCLE or 0 end
-  if key == "square" then return common.PAD_SQUARE or 0 end
-  if key == "triangle" then return common.PAD_TRIANGLE or 0 end
-  if key == "l1" then return common.PAD_L1 or 0 end
-  if key == "r1" then return common.PAD_R1 or 0 end
-  if key == "l2" then return common.PAD_L2 or 0 end
-  if key == "r2" then return common.PAD_R2 or 0 end
-  if key == "l3" then return common.PAD_L3 or 0 end
-  if key == "r3" then return common.PAD_R3 or 0 end
-  if key == "start" then return common.PAD_START or 0 end
-  if key == "select" then return common.PAD_SELECT or 0 end
-  if key == "up" then return common.PAD_UP or 0 end
-  if key == "down" then return common.PAD_DOWN or 0 end
-  if key == "left" then return common.PAD_LEFT or 0 end
-  if key == "right" then return common.PAD_RIGHT or 0 end
-  return 0
-end
-
-local function updateGlobalHintPadPressAnims(runtime)
-  if type(runtime) ~= "table" then return nil end
-
-  local frameCounter = math.max(0, math.floor(tonumber(runtime.uiFrameCounter) or 0))
-  local states = runtime.hintPadPressAnims
-  if runtime.hintPadPressAnimsFrame == frameCounter and type(states) == "table" then
-    return states
-  end
-  if type(states) ~= "table" then
-    states = {}
-  end
-
-  local rawPad = 0
-  if type(runtime.currentRawPad) == "number" then
-    rawPad = runtime.currentRawPad
-  elseif Pads and Pads.get then
-    local ok, v = pcall(Pads.get, 0)
-    if ok and type(v) == "number" then
-      rawPad = v
-    end
-  end
-
-  local pressIn = clampHintUnit(common.PAD_HINT_ICON_PRESS_LERP_IN or 0.55)
-  local pressOut = clampHintUnit(common.PAD_HINT_ICON_PRESS_LERP_OUT or 0.35)
-  local animatedPads = {
-    "cross", "circle", "square", "triangle",
-    "l1", "r1", "l2", "r2", "l3", "r3",
-    "start", "select", "up", "down", "left", "right"
-  }
-
-  for i = 1, #animatedPads do
-    local padName = animatedPads[i]
-    local mask = getHintPadMask(padName)
-    local held = (mask ~= 0) and ((rawPad & mask) ~= 0)
-    local target = held and 1 or 0
-    local current = clampHintUnit(states[padName])
-    local speed = held and pressIn or pressOut
-    local nextValue = current + ((target - current) * speed)
-    if math.abs(nextValue - target) <= 0.001 then nextValue = target end
-    if nextValue <= 0.001 and target == 0 then
-      states[padName] = nil
-    else
-      states[padName] = clampHintUnit(nextValue)
-    end
-  end
-
-  -- Keep an empty table instead of nil so repeated calls in the same frame
-  -- can early-return without re-running the whole animation update.
-  runtime.hintPadPressAnims = states
-  runtime.hintPadPressAnimsFrame = frameCounter
-  return states
-end
-
-function common.getHintPadPressAmount(padName)
-  local runtime = _G and _G.CONFIG_UI
-  local states = updateGlobalHintPadPressAnims(runtime)
-  if type(states) ~= "table" then return 0 end
-  local key = normalizeHintPadName(padName)
-  return clampHintUnit(states[key])
 end
 local padIconNames                 = {
   up = "up",
@@ -392,193 +181,6 @@ function common.makeDebugLogger(flagName, prefix)
   end
 end
 
-function common.findHintLabel(items, pad, fallback)
-  local target = tostring(pad or ""):lower()
-  for i = 1, #(items or {}) do
-    local item = items[i]
-    local itemPad = tostring(item and item.pad or ""):lower()
-    local label = tostring(item and item.label or "")
-    if itemPad == target and label ~= "" then
-      return label
-    end
-  end
-  return fallback
-end
-
-function common.withStartHintVisibility(items, showStart)
-  if showStart then return items end
-  local out = {}
-  for i = 1, #(items or {}) do
-    local item = items[i]
-    if item and item.pad ~= "start" then
-      out[#out + 1] = item
-    else
-      out[#out + 1] = { pad = "", label = "", row = item and item.row or 1 }
-    end
-  end
-  return out
-end
-
-function common.bootKeyToPadName(key)
-  if key == "boot_start" then return "start" end
-  if key == "boot_triangle" then return "triangle" end
-  if key == "boot_circle" then return "circle" end
-  if key == "boot_cross" then return "cross" end
-  if key == "boot_square" then return "square" end
-  return nil
-end
-
-function common.isBblContext(context)
-  return context == "ps2bbl" or context == "psxbbl"
-end
-
-function common.isOsdConfigFileType(fileType)
-  return fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf"
-end
-
-function common.getNextStateAfterMcSelection(context)
-  if common.isBblContext(context) then return "select_config" end
-  if context == "osdmenu" or context == "hosdmenu" then return "select_config" end
-  return "open"
-end
-
-function common.getOpenParentState(context, fileType)
-  if common.isBblContext(context) then
-    return "select_config"
-  end
-  if (context == "freemcboot" or context == "freehddboot") and fileType == "freemcboot_cnf" then
-    return "select_config"
-  end
-  if (context == "osdmenu" or context == "hosdmenu") and common.isOsdConfigFileType(fileType) then
-    return "select_config"
-  end
-  return "main"
-end
-
-function common.getEditorBackState(context, fileType, getPresentMcSlots)
-  if common.isBblContext(context) then
-    return "select_config"
-  end
-  if (context == "freemcboot" or context == "freehddboot") and fileType == "freemcboot_cnf" then
-    return "select_config"
-  end
-  if context == "hosdmenu" and common.isOsdConfigFileType(fileType) then
-    return "select_config"
-  end
-  if context == "osdmenu" and common.isOsdConfigFileType(fileType) then
-    local slots = (type(getPresentMcSlots) == "function" and getPresentMcSlots()) or {}
-    if type(slots) == "table" and #slots > 1 then
-      return "choose_mc"
-    end
-    return "main"
-  end
-  return "main"
-end
-
-function common.configureBelTextInput(ctx, opts)
-  if not ctx then return end
-  opts = opts or {}
-  local allowBel = (opts.allow == true)
-  local profile = opts.profile
-  if profile == nil then
-    local context = tostring(opts.context or ctx.context or ""):lower()
-    profile = ((context == "freehddboot") or (context == "hosdmenu")) and "hddosd" or "ps2rom"
-  end
-
-  ctx.textInputEnableBelKey = allowBel and true or nil
-  ctx.textInputBelProfile = allowBel and tostring(profile or "ps2rom") or nil
-  ctx.textInputAllowBelAdd = allowBel and true or nil
-
-  if opts.hidePipeBackslash ~= nil then
-    ctx.textInputHidePipeBackslash = (opts.hidePipeBackslash == true) and true or nil
-  else
-    ctx.textInputHidePipeBackslash = nil
-  end
-end
-
-function common.formatBelForDisplay(text)
-  local s = tostring(text or "")
-  if s == "" then return s end
-  return s:gsub(string.char(7), "\226\150\161")
-end
-
-function common.drawPadTitle(_, padName, titleText, opts)
-  if type(_) ~= "table" then return end
-  opts = opts or {}
-  local x = tonumber(opts.x) or _.MARGIN_X or 0
-  local y = tonumber(opts.y) or _.MARGIN_Y or 0
-  local lineH = tonumber(opts.lineH) or _.LINE_H or 26
-  local gap = tonumber(opts.gap) or 8
-  local scale = tonumber(opts.scale) or 1
-  local color = opts.color or _.WHITE
-  local label = tostring(titleText or "")
-
-  local icon = padName and common.getPadIcon and common.getPadIcon(padName) or nil
-  local baseIconW = common.PAD_ICON_W or 26
-  local baseIconH = common.PAD_ICON_H or 26
-  local textH = common.FT_PIXEL_H or 18
-  local iconH = math.min(baseIconH, textH)
-  local iconW = math.max(1, math.floor((baseIconW * iconH) / baseIconH + 0.5))
-  local iconY = y + math.floor((lineH - iconH) / 2)
-
-  if icon then
-    if _.Graphics and _.Graphics.drawScaleImage then
-      _.Graphics.drawScaleImage(icon, x, iconY, iconW, iconH)
-    elseif _.Graphics and _.Graphics.drawImage then
-      _.Graphics.drawImage(icon, x, iconY)
-    end
-  end
-
-  local textX = x + iconW + gap
-  if _.drawText then
-    _.drawText(_.font, _.drawMode, textX, y, scale, label, color)
-  end
-end
-
-function common.drawBootTitle(_, bootKey, titleLabel)
-  local padName = common.bootKeyToPadName(bootKey)
-  common.drawPadTitle(_, padName, "- " .. tostring(titleLabel or ""))
-end
-
-function common.drawHotkeyTitle(_, keyId, suffix)
-  local tail = tostring(suffix or "")
-  if keyId == "AUTO" then
-    if _ and _.drawText then
-      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, "AUTOBOOT" .. tail, _.WHITE)
-    end
-    return
-  end
-  common.drawPadTitle(_, keyId, tail)
-end
-
-function common.formatDisplayPathWithCommands(_, pathVal)
-  local raw = tostring(pathVal or "")
-  local up = raw:gsub("^%s+", ""):gsub("%s+$", ""):upper()
-  local p = (_ and _.path_str) or {}
-  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
-  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
-  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
-  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
-  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
-  if common.normalizePathForDisplay then
-    return common.normalizePathForDisplay(raw)
-  end
-  return raw
-end
-
-function common.trimPathValue(pathVal)
-  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-function common.pathTokenUpper(pathVal)
-  return common.trimPathValue(pathVal):upper()
-end
-
-function common.isBblSpecialExclusivePath(pathVal)
-  local up = common.pathTokenUpper(pathVal)
-  return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
-end
-
 -- Canonicalize HDD APA/PFS display paths:
 -- - hdd0:PART:pfs:foo   -> hdd0:PART:pfs:/foo
 -- - hdd0:/PART/dir/file -> hdd0:PART:pfs:/dir/file
@@ -651,120 +253,12 @@ function common.resolvePathForAccess(path)
   return p
 end
 
-function common.mapPartitionPathToMountedPfs(path)
-  if not path then return nil, nil end
-  local raw = tostring(path):gsub("\\", "/")
-  local part, rest = raw:match("^(hdd%d:[^:]+):pfs:(.*)$")
-  if not part then
-    -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
-    part, rest = raw:match("^(hdd%d:[^/:]+)(/.*)$")
-  end
-  if not part then return nil, nil end
-  if not rest or rest == "" then rest = "/" end
-  if rest:sub(1, 1) ~= "/" then rest = "/" .. rest end
-  return part, "pfs0:" .. rest
-end
-
-function common.beginPathAccess(path, opts)
-  opts = opts or {}
-  local resolvedPath = common.resolvePathForAccess(path)
-  local loadModule = (opts.loadModule ~= false)
-  local mountPartition = (opts.mountPartition ~= false)
-
-  if loadModule then
-    local moduleType = common.getPathModuleType and common.getPathModuleType(resolvedPath)
-    if moduleType and System and System.loadModules then
-      pcall(System.loadModules, moduleType)
-    end
-  end
-
-  if not mountPartition then
-    return nil, resolvedPath, nil
-  end
-
-  local part, mapped = common.mapPartitionPathToMountedPfs(resolvedPath)
-  if part and mapped then
-    local mounted = nil
-    if System and System.fileXioMount then
-      pcall(System.fileXioMount, "pfs0:", part)
-      mounted = "pfs0:"
-    end
-    return mounted, mapped, part
-  end
-
-  local mounted = nil
-  if resolvedPath and resolvedPath:match("^pfs0:/") and System and System.fileXioMount then
-    pcall(System.fileXioMount, "pfs0:", "hdd0:__sysconf")
-    mounted = "pfs0:"
-  end
-  return mounted, resolvedPath, nil
-end
-
-function common.endPathAccess(mounted)
-  if mounted and System and System.fileXioUmount then
-    pcall(System.fileXioUmount, mounted)
-  end
-end
-
-local function getRuntimeFtPixelBase(opts)
-  opts = opts or {}
-  local runtime = _G and _G.CONFIG_UI
-  if opts.lockSceneScale == true then
-    local uiScale = tonumber(runtime and runtime.currentUiScale) or 1
-    if uiScale <= 0 then uiScale = 1 end
-    return math.max(8, math.floor(((tonumber(common.FT_PIXEL_H) or 18) * uiScale) + 0.5))
-  end
-  local runtimePx = (runtime and tonumber(runtime.currentFtPixelH)) or 0
+local function getRuntimeFtPixelBase()
+  local runtimePx = (_G.CONFIG_UI and tonumber(_G.CONFIG_UI.currentFtPixelH)) or 0
   if runtimePx > 0 then
     return runtimePx
   end
   return tonumber(common.FT_PIXEL_H) or 18
-end
-
-function common.applyFtPixelSize(ctx, font, drawMode, optsOrUiScale, usePcall)
-  local opts = (type(optsOrUiScale) == "table") and optsOrUiScale or nil
-  local runtime = _G and _G.CONFIG_UI
-  if not (ctx and drawMode == "ftPrint" and font and Font and Font.ftSetPixelSize) then
-    if runtime then
-      runtime.currentFtPixelH = nil
-    end
-    return nil
-  end
-
-  local uiScale = tonumber((opts and opts.uiScale) or optsOrUiScale) or tonumber(ctx.uiScale) or 1
-  if uiScale <= 0 then uiScale = 1 end
-  local usePcallSafe = ((opts and opts.usePcall) ~= false) and (usePcall ~= false)
-  local runtimeDrawScale = tonumber(runtime and runtime.sceneDrawScale) or 1
-  if runtime and runtime.sceneDrawProjective == true then
-    local trType = tostring(runtime.sceneTransitionAnimType or "")
-    if trType == "flip_horizontal" then
-      -- Keep glyph pixel height stable during horizontal flip; horizontal
-      -- foreshortening is handled in the projected per-glyph draw path.
-      runtimeDrawScale = 1
-    end
-  end
-  if runtimeDrawScale <= 0 then runtimeDrawScale = 1 end
-  if runtimeDrawScale < 0.25 then runtimeDrawScale = 0.25 end
-  if runtimeDrawScale > 4 then runtimeDrawScale = 4 end
-
-  local minFtPx = 10
-  if runtime and runtime.sceneDrawProjective == true then
-    minFtPx = 2
-  end
-
-  local wantPx = math.max(minFtPx, math.floor((common.FT_PIXEL_H or 18) * uiScale * runtimeDrawScale + 0.5))
-  if ctx._ftPixelSizeApplied ~= wantPx then
-    if usePcallSafe then
-      pcall(Font.ftSetPixelSize, font, 0, wantPx)
-    else
-      Font.ftSetPixelSize(font, 0, wantPx)
-    end
-    ctx._ftPixelSizeApplied = wantPx
-  end
-  if runtime then
-    runtime.currentFtPixelH = wantPx
-  end
-  return wantPx
 end
 
 local function loadFtFontWithFallback()
@@ -787,13 +281,11 @@ local function loadFtFontWithFallback()
   return nil
 end
 
-local function getHintFtFont(scaleFactor, opts)
+local function getHintFtFont(scaleFactor)
   local sf = tonumber(scaleFactor) or 1
   if sf <= 0 then sf = 1 end
-  opts = opts or {}
-  local basePx = getRuntimeFtPixelBase(opts)
-  local lockSceneScale = opts.lockSceneScale == true
-  local key = string.format("%d@%.3f@%d", math.floor(basePx + 0.5), sf, lockSceneScale and 1 or 0)
+  local basePx = getRuntimeFtPixelBase()
+  local key = string.format("%d@%.3f", math.floor(basePx + 0.5), sf)
   if hintFtFontCache[key] then return hintFtFontCache[key] end
   local f = loadFtFontWithFallback()
   if f and f >= 0 then
@@ -807,10 +299,10 @@ local function getHintFtFont(scaleFactor, opts)
   return nil
 end
 
-function common.getHintFont(fallbackFont, drawMode, textScale, opts)
+function common.getHintFont(fallbackFont, drawMode, textScale)
   local hintFont = fallbackFont
   if drawMode == "ftPrint" then
-    local f = getHintFtFont(textScale or 1, opts)
+    local f = getHintFtFont(textScale or 1)
     if f then hintFont = f end
   end
   return hintFont
@@ -822,200 +314,17 @@ function common.getHintLabelDrawScale(baseScale)
   return bs * ts
 end
 
-function common.getHintLabelTextHeight(opts)
+function common.getHintLabelTextHeight()
   local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
-  local basePx = getRuntimeFtPixelBase(opts)
+  local basePx = getRuntimeFtPixelBase()
   return math.max(10, math.floor(basePx * ts + 0.5))
-end
-
-function common.getHintRowTransitionInfo(runtime)
-  local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
-  local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
-  -- Use configured scene-transition frames for hint fades so button/helper
-  -- transitions keep consistent timing across transition styles.
-  local transitionFramesValue = tonumber(runtime and runtime.sceneTransitionFrames)
-  if not transitionFramesValue or transitionFramesValue <= 0 then
-    transitionFramesValue = tonumber(runtime and runtime.sceneTransitionAnimFrames)
-  end
-  local transitionFrames = math.max(0, math.floor(transitionFramesValue or 0))
-  local instantSwitch = (not transitionActive) or transitionType == "cut" or transitionFrames <= 1
-  return {
-    active = transitionActive,
-    type = transitionType,
-    frames = transitionFrames,
-    instant = instantSwitch,
-  }
-end
-
-function common.drawHintSlotsWithTransition(runtime, opts)
-  if type(opts) ~= "table" then return false end
-  local rowSlots = opts.rowSlots
-  local cloneSlots = opts.cloneSlots
-  local slotsEqual = opts.slotsEqual
-  local drawRow = opts.drawRow
-  local drawBlendedRows = opts.drawBlendedRows
-  if type(rowSlots) ~= "table" or type(cloneSlots) ~= "function" or type(slotsEqual) ~= "function" or
-      type(drawRow) ~= "function" or type(drawBlendedRows) ~= "function" then
-    return false
-  end
-
-  if type(runtime) ~= "table" then
-    drawRow(rowSlots)
-    return true
-  end
-
-  local hintKey = tostring(opts.hintKey or "__hint_row__")
-  local stableField = tostring(opts.stableField or "hintRowStableSlots")
-  local fadeField = tostring(opts.fadeField or "hintRowFadeStates")
-  local transitionInfo = common.getHintRowTransitionInfo and common.getHintRowTransitionInfo(runtime) or
-      { instant = true, frames = 0 }
-
-  if transitionInfo.instant then
-    if type(runtime[stableField]) ~= "table" then
-      runtime[stableField] = {}
-    end
-    local stableSlots = runtime[stableField][hintKey]
-    if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
-      runtime[stableField][hintKey] = cloneSlots(rowSlots)
-    end
-    if type(runtime[fadeField]) == "table" then
-      runtime[fadeField][hintKey] = nil
-    end
-    drawRow(rowSlots)
-    return true
-  end
-
-  if type(runtime[stableField]) ~= "table" then
-    runtime[stableField] = {}
-  end
-  if type(runtime[fadeField]) ~= "table" then
-    runtime[fadeField] = {}
-  end
-
-  local frameCounter = math.floor(tonumber(runtime.uiFrameCounter) or 0)
-  local stableSlots = runtime[stableField][hintKey]
-  local state = runtime[fadeField][hintKey] or {}
-  runtime[fadeField][hintKey] = state
-
-  if type(state.fromSlots) ~= "table" then
-    state.fromSlots = cloneSlots(stableSlots or rowSlots)
-  end
-  if type(state.toSlots) ~= "table" then
-    state.toSlots = cloneSlots(state.fromSlots)
-  end
-
-  local changed = not slotsEqual(state.toSlots, rowSlots)
-  if changed then
-    local hasSource = type(stableSlots) == "table" and #stableSlots > 0
-    state.fromSlots = cloneSlots(hasSource and stableSlots or state.toSlots)
-    state.toSlots = cloneSlots(rowSlots)
-    state.frame = 0
-    state.lastAdvanceFrame = nil
-    state.frames = math.max(1, transitionInfo.frames)
-  end
-
-  if slotsEqual(state.fromSlots, state.toSlots) then
-    local stableSlots = runtime[stableField][hintKey]
-    if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
-      runtime[stableField][hintKey] = cloneSlots(rowSlots)
-    end
-    drawRow(rowSlots)
-    return true
-  end
-
-  local frames = math.max(1, math.floor(tonumber(state.frames) or 1))
-  local frame = math.max(0, math.floor(tonumber(state.frame) or 0))
-  if frame > frames then frame = frames end
-  local progress = frame / frames
-  if progress < 0 then progress = 0 end
-  if progress > 1 then progress = 1 end
-
-  drawBlendedRows(state.fromSlots, state.toSlots, progress)
-
-  if state.lastAdvanceFrame ~= frameCounter then
-    frame = frame + 1
-    if frame > frames then frame = frames end
-    state.frame = frame
-    state.lastAdvanceFrame = frameCounter
-  end
-
-  if frame >= frames then
-    state.fromSlots = cloneSlots(state.toSlots)
-    runtime[stableField][hintKey] = cloneSlots(state.toSlots)
-  end
-  return true
 end
 
 -- Draw a hint line: list of { pad = "cross", label = "Select" }.
 -- Single-row 5-slot layout (top row removed in new UX).
 -- totalWidth: optional. y = bottom of hint area.
-function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth, opts)
+function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth)
   if not color then color = common.DIM_COLOR end
-  local runtime = _G and _G.CONFIG_UI
-  local function clamp01(v)
-    local n = tonumber(v) or 0
-    if n < 0 then return 0 end
-    if n > 1 then return 1 end
-    return n
-  end
-  local function applyAlpha(colorValue, alpha)
-    local c = math.floor(tonumber(colorValue) or 0)
-    local a = (c >> 24) & 0xFF
-    local scaled = math.floor(a * clamp01(alpha) + 0.5)
-    if scaled < 0 then scaled = 0 end
-    if scaled > 0x80 then scaled = 0x80 end
-    return (c & 0x00FFFFFF) | ((scaled & 0xFF) << 24)
-  end
-  local function makeIconColor(alpha)
-    local a = math.floor((FULL_ALPHA or 0x80) * clamp01(alpha) + 0.5)
-    if a < 0 then a = 0 end
-    if a > 0x80 then a = 0x80 end
-    -- Texture draw APIs use 0x80808080 as neutral modulation.
-    return Color.new(0x80, 0x80, 0x80, a)
-  end
-  local function cloneSlots(src)
-    local out = {}
-    for i = 1, #(src or {}) do
-      local s = src[i] or {}
-      out[i] = {
-        pad = tostring(s.pad or ""),
-        label = tostring(s.label or ""),
-        used = (s.used == true),
-      }
-    end
-    return out
-  end
-  local function normalizeLabelForCompare(s)
-    return tostring(s or ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-  end
-  local function slotsEqual(a, b)
-    if #(a or {}) ~= #(b or {}) then return false end
-    for i = 1, #(a or {}) do
-      local sa = a[i] or {}
-      local sb = b[i] or {}
-      if tostring(sa.pad or "") ~= tostring(sb.pad or "") then return false end
-      if normalizeLabelForCompare(sa.label) ~= normalizeLabelForCompare(sb.label) then return false end
-      if (sa.used == true) ~= (sb.used == true) then return false end
-    end
-    return true
-  end
-  local function drawHintsUntransformed(drawFn)
-    if common.drawWithoutSceneTransform then
-      return common.drawWithoutSceneTransform(drawFn)
-    end
-    return drawFn()
-  end
-  local function clearHintRowForCrossDissolve(topY, height)
-    if type(runtime) ~= "table" then return end
-    if runtime.sceneTransitionAnimActive ~= true then return end
-    if tostring(runtime.sceneTransitionAnimType or "") ~= "cross_dissolve" then return end
-    if not (Graphics and Graphics.drawRect) then return end
-    local rw = math.max(1, math.floor(tonumber(runtime.currentSceneWidth) or common.DEFAULT_W))
-    local ry = math.floor(tonumber(topY) or 0)
-    local rh = math.max(0, math.floor(tonumber(height) or 0))
-    if rh <= 0 then return end
-    Graphics.drawRect(0, ry, rw, rh, common.BACKGROUND_COLOR)
-  end
   local function getPadLabelColor(padName, fallbackColor)
     local key = tostring(padName or ""):lower()
     if key == "cross" then return common.PAD_LABEL_CROSS end
@@ -1032,7 +341,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
-    local textH = common.getHintLabelTextHeight({ lockSceneScale = true })
+    local textH = common.getHintLabelTextHeight()
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
     local approxCharW = math.floor(8 * drawScale)
     local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
@@ -1048,20 +357,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
     local slotCount = #rowPads
     local slotW = widthEff / slotCount
-    local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
-    -- Keep one shared hint-row transition state across scenes so back/forward
-    -- navigation always fades between previous/next rows, even if layout width
-    -- differs between scenes.
-    local hintKey = "__main_hint_row__"
+    local hintFont = common.getHintFont(font, drawMode, textScale)
 
     local function getTextWidth(label)
       if not label or label == "" then return 0 end
-      if common.calcTextWidth then
-        local w = common.calcTextWidth(hintFont, label, drawScale)
-        if type(w) == "number" and w > 0 then
-          return w
-        end
-      end
       if drawMode == "ftPrint" and hintFont and Font and Font.ftCalcDimensions then
         local w = Font.ftCalcDimensions(hintFont, label)
         return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #label)
@@ -1072,7 +371,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local rowSlots = {}
     local rowMap = {}
     local drawUnusedButtons = common.PAD_HINT_DRAW_UNUSED_BUTTONS == true
-    local inactiveIconAlpha = clamp01((tonumber(common.PAD_HINT_UNUSED_ALPHA) or 0) / FULL_ALPHA)
     for i = 1, slotCount do
       rowMap[rowPads[i]] = true
     end
@@ -1091,190 +389,81 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     for i = 1, slotCount do
       local key = rowPads[i]
       local active = activeByPad[key]
-      rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
+      if drawUnusedButtons or active then
+        rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
+      end
     end
 
     local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH
 
-    local function getIconVisualAlpha(slot)
-      if slot and slot.used == true then return 1 end
-      if drawUnusedButtons then return inactiveIconAlpha end
-      return 0
-    end
-
-    local function drawSlot(slot, col, rowCenter, iconY, textY, iconAlpha, labelAlpha, labelTextOverride)
-      if not slot then return end
-      local padName = tostring(slot.pad or "")
-      if padName == "" then return end
-      local icon = common.getPadIcon(padName)
-      local slotLeft = xEff + (col - 1) * slotW
-      local slotCenter = slotLeft + slotW / 2
-      local basePx = math.floor(slotCenter - iconW / 2)
-      local pressAmount = 0
-      if type(opts) == "table" and type(opts.getIconPressAmount) == "function" then
-        local ok, v = pcall(opts.getIconPressAmount, padName)
-        if ok then
-          pressAmount = clamp01(v)
-        end
-      elseif common.getHintPadPressAmount then
-        pressAmount = clamp01(common.getHintPadPressAmount(padName))
-      end
-      local defaultShrink = tonumber(common.PAD_HINT_ICON_PRESS_SHRINK_TOTAL) or 0
-      local defaultDarken = tonumber(common.PAD_HINT_ICON_DARKEN_MAX) or 0
-      local shrinkTotal = math.max(0, tonumber(type(opts) == "table" and opts.iconPressShrinkPx or defaultShrink) or defaultShrink) *
-          pressAmount
-      local iconDarkenMax = math.max(0, tonumber(type(opts) == "table" and opts.iconPressDarkenMax or defaultDarken) or
-        defaultDarken)
-      local inset = math.max(0, shrinkTotal * 0.5)
-      local drawIconW = math.max(1, iconW - shrinkTotal)
-      local drawIconH = math.max(1, iconH - shrinkTotal)
-      local px = basePx + inset
-      local py = math.floor(iconY) + inset
-      local drawIconAlpha = clamp01(iconAlpha or 0)
-      local label = (labelTextOverride ~= nil) and tostring(labelTextOverride or "") or tostring(slot.label or "")
-      local drawLabelAlpha = clamp01(labelAlpha or 0)
-      if icon and drawIconAlpha > 0.001 then
-        local pressDarken = (pressAmount > 0.0001 and iconDarkenMax > 0) and (iconDarkenMax * pressAmount) or 0
-        local dimmedAlpha = drawIconAlpha * (1 - clamp01(pressDarken))
-        local iconColor = makeIconColor(dimmedAlpha)
-        if Graphics.drawScaleImage then
-          local ok = pcall(Graphics.drawScaleImage, icon, px, py, drawIconW, drawIconH, iconColor)
-          if not ok then
-            Graphics.drawScaleImage(icon, px, py, drawIconW, drawIconH)
-          end
-        elseif Graphics.drawImage then
-          local ok = pcall(Graphics.drawImage, icon, px, py, iconColor)
-          if not ok then
-            Graphics.drawImage(icon, px, py)
-          end
-        end
-      end
-      if drawLabelAlpha > 0.001 and label ~= "" then
-        local textW = getTextWidth(label)
-        local textX
-        if icon then
-          textX = basePx + iconW + gap
-        else
-          textX = math.floor(slotCenter - textW / 2)
-        end
-        local labelColor = applyAlpha(getPadLabelColor(padName, color), drawLabelAlpha)
-        common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
-      end
-    end
-
     local function drawRow(slots, rowIndex)
-      local idx = tonumber(rowIndex) or 0
-      local rTop = rowTop + idx * rowH
-      local rowCenter = rTop + rowH / 2
-      local iconY = math.floor(rowCenter - iconH / 2)
-      local textY = math.floor(rowCenter - textH / 2) - 4
-      for col = 1, slotCount do
-        local slot = slots[col]
-        drawSlot(slot, col, rowCenter, iconY, textY, getIconVisualAlpha(slot),
-          (slot and slot.used and tostring(slot.label or "") ~= "") and 1 or 0)
-      end
-    end
-
-    local function drawBlendedRows(fromSlots, toSlots, progress)
-      local p = clamp01(progress)
-      local fullOut = 1 - p
-      local fullIn = p
-      local function splitFadeAlpha(t)
-        local q = clamp01(t)
-        if q < 0.5 then
-          return 1 - (q * 2), 0
-        end
-        return 0, (q - 0.5) * 2
-      end
-      local outAlpha, inAlpha = splitFadeAlpha(p)
-      local rowIndex = 0
       local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
       local textY = math.floor(rowCenter - textH / 2) - 4
-      for col = 1, slotCount do
-        local fromSlot = (fromSlots and fromSlots[col]) or { pad = rowPads[col], label = "", used = false }
-        local toSlot = (toSlots and toSlots[col]) or { pad = rowPads[col], label = "", used = false }
-        local samePad = tostring(fromSlot.pad or "") == tostring(toSlot.pad or "")
-        local sameUsed = (fromSlot.used == true) == (toSlot.used == true)
-        local sameLabel = normalizeLabelForCompare(fromSlot.label) == normalizeLabelForCompare(toSlot.label)
-        -- Blend to/from the same visual alpha used by steady-state rendering
-        -- so icons do not pop at transition boundaries.
-        local fromIcon = getIconVisualAlpha(fromSlot)
-        local toIcon = getIconVisualAlpha(toSlot)
-        local fromLabel = tostring(fromSlot.label or "")
-        local toLabel = tostring(toSlot.label or "")
-        if samePad and sameUsed and sameLabel then
-          drawSlot(toSlot, col, rowCenter, iconY, textY, getIconVisualAlpha(toSlot),
-            (toSlot.used and toLabel ~= "") and 1 or 0)
+      local activeIconColor = Color.new(255, 255, 255, FULL_ALPHA)
+      local inactiveIconColor = Color.new(255, 255, 255, common.PAD_HINT_UNUSED_ALPHA or 38)
+      local function drawActiveIcon(icon, px)
+        if Graphics.drawScaleImage then
+          local drawScaled = Graphics.drawScaleImage
+          local ok = pcall(drawScaled, icon, px, iconY, iconW, iconH)
+          if not ok then
+            drawScaled(icon, px, iconY, iconW, iconH, activeIconColor)
+          end
         else
-          if samePad then
-            -- Same pad in this slot: draw icon once with a continuous blend to
-            -- avoid double-draw pops/brightness pulses.
-            local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
-            if sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
-              -- Same active button, changed helper text: text uses sequential fade.
-              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon, 0)
-              if fromLabel ~= "" then
-                drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, outAlpha)
-              end
-              if toLabel ~= "" then
-                drawSlot(toSlot, col, rowCenter, iconY, textY, 0, inAlpha)
-              end
+          Graphics.drawImage(icon, px, iconY)
+        end
+      end
+      for col = 1, slotCount do
+        local item = slots[col]
+        local padName = item and item.pad
+        local label = (item and item.label) or ""
+        local isUsed = item and item.used
+        local active = (padName and activeByPad[padName]) or nil
+        if active then
+          isUsed = true
+          if label == "" then
+            label = active.label or ""
+          end
+        end
+        if padName and padName ~= "" then
+          local icon = common.getPadIcon(padName)
+          local slotLeft = xEff + (col - 1) * slotW
+          local slotCenter = slotLeft + slotW / 2
+          local px = math.floor(slotCenter - iconW / 2)
+          if icon then
+            if isUsed then
+              drawActiveIcon(icon, px)
             else
-              -- Active/inactive changes and non-paired text follow full-duration fade.
-              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon,
-                (toSlot.used and toLabel ~= "") and fullIn or 0)
-              if fromSlot.used and fromLabel ~= "" then
-                drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, fullOut)
+              if Graphics.drawScaleImage then
+                Graphics.drawScaleImage(icon, px, iconY, iconW, iconH, inactiveIconColor)
+              else
+                Graphics.drawImage(icon, px, iconY, inactiveIconColor)
               end
             end
-          else
-            -- Different pad in this slot: cross-fade icon presence over full duration.
-            local fromBlend = fromIcon * fullOut
-            local toBlend = toIcon * fullIn
-            drawSlot(fromSlot, col, rowCenter, iconY, textY, fromBlend,
-              (fromSlot.used and fromLabel ~= "") and fullOut or 0)
-            drawSlot(toSlot, col, rowCenter, iconY, textY, toBlend,
-              (toSlot.used and toLabel ~= "") and fullIn or 0)
+          end
+          if isUsed and label ~= "" then
+            local textW = getTextWidth(label)
+            local textX
+            if icon then
+              textX = px + iconW + gap
+            else
+              textX = math.floor(slotCenter - textW / 2)
+            end
+            local labelColor = getPadLabelColor(padName, color)
+            common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
           end
         end
       end
     end
 
-    drawHintsUntransformed(function()
-      clearHintRowForCrossDissolve(rowTop - 1, rowH + 2)
-      local disableTransitions = (type(opts) == "table" and opts.disableTransitions == true)
-      if disableTransitions then
-        drawRow(rowSlots, 0)
-      else
-        local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
-          hintKey = hintKey,
-          stableField = "hintRowStableSlots",
-          fadeField = "hintRowFadeStates",
-          rowSlots = rowSlots,
-          cloneSlots = cloneSlots,
-          slotsEqual = slotsEqual,
-          drawRow = function(slots)
-            drawRow(slots, 0)
-          end,
-          drawBlendedRows = drawBlendedRows,
-        })
-        if not handled then
-          drawRow(rowSlots, 0)
-        end
-      end
-    end)
+    drawRow(rowSlots, 0)
     return
   end
   if textFallback and textFallback ~= "" then
     local rowTop = math.floor(y) - common.PAD_HINT_ROW_H
-    drawHintsUntransformed(function()
-      clearHintRowForCrossDissolve(rowTop - 1, common.PAD_HINT_ROW_H + 2)
-      common.drawText(font, drawMode, x, rowTop + math.floor((common.PAD_HINT_ROW_H - 16) / 2), scale, textFallback,
-        color)
-    end)
+    common.drawText(font, drawMode, x, rowTop + math.floor((common.PAD_HINT_ROW_H - 16) / 2), scale, textFallback, color)
   end
 end
 
@@ -1311,97 +500,14 @@ function common.buildEditorHintItems(selOpt, hintEditItems, getDefaultFn, enumHi
   return out
 end
 
--- Open an actions overlay with consistent state key initialization.
-function common.openActionsMenu(ctx, openKey, selKey, scrollKey, opts)
-  if not ctx then return end
-  local openStateKey = tostring(openKey or "actionsMenuOpen")
-  local selStateKey = tostring(selKey or "actionsMenuSel")
-  local scrollStateKey = tostring(scrollKey or "actionsMenuScroll")
-  opts = opts or {}
-
-  ctx[openStateKey] = true
-  if ctx[selStateKey] == nil then
-    ctx[selStateKey] = tonumber(opts.defaultSel) or 1
-  end
-  if ctx[scrollStateKey] == nil then
-    ctx[scrollStateKey] = tonumber(opts.defaultScroll) or 0
-  end
-end
-
-function common.drawCenteredPromptModal(_, promptText, opts)
-  if type(_) ~= "table" then return end
-  opts = opts or {}
-  local prompt = tostring(promptText or "")
-  local padX = tonumber(opts.padX) or 24
-  local padY = tonumber(opts.padY) or 14
-  local lineH = _.LINE_H or common.LINE_H
-  local maxTextW = math.max(80, (_.w or common.DEFAULT_W) - (((_.MARGIN_X or common.MARGIN_X) * 2) + (padX * 2)))
-  if common.truncateTextToWidth then
-    prompt = common.truncateTextToWidth(_.font, prompt, maxTextW, 1)
-  end
-  local textW = (common.calcTextWidth and common.calcTextWidth(_.font, prompt, 1)) or (#prompt * 14)
-  local boxW = textW + (padX * 2)
-  local boxH = lineH + (padY * 2)
-  local boxX = math.floor(((_.w or common.DEFAULT_W) - boxW) / 2)
-  local boxY = math.floor(((_.h or common.DEFAULT_H) - boxH) / 2)
-  local bg = opts.bgColor or (Color and Color.new and Color.new(40, 40, 48, 110)) or common.DIM_COLOR
-  if _.Graphics and _.Graphics.drawRect then
-    _.Graphics.drawRect(boxX, boxY, boxW, boxH, bg)
-  end
-  local textX = boxX + math.floor((boxW - textW) / 2)
-  local textY = boxY + math.floor((boxH - lineH) / 2)
-  if common.drawText then
-    common.drawText(_.font, _.drawMode, textX, textY, 1, prompt, _.WHITE or common.WHITE)
-  end
-end
-
--- Shared leave-save prompt flow for editor-like scenes.
--- opts: { onSave, onDiscard, onCancel, drawPrompt(ctx, _, prompt), prompt }
-function common.handleLeaveSavePrompt(ctx, opts)
-  if not (ctx and ctx.editorLeavePrompt) then
-    return false
-  end
-  local _ = ctx._
-  if type(_) ~= "table" then
-    return false
-  end
-  opts = opts or {}
-  local prompt = tostring(opts.prompt or (_.editor_str and _.editor_str.leave_save_prompt) or
-    "Save changes before leaving?")
-  if type(opts.drawPrompt) == "function" then
-    opts.drawPrompt(ctx, _, prompt)
-  else
-    common.drawCenteredPromptModal(_, prompt)
-  end
-  common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM_COLOR,
-    _.w - 2 * _.MARGIN_X)
-  if (_.padEffective & _.PAD_CROSS) ~= 0 then
-    ctx.editorLeavePrompt = nil
-    if type(opts.onSave) == "function" then
-      opts.onSave()
-    end
-  elseif (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
-    ctx.editorLeavePrompt = nil
-    if type(opts.onDiscard) == "function" then
-      opts.onDiscard()
-    end
-  elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
-    ctx.editorLeavePrompt = nil
-    if type(opts.onCancel) == "function" then
-      opts.onCancel()
-    end
-  end
-  return true
-end
-
--- Keyboard: full QWERTY rows 1-=, q-], a-'\, z-/
-common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvbnm,./" }
-common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"|", "ZXCVBNM<>?" }
+-- Keyboard: full QWERTY rows 1-=, q-\, a-', z-/
+common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]\\", "asdfghjkl;'", "zxcvbnm,./" }
+common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?" }
 -- Title ID only: digits + uppercase letters, no shift (e.g. eGSM AAAA_000.00). No symbols.
 common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
--- Shift the row above spacebar right by one key for both layouts.
-common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.0, 0.0, 1.0 }
-common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.0, 0.0, 1.0 }
+-- Horizontal row offsets in key widths, to keep a staggered physical-QWERTY look.
+common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.5, 0.85, 1.2 }
+common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.5, 0.85, 1.2 }
 common.KEYBOARD_CENTER_X, common.KEYBOARD_CENTER_Y = 320, 220
 common.KEY_WIDTH, common.KEY_HEIGHT = 34, 26
 common.KEY_GAP = 2
@@ -1434,6 +540,14 @@ function common.getPresentMcSlots()
   if common.tryOpen("mc0:/") then table.insert(out, 0) end
   if common.tryOpen("mc1:/") then table.insert(out, 1) end
   table.sort(out)
+  return out
+end
+
+function common.findExistingPaths(locations)
+  local out = {}
+  for _, p in ipairs(locations) do
+    if common.tryOpen(p) then table.insert(out, p) end
+  end
   return out
 end
 
@@ -1650,26 +764,43 @@ function common.saveConfig(ctx, path, lines, createDir)
   if not prepOk then
     return nil, prepErr
   end
-  local mounted, savePath, mountedPartition = common.beginPathAccess(resolvedPath, {
-    loadModule = false,
-    mountPartition = true,
-  })
+  local savePath = resolvedPath
   local saveDir = resolvedDir
+  local mounted = nil
 
-  if saveDir and saveDir ~= "" and mountedPartition then
-    local dirPart, mappedDir = common.mapPartitionPathToMountedPfs(saveDir)
-    if dirPart and dirPart == mountedPartition and mappedDir then
-      saveDir = mappedDir
+  local function splitHddPartitionPath(p)
+    local s = tostring(p or ""):gsub("\\", "/")
+    local part, rest = s:match("^(hdd%d:[^:]+):pfs:(.*)$")
+    if not part then
+      -- Accept FMCB-style partition path (hdd0:__sysconf/dir/file) in addition to :pfs: form.
+      part, rest = s:match("^(hdd%d:[^/:]+)(/.*)$")
     end
+    if not part then return nil, nil end
+    if rest == "" then rest = "/" end
+    if rest:sub(1, 1) ~= "/" then rest = "/" .. rest end
+    return part, rest
   end
 
-  if mounted then
-    if mountedPartition then
-      saveDbg("mount", tostring(mounted), "<-", tostring(mountedPartition))
-    elseif savePath and savePath:match("^pfs0:/") then
-      saveDbg("mount", tostring(mounted), "<-", "hdd0:__sysconf")
-    else
-      saveDbg("mount", tostring(mounted))
+  local part, rest = splitHddPartitionPath(resolvedPath)
+  if part and rest then
+    savePath = "pfs0:" .. rest
+    saveDbg("route partition", "part=" .. tostring(part), "savePath=" .. tostring(savePath))
+    if saveDir and saveDir ~= "" then
+      local dPart, dRest = splitHddPartitionPath(saveDir)
+      if dPart and dPart == part and dRest then
+        saveDir = "pfs0:" .. dRest
+      end
+    end
+    if System and System.fileXioMount then
+      saveDbg("mount", "pfs0:", "<-", tostring(part))
+      System.fileXioMount("pfs0:", part)
+      mounted = "pfs0:"
+    end
+  elseif savePath and savePath:match("^pfs0:/") then
+    if System and System.fileXioMount then
+      saveDbg("mount", "pfs0:", "<-", "hdd0:__sysconf")
+      System.fileXioMount("pfs0:", "hdd0:__sysconf")
+      mounted = "pfs0:"
     end
   end
   saveDbg("dispatch", "savePath=" .. tostring(savePath), "saveDir=" .. tostring(saveDir))
@@ -1678,107 +809,11 @@ function common.saveConfig(ctx, path, lines, createDir)
     common.markConfigSaved(ctx, lines)
   end
   saveDbg("dispatch result", "ok=" .. tostring(ok), "err=" .. tostring(err))
-  if mounted then
+  if mounted and System and System.fileXioUmount then
     saveDbg("umount", tostring(mounted))
-    common.endPathAccess(mounted)
+    System.fileXioUmount(mounted)
   end
   return ok, err
-end
-
-function common.regenerateLinesForSave(ctx)
-  if not ctx then return end
-  local _ = ctx._
-  if not (_ and _.config_parse and _.config_parse.regenerateForSave) then return end
-  ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
-end
-
--- Shared save flow used by multiple editor scenes.
--- opts:
---  allowChoose: boolean (default false)
---  chooseSaveState: default "choose_save"
---  locationFileType/locationContext/chosenMcSlot/locations/getLocations
---  regenerateBeforeSave: default true
---  beforeChooseSave(locations), beforeSave(path), afterSave(path)
---  noSaveLocationMessage, errorDetail(err), savedFrames, failedFrames
-function common.saveCurrentConfig(ctx, opts)
-  if not ctx then return nil, "no_context" end
-  opts = opts or {}
-  local _ = ctx._
-  if not _ then return nil, "no_frame_context" end
-
-  ctx.saveSplash = nil
-
-  local locations = opts.locations
-  if type(locations) ~= "table" then
-    local resolver = opts.getLocations or _.getLocations
-    if type(resolver) == "function" then
-      local locContext = opts.locationContext or ctx.context
-      local locFileType = opts.locationFileType or ctx.fileType
-      local locSlot = (opts.chosenMcSlot ~= nil) and opts.chosenMcSlot or ctx.chosenMcSlot
-      locations = resolver(locContext, locFileType, locSlot) or {}
-    else
-      locations = {}
-    end
-  end
-
-  if opts.allowChoose and #locations >= 2 then
-    if type(opts.beforeChooseSave) == "function" then
-      opts.beforeChooseSave(locations)
-    end
-    ctx.saveChoices = locations
-    ctx.saveSel = ctx.saveSel or 1
-    ctx.state = opts.chooseSaveState or "choose_save"
-    return true, "choose_save"
-  end
-
-  local path = opts.path
-  if type(path) ~= "string" or path == "" then
-    path = ctx.currentPath or (locations and locations[1])
-  end
-  if type(path) ~= "string" or path == "" then
-    local noSaveLocation = opts.noSaveLocationMessage or (_.editor_str and _.editor_str.no_save_location) or
-        "No save location"
-    ctx.saveSplash = { kind = "failed", detail = noSaveLocation, framesLeft = opts.failedFrames or 120 }
-    return nil, "no_save_location"
-  end
-
-  local regenBeforeSave = (opts.regenerateBeforeSave ~= false)
-  if regenBeforeSave then
-    common.regenerateLinesForSave(ctx)
-  end
-  if type(opts.beforeSave) == "function" then
-    opts.beforeSave(path)
-  end
-
-  local parentDir = opts.createDir
-  if parentDir == nil then
-    parentDir = path:match("^(.+)/[^/]+$")
-  end
-  local ok, err = common.saveConfig(ctx, path, opts.lines or ctx.lines, parentDir)
-  if ok then
-    if opts.setCurrentPath ~= false then
-      ctx.currentPath = path
-    end
-    if opts.markUnmodified ~= false then
-      ctx.configModified = false
-    end
-    if type(opts.afterSave) == "function" then
-      opts.afterSave(path)
-    end
-    ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = opts.savedFrames or 60 }
-    return true
-  end
-
-  local detail = nil
-  if type(opts.errorDetail) == "function" then
-    detail = opts.errorDetail(err)
-  end
-  if detail == nil or detail == "" then
-    detail = (common.localizeParseError and _.editor_str and common.localizeParseError(err, _.editor_str)) or
-        (_.editor_str and _.editor_str.save_failed) or tostring(err or "Save failed")
-  end
-  ctx.saveSplash = { kind = "failed", detail = detail, framesLeft = opts.failedFrames or 120 }
-  return nil, err
 end
 
 function common.listDirectoryFiltered(path, file_selector, opts)
@@ -1817,21 +852,18 @@ function common.listDirectoryElfOnly(path, file_selector)
 end
 
 common.REPEATABLE_MASK = common.PAD_UP | common.PAD_DOWN
-common.REPEAT_START_HZ = 5
+common.REPEAT_START_HZ = 3
 common.REPEAT_END_HZ = 12
-common.REPEAT_ACCEL_SECONDS = 3
+common.REPEAT_ACCEL_SECONDS = 4
 common.REPEAT_FPS_SAMPLE_WINDOW = 8
 
-function common.getRepeatFps(ctx, nominalFps, opts)
+function common.getRepeatFps(ctx, nominalFps)
   local fallback = math.max(1, tonumber(nominalFps) or 60)
   if not ctx then
     return fallback
   end
 
   local cached = tonumber(ctx.holdRepeatFps) or 0
-  if opts and opts.forceRefresh == true then
-    cached = 0
-  end
   if cached <= 0 and Screen and Screen.getFPS then
     local sampleWindow = math.max(1, math.floor(tonumber(common.REPEAT_FPS_SAMPLE_WINDOW) or 8))
     local measured = tonumber(Screen.getFPS(sampleWindow))
@@ -1863,62 +895,6 @@ function common.getRepeatIntervalFrames(fps, heldFrames)
   return math.max(1, math.floor((safeFps / hz) + 0.5))
 end
 
--- Generic hold-to-repeat helper for one action key.
--- Returns true when action should trigger this frame.
-function common.consumeHeldRepeat(ctx, repeatKey, isHeld, opts)
-  if not ctx or not repeatKey then
-    return isHeld and true or false
-  end
-  local held = isHeld and true or false
-  local store = ctx._holdRepeatStates
-  if type(store) ~= "table" then
-    store = {}
-    ctx._holdRepeatStates = store
-  end
-  local key = tostring(repeatKey)
-  local st = store[key]
-  if type(st) ~= "table" then
-    st = { wasHeld = false, heldFrames = 0, countdown = 0 }
-    store[key] = st
-  end
-  if not held then
-    st.wasHeld = false
-    st.heldFrames = 0
-    st.countdown = 0
-    return false
-  end
-
-  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
-  local fps = common.getRepeatFps(ctx, nominalFps)
-  local speed = tonumber(opts and opts.speed) or 1
-  if speed <= 0 then speed = 1 end
-
-  local function intervalForFrame(frame)
-    local base = common.getRepeatIntervalFrames(fps, frame)
-    if speed == 1 then return base end
-    return math.max(1, math.floor((base / speed) + 0.5))
-  end
-
-  if not st.wasHeld then
-    st.wasHeld = true
-    st.heldFrames = 0
-    st.countdown = intervalForFrame(0)
-    return true
-  end
-
-  st.heldFrames = st.heldFrames + 1
-  local targetInterval = intervalForFrame(st.heldFrames)
-  if st.countdown > targetInterval then
-    st.countdown = targetInterval
-  end
-  st.countdown = st.countdown - 1
-  if st.countdown <= 0 then
-    st.countdown = targetInterval
-    return true
-  end
-  return false
-end
-
 -- Update ctx with layout values from current screen mode (for scene runner).
 function common.computeVisibleRows(ctx, startY, rowH, fallback, opts)
   local safeStartY = math.floor(tonumber(startY) or 0)
@@ -1946,11 +922,6 @@ function common.computeVisibleRows(ctx, startY, rowH, fallback, opts)
     return rows
   end
   return math.max(1, math.floor(tonumber(fallback) or 1))
-end
-
-local transitions = dofile("scripts/transitions.lua")
-if transitions and transitions.install then
-  transitions.install(common)
 end
 
 function common.runLayout(ctx)
@@ -2008,20 +979,8 @@ end
 -- Shared scene loop: clear, layout, getPadEffective, runHandler(ctx, pad), exit when ctx.state ~= sceneName.
 function common.runSceneLoop(ctx, sceneName, runHandler)
   while true do
-    if ctx and type(ctx._preSceneFrameHook) == "function" then
-      ctx._preSceneFrameHook(ctx, sceneName, 0)
-      if ctx.state ~= sceneName then
-        return ctx.state, ctx
-      end
-    end
-    if _G and _G.CONFIG_UI then
-      _G.CONFIG_UI.uiFrameCounter = (tonumber(_G.CONFIG_UI.uiFrameCounter) or 0) + 1
-    end
-    if not common.shouldSkipSceneClearForTransition(ctx) then
-      Screen.clear(common.BACKGROUND_COLOR)
-    end
+    Screen.clear(common.BACKGROUND_COLOR)
     common.runLayout(ctx)
-    common.applySceneDrawOffsetForCurrentFrame(ctx)
     local uiScale = (ctx and tonumber(ctx.uiScale)) or 1
     local scaleX = (ctx and ctx.scaleX) or function(x) return math.floor(((x or 0) * uiScale) + 0.5) end
     local scaleY = (ctx and ctx.scaleY) or function(y) return math.floor(((y or 0) * uiScale) + 0.5) end
@@ -2030,23 +989,25 @@ function common.runSceneLoop(ctx, sceneName, runHandler)
       _G.CONFIG_UI.currentDrawWidth = math.max(1, scaleX(common.FT_DRAW_W))
       _G.CONFIG_UI.currentDrawHeight = math.max(1, scaleY(common.FT_DRAW_H))
     end
-    common.applyFtPixelSize(ctx, ctx and ctx.font, ctx and ctx.drawMode, uiScale, true)
-    if ctx and ctx.drawBackgroundLayer and
-        (not common.shouldDrawBackgroundLayerForTransition or common.shouldDrawBackgroundLayerForTransition(ctx) ~= false) then
-      if common.drawWithoutSceneTransform then
-        common.drawWithoutSceneTransform(function()
-          ctx.drawBackgroundLayer(ctx)
-        end)
-      else
-        ctx.drawBackgroundLayer(ctx)
+    if ctx and ctx.drawMode == "ftPrint" and ctx.font and Font and Font.ftSetPixelSize then
+      local wantPx = math.max(10, math.floor((common.FT_PIXEL_H or 18) * uiScale + 0.5))
+      if ctx._ftPixelSizeApplied ~= wantPx then
+        pcall(Font.ftSetPixelSize, ctx.font, 0, wantPx)
+        ctx._ftPixelSizeApplied = wantPx
       end
+      if _G.CONFIG_UI then
+        _G.CONFIG_UI.currentFtPixelH = wantPx
+      end
+    elseif _G.CONFIG_UI then
+      _G.CONFIG_UI.currentFtPixelH = nil
     end
-    local rawPadEffective = common.getPadEffective(ctx)
-    local padEffective = common.shouldBlockInputForSceneTransition(ctx) and 0 or rawPadEffective
+    if ctx and ctx.drawBackgroundLayer then
+      ctx.drawBackgroundLayer(ctx)
+    end
+    local padEffective = common.getPadEffective(ctx)
     ctx._lastPadEffective = padEffective
     runHandler(ctx, padEffective)
     common.refreshConfigModified(ctx)
-    common.drawAndAdvanceSceneTransitionIn(ctx)
     if ctx.state ~= sceneName then
       return ctx.state, ctx
     end
@@ -2060,16 +1021,10 @@ end
 -- Repeat ramps from REPEAT_START_HZ to REPEAT_END_HZ over REPEAT_ACCEL_SECONDS while held.
 function common.getPadEffective(ctx)
   local pad = Pads.get(0)
-  if type(ctx) == "table" then
-    ctx._rawPadNow = pad
-    ctx._rawPadLogicalNow = common.remapCrossCircleMask(pad)
-  end
-  if _G and _G.CONFIG_UI then
-    _G.CONFIG_UI.currentRawPad = pad
-  end
   local prevPad = ctx.prevPad or 0
   local padJust = pad & ~prevPad
   local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local fps = common.getRepeatFps(ctx, nominalFps)
   ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
   ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
@@ -2077,12 +1032,10 @@ function common.getPadEffective(ctx)
   local prevHeldMask = prevPad & common.REPEATABLE_MASK
   if heldMask ~= 0 then
     if prevHeldMask == 0 then
-      local fps = common.getRepeatFps(ctx, nominalFps)
       -- New hold starts now: first repeat at start-rate interval.
       ctx.holdFrameCount = 0
       ctx.holdRepeatCountdown = common.getRepeatIntervalFrames(fps, 0)
     else
-      local fps = common.getRepeatFps(ctx, nominalFps)
       ctx.holdFrameCount = ctx.holdFrameCount + 1
       local targetInterval = common.getRepeatIntervalFrames(fps, ctx.holdFrameCount)
       if ctx.holdRepeatCountdown > targetInterval then
@@ -2099,11 +1052,7 @@ function common.getPadEffective(ctx)
     ctx.holdRepeatCountdown = 0
   end
   ctx.prevPad = pad
-  local effective = common.remapCrossCircleMask(padJust | padRepeat)
-  if type(ctx) == "table" then
-    ctx._rawPadEffectiveNow = padJust | padRepeat
-  end
-  return effective
+  return common.remapCrossCircleMask(padJust | padRepeat)
 end
 
 function common.loadCustomFont()
@@ -2120,24 +1069,6 @@ end
 -- opts: { prompt, value, maxLen, callback, returnState, titleIdMode, gridSel, cursor, scroll, clearArgEditIdx, argEditIdx }
 function common.beginTextInput(ctx, opts)
   if not ctx or type(opts) ~= "table" then return end
-  -- Reset per-key held-repeat state so each text-input session starts clean.
-  ctx._holdRepeatStates = nil
-  local suppressCrossOnEntry = false
-  local entryRawPad = nil
-  if Pads and Pads.get then
-    local okPad, rawPad = pcall(Pads.get, 0)
-    if okPad and type(rawPad) == "number" then
-      entryRawPad = rawPad
-      local logicalPad = rawPad
-      if common.remapCrossCircleMask then
-        logicalPad = common.remapCrossCircleMask(logicalPad)
-      end
-      suppressCrossOnEntry = (logicalPad & (common.PAD_CROSS or 0)) ~= 0
-    end
-  else
-    local lastMask = tonumber(ctx._lastPadEffective) or 0
-    suppressCrossOnEntry = (lastMask & (common.PAD_CROSS or 0)) ~= 0
-  end
   if opts.clearArgEditIdx then
     ctx.argEditIdx = nil
   end
@@ -2153,41 +1084,6 @@ function common.beginTextInput(ctx, opts)
   ctx.textInputGridSel = math.max(1, math.floor(tonumber(opts.gridSel) or 1))
   ctx.textInputCursor = math.max(1, math.floor(tonumber(opts.cursor) or (#ctx.textInputValue + 1)))
   ctx.textInputScroll = math.max(1, math.floor(tonumber(opts.scroll) or 1))
-  ctx.textInputIgnoreCrossUntilRelease = suppressCrossOnEntry and true or nil
-  ctx.textInputIgnoreCrossReleaseFrames = suppressCrossOnEntry and 0 or nil
-  ctx.textInputCrossHeldPrev = suppressCrossOnEntry and true or nil
-  -- Animation gate state:
-  -- 1 = undecided on first text-input frame (check if Enter is currently held)
-  -- 2 = Enter was held; keep press visuals suppressed until full release.
-  ctx.textInputPressAnimEntryGate = 1
-  ctx.textInputPressGateSceneEpoch = nil
-  -- Short neutral window on entry so held confirm from previous scene does not
-  -- create a visual "pressed" flash on Enter/selected key.
-  ctx.textInputSuppressPressVisualFrames = suppressCrossOnEntry and 6 or 0
-  ctx.textInputHeldPressKey = nil
-  ctx.textInputKeyPressAnims = nil
-  ctx.textInputKeyboardDrawCache = nil
-  ctx.textInputKeyLabelFontByShrinkPx = nil
-  ctx.textInputKeyLabelFontByShrinkPxSig = nil
-  ctx.textInputKeyLabelWidthCache = nil
-  ctx.textInputKeyLabelWidthCacheSig = nil
-  ctx.textInputKeyLabelWidthWarmSig = nil
-  -- Prevent carry-over repeats/held edges from the previous scene when entering
-  -- text input while Enter is still physically held.
-  ctx.holdFrameCount = 0
-  ctx.holdRepeatCountdown = 0
-  if type(entryRawPad) == "number" then
-    ctx.prevPad = entryRawPad
-    ctx._rawPadNow = entryRawPad
-    ctx._rawPadLogicalNow = common.remapCrossCircleMask(entryRawPad)
-    if _G and _G.CONFIG_UI then
-      _G.CONFIG_UI.currentRawPad = entryRawPad
-    end
-  end
-  if _G and _G.CONFIG_UI then
-    _G.CONFIG_UI.hintPadPressAnims = {}
-    _G.CONFIG_UI.hintPadPressAnimsFrame = nil
-  end
   ctx.state = opts.state or "text_input"
 end
 
@@ -2478,92 +1374,17 @@ end
 
 function common.drawText(font, mode, x, y, scale, text, color, drawHeight)
   local c = color or common.WHITE
-  local runtime = _G and _G.CONFIG_UI
-  local offsetX = math.floor(tonumber(runtime and runtime.sceneDrawOffsetX) or 0)
-  local drawScale = tonumber(runtime and runtime.sceneDrawScale) or 1
-  if drawScale <= 0 then drawScale = 1 end
-  if drawScale < 0.1 then drawScale = 0.1 end
-  if drawScale > 4 then drawScale = 4 end
-  local drawScaleX = tonumber(runtime and runtime.sceneDrawScaleX)
-  if drawScaleX == nil then drawScaleX = drawScale end
-  if drawScaleX < -4 then drawScaleX = -4 end
-  if drawScaleX > 4 then drawScaleX = 4 end
-  local drawScaleY = tonumber(runtime and runtime.sceneDrawScaleY)
-  if drawScaleY == nil then drawScaleY = drawScale end
-  if drawScaleY < -4 then drawScaleY = -4 end
-  if drawScaleY > 4 then drawScaleY = 4 end
-  local centerX = tonumber(runtime and runtime.sceneDrawCenterX) or
-      ((tonumber(runtime and runtime.currentSceneWidth) or common.DEFAULT_W) / 2)
-  local centerY = tonumber(runtime and runtime.sceneDrawCenterY) or
-      ((tonumber(runtime and runtime.currentSceneHeight) or common.DEFAULT_H) / 2)
-  local drawAlpha = tonumber(runtime and runtime.sceneDrawAlpha) or 1
-  if c and drawAlpha < 0.999 then
-    local base = math.floor(tonumber(c) or 0)
-    local a = (base >> 24) & 0xFF
-    local scaledA = math.floor(a * math.max(0, math.min(1, drawAlpha)) + 0.5)
-    if scaledA < 0 then scaledA = 0 end
-    if scaledA > 0x80 then scaledA = 0x80 end
-    c = (base & 0x00FFFFFF) | ((scaledA & 0xFF) << 24)
-  end
-  local px = tonumber(x) or 0
-  local py = tonumber(y) or 0
-  local projective = (type(runtime) == "table" and runtime.sceneDrawProjective == true)
-  if projective then
-    local projX, projY = common.projectScenePoint(px, py)
-    if projX ~= nil and projY ~= nil then
-      px, py = projX, projY
-    end
-  elseif math.abs(drawScaleX - 1) > 0.0001 or math.abs(drawScaleY - 1) > 0.0001 then
-    px = centerX + ((px - centerX) * drawScaleX)
-    py = centerY + ((py - centerY) * drawScaleY)
-  end
-  local ix = math.floor(px + offsetX)
-  local iy = math.floor(py)
+  local ix, iy = math.floor(tonumber(x) or 0), math.floor(tonumber(y) or 0)
   local s = text or ""
-  local scaleN = tonumber(scale) or 1
   if mode == "fmPrint" then
-    Font.fmPrint(ix, iy, scaleN * drawScale, s, c)
+    Font.fmPrint(ix, iy, scale, s, c)
   elseif mode == "ftPrint" then
     local w = (_G.CONFIG_UI and _G.CONFIG_UI.currentDrawWidth) or common.FT_DRAW_W
     local h = (drawHeight and drawHeight > 0) and drawHeight or (_G.CONFIG_UI and _G.CONFIG_UI.currentDrawHeight) or
         common.FT_DRAW_H
-    local drewProjectedGlyphRun = false
-    if projective and type(s) == "string" and #s > 1 and (not s:find("[\128-\255]")) and
-        Font and Font.ftCalcDimensions and Font.ftPrint then
-      local trType = tostring(runtime and runtime.sceneTransitionAnimType or "")
-      if trType == "flip_horizontal" or trType == "flip_vertical" then
-        local logicalX = tonumber(x) or 0
-        local logicalY = tonumber(y) or 0
-        local cursorX = logicalX
-        local fallbackAdvance = math.max(1,
-          math.floor(((tonumber(_G.CONFIG_UI and _G.CONFIG_UI.currentFtPixelH) or common.FT_PIXEL_H or 18) * 0.6) + 0.5))
-        for i = 1, #s do
-          local ch = s:sub(i, i)
-          local chX, chY = common.projectScenePoint(cursorX, logicalY)
-          if chX == nil or chY == nil then
-            chX, chY = logicalX, logicalY
-          end
-          local chIx = math.floor(chX + offsetX)
-          local chIy = math.floor(chY)
-          Font.ftPrint(font, chIx, chIy, 0, w, h, ch, c)
-          local adv = tonumber(Font.ftCalcDimensions(font, ch)) or 0
-          if adv <= 0 then
-            if ch == " " then
-              adv = math.max(1, math.floor((fallbackAdvance * 0.5) + 0.5))
-            else
-              adv = fallbackAdvance
-            end
-          end
-          cursorX = cursorX + adv
-        end
-        drewProjectedGlyphRun = true
-      end
-    end
-    if not drewProjectedGlyphRun then
-      Font.ftPrint(font, ix, iy, 0, w, h, s, c)
-    end
+    Font.ftPrint(font, ix, iy, 0, w, h, s, c)
   else
-    Font.print(font, ix, iy, scaleN * drawScale, s, c)
+    Font.print(font, ix, iy, scale, s, c)
   end
 end
 

@@ -4,11 +4,34 @@ local actions_menu = dofile("scripts/scenes/actions_menu.lua")
 
 local function getEgsmBackState(ctx)
   local context = ctx and ctx.context or nil
-  local commonRef = ctx and ctx._ and ctx._.common or nil
-  if commonRef and commonRef.getEditorBackState then
-    return commonRef.getEditorBackState(context, "osdgsm_cnf", commonRef.getPresentMcSlots)
+  if context == "ps2bbl" or context == "psxbbl" then
+    return "select_config"
+  end
+  if context == "hosdmenu" then
+    return "select_config"
+  end
+  if context == "osdmenu" or context == "freemcboot" then
+    local common = ctx and ctx._ and ctx._.common or nil
+    local slots = (common and common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+    if type(slots) == "table" and #slots > 1 then
+      return "choose_mc"
+    end
+    return "main"
   end
   return "main"
+end
+
+local function withStartHintVisibility(items, showStart)
+  if showStart then return items end
+  local out = {}
+  for _, item in ipairs(items or {}) do
+    if item.pad ~= "start" then
+      out[#out + 1] = item
+    else
+      out[#out + 1] = { pad = "", label = "", row = item.row }
+    end
+  end
+  return out
 end
 
 local function run(ctx)
@@ -17,27 +40,49 @@ local function run(ctx)
     ctx.state = getEgsmBackState(ctx); ctx.currentPath = nil; return
   end
 
-  if _.common.handleLeaveSavePrompt(ctx, {
-        onSave = function()
-          _.common.saveCurrentConfig(ctx, {
-            allowChoose = true,
-            locationFileType = "osdgsm_cnf",
-            beforeChooseSave = function()
-              ctx.returnToSelectConfigAfterSave = getEgsmBackState(ctx)
-            end,
-            afterSave = function()
-              ctx.returnStateAfterSaveFlash = getEgsmBackState(ctx)
-              ctx.returnToSelectConfigAfterSaveFlash = true
-            end,
-          })
-        end,
-        onDiscard = function()
-          ctx.state = getEgsmBackState(ctx)
-          ctx.currentPath = nil
-          ctx.lines = nil
-          ctx.saveSplash = nil
-        end,
-      }) then
+  -- Leave-save prompt when going back to config select with unsaved changes
+  if ctx.editorLeavePrompt then
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.editor_str.leave_save_prompt, _.WHITE)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM_COLOR,
+      _.w - 2 * _.MARGIN_X)
+    if (_.padEffective & _.PAD_CROSS) ~= 0 then
+      ctx.editorLeavePrompt = nil
+      ctx.saveSplash = nil
+      local locations = _.getLocations(ctx.context, "osdgsm_cnf", ctx.chosenMcSlot)
+      if #locations >= 2 then
+        ctx.returnToSelectConfigAfterSave = getEgsmBackState(ctx)
+        ctx.saveChoices = locations
+        ctx.saveSel = ctx.saveSel or 1
+        ctx.state = "choose_save"
+      else
+        local path = ctx.currentPath or (locations and locations[1])
+        if path and path ~= "" then
+          ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+          local parentDir = path:match("^(.+)/[^/]+$")
+          local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+          if ok then
+            ctx.currentPath = path
+            ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+            ctx.configModified = false
+            ctx.returnStateAfterSaveFlash = getEgsmBackState(ctx)
+            ctx.returnToSelectConfigAfterSaveFlash = true
+          else
+            ctx.saveSplash = { kind = "failed", detail = _.common.localizeParseError(err, _.editor_str) or
+            _.editor_str.save_failed, framesLeft = 120 }
+          end
+        else
+          ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+        end
+      end
+    elseif (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
+      ctx.editorLeavePrompt = nil
+      ctx.state = getEgsmBackState(ctx)
+      ctx.currentPath = nil
+      ctx.lines = nil
+      ctx.saveSplash = nil
+    elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+      ctx.editorLeavePrompt = nil
+    end
     return
   end
 
@@ -110,7 +155,7 @@ local function run(ctx)
     { pad = "triangle", label = selectedCommented and (_.menu_str.enable_label or "Enable") or (_.menu_str.disable_label or "Disable"), row = 1 },
     { pad = "circle", label = (_.menu_str.back_label or "Back"), row = 1 },
   }
-  hintItems = _.common.withStartHintVisibility(hintItems, ctx.configModified == true)
+  hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if not ctx.egsmActionsOpen then
@@ -138,9 +183,11 @@ local function run(ctx)
   end
 
   local function beginInsertEgsmEntry()
-    local prompt = _.strings.egsm.title_id_prompt
-    local initialValue = ""
-    local onSubmit = function(val)
+    ctx.textInputPrompt = _.strings.egsm.title_id_prompt
+    ctx.textInputValue = ""
+    ctx.textInputMaxLen = 15
+    ctx.textInputTitleIdMode = true
+    ctx.textInputCallback = function(val)
       local id = _.config_parse.parseTitleIdInput and _.config_parse.parseTitleIdInput(val or "")
       if id and _.config_parse.isValidTitleId(id) then
         _.config_parse.setEgsmEntry(ctx.lines, id, "", true)
@@ -155,18 +202,11 @@ local function run(ctx)
       end
       ctx.state = "egsm_editor"
     end
-    _.common.beginTextInput(ctx, {
-      titleIdMode = true,
-      prompt = prompt,
-      value = initialValue,
-      maxLen = 15,
-      callback = onSubmit,
-      returnState = "egsm_editor",
-      gridSel = 1,
-      cursor = 1,
-      scroll = 1,
-      state = "text_input",
-    })
+    ctx.textInputReturnState = "egsm_editor"
+    ctx.textInputGridSel = 1
+    ctx.textInputCursor = 1
+    ctx.textInputScroll = 1
+    ctx.state = "text_input"
   end
 
   local function removeSelectedEgsmEntry()
@@ -220,14 +260,36 @@ local function run(ctx)
   end
 
   if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-    _.common.openActionsMenu(ctx, "egsmActionsOpen", "egsmActionsSel", "egsmActionsScroll")
+    ctx.egsmActionsOpen = true
+    ctx.egsmActionsSel = ctx.egsmActionsSel or 1
+    ctx.egsmActionsScroll = ctx.egsmActionsScroll or 0
   end
 
   if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    _.common.saveCurrentConfig(ctx, {
-      allowChoose = true,
-      locationFileType = "osdgsm_cnf",
-    })
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, "osdgsm_cnf", ctx.chosenMcSlot)
+    if #locations >= 2 then
+      ctx.saveChoices = locations
+      ctx.saveSel = ctx.saveSel or 1
+      ctx.state = "choose_save"
+    else
+      local path = ctx.currentPath or (locations and locations[1])
+      if path and path ~= "" then
+        ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+        local parentDir = path:match("^(.+)/[^/]+$")
+        local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+        if ok then
+          ctx.currentPath = path
+          ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+          ctx.configModified = false
+        else
+          ctx.saveSplash = { kind = "failed", detail = _.common.localizeParseError(err, _.editor_str) or
+          _.editor_str.save_failed, framesLeft = 120 }
+        end
+      else
+        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+      end
+    end
   end
 
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then

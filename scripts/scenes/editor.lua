@@ -19,11 +19,26 @@ local function formatArgCount(n)
   return "(" .. tostring(count) .. " args)"
 end
 
-local function getOsdmbrHotkeyPadName(key)
-  local commonRef = _G and _G.CONFIG_UI and _G.CONFIG_UI.common
-  if commonRef and commonRef.bootKeyToPadName then
-    return commonRef.bootKeyToPadName(key)
+local function trimPathValue(pathVal)
+  return tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function formatDisplayPath(_, pathVal)
+  local raw = tostring(pathVal or "")
+  local up = trimPathValue(raw):upper()
+  local p = _.path_str or {}
+  if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
+  if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
+  if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
+  if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
+  if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
+  if _.common and _.common.normalizePathForDisplay then
+    return _.common.normalizePathForDisplay(raw)
   end
+  return raw
+end
+
+local function getOsdmbrHotkeyPadName(key)
   if key == "boot_start" then return "start" end
   if key == "boot_triangle" then return "triangle" end
   if key == "boot_circle" then return "circle" end
@@ -52,12 +67,50 @@ local function osdmbrBootKeyHasEntries(ctx, _, key)
   return false
 end
 
+local function getCategoryOptSel(ctx, categoryIdx)
+  if not categoryIdx or categoryIdx < 1 then return 1 end
+  local byFile = ctx.editorCategoryOptSelByFile
+  if type(byFile) ~= "table" then return 1 end
+  local fileKey = ctx.fileType or "__none__"
+  local byCategory = byFile[fileKey]
+  if type(byCategory) ~= "table" then return 1 end
+  local sel = byCategory[categoryIdx]
+  if type(sel) ~= "number" then return 1 end
+  return math.max(1, math.floor(sel))
+end
+
+local function setCategoryOptSel(ctx, categoryIdx, sel)
+  if not categoryIdx or categoryIdx < 1 then return end
+  if type(ctx.editorCategoryOptSelByFile) ~= "table" then
+    ctx.editorCategoryOptSelByFile = {}
+  end
+  local fileKey = ctx.fileType or "__none__"
+  if type(ctx.editorCategoryOptSelByFile[fileKey]) ~= "table" then
+    ctx.editorCategoryOptSelByFile[fileKey] = {}
+  end
+  ctx.editorCategoryOptSelByFile[fileKey][categoryIdx] = math.max(1, math.floor(tonumber(sel) or 1))
+end
+
 local function getEditorBackState(ctx)
   local context = ctx and ctx.context or nil
   local fileType = ctx and ctx.fileType or nil
-  local commonRef = ctx and ctx._ and ctx._.common or nil
-  if commonRef and commonRef.getEditorBackState then
-    return commonRef.getEditorBackState(context, fileType, commonRef.getPresentMcSlots)
+  if context == "ps2bbl" or context == "psxbbl" then
+    return "select_config"
+  end
+  if context == "hosdmenu" then
+    if fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf" then
+      return "select_config"
+    end
+  end
+  if context == "osdmenu" or context == "freemcboot" then
+    if fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf" or fileType == "freemcboot_cnf" then
+      local common = ctx and ctx._ and ctx._.common or nil
+      local slots = (common and common.getPresentMcSlots and common.getPresentMcSlots()) or {}
+      if type(slots) == "table" and #slots > 1 then
+        return "choose_mc"
+      end
+      return "main"
+    end
   end
   return "main"
 end
@@ -98,6 +151,18 @@ local R3_DEFAULT_COLOR_PRESET = {
   background = "141414",
 }
 
+local R3_BUTTON_COLOR_KEYS = { "cross", "square", "triangle", "circle" }
+
+local function isR3ButtonColorKey(key)
+  local k = tostring(key or "")
+  for i = 1, #R3_BUTTON_COLOR_KEYS do
+    if R3_BUTTON_COLOR_KEYS[i] == k then
+      return true
+    end
+  end
+  return false
+end
+
 local function parseR3HexColor(raw)
   local value = tostring(raw or "")
   local trimmed = value:gsub("^%s+", ""):gsub("%s+$", "")
@@ -122,61 +187,6 @@ end
 
 local function isR3ConfiguratorFile(ctx)
   return ctx and ctx.fileType == "r3configurator_cnf"
-end
-
-local function isBlockedSceneTransitionEnumValue(ctx, opt, value)
-  return false
-end
-
-local function getCurrentSceneTransitionType(ctx, _)
-  if not (ctx and _) then return "cut" end
-  local t = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, "scene_transition")) or "cut"
-  if tostring(t or "") == "" then
-    t = "cut"
-  end
-  if _.common and _.common.normalizeSceneTransitionType then
-    return _.common.normalizeSceneTransitionType(t)
-  end
-  return tostring(t or "cut"):lower():gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local function isTemporarilyDisabledEditorOption(ctx, _, opt)
-  if not isR3ConfiguratorFile(ctx) then return false end
-  local key = tostring(opt and opt.key or "")
-  if key == "scene_transition_frames" then
-    return getCurrentSceneTransitionType(ctx, _) == "cut"
-  end
-  return false
-end
-
-local function findEnumIndex(enumVals, value)
-  local list = enumVals or {}
-  for i, v in ipairs(list) do
-    if v == value then return i end
-  end
-  return 0
-end
-
-local function cycleEnumIndex(ctx, opt, currentIndex, step, allowUnset)
-  local values = opt and opt.enumVals or nil
-  local count = values and #values or 0
-  if count <= 0 then return currentIndex end
-  local minIdx = allowUnset and 0 or 1
-  local idx = tonumber(currentIndex) or minIdx
-  local dir = (tonumber(step) or 0) < 0 and -1 or 1
-  local span = count + (allowUnset and 1 or 0)
-  for _scan = 1, span do
-    idx = idx + dir
-    if idx < minIdx then idx = count end
-    if idx > count then idx = minIdx end
-    if idx == 0 then
-      return idx
-    end
-    if not isBlockedSceneTransitionEnumValue(ctx, opt, values[idx]) then
-      return idx
-    end
-  end
-  return currentIndex
 end
 
 local function isDeviceAbsolutePath(path)
@@ -378,7 +388,8 @@ local OSD_VISUAL_COORD_KEYS = {
   OSDSYS_version_y = true,
 }
 
--- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig).
+-- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig),
+-- with visual coordinate values kept inside configured editor bounds.
 local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_menu_x = "320",
   OSDSYS_menu_y = "110",
@@ -388,7 +399,8 @@ local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_version_y = "-1",
 }
 
--- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments.
+-- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments,
+-- with visual coordinate values kept inside configured editor bounds.
 local OSD_VISUAL_PS2_DEFAULTS = {
   OSDSYS_menu_x = "430",
   OSDSYS_menu_y = "110",
@@ -560,38 +572,6 @@ local function removeHintPad(items, padName)
   return out
 end
 
-local function isSceneTransitionTestOption(opt)
-  local key = tostring(opt and opt.key or "")
-  return key == "scene_transition" or key == "scene_transition_frames"
-end
-
-local function beginSceneTransitionSelfTest(ctx, _)
-  if not (ctx and _ and _.common and _.common.beginSceneTransitionIn and _.common.shouldRunSceneTransition) then
-    return
-  end
-  local runtime = _G.CONFIG_UI or {}
-  local transitionType = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, "scene_transition")) or
-      runtime.sceneTransitionType
-  local transitionFrames = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, "scene_transition_frames")) or
-      runtime.sceneTransitionFrames
-  if _.common.normalizeSceneTransitionType then
-    transitionType = _.common.normalizeSceneTransitionType(transitionType)
-  end
-  if _.common.normalizeSceneTransitionFrames then
-    transitionFrames = _.common.normalizeSceneTransitionFrames(transitionFrames)
-  else
-    local n = math.floor(tonumber(transitionFrames) or 10)
-    if n < 1 then n = 1 end
-    if n > 60 then n = 60 end
-    transitionFrames = n
-  end
-  if not _.common.shouldRunSceneTransition(transitionType, transitionFrames) then
-    return
-  end
-  ctx.sceneTransitionIn = nil
-  _.common.beginSceneTransitionIn(ctx, transitionType, transitionFrames, { direction = "in" })
-end
-
 local function prettifyBblGlobalLabel(ctx, o, label)
   if not (ctx and o and label) then return label end
   if (ctx.fileType ~= "ps2bbl_ini" and ctx.fileType ~= "psxbbl_ini") then
@@ -601,6 +581,19 @@ local function prettifyBblGlobalLabel(ctx, o, label)
     return label
   end
   return tostring(label):gsub("_", " ")
+end
+
+local function withStartHintVisibility(items, showStart)
+  if showStart then return items end
+  local out = {}
+  for _, item in ipairs(items or {}) do
+    if item.pad ~= "start" then
+      out[#out + 1] = item
+    else
+      out[#out + 1] = { pad = "", label = "", row = item.row }
+    end
+  end
+  return out
 end
 
 local function drawColorSwatch(_, x, y, w, h, fillColor)
@@ -989,11 +982,31 @@ local function runInlineColorEditInput(ctx, _)
   return true
 end
 
+local function drawLeaveSavePromptModal(_)
+  local prompt = tostring((_ and _.editor_str and _.editor_str.leave_save_prompt) or "Save changes before leaving?")
+  local padX = 24
+  local padY = 14
+  local lineH = _.LINE_H or 22
+  local maxTextW = math.max(80, (_.w or 640) - (((_.MARGIN_X or 40) * 2) + (padX * 2)))
+  if _.common and _.common.truncateTextToWidth then
+    prompt = _.common.truncateTextToWidth(_.font, prompt, maxTextW, 1)
+  end
+  local textW = (_.common and _.common.calcTextWidth and _.common.calcTextWidth(_.font, prompt, 1)) or (#prompt * 14)
+  local boxW = textW + (padX * 2)
+  local boxH = lineH + (padY * 2)
+  local boxX = math.floor(((_.w or 640) - boxW) / 2)
+  local boxY = math.floor(((_.h or 448) - boxH) / 2)
+  local bg = (_.Color and _.Color.new and _.Color.new(40, 40, 48, 110)) or _.DIM_COLOR
+  if _.Graphics and _.Graphics.drawRect then
+    _.Graphics.drawRect(boxX, boxY, boxW, boxH, bg)
+  end
+  local textX = boxX + math.floor((boxW - textW) / 2)
+  local textY = boxY + math.floor((boxH - lineH) / 2)
+  _.drawText(_.font, _.drawMode, textX, textY, 1, prompt, _.WHITE)
+end
+
 local function run(ctx)
   local _ = ctx._
-  local formatBelForDisplay = (_.common and _.common.formatBelForDisplay) or function(text)
-    return tostring(text or ""):gsub(string.char(7), "\226\150\161")
-  end
   local frameParse = getEditorParseCache(ctx, _)
   local cachedGet = frameParse.get
   local cachedGetWithComment = frameParse.getWithComment
@@ -1001,30 +1014,55 @@ local function run(ctx)
   local cachedGetBootPaths = frameParse.getBootPaths
   local cachedGetBblHotkeySlot = frameParse.getBblHotkeySlot
   local cachedIsBootKeyDisabled = frameParse.isBootKeyDisabled
-  if _.common.handleLeaveSavePrompt(ctx, {
-        onSave = function()
-          _.common.saveCurrentConfig(ctx, {
-            allowChoose = (ctx.fileType == "osdmenu_cnf"),
-            beforeChooseSave = function()
-              ctx.returnToSelectConfigAfterSave = getEditorBackState(ctx)
-            end,
-            afterSave = function()
-              ctx.returnStateAfterSaveFlash = getEditorBackState(ctx)
-              ctx.returnToSelectConfigAfterSaveFlash = true
-            end,
-          })
-        end,
-        onDiscard = function()
-          ctx.state = getEditorBackState(ctx)
-          ctx.currentPath = nil
-          ctx.lines = nil
-          ctx.optList = nil
-          ctx.editorCategoryIdx = 0
-          ctx.editorPendingEnterCategoryIdx = nil
-          ctx.editorPendingReturnCategorySel = nil
-          ctx.saveSplash = nil
-        end,
-      }) then
+  -- Leave-save prompt when going back to file select with unsaved changes
+  if ctx.editorLeavePrompt then
+    drawLeaveSavePromptModal(_)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM_COLOR,
+      _.w - 2 * _.MARGIN_X)
+    if (_.padEffective & _.PAD_CROSS) ~= 0 then
+      ctx.editorLeavePrompt = nil
+      ctx.saveSplash = nil
+      local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+      if ctx.fileType == "osdmenu_cnf" and #locations >= 2 then
+        ctx.returnToSelectConfigAfterSave = getEditorBackState(ctx)
+        ctx.saveChoices = locations
+        ctx.saveSel = ctx.saveSel or 1
+        ctx.state = "choose_save"
+      else
+        local path = ctx.currentPath or (locations and locations[1])
+        if path and path ~= "" then
+          ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+          local parentDir = path:match("^(.+)/[^/]+$")
+          local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+              if ok then
+                ctx.currentPath = path
+                ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+                ctx.configModified = false
+                ctx.returnStateAfterSaveFlash = getEditorBackState(ctx)
+                ctx.returnToSelectConfigAfterSaveFlash = true
+              else
+            ctx.saveSplash = {
+              kind = "failed",
+              detail = _.common.localizeParseError(err, _.editor_str) or
+                  _.editor_str.save_failed,
+              framesLeft = 120
+            }
+          end
+        else
+          ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+        end
+      end
+    elseif (_.padEffective & _.PAD_TRIANGLE) ~= 0 then
+      ctx.editorLeavePrompt = nil
+      ctx.state = getEditorBackState(ctx)
+      ctx.currentPath = nil
+      ctx.lines = nil
+      ctx.optList = nil
+      ctx.editorCategoryIdx = 0
+      ctx.saveSplash = nil
+    elseif (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+      ctx.editorLeavePrompt = nil
+    end
     return
   end
 
@@ -1064,60 +1102,12 @@ local function run(ctx)
     categories = _.config_options.psxbbl_ini_categories or {}
   end
 
-  local function resolveCategoryOptList(cat)
-    local rawOpts = (cat and cat.options) or {}
-    -- DKWDRV custom path not applicable for HOSDMenu (no MC path)
-    if ctx.context == "hosdmenu" and ctx.fileType == "osdmenu_cnf" then
-      local filtered = {}
-      for _, o in ipairs(rawOpts) do
-        if o.key ~= "path_DKWDRV_ELF" then filtered[#filtered + 1] = o end
-      end
-      return filtered
-    end
-    return rawOpts
-  end
-
-  local function applyEnterCategory(categoryIdx)
-    local selectedCategoryIdx = math.max(1, math.floor(tonumber(categoryIdx) or 1))
-    if #categories > 0 and selectedCategoryIdx > #categories then
-      selectedCategoryIdx = #categories
-    end
-    local cat = categories[selectedCategoryIdx]
-    ctx.editorCategoryIdx = selectedCategoryIdx
-    ctx.optList = resolveCategoryOptList(cat)
-    if #ctx.optList > 0 then
-      -- Forward enter should always land on the first interactive row.
-      ctx.optSel = 1
-    else
-      ctx.optSel = 1
-    end
-    ctx.optScroll = ctx.optScroll or 0
-  end
-
-  if isCategorizedFile and ctx.state == "editor" and ctx.editorPendingEnterCategoryIdx then
-    applyEnterCategory(ctx.editorPendingEnterCategoryIdx)
-    ctx.editorPendingEnterCategoryIdx = nil
-  elseif isCategorizedFile and ctx.state == "editor_categories" and ctx.editorPendingReturnCategorySel then
-    local prevCategoryIdx = math.max(1, math.floor(tonumber(ctx.editorPendingReturnCategorySel) or 1))
-    if #categories > 0 and prevCategoryIdx > #categories then
-      prevCategoryIdx = #categories
-    end
-    ctx.editorCategoryIdx = 0
-    ctx.optList = nil
-    ctx.optSel = prevCategoryIdx
-    ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #categories, _.MAX_VISIBLE)
-    ctx.editorPendingReturnCategorySel = nil
-  end
-
-  -- Keep interactive rows anchored to the same Y slots between category and child option pages.
-  local editorListStartY = _.MARGIN_Y + _.scaleY(50)
-
   if isCategorizedFile and ctx.editorCategoryIdx == 0 then
     local cats = categories
     local maxVis = _.MAX_VISIBLE
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #cats)
     ctx.optScroll = _.common.centeredListScroll(ctx.optSel, #cats, maxVis)
-    local startY = editorListStartY
+    local startY = _.MARGIN_Y + _.scaleY(50)
     if _.common and _.common.drawListScrollbar then
       _.common.drawListScrollbar(_, {
         totalRows = #cats,
@@ -1148,7 +1138,7 @@ local function run(ctx)
       _.drawListRow(_.MARGIN_X + 16, y, i == ctx.optSel,
         catLabel, col)
     end
-    local categoryHints = _.common.withStartHintVisibility(_.editor_str.cross_open_circle_back_items, ctx.configModified == true)
+    local categoryHints = withStartHintVisibility(_.editor_str.cross_open_circle_back_items, ctx.configModified == true)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, categoryHints, nil,
       _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
     if (_.padEffective & _.PAD_UP) ~= 0 then
@@ -1173,25 +1163,37 @@ local function run(ctx)
         ctx.bblHotkeySel = 1
         ctx.state = "bbl_hotkeys"
       else
-        if isCategorizedFile then
-          local selectedCategoryIdx = ctx.optSel
-          ctx.editorPendingEnterCategoryIdx = selectedCategoryIdx
-          ctx.state = "editor"
+        local selectedCategoryIdx = ctx.optSel
+        ctx.editorCategoryIdx = selectedCategoryIdx
+        local rawOpts = cat.options or {}
+        -- DKWDRV custom path not applicable for HOSDMenu (no MC path)
+        if ctx.context == "hosdmenu" and ctx.fileType == "osdmenu_cnf" then
+          ctx.optList = {}
+          for _, o in ipairs(rawOpts) do
+            if o.key ~= "path_DKWDRV_ELF" then ctx.optList[#ctx.optList + 1] = o end
+          end
         else
-          local selectedCategoryIdx = ctx.optSel
-          applyEnterCategory(selectedCategoryIdx)
+          ctx.optList = rawOpts
         end
+        local rememberedSel = getCategoryOptSel(ctx, selectedCategoryIdx)
+        if #ctx.optList > 0 then
+          ctx.optSel = math.max(1, math.min(rememberedSel, #ctx.optList))
+        else
+          ctx.optSel = 1
+        end
+        ctx.optScroll = ctx.optScroll or 0
       end
     end
     if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
       if ctx.configModified then
         ctx.editorLeavePrompt = true
       else
-        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0; ctx.editorPendingEnterCategoryIdx = nil; ctx.editorPendingReturnCategorySel = nil
+        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0
       end
     end
   elseif ctx.optList and #ctx.optList > 0 then
-    local startY = editorListStartY
+    local listOffsetY = isR3ConfiguratorFile(ctx) and 50 or 58
+    local startY = _.MARGIN_Y + _.scaleY(listOffsetY)
     local maxVisFallback = isR3ConfiguratorFile(ctx) and math.max(_.MAX_VISIBLE or 0, 12) or _.MAX_VISIBLE
     local maxVis = maxVisFallback
     if _.common and _.common.computeVisibleRows then
@@ -1203,12 +1205,12 @@ local function run(ctx)
     ctx.optSel = _.common.clampListSelection(ctx.optSel or 1, #ctx.optList)
     if #ctx.optList > 0 then
       local currentOpt = ctx.optList[ctx.optSel]
-      if currentOpt and (currentOpt.optType == "header" or isTemporarilyDisabledEditorOption(ctx, _, currentOpt)) then
+      if currentOpt and currentOpt.optType == "header" then
         local idx = ctx.optSel
         for _scan = 1, #ctx.optList do
           idx = _.common.wrapListSelection(idx, #ctx.optList, 1)
           local candidate = ctx.optList[idx]
-          if candidate and candidate.optType ~= "header" and not isTemporarilyDisabledEditorOption(ctx, _, candidate) then
+          if candidate and candidate.optType ~= "header" then
             ctx.optSel = idx
             break
           end
@@ -1234,7 +1236,6 @@ local function run(ctx)
       local lab = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or o.label
       lab = prettifyBblGlobalLabel(ctx, o, lab)
       local valDisplay
-      local optionDisabled = isTemporarilyDisabledEditorOption(ctx, _, o)
       if o.optType == "header" or o.optType == "action" then
         valDisplay = ""
       elseif o.optType == "color" then
@@ -1269,7 +1270,7 @@ local function run(ctx)
         if slot and (slot.used or slot.pathExists) then
           local p = _.common_str.not_set
           if slot.path ~= "" then
-            p = _.common.formatDisplayPathWithCommands(_, slot.path)
+            p = formatDisplayPath(_, slot.path)
           elseif slot.pathExists then
             p = _.common_str.empty
           end
@@ -1290,7 +1291,7 @@ local function run(ctx)
         end
       elseif o.optType == "path" then
         local raw = cachedGet(ctx.lines, o.key) or o.default or ""
-        valDisplay = _.common.formatDisplayPathWithCommands(_, raw)
+        valDisplay = formatDisplayPath(_, raw)
       else
         local multi = cachedGetMulti(ctx.lines, o.key)
         if multi and #multi > 1 then
@@ -1341,7 +1342,7 @@ local function run(ctx)
         if pathVal == nil then
           pathVal = ""
         end
-        local pathDisp = (pathVal ~= "" and _.common.formatDisplayPathWithCommands(_, pathVal)) or _.common_str.not_set
+        local pathDisp = (pathVal ~= "" and formatDisplayPath(_, pathVal)) or _.common_str.not_set
         lab = "  " .. pathDisp
         if ctx.editorEsrPathGrab and i == ctx.optSel then
           lab = "[" .. (_.menu_str.grabbed_tag or "Move") .. "] " .. lab
@@ -1356,7 +1357,7 @@ local function run(ctx)
         local slot = _.config_parse.getBblHotkeySlot and cachedGetBblHotkeySlot(ctx.lines, "AUTO", slotIdx) or nil
         local pathDisp = _.common_str.not_set
         if slot and slot.path and slot.path ~= "" then
-          pathDisp = _.common.formatDisplayPathWithCommands(_, slot.path)
+          pathDisp = formatDisplayPath(_, slot.path)
         elseif slot and slot.pathExists then
           pathDisp = _.common_str.empty
         end
@@ -1375,9 +1376,6 @@ local function run(ctx)
         valDisplay = ""
       end
       if o.optType == "boot_paths" and bootKeyDisabled then
-        col = (i == ctx.optSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
-      end
-      if optionDisabled then
         col = (i == ctx.optSel) and (_.SELECTED_DIM_COLOR or _.SELECTED_COLOR) or (_.DISABLED_DIM_COLOR or _.DIM_COLOR)
       end
       if inlineAutoRow then
@@ -1420,7 +1418,6 @@ local function run(ctx)
         end
         _.drawText(_.font, _.drawMode, rowX + bootHotkeyIconW + bootHotkeyIconGap, y, _.FONT_SCALE, lab, col)
       else
-        lab = formatBelForDisplay(lab)
         _.drawListRow(_.MARGIN_X + 16, y, i == ctx.optSel, lab, col)
       end
       local timerInlineEdit = (i == ctx.optSel) and ctx.timerDigitEdit and ctx.timerDigitEdit.key == o.key
@@ -1441,28 +1438,21 @@ local function run(ctx)
         drawInlineColorEditValue(_, edit, _.VALUE_X + 34, y, _.FONT_SCALE)
       elseif valDisplay then
         if valDisplay ~= "" then
-          local valCol
-          if valDisplay == _.common_str.off or valDisplay == _.common_str.not_set or optionDisabled then
-            valCol = _.DIM_COLOR
-          elseif o.optType == "bool" and valDisplay == _.common_str.on then
-            valCol = _.UNSELECTED_COLOR
-          else
-            valCol = ((i == ctx.optSel) and _.WHITE or _.UNSELECTED_COLOR)
-          end
-          local valDisplayDraw = formatBelForDisplay(valDisplay)
+          local valCol = (valDisplay == _.common_str.off or valDisplay == _.common_str.not_set) and _.DIM_COLOR or
+              ((i == ctx.optSel) and _.WHITE or _.UNSELECTED_COLOR)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
           local drawVal
           if _.common.fitValueText then
-            drawVal = _.common.fitValueText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplayDraw, valueAreaWidth,
+            drawVal = _.common.fitValueText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplay, valueAreaWidth,
               _.FONT_SCALE, i == ctx.optSel, { holdStart = 50, stepFrames = 18, holdEnd = 70 })
           elseif _.common.fitListRowText then
-            drawVal = _.common.fitListRowText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplayDraw, valueAreaWidth,
+            drawVal = _.common.fitListRowText(ctx, "editor_value_row_" .. tostring(i), _.font, valDisplay, valueAreaWidth,
               _.FONT_SCALE, i == ctx.optSel, { holdStart = 50, stepFrames = 18, holdEnd = 70 })
           elseif _.common.truncateTextToWidth then
-            drawVal = (i == ctx.optSel) and valDisplayDraw or
-                _.common.truncateTextToWidth(_.font, valDisplayDraw, valueAreaWidth, _.FONT_SCALE)
+            drawVal = (i == ctx.optSel) and valDisplay or
+                _.common.truncateTextToWidth(_.font, valDisplay, valueAreaWidth, _.FONT_SCALE)
           else
-            drawVal = valDisplayDraw
+            drawVal = valDisplay
           end
           _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, drawVal, valCol)
         end
@@ -1568,25 +1558,6 @@ local function run(ctx)
         if tostring(item and item.pad or ""):lower() == "triangle" then
           item.label = triangleLabel
         end
-      end
-    end
-    local canRunSceneTransitionTest = selOpt and
-        not isTemporarilyDisabledEditorOption(ctx, _, selOpt) and
-        isSceneTransitionTestOption(selOpt)
-    if canRunSceneTransitionTest then
-      local testLabel = (_.editor_str and _.editor_str.test_label) or "Test"
-      local squareHint = nil
-      for i = 1, #hintItems do
-        local item = hintItems[i]
-        if tostring(item and item.pad or ""):lower() == "square" then
-          squareHint = item
-          break
-        end
-      end
-      if squareHint then
-        squareHint.label = testLabel
-      else
-        hintItems[#hintItems + 1] = { pad = "square", label = testLabel, row = 1 }
       end
     end
     if selOpt and selOpt.optType == "header" then
@@ -1987,7 +1958,7 @@ local function run(ctx)
       }
     end
 
-    hintItems = _.common.withStartHintVisibility(hintItems, ctx.configModified == true)
+    hintItems = withStartHintVisibility(hintItems, ctx.configModified == true)
     _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
     if runTimerDigitInlineInput(ctx, _) then
@@ -2148,7 +2119,7 @@ local function run(ctx)
       for _scan = 1, count do
         idx = _.common.wrapListSelection(idx, count, step)
         local candidate = ctx.optList[idx]
-        if candidate and candidate.optType ~= "header" and not isTemporarilyDisabledEditorOption(ctx, _, candidate) then
+        if not (candidate and candidate.optType == "header") then
           ctx.optSel = idx
           return
         end
@@ -2175,29 +2146,36 @@ local function run(ctx)
     end
     if (_.padEffective & (_.PAD_LEFT | _.PAD_RIGHT)) ~= 0 then
       local o = ctx.optList[ctx.optSel]
-      if o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "enum" and o.enumVals and #o.enumVals > 0 then
+      if o.optType == "enum" and o.enumVals and #o.enumVals > 0 then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
         local allowUnset = (o.default == "")
-        local idx
+        local idx = 0
         if cur == "" then
           idx = allowUnset and 0 or 1
         else
-          idx = findEnumIndex(o.enumVals, cur)
+          for ei, v in ipairs(o.enumVals) do
+            if v == cur then
+              idx = ei; break
+            end
+          end
           if idx == 0 then idx = 1 end
         end
         if (_.padEffective & _.PAD_LEFT) ~= 0 then
-          idx = cycleEnumIndex(ctx, o, idx, -1, allowUnset)
+          idx = idx - 1
+          if idx < 0 then idx = #o.enumVals end
+          if idx == 0 and not allowUnset then idx = #o.enumVals end
         end
         if (_.padEffective & _.PAD_RIGHT) ~= 0 then
-          idx = cycleEnumIndex(ctx, o, idx, 1, allowUnset)
+          idx = idx + 1
+          if idx > #o.enumVals then idx = (allowUnset and 0 or 1) end
         end
         setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
         markConfigMutated(ctx)
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "bool" then
+      elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
         markConfigMutated(ctx)
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "int" then
+      elseif o.optType == "int" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
         if not num then num = tonumber(o.default or "0") end
@@ -2226,7 +2204,7 @@ local function run(ctx)
           setConfigValue(ctx, _, o.key, tostring(math.floor(num)))
           markConfigMutated(ctx)
         end
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "string" then
+      elseif o.optType == "string" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         local num = tonumber(cur)
         if num then
@@ -2272,70 +2250,65 @@ local function run(ctx)
         return
       end
       local o = ctx.optList[ctx.optSel]
-      if o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "enum" and o.enumVals and #o.enumVals > 0 and
+      if o.optType == "enum" and o.enumVals and #o.enumVals > 0 and
           (((ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini") and
             (o.key == "VIDEO_MODE" or o.key == "LOGO_DISPLAY")) or
             (ctx.fileType == "osdmenu_cnf" and (o.key == "OSDSYS_video_mode" or o.key == "OSDSYS_region")) or
             (ctx.fileType == "osdmbr_cnf" and (o.key == "osd_screentype" or o.key == "osd_language")) or
             (ctx.fileType == "r3configurator_cnf")) then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or ""
-        local allowUnset = (o.default == "")
-        local idx
-        if cur == "" then
-          idx = allowUnset and 0 or 1
-        else
-          idx = findEnumIndex(o.enumVals, cur)
-          if idx == 0 then idx = 1 end
+        local idx = 0
+        for ei, v in ipairs(o.enumVals) do
+          if v == cur then
+            idx = ei
+            break
+          end
         end
-        idx = cycleEnumIndex(ctx, o, idx, 1, allowUnset)
-        setConfigValue(ctx, _, o.key, (idx == 0) and "" or o.enumVals[idx])
+        idx = idx + 1
+        if idx > #o.enumVals then idx = 1 end
+        setConfigValue(ctx, _, o.key, o.enumVals[idx])
         markConfigMutated(ctx)
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "bool" then
+      elseif o.optType == "bool" then
         local cur = _.config_parse.get(ctx.lines, o.key) or o.default or "0"
         setConfigValue(ctx, _, o.key, (cur == "1") and "0" or "1")
         markConfigMutated(ctx)
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "int" then
+      elseif o.optType == "int" then
         if isTimerDigitEditKey(o.key) then
           startTimerDigitEdit(ctx, _, o)
         else
           startIntDigitEdit(ctx, _, o)
         end
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "color" then
+      elseif o.optType == "color" then
         startInlineColorEdit(ctx, _, o)
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and (o.optType == "text" or o.optType == "string") then
+      elseif o.optType == "text" or o.optType == "string" then
+        local belProfile = (ctx.context == "freehddboot" or ctx.context == "hosdmenu") and "hddosd" or "ps2rom"
         local allowBelKey = (o.key == "OSDSYS_left_cursor" or o.key == "OSDSYS_right_cursor" or
           o.key == "OSDSYS_menu_top_delimiter" or o.key == "OSDSYS_menu_bottom_delimiter")
-        local prompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
+        ctx.textInputTitleIdMode = nil
+        ctx.textInputPrompt = (_.strings.options and _.strings.options[o.key] and _.strings.options[o.key].label) or
             o.label or _.common_str.enter_text
-        local initialValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
-        local maxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
-        _.common.configureBelTextInput(ctx, {
-          allow = allowBelKey,
-          context = ctx.context,
-        })
-        local onSubmit = function(val)
+        ctx.textInputValue = _.config_parse.get(ctx.lines, o.key) or o.default or ""
+        ctx.textInputMaxLen = (o.maxLen and o.maxLen > 0) and o.maxLen or 79
+        ctx.textInputEnableBelKey = allowBelKey and true or nil
+        ctx.textInputBelProfile = allowBelKey and belProfile or nil
+        ctx.textInputAllowBelAdd = allowBelKey and true or nil
+        ctx.textInputHidePipeBackslash = nil
+        ctx.textInputCallback = function(val)
           setConfigValue(ctx, _, o.key, val or "")
           markConfigMutated(ctx)
           ctx.state = "editor"
         end
-        _.common.beginTextInput(ctx, {
-          titleIdMode = nil,
-          prompt = prompt,
-          value = initialValue,
-          maxLen = maxLen,
-          callback = onSubmit,
-          returnState = "editor",
-          gridSel = 1,
-          cursor = #initialValue + 1,
-          scroll = 1,
-          state = "text_input",
-        })
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_menu_entries" then
+        ctx.textInputReturnState = "editor"
+        ctx.textInputGridSel = 1
+        ctx.textInputCursor = #ctx.textInputValue + 1
+        ctx.textInputScroll = 1
+        ctx.state = "text_input"
+      elseif o.key == "_menu_entries" then
         ctx.state = "menu_entries"
         ctx.entryList = _.config_parse.getMenuEntryIndices(ctx.lines)
         ctx.entrySel = 1
         ctx.entryScroll = 0
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_bbl_irx_entries" then
+      elseif o.key == "_bbl_irx_entries" then
         local irxEntries = (_.config_parse.getBblIrxEntryIndices and _.config_parse.getBblIrxEntryIndices(ctx.lines)) or {}
         local targetIrxIdx, targetIrxDisabled = nil, false
         local hasUsableIrx = false
@@ -2395,10 +2368,10 @@ local function run(ctx)
           ctx.bblIrxScroll = 0
           ctx.state = "bbl_irx_entries"
         end
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key == "_bbl_hotkeys" then
+      elseif o.key == "_bbl_hotkeys" then
         ctx.bblHotkeySel = 1
         ctx.state = "bbl_hotkeys"
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "bbl_slot" and o.bblEntrySlot then
+      elseif o.optType == "bbl_slot" and o.bblEntrySlot then
         ctx.bblHotkeyKey = o.bblKeyId or "AUTO"
         local isAutoKey = tostring(ctx.bblHotkeyKey or ""):upper() == "AUTO"
         local slotNum = tonumber(o.bblEntrySlot)
@@ -2450,7 +2423,7 @@ local function run(ctx)
           ctx.bblEntryDetailReturnState = "editor"
           ctx.state = "bbl_hotkey_entry"
         end
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "boot_paths" then
+      elseif o.optType == "boot_paths" then
         local bootEntries = (_.config_parse.getBootPathEntries and _.config_parse.getBootPathEntries(ctx.lines, o.key)) or {}
         local hasUsableBootPath = false
         for bi = 1, #bootEntries do
@@ -2502,7 +2475,7 @@ local function run(ctx)
           ctx.entryPathScroll = 0
           ctx.state = "entry_paths"
         end
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.optType == "path" then
+      elseif o.optType == "path" then
         ctx.editKey = o.key
         ctx.isAddPath = false
         ctx.addPathKey = nil
@@ -2532,15 +2505,14 @@ local function run(ctx)
       end
     end
     if (_.padEffective & _.PAD_SQUARE) ~= 0 then
-      local o = ctx.optList and ctx.optList[ctx.optSel] or nil
-      if o and not isTemporarilyDisabledEditorOption(ctx, _, o) and isSceneTransitionTestOption(o) then
-        beginSceneTransitionSelfTest(ctx, _)
-      elseif isAutoSlotRow then
-        _.common.openActionsMenu(ctx, "editorAutoSlotActionsOpen", "editorAutoSlotActionsSel",
-          "editorAutoSlotActionsScroll")
+      if isAutoSlotRow then
+        ctx.editorAutoSlotActionsOpen = true
+        ctx.editorAutoSlotActionsSel = ctx.editorAutoSlotActionsSel or 1
+        ctx.editorAutoSlotActionsScroll = ctx.editorAutoSlotActionsScroll or 0
       elseif isEsrPathRow then
-        _.common.openActionsMenu(ctx, "editorEsrPathActionsOpen", "editorEsrPathActionsSel",
-          "editorEsrPathActionsScroll")
+        ctx.editorEsrPathActionsOpen = true
+        ctx.editorEsrPathActionsSel = ctx.editorEsrPathActionsSel or 1
+        ctx.editorEsrPathActionsScroll = ctx.editorEsrPathActionsScroll or 0
       end
     end
     if (_.padEffective & _.PAD_TRIANGLE) ~= 0 and ctx.optList and #ctx.optList > 0 then
@@ -2579,7 +2551,7 @@ local function run(ctx)
         ctx.editorR3ColorPresetSel = ctx.editorR3ColorPresetSel or 1
         ctx.editorR3ColorPresetScroll = ctx.editorR3ColorPresetScroll or 0
         ctx.editorR3ColorPresetKey = o.key
-      elseif o and not isTemporarilyDisabledEditorOption(ctx, _, o) and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
+      elseif o and o.key and o.key:sub(1, 1) ~= "_" and o.optType ~= "header" then
         local def = resetDefaultFn and resetDefaultFn(o.key)
         if def ~= nil and not optionMatchesDefault(ctx, _, o.key, def, cachedGet) then
           setConfigValue(ctx, _, o.key, def)
@@ -2588,23 +2560,41 @@ local function run(ctx)
       end
     end
   else
-    -- Avoid transient "no option list" flash while transitioning out of editor.
-    -- During outgoing transition we may still render the editor scene for a few
-    -- frames after ctx.lines/currentPath have been cleared for the destination scene.
-    local shouldShowNoOptionList = (ctx.lines ~= nil) or (ctx.currentPath ~= nil)
-    if shouldShowNoOptionList then
-      _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.editor_str.no_option_list,
-        _.UNSELECTED_COLOR)
-      local emptyHints = _.common.withStartHintVisibility(_.editor_str.start_save_circle_back_items, ctx.configModified == true)
-      _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, emptyHints, nil,
-        _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
-    end
+    _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y + _.scaleY(60), _.FONT_SCALE, _.editor_str.no_option_list,
+      _.UNSELECTED_COLOR)
+    local emptyHints = withStartHintVisibility(_.editor_str.start_save_circle_back_items, ctx.configModified == true)
+    _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, emptyHints, nil,
+      _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
   end
 
   if ctx.configModified and ((_.padEffective & _.PAD_START) ~= 0) then
-    _.common.saveCurrentConfig(ctx, {
-      allowChoose = (ctx.fileType == "osdmenu_cnf"),
-    })
+    ctx.saveSplash = nil
+    local locations = _.getLocations(ctx.context, ctx.fileType, ctx.chosenMcSlot)
+    if ctx.fileType == "osdmenu_cnf" and #locations >= 2 then
+      ctx.saveChoices = locations
+      ctx.saveSel = ctx.saveSel or 1
+      ctx.state = "choose_save"
+    else
+      local path = ctx.currentPath or (locations and locations[1])
+      if path and path ~= "" then
+        ctx.lines = _.config_parse.regenerateForSave(ctx.lines, ctx.fileType, _.config_options)
+        local parentDir = path:match("^(.+)/[^/]+$")
+        local ok, err = _.common.saveConfig(ctx, path, ctx.lines, parentDir)
+        if ok then
+          ctx.currentPath = path
+          ctx.saveSplash = { kind = "saved", detail = path or "", framesLeft = 60 }
+          ctx.configModified = false
+        else
+          ctx.saveSplash = {
+            kind = "failed",
+            detail = _.common.localizeParseError(err, _.editor_str) or _.editor_str.save_failed,
+            framesLeft = 120
+          }
+        end
+      else
+        ctx.saveSplash = { kind = "failed", detail = _.editor_str.no_save_location, framesLeft = 120 }
+      end
+    end
   end
   if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
     ctx.timerDigitEdit = nil
@@ -2649,15 +2639,17 @@ local function run(ctx)
     ctx.editorR3ColorPresetScroll = nil
     ctx.editorR3ColorPresetKey = nil
     if isCategorizedFile and ctx.editorCategoryIdx and ctx.editorCategoryIdx > 0 then
+      setCategoryOptSel(ctx, ctx.editorCategoryIdx, ctx.optSel)
       local prevCategoryIdx = ctx.editorCategoryIdx
-      ctx.editorPendingReturnCategorySel = prevCategoryIdx
-      ctx.state = "editor_categories"
+      ctx.editorCategoryIdx = 0
+      ctx.optList = nil
+      ctx.optSel = prevCategoryIdx
       ctx.saveSplash = nil
     else
       if ctx.configModified then
         ctx.editorLeavePrompt = true
       else
-        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0; ctx.editorPendingEnterCategoryIdx = nil; ctx.editorPendingReturnCategorySel = nil; ctx.saveSplash = nil
+        ctx.state = getEditorBackState(ctx); ctx.currentPath = nil; ctx.lines = nil; ctx.optList = nil; ctx.editorCategoryIdx = 0; ctx.saveSplash = nil
       end
     end
   end
