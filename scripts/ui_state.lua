@@ -99,6 +99,8 @@ local function initContext()
     openExplicitPath = nil,
     katamariEasterEggReturnState = nil,
     _katamariStickActiveFrames = 0,
+    _katamariStickCountdownFrames = 0,
+    _katamariStickNeutralFrames = 0,
     _katamariStickRequireRelease = nil,
     _katamariEasterEggTriggered = nil,
   }

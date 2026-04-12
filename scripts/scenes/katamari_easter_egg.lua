@@ -45,6 +45,8 @@ local function run(ctx)
     end
     ctx.katamariEasterEggReturnState = nil
     ctx._katamariStickActiveFrames = 0
+    ctx._katamariStickCountdownFrames = 0
+    ctx._katamariStickNeutralFrames = 0
     ctx.state = returnState
   end
 end

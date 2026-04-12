@@ -1,5 +1,5 @@
 --[[
-  OSDMenu GUI Configurator — main and editor UI.
+  R3Configurator -  GUI Configurator for FMCB, OSDMenu, PS2BBL — main and editor UI.
   Renders every frame; pad debounced. Main flow in ui_main.lua.
 ]]
 
@@ -1016,6 +1016,9 @@ local KATAMARI_EASTER_EGG_STATE = "katamari_easter_egg"
 local KATAMARI_EASTER_EGG_TRIGGER_SECONDS = 10
 local KATAMARI_EASTER_EGG_TRIGGER_FRAMES = math.max(1,
   math.floor((KATAMARI_EASTER_EGG_TRIGGER_SECONDS * 60) + 0.5))
+local KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_SECONDS = 0.5
+local KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_FRAMES = math.max(0,
+  math.floor((KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_SECONDS * 60) + 0.5))
 
 local function isValidImageHandle(img)
   return type(img) == "number" and img ~= 0
@@ -1067,39 +1070,67 @@ local function isAnyStickActive()
   return not (lx == 0 and ly == 0 and rx == 0 and ry == 0)
 end
 
+local function resetKatamariEasterEggCounters(ctx)
+  ctx._katamariStickActiveFrames = 0
+  ctx._katamariStickCountdownFrames = 0
+  ctx._katamariStickNeutralFrames = 0
+end
+
 local function updateKatamariEasterEggTrigger(ctx, sceneName)
   if type(ctx) ~= "table" then return false end
   if ctx._katamariEasterEggTriggered == true then
-    ctx._katamariStickActiveFrames = 0
+    resetKatamariEasterEggCounters(ctx)
     return false
   end
   if sceneName == KATAMARI_EASTER_EGG_STATE or ctx.state == KATAMARI_EASTER_EGG_STATE then
-    ctx._katamariStickActiveFrames = 0
+    resetKatamariEasterEggCounters(ctx)
     return false
   end
+
   local stickActive = isAnyStickActive()
   local requireRelease = (ctx._katamariStickRequireRelease == true)
-  if stickActive then
-    if requireRelease then
-      ctx._katamariStickActiveFrames = 0
-      return false
-    end
-    local heldFrames = math.max(0, math.floor(tonumber(ctx._katamariStickActiveFrames) or 0)) + 1
-    ctx._katamariStickActiveFrames = heldFrames
-    if heldFrames >= KATAMARI_EASTER_EGG_TRIGGER_FRAMES then
-      ctx._katamariStickActiveFrames = 0
-      ctx._katamariStickRequireRelease = true
-      ctx._katamariEasterEggTriggered = true
-      ctx.katamariEasterEggReturnState = sceneName
-      ctx.state = KATAMARI_EASTER_EGG_STATE
-      return true
+
+  if requireRelease then
+    resetKatamariEasterEggCounters(ctx)
+    if not stickActive then
+      ctx._katamariStickRequireRelease = nil
     end
     return false
   end
-  ctx._katamariStickActiveFrames = 0
-  if requireRelease then
-    ctx._katamariStickRequireRelease = nil
+
+  local countdownFrames = math.max(0, math.floor(tonumber(ctx._katamariStickCountdownFrames) or 0))
+  local activeFrames = math.max(0, math.floor(tonumber(ctx._katamariStickActiveFrames) or 0))
+  local neutralFrames = math.max(0, math.floor(tonumber(ctx._katamariStickNeutralFrames) or 0))
+
+  if stickActive then
+    countdownFrames = countdownFrames + 1
+    activeFrames = activeFrames + 1
+  elseif countdownFrames > 0 then
+    countdownFrames = countdownFrames + 1
+    neutralFrames = neutralFrames + 1
+  else
+    resetKatamariEasterEggCounters(ctx)
+    return false
   end
+
+  ctx._katamariStickCountdownFrames = countdownFrames
+  ctx._katamariStickActiveFrames = activeFrames
+  ctx._katamariStickNeutralFrames = neutralFrames
+
+  if neutralFrames > KATAMARI_EASTER_EGG_NEUTRAL_ALLOW_FRAMES then
+    resetKatamariEasterEggCounters(ctx)
+    return false
+  end
+
+  if countdownFrames >= KATAMARI_EASTER_EGG_TRIGGER_FRAMES then
+    resetKatamariEasterEggCounters(ctx)
+    ctx._katamariStickRequireRelease = true
+    ctx._katamariEasterEggTriggered = true
+    ctx.katamariEasterEggReturnState = sceneName
+    ctx.state = KATAMARI_EASTER_EGG_STATE
+    return true
+  end
+
   return false
 end
 

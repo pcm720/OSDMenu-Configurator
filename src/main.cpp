@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
   initGraphics();
   showSplashScreen();
 
-  printf("\n******\nOSDMenu Configurator %s by pcm720\nBased on Enceladus by DanielSant0s\nhttps://github.com/DanielSant0s/Enceladus\n******\n\n", APP_VERSION);
+  printf("\n******\nR3Configurator %s by pcm720\nBased on Enceladus by DanielSant0s\nhttps://github.com/DanielSant0s/Enceladus\n******\n\n", APP_VERSION);
 
   // Init basic device drivers
   if (device_init()) {
