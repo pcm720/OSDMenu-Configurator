@@ -284,6 +284,7 @@ local function run(ctx)
     selKey = "entryArgGsmPickerSel",
     videoKey = "entryArgGsmVideoIdx",
     compatKey = "entryArgGsmCompatIdx",
+    compatSelectedKey = "entryArgGsmCompatSelected",
     argKeyKey = "entryArgGsmArgKey",
     lastVideoKey = "entryArgGsmLastVideoIdx",
     editIdxKey = "entryArgGsmEditIdx",

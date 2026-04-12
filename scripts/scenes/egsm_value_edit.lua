@@ -29,6 +29,7 @@ local function run(ctx)
       end
     end
     ctx.egsmVideoIdx, ctx.egsmCompatIdx = _.config_parse.parseEgsmValue(cur)
+    ctx.egsmCompatSelected = (ctx.egsmVideoIdx and ctx.egsmVideoIdx > 1 and ctx.egsmCompatIdx and ctx.egsmCompatIdx > 1) and true or false
     ctx.egsmValueSel = 1
     if ctx.egsmEditCommented == nil then ctx.egsmEditCommented = false end
   end
@@ -95,7 +96,7 @@ local function run(ctx)
     local isActive = (ctx.egsmCompatIdx == i)
     local col = compatDim and _.DIM_COLOR or ((isCur and _.SELECTED_COLOR) or _.UNSELECTED_COLOR)
     _.drawListRow(_.MARGIN_X + 20, y, isCur, label, col)
-    if isActive and hasVideo then
+    if isActive and hasVideo and ctx.egsmCompatSelected then
       _.drawText(_.font, _.drawMode, _.VALUE_X, y, _.FONT_SCALE, "✓", _.UNSELECTED_COLOR)
     end
     row = row + 1
@@ -103,14 +104,25 @@ local function run(ctx)
 
   local baseHints = _.strings.egsm.value_edit_hint or {}
   local crossLabel = (baseHints[1] and baseHints[1].label) or "Select"
+  local doneLabel = "Done"
+  do
+    local textInputHints = _.strings and _.strings.text_input and _.strings.text_input.hint_items_title_id
+    if type(textInputHints) ~= "table" then
+      textInputHints = _.strings and _.strings.text_input and _.strings.text_input.hint_items
+    end
+    if type(textInputHints) == "table" then
+      for _, item in ipairs(textInputHints) do
+        if type(item) == "table" and item.pad == "start" and type(item.label) == "string" and item.label ~= "" then
+          doneLabel = item.label
+          break
+        end
+      end
+    end
+  end
   local backLabel = (baseHints[2] and baseHints[2].label) or (_.menu_str.back_label or "Back")
   local valueEditHints = {
     { pad = "cross", label = crossLabel, row = 1 },
-    {
-      pad = ctx.configModified and "start" or "",
-      label = ctx.configModified and (_.menu_str.save_config_label or "Save") or "",
-      row = 1
-    },
+    { pad = "start", label = doneLabel, row = 1 },
     { pad = "circle", label = backLabel, row = 1 },
   }
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, valueEditHints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
@@ -129,6 +141,7 @@ local function run(ctx)
     if ctx.egsmValueSel >= 1 and ctx.egsmValueSel <= NUM_VIDEO_OPTS then
       local vi = ctx.egsmValueSel + 1 -- sel 1..5 -> EGSM_VIDEO index 2..6
       ctx.egsmVideoIdx = vi
+      ctx.egsmValueSel = NUM_VIDEO_OPTS + 1
       local val = _.config_parse.buildEgsmValue(ctx.egsmVideoIdx, ctx.egsmCompatIdx)
       if ctx.egsmEditDefault then
         _.config_parse.setEgsmDefault(ctx.lines, val, commented)
@@ -139,6 +152,7 @@ local function run(ctx)
     elseif ctx.egsmValueSel > NUM_VIDEO_OPTS and ctx.egsmValueSel <= total and hasVideo then
       local ci = ctx.egsmValueSel - NUM_VIDEO_OPTS -- sel 6..9 -> compat index 1..4
       ctx.egsmCompatIdx = ci
+      ctx.egsmCompatSelected = true
       local val = _.config_parse.buildEgsmValue(ctx.egsmVideoIdx, ctx.egsmCompatIdx)
       if ctx.egsmEditDefault then
         _.config_parse.setEgsmDefault(ctx.lines, val, commented)
@@ -149,19 +163,22 @@ local function run(ctx)
     end
   end
 
-  if ctx.configModified and (_.padEffective & _.PAD_START) ~= 0 then
-    _.common.saveCurrentConfig(ctx, {
-      allowChoose = true,
-      locationFileType = "osdgsm_cnf",
-    })
-  end
-
-  if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+  local function closeValueEdit()
     ctx.egsmVideoIdx = nil
     ctx.egsmCompatIdx = nil
+    ctx.egsmCompatSelected = nil
     ctx.egsmEditDefault = nil
     ctx.egsmEditTitleId = nil
     ctx.state = "egsm_editor"
+  end
+
+  if (_.padEffective & _.PAD_START) ~= 0 then
+    closeValueEdit()
+    return
+  end
+
+  if (_.padEffective & _.PAD_CIRCLE) ~= 0 then
+    closeValueEdit()
   end
 end
 
