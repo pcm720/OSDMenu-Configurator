@@ -96,6 +96,7 @@ common.PAD_HINT_ICON_PRESS_LERP_IN = 0.55
 common.PAD_HINT_ICON_PRESS_LERP_OUT = 0.35
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+local hintFtFontLastPxByHandle     = {}
 local hintTypographyCache          = {}
 
 local function flushTextWidthCache()
@@ -169,11 +170,17 @@ function common.flushHintFtFontCache(unloadFonts)
       end
       hintFtFontCache[key] = nil
     end
+    for handleKey in pairs(hintFtFontLastPxByHandle) do
+      hintFtFontLastPxByHandle[handleKey] = nil
+    end
     common.flushHintTypographyCache()
     return
   end
   for key in pairs(hintFtFontCache) do
     hintFtFontCache[key] = nil
+  end
+  for handleKey in pairs(hintFtFontLastPxByHandle) do
+    hintFtFontLastPxByHandle[handleKey] = nil
   end
   common.flushHintTypographyCache()
 end
@@ -931,19 +938,29 @@ local function getHintFtFont(scaleFactor, opts)
   if sf <= 0 then sf = 1 end
   opts = opts or {}
   local basePx = getRuntimeFtPixelBase(opts)
+  local px = math.max(8, math.floor((basePx * sf) + 0.5))
   local lockSceneScale = opts.lockSceneScale == true
   local key = string.format("%d@%.3f@%d", math.floor(basePx + 0.5), sf, lockSceneScale and 1 or 0)
-  if hintFtFontCache[key] then return hintFtFontCache[key] end
-  local f = loadFtFontWithFallback()
-  if f and f >= 0 then
-    if Font.ftSetPixelSize then
-      local px = math.max(8, math.floor((basePx * sf) + 0.5))
-      pcall(Font.ftSetPixelSize, f, 0, px)
+  local f = hintFtFontCache[key]
+  if not (f and f >= 0) then
+    f = loadFtFontWithFallback()
+    if f and f >= 0 then
+      hintFtFontCache[key] = f
     end
-    hintFtFontCache[key] = f
-    return hintFtFontCache[key]
   end
-  return nil
+  if not (f and f >= 0) then
+    return nil
+  end
+
+  if Font.ftSetPixelSize then
+    local handleKey = tostring(f)
+    local prevPx = tonumber(hintFtFontLastPxByHandle[handleKey]) or -1
+    if prevPx ~= px then
+      pcall(Font.ftSetPixelSize, f, 0, px)
+      hintFtFontLastPxByHandle[handleKey] = px
+    end
+  end
+  return f
 end
 
 function common.getHintFont(fallbackFont, drawMode, textScale, opts)
@@ -1023,8 +1040,15 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
     tostring(ftPxKey),
   }, "@")
 
+  local fontOpts = {
+    lockSceneScale = lockSceneScale
+  }
+
   local cached = hintTypographyCache[key]
   if cached then
+    -- Re-resolve hint font on each request so pixel size is corrected even when
+    -- underlying FT handles are shared/mutated by other text draws (e.g. keyboard labels).
+    cached.font = common.getHintFont(fallbackFont, drawMode, textScale, fontOpts)
     return cached
   end
 
@@ -1033,9 +1057,6 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
     drawScale = globalScale
   end
 
-  local fontOpts = {
-    lockSceneScale = lockSceneScale
-  }
   local hintFont = common.getHintFont(fallbackFont, drawMode, textScale, fontOpts)
   local textHeight = common.getHintLabelTextHeight({
     lockSceneScale = lockSceneScale,
