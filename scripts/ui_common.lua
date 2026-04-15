@@ -1231,36 +1231,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return getTextWidthAtScale(label, drawScale)
     end
 
-    local function getBestLabelScaleToFit(label, maxWidth, maxScale)
-      local topScale = tonumber(maxScale) or drawScale
-      if topScale > drawScale then topScale = drawScale end
-      if topScale < minLabelScale then topScale = minLabelScale end
-      if not label or label == "" then return topScale end
-      if not maxWidth or maxWidth <= 0 then return minLabelScale end
-      local baseW = getTextWidthAtScale(label, topScale)
-      if baseW <= maxWidth then
-        return topScale
-      end
-      local minW = getTextWidthAtScale(label, minLabelScale)
-      if minW > maxWidth then
-        return minLabelScale
-      end
-      -- Binary-search the largest readable scale that still fits.
-      local lo, hi = minLabelScale, topScale
-      local best = minLabelScale
-      for _ = 1, 8 do
-        local mid = (lo + hi) * 0.5
-        local w = getTextWidthAtScale(label, mid)
-        if w <= maxWidth then
-          best = mid
-          lo = mid
-        else
-          hi = mid
-        end
-      end
-      return best
-    end
-
     if type(runtime) == "table" then
       if type(runtime.hintGridLabelCandidates) ~= "table" then
         runtime.hintGridLabelCandidates = {}
@@ -1340,41 +1310,40 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       width = baseWidth + autoExtraW
       widthEff = width - 2 * sideMargin
       if common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
-        local globalScale = drawScale
-        local preSlotW = widthEff / slotCount
-        for i = 1, slotCount do
-          local pad = rowPads[i]
-          local labelW = tonumber(maxLabelWByPad[pad]) or fallbackLabelW
-          if labelW > 0 then
-            local slotLeft = xEff + (i - 1) * preSlotW
-            local slotCenter = slotLeft + preSlotW / 2
-            local basePx = math.floor(slotCenter - iconW / 2)
-            local textX = basePx + iconW + gap
-            local maxLabelWAvail
-            if i < slotCount then
-              local nextSlotLeft = xEff + i * preSlotW
-              local nextIconLeft = math.floor((nextSlotLeft + (preSlotW / 2)) - (iconW / 2))
-              maxLabelWAvail = nextIconLeft - labelSafeGap - textX
-            else
-              local rightEdge = xEff + widthEff - labelSafeGap
-              maxLabelWAvail = rightEdge - textX
-            end
-            if not maxLabelWAvail or maxLabelWAvail <= 0 then
-              globalScale = minLabelScale
-            elseif labelW > maxLabelWAvail then
-              local fitScale = drawScale * (maxLabelWAvail / labelW)
-              if fitScale < globalScale then
-                globalScale = fitScale
+        local currentGlobal = tonumber(runtime.hintGridGlobalLabelScale)
+        if not currentGlobal or currentGlobal <= 0 then
+          local globalScale = drawScale
+          local preSlotW = widthEff / slotCount
+          for i = 1, slotCount do
+            local pad = rowPads[i]
+            local labelW = tonumber(maxLabelWByPad[pad]) or fallbackLabelW
+            if labelW > 0 then
+              local slotLeft = xEff + (i - 1) * preSlotW
+              local slotCenter = slotLeft + preSlotW / 2
+              local basePx = math.floor(slotCenter - iconW / 2)
+              local textX = basePx + iconW + gap
+              local maxLabelWAvail
+              if i < slotCount then
+                local nextSlotLeft = xEff + i * preSlotW
+                local nextIconLeft = math.floor((nextSlotLeft + (preSlotW / 2)) - (iconW / 2))
+                maxLabelWAvail = nextIconLeft - labelSafeGap - textX
+              else
+                local rightEdge = xEff + widthEff - labelSafeGap
+                maxLabelWAvail = rightEdge - textX
+              end
+              if not maxLabelWAvail or maxLabelWAvail <= 0 then
+                globalScale = minLabelScale
+              elseif labelW > maxLabelWAvail then
+                local fitScale = drawScale * (maxLabelWAvail / labelW)
+                if fitScale < globalScale then
+                  globalScale = fitScale
+                end
               end
             end
           end
+          globalScale = math.max(minLabelScale, math.min(drawScale, globalScale))
+          runtime.hintGridGlobalLabelScale = globalScale
         end
-        globalScale = math.max(minLabelScale, math.min(drawScale, globalScale))
-        local prevGlobal = tonumber(runtime.hintGridGlobalLabelScale)
-        if prevGlobal and prevGlobal > 0 and prevGlobal < globalScale then
-          globalScale = prevGlobal
-        end
-        runtime.hintGridGlobalLabelScale = globalScale
       end
     end
 
@@ -1418,54 +1387,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return s
     end
 
-    local function getSlotMaxLabelW(col)
-      local slotLeft = xEff + (col - 1) * slotW
-      local slotCenter = slotLeft + slotW / 2
-      local basePx = math.floor(slotCenter - iconW / 2)
-      local textX = basePx + iconW + gap
-      if col < slotCount then
-        local nextSlotLeft = xEff + col * slotW
-        local nextIconLeft = math.floor((nextSlotLeft + (slotW / 2)) - (iconW / 2))
-        return nextIconLeft - labelSafeGap - textX
-      end
-      local rightEdge = xEff + widthEff - labelSafeGap
-      return rightEdge - textX
-    end
-
-    local function getRowRequiredLabelScale(slots, startScale)
-      local required = clampLabelScale(startScale)
-      for col = 1, slotCount do
-        local slot = slots and slots[col]
-        local label = tostring(slot and slot.label or "")
-        if slot and slot.used and label ~= "" then
-          local maxLabelW = getSlotMaxLabelW(col)
-          if maxLabelW and maxLabelW > 0 then
-            local fitScale = getBestLabelScaleToFit(label, maxLabelW, required)
-            if fitScale < required then
-              required = fitScale
-            end
-          else
-            required = minLabelScale
-          end
-        end
-      end
-      return clampLabelScale(required)
-    end
-
     local resolvedLabelScale = drawScale
     if common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
-      local seedScale = drawScale
-      if type(runtime) == "table" then
-        seedScale = clampLabelScale(runtime.hintGridGlobalLabelScale or drawScale)
-      end
-      local fitScale = getRowRequiredLabelScale(rowSlots, seedScale)
-      if fitScale < seedScale then
-        seedScale = fitScale
-      end
-      resolvedLabelScale = seedScale
-      if type(runtime) == "table" then
-        runtime.hintGridGlobalLabelScale = resolvedLabelScale
-      end
+      resolvedLabelScale = clampLabelScale(type(runtime) == "table" and runtime.hintGridGlobalLabelScale or drawScale)
     end
 
     local totalRowH = rowH
