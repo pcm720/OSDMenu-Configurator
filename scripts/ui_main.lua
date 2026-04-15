@@ -798,10 +798,12 @@ local function runMain(s, pad)
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
     local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.675)
-    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+    local baseScale = tonumber((common and common.PAD_HINT_BASE_SCALE) or 0.7)
+    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(baseScale)) or (baseScale * textScale)
     local rowScale = titleScale
-    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
-    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
+    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale, { lockSceneScale = true })) or
+        s.font
+    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight({ lockSceneScale = true })) or
         math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
     local function textWidth(text, scale)
       local useScale = scale or rowScale
@@ -907,7 +909,7 @@ local function runMain(s, pad)
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
       local hintBg = (common and common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
-      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
       Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
@@ -958,10 +960,12 @@ local function runMain(s, pad)
     local lines = buildMainCreditsLines(main_str)
     local total = #lines
     local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.675)
-    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
+    local baseScale = tonumber((common and common.PAD_HINT_BASE_SCALE) or 0.7)
+    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(baseScale)) or (baseScale * textScale)
     local rowScale = titleScale
-    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
-    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
+    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale, { lockSceneScale = true })) or
+        s.font
+    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight({ lockSceneScale = true })) or
         math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
     local function textWidth(text, scale)
       local useScale = scale or rowScale
@@ -1052,7 +1056,7 @@ local function runMain(s, pad)
     local hintItems = buildMainCreditsOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
       local hintBg = (common and common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
-      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
       Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)

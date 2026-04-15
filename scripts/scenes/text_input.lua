@@ -553,8 +553,11 @@ end
 
 local function buildBelMenuLayoutMetrics(_, rowsByPage)
   local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.675)
-  local rowScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
-  local hintFont = (_.common and _.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
+  local baseScale = tonumber((_.common and _.common.PAD_HINT_BASE_SCALE) or 0.7)
+  local rowScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(baseScale)) or
+      (baseScale * textScale)
+  local hintFont = (_.common and _.common.getHintFont and
+      _.common.getHintFont(_.font, _.drawMode, textScale, { lockSceneScale = true })) or _.font
   local function textWidth(text)
     local s = tostring(text or "")
     if _.common and _.common.calcTextWidth then

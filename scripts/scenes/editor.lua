@@ -1486,10 +1486,13 @@ local function run(ctx)
         descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
       end
       if descStr ~= "" then
-        local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
-        local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * hintTextScale)
-        local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
-        local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
+        local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.675
+        local baseScale = tonumber(_.common.PAD_HINT_BASE_SCALE) or 0.7
+        local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(baseScale)) or
+            (baseScale * hintTextScale)
+        local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale, { lockSceneScale = true })) or
+            _.font
+        local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight({ lockSceneScale = true })) or
             math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
         local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
         local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)

@@ -1238,11 +1238,13 @@ local function run(ctx)
             selectedHelper = getFmcbCommandHelper(selectedEntry)
           end
           if selectedHelper and selectedHelper ~= "" then
-            local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
-            local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or
-                (0.7 * hintTextScale)
-            local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
-            local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or nil
+            local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.675
+            local baseScale = tonumber(_.common.PAD_HINT_BASE_SCALE) or 0.7
+            local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(baseScale)) or
+                (baseScale * hintTextScale)
+            local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale, { lockSceneScale = true })) or
+                _.font
+            local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight({ lockSceneScale = true })) or nil
             local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
             if _.common.fitListRowText then
               selectedHelper = _.common.fitListRowText(ctx, "path_picker_device_helper", hintFont, selectedHelper,

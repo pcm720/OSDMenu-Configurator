@@ -939,7 +939,18 @@ end
 function common.getHintFont(fallbackFont, drawMode, textScale, opts)
   local hintFont = fallbackFont
   if drawMode == "ftPrint" then
-    local f = getHintFtFont(textScale or 1, opts)
+    local hintOpts = opts
+    if type(hintOpts) ~= "table" then
+      hintOpts = { lockSceneScale = true }
+    elseif hintOpts.lockSceneScale == nil then
+      hintOpts = {
+        lockSceneScale = true
+      }
+      for k, v in pairs(opts) do
+        hintOpts[k] = v
+      end
+    end
+    local f = getHintFtFont(textScale or 1, hintOpts)
     if f then hintFont = f end
   end
   return hintFont
@@ -952,8 +963,19 @@ function common.getHintLabelDrawScale(baseScale)
 end
 
 function common.getHintLabelTextHeight(opts)
+  local metricOpts = opts
+  if type(metricOpts) ~= "table" then
+    metricOpts = { lockSceneScale = true }
+  elseif metricOpts.lockSceneScale == nil then
+    metricOpts = {
+      lockSceneScale = true
+    }
+    for k, v in pairs(opts) do
+      metricOpts[k] = v
+    end
+  end
   local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
-  local basePx = getRuntimeFtPixelBase(opts)
+  local basePx = getRuntimeFtPixelBase(metricOpts)
   return math.max(10, math.floor(basePx * ts + 0.5))
 end
 
