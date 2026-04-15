@@ -278,23 +278,18 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   drawHintsUntransformed(function()
     clearShoulderHintRowForCrossDissolve(topRowTop, rowH)
-    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
-    if not transitionActive then
+    local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
+      hintKey = hintKey,
+      stableField = "keyboardShoulderStableSlots",
+      fadeField = "keyboardShoulderFadeStates",
+      rowSlots = rowSlots,
+      cloneSlots = cloneSlots,
+      slotsEqual = slotsEqual,
+      drawRow = drawRow,
+      drawBlendedRows = drawBlendedRows,
+    })
+    if not handled then
       drawRow(rowSlots)
-    else
-      local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
-        hintKey = hintKey,
-        stableField = "keyboardShoulderStableSlots",
-        fadeField = "keyboardShoulderFadeStates",
-        rowSlots = rowSlots,
-        cloneSlots = cloneSlots,
-        slotsEqual = slotsEqual,
-        drawRow = drawRow,
-        drawBlendedRows = drawBlendedRows,
-      })
-      if not handled then
-        drawRow(rowSlots)
-      end
     end
   end)
 end
