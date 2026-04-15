@@ -154,6 +154,9 @@ end
 local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
+if common and common.onLanguageChanged then
+  pcall(common.onLanguageChanged, nil, strings)
+end
 
 local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_SQUARE, PAD_TRIANGLE = common.PAD_UP, common.PAD_DOWN,
     common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_SQUARE, common.PAD_TRIANGLE
@@ -480,6 +483,9 @@ local function applyLanguageFileIndex(s, idx)
       s.main = labels
       s.mainEntries = entries
       s.mainBuildKey = nil
+    end
+    if common and common.onLanguageChanged then
+      pcall(common.onLanguageChanged, s, newStrings)
     end
     return true
   end

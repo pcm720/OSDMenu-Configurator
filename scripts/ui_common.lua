@@ -76,6 +76,12 @@ common.SCENE_TRANSITION_MAX_FRAMES = 60
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_GRID_EXTRA_W       = 60
 common.PAD_HINT_GRID_X_SHIFT       = -55
+common.PAD_HINT_GRID_AUTO_WIDEN    = true                 -- widen once (per language/font metrics) to fit helper labels
+common.PAD_HINT_GRID_AUTO_MAX_EXTRA_W = 220               -- hard cap so hint row never grows unbounded
+common.PAD_HINT_GRID_RIGHT_OVERSCAN = 8                   -- keep widened grid this many pixels away from right edge
+common.PAD_HINT_LABEL_SAFE_GAP     = 4                    -- keep text away from next icon / next slot edge
+common.PAD_HINT_LABEL_MIN_SCALE_FACTOR = 0.82             -- shrink hint labels only as needed (relative to base)
+common.PAD_HINT_CANDIDATE_MAX_CHARS = 24                  -- ignore very long non-hint labels when scanning language strings
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
@@ -86,6 +92,124 @@ common.PAD_HINT_ICON_PRESS_LERP_IN = 0.55
 common.PAD_HINT_ICON_PRESS_LERP_OUT = 0.35
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+
+local function flushTextWidthCache()
+  common._textWidthCache = {}
+  common._textWidthCacheSize = 0
+end
+
+local function trimHintLabel(text)
+  local s = tostring(text or "")
+  s = s:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+  return s
+end
+
+local function addHintLabelCandidate(out, seen, label)
+  local cleaned = trimHintLabel(label)
+  if cleaned == "" then return end
+  local maxChars = math.max(4, math.floor(tonumber(common.PAD_HINT_CANDIDATE_MAX_CHARS) or 24))
+  if #cleaned > maxChars then return end
+  if seen[cleaned] then return end
+  seen[cleaned] = true
+  out[#out + 1] = cleaned
+end
+
+function common.collectHintLabelCandidates(stringsTable)
+  local out = {}
+  local seen = {}
+  local visited = {}
+
+  local function walk(value)
+    if type(value) ~= "table" or visited[value] then return end
+    visited[value] = true
+
+    for i = 1, #value do
+      local item = value[i]
+      if type(item) == "table" then
+        if item.pad ~= nil and item.label ~= nil then
+          addHintLabelCandidate(out, seen, item.label)
+        end
+        walk(item)
+      end
+    end
+
+    for k, v in pairs(value) do
+      if type(v) == "table" then
+        walk(v)
+      elseif type(v) == "string" then
+        local key = tostring(k or "")
+        if key:match("_label$") or key:match("_hint$") then
+          addHintLabelCandidate(out, seen, v)
+        end
+      end
+    end
+  end
+
+  walk(stringsTable)
+
+  local baseline = {
+    "Enter", "Select", "Back", "Cancel", "Actions", "Save",
+    "Move", "Insert", "Remove", "Language", "Settings", "Credits",
+  }
+  for i = 1, #baseline do
+    addHintLabelCandidate(out, seen, baseline[i])
+  end
+  return out
+end
+
+function common.flushTextWidthCache()
+  flushTextWidthCache()
+end
+
+function common.flushHintFtFontCache(unloadFonts)
+  if unloadFonts and Font and Font.ftUnload then
+    for key, fontHandle in pairs(hintFtFontCache) do
+      if type(fontHandle) == "number" and fontHandle >= 0 then
+        pcall(Font.ftUnload, fontHandle)
+      end
+      hintFtFontCache[key] = nil
+    end
+    return
+  end
+  for key in pairs(hintFtFontCache) do
+    hintFtFontCache[key] = nil
+  end
+end
+
+function common.handleVideoModeMetricsChanged(ctx, modeSig)
+  flushTextWidthCache()
+  common.flushHintFtFontCache(true)
+  local runtime = _G and _G.CONFIG_UI
+  if runtime then
+    runtime.currentFtPixelH = nil
+    runtime.hintGridAutoNeedsRecalc = true
+  end
+  if type(ctx) ~= "table" then
+    return
+  end
+  ctx._ftPixelSizeApplied = nil
+  ctx._rowMarqueeStates = nil
+  ctx.textInputKeyboardDrawCache = nil
+  ctx.textInputKeyLabelFontByShrinkPx = nil
+  ctx.textInputKeyLabelFontByShrinkPxSig = nil
+  ctx.textInputKeyLabelWidthCache = nil
+  ctx.textInputKeyLabelWidthCacheSig = nil
+  ctx.textInputKeyLabelWidthWarmSig = nil
+  ctx._layoutVideoModeSig = modeSig
+end
+
+function common.onLanguageChanged(ctx, stringsTable)
+  flushTextWidthCache()
+  if type(ctx) == "table" then
+    ctx._rowMarqueeStates = nil
+  end
+  local runtime = _G and _G.CONFIG_UI
+  if type(runtime) ~= "table" then return end
+  runtime.hintGridLabelCandidates = common.collectHintLabelCandidates(stringsTable or runtime.strings or {})
+  runtime.hintGridAutoExtraW = nil
+  runtime.hintGridAutoNeedsRecalc = true
+end
+
 local function normalize3(xv, yv, zv)
   local l = math.sqrt((xv * xv) + (yv * yv) + (zv * zv))
   if l <= 0.000001 then return 0, 0, 1 end
@@ -759,6 +883,7 @@ function common.applyFtPixelSize(ctx, font, drawMode, optsOrUiScale, usePcall)
     else
       Font.ftSetPixelSize(font, 0, wantPx)
     end
+    flushTextWidthCache()
     ctx._ftPixelSizeApplied = wantPx
   end
   if runtime then
@@ -1032,13 +1157,26 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
+    local labelSafeGap = math.max(2, math.floor(tonumber(common.PAD_HINT_LABEL_SAFE_GAP) or 6))
     local textH = common.getHintLabelTextHeight({ lockSceneScale = true })
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
     local approxCharW = math.floor(8 * drawScale)
-    local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
-    width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
+    local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
+    local gridBaseExtraW = tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0
+    baseWidth = baseWidth + gridBaseExtraW
+    local autoExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
+    if autoExtraW < 0 then autoExtraW = 0 end
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
+    local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or common.DEFAULT_W
+    local rightOverscan = math.max(0, math.floor(tonumber(common.PAD_HINT_GRID_RIGHT_OVERSCAN) or 8))
+    local maxWidthEffByScreen = math.max(1, math.floor((sceneW - rightOverscan) - xEff))
+    local baseWidthEff = math.max(1, baseWidth - (2 * sideMargin))
+    local maxAutoExtraByScreen = math.max(0, maxWidthEffByScreen - baseWidthEff)
+    if autoExtraW > maxAutoExtraByScreen then
+      autoExtraW = maxAutoExtraByScreen
+    end
+    local width = baseWidth + autoExtraW
     local widthEff = width - 2 * sideMargin
     local rowPads
     if common.isSwapCrossCircle() then
@@ -1047,27 +1185,94 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       rowPads = { "cross", "square", "start", "triangle", "circle" }
     end
     local slotCount = #rowPads
-    local slotW = widthEff / slotCount
     local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
+    local minLabelScaleFactor = tonumber(common.PAD_HINT_LABEL_MIN_SCALE_FACTOR) or 0.82
+    if minLabelScaleFactor <= 0 then minLabelScaleFactor = 0.82 end
+    if minLabelScaleFactor > 1 then minLabelScaleFactor = 1 end
+    local minLabelScale = drawScale * minLabelScaleFactor
+    if minLabelScale < 0.3 then minLabelScale = 0.3 end
     -- Keep one shared hint-row transition state across scenes so back/forward
     -- navigation always fades between previous/next rows, even if layout width
     -- differs between scenes.
     local hintKey = "__main_hint_row__"
 
-    local function getTextWidth(label)
+    local function getTextWidthAtScale(label, labelScale)
       if not label or label == "" then return 0 end
+      local s = tonumber(labelScale) or drawScale
       if common.calcTextWidth then
-        local w = common.calcTextWidth(hintFont, label, drawScale)
+        local w = common.calcTextWidth(hintFont, label, s)
         if type(w) == "number" and w > 0 then
           return w
         end
       end
       if drawMode == "ftPrint" and hintFont and Font and Font.ftCalcDimensions then
         local w = Font.ftCalcDimensions(hintFont, label)
-        return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #label)
+        if type(w) == "number" and w > 0 then
+          return w
+        end
       end
-      return math.floor(approxCharW * #label)
+      local approx = math.max(1, math.floor(8 * s))
+      return math.floor(approx * #label)
     end
+
+    local function getTextWidth(label)
+      return getTextWidthAtScale(label, drawScale)
+    end
+
+    local function getBestLabelScaleToFit(label, maxWidth)
+      if not label or label == "" then return drawScale end
+      if not maxWidth or maxWidth <= 0 then return minLabelScale end
+      local baseW = getTextWidthAtScale(label, drawScale)
+      if baseW <= maxWidth then
+        return drawScale
+      end
+      local minW = getTextWidthAtScale(label, minLabelScale)
+      if minW > maxWidth then
+        return minLabelScale
+      end
+      -- Binary-search the largest readable scale that still fits.
+      local lo, hi = minLabelScale, drawScale
+      local best = minLabelScale
+      for _ = 1, 8 do
+        local mid = (lo + hi) * 0.5
+        local w = getTextWidthAtScale(label, mid)
+        if w <= maxWidth then
+          best = mid
+          lo = mid
+        else
+          hi = mid
+        end
+      end
+      return best
+    end
+
+    if type(runtime) == "table" and common.PAD_HINT_GRID_AUTO_WIDEN ~= false and runtime.hintGridAutoNeedsRecalc == true then
+      local labels = runtime.hintGridLabelCandidates
+      local maxLabelW = 0
+      for i = 1, #(labels or {}) do
+        local lw = getTextWidth(labels[i])
+        if lw > maxLabelW then
+          maxLabelW = lw
+        end
+      end
+      local minSlotWNeeded = math.max(0, maxLabelW) + iconW + gap + labelSafeGap
+      local neededWidthEff = math.max(baseWidthEff, minSlotWNeeded * slotCount)
+      local neededTotalW = neededWidthEff + (2 * sideMargin)
+      local neededExtra = math.max(0, math.floor((neededTotalW - baseWidth) + 0.5))
+      local maxExtra = math.max(0, math.floor(tonumber(common.PAD_HINT_GRID_AUTO_MAX_EXTRA_W) or 220))
+      local maxAllowedExtra = math.min(maxExtra, maxAutoExtraByScreen)
+      runtime.hintGridAutoExtraW = math.min(maxAllowedExtra, neededExtra)
+      runtime.hintGridAutoNeedsRecalc = nil
+      autoExtraW = tonumber(runtime.hintGridAutoExtraW) or 0
+      if autoExtraW < 0 then autoExtraW = 0 end
+      if autoExtraW > maxAutoExtraByScreen then
+        autoExtraW = maxAutoExtraByScreen
+      end
+      width = baseWidth + autoExtraW
+      widthEff = width - 2 * sideMargin
+    end
+
+    local slotW = widthEff / slotCount
 
     local rowSlots = {}
     local rowMap = {}
@@ -1151,15 +1356,42 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         end
       end
       if drawLabelAlpha > 0.001 and label ~= "" then
-        local textW = getTextWidth(label)
+        local labelDrawScale = drawScale
+        local textW = getTextWidthAtScale(label, labelDrawScale)
         local textX
+        local maxLabelW
         if icon then
           textX = basePx + iconW + gap
+          if col < slotCount then
+            local nextSlotLeft = xEff + col * slotW
+            local nextIconLeft = math.floor((nextSlotLeft + (slotW / 2)) - (iconW / 2))
+            maxLabelW = nextIconLeft - labelSafeGap - textX
+          else
+            local rightEdge = xEff + widthEff - labelSafeGap
+            maxLabelW = rightEdge - textX
+          end
         else
           textX = math.floor(slotCenter - textW / 2)
+          local rightEdge = xEff + widthEff - labelSafeGap
+          maxLabelW = rightEdge - textX
         end
-        local labelColor = applyAlpha(getPadLabelColor(padName, color), drawLabelAlpha)
-        common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
+        if maxLabelW and maxLabelW > 0 then
+          labelDrawScale = getBestLabelScaleToFit(label, maxLabelW)
+          textW = getTextWidthAtScale(label, labelDrawScale)
+          if common.truncateTextToWidth then
+            label = common.truncateTextToWidth(hintFont, label, maxLabelW, labelDrawScale)
+            textW = getTextWidthAtScale(label, labelDrawScale)
+            if not icon then
+              textX = math.floor(slotCenter - textW / 2)
+            end
+          end
+        else
+          label = ""
+        end
+        if label ~= "" then
+          local labelColor = applyAlpha(getPadLabelColor(padName, color), drawLabelAlpha)
+          common.drawText(hintFont, drawMode, textX, textY, labelDrawScale, label, labelColor, textH)
+        end
       end
     end
 
@@ -1955,6 +2187,19 @@ end
 
 function common.runLayout(ctx)
   local vmode = Screen.getMode()
+  local modeSig = "nil\31\31\31\31"
+  if type(vmode) == "table" then
+    modeSig = table.concat({
+      tostring(vmode.mode or ""),
+      tostring(vmode.width or ""),
+      tostring(vmode.height or ""),
+      tostring(vmode.interlace or ""),
+      tostring(vmode.field or ""),
+    }, "\31")
+  end
+  if ctx and ctx._layoutVideoModeSig ~= modeSig then
+    common.handleVideoModeMetricsChanged(ctx, modeSig)
+  end
   local w = (vmode and vmode.width) or common.DEFAULT_W
   local h = (vmode and vmode.height) or common.DEFAULT_H
   local sx = w / common.DEFAULT_W
@@ -2198,9 +2443,8 @@ function common.calcTextWidth(font, text, scale)
   local approxCharW = math.floor(8 * s)
   local cache = common._textWidthCache
   if not cache then
-    cache = {}
-    common._textWidthCache = cache
-    common._textWidthCacheSize = 0
+    flushTextWidthCache()
+    cache = common._textWidthCache
   end
   local cacheKey = tostring(font) .. "\31" .. tostring(s) .. "\31" .. tostring(text)
   local cachedWidth = cache[cacheKey]
@@ -2217,8 +2461,7 @@ function common.calcTextWidth(font, text, scale)
   cache[cacheKey] = measured
   common._textWidthCacheSize = (common._textWidthCacheSize or 0) + 1
   if (common._textWidthCacheSize or 0) > 8192 then
-    common._textWidthCache = {}
-    common._textWidthCacheSize = 0
+    flushTextWidthCache()
   end
   return measured
 end
