@@ -2033,8 +2033,13 @@ local function mainLoop()
 
     -- Keep keyboard shoulder hints transition-consistent across scene changes.
     -- Non-keyboard scenes drive this row toward empty so it fades out instead of cutting.
-    if renderedState ~= "text_input" and renderedState ~= KATAMARI_EASTER_EGG_STATE and scene_text_input and
-        type(scene_text_input.drawShoulderHints) == "function" then
+    local runtime = _G and _G.CONFIG_UI
+    local pendingShoulderFade = type(runtime) == "table" and type(runtime.keyboardShoulderFadeStates) == "table" and
+        runtime.keyboardShoulderFadeStates["__keyboard_shoulder_hint_row__"] ~= nil
+    local driveKeyboardShoulderRow = (type(runtime) == "table" and runtime.sceneTransitionAnimActive == true) or
+        pendingShoulderFade
+    if driveKeyboardShoulderRow and renderedState ~= "text_input" and renderedState ~= KATAMARI_EASTER_EGG_STATE and
+        scene_text_input and type(scene_text_input.drawShoulderHints) == "function" then
       local shoulderTotalWidth = (c.w or common.DEFAULT_W) - (2 * (c.MARGIN_X or common.MARGIN_X))
       local ok, err = pcall(scene_text_input.drawShoulderHints, c, c._, {}, 0.7, shoulderTotalWidth, c.DIM_COLOR or DIM_COLOR)
       if not ok and c then

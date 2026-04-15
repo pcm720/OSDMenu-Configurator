@@ -278,18 +278,37 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   drawHintsUntransformed(function()
     clearShoulderHintRowForCrossDissolve(topRowTop, rowH)
-    local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
-      hintKey = hintKey,
-      stableField = "keyboardShoulderStableSlots",
-      fadeField = "keyboardShoulderFadeStates",
-      rowSlots = rowSlots,
-      cloneSlots = cloneSlots,
-      slotsEqual = slotsEqual,
-      drawRow = drawRow,
-      drawBlendedRows = drawBlendedRows,
-    })
-    if not handled then
+    local transitionInfo = (_.common.getHintRowTransitionInfo and _.common.getHintRowTransitionInfo(runtime)) or nil
+    local useAnimatedTransition = (type(runtime) == "table") and transitionInfo and transitionInfo.active == true and
+        transitionInfo.instant ~= true
+    if not useAnimatedTransition then
+      if type(runtime) == "table" then
+        if type(runtime.keyboardShoulderStableSlots) ~= "table" then
+          runtime.keyboardShoulderStableSlots = {}
+        end
+        local stableSlots = runtime.keyboardShoulderStableSlots[hintKey]
+        if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
+          runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(rowSlots)
+        end
+        if type(runtime.keyboardShoulderFadeStates) == "table" then
+          runtime.keyboardShoulderFadeStates[hintKey] = nil
+        end
+      end
       drawRow(rowSlots)
+    else
+      local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
+        hintKey = hintKey,
+        stableField = "keyboardShoulderStableSlots",
+        fadeField = "keyboardShoulderFadeStates",
+        rowSlots = rowSlots,
+        cloneSlots = cloneSlots,
+        slotsEqual = slotsEqual,
+        drawRow = drawRow,
+        drawBlendedRows = drawBlendedRows,
+      })
+      if not handled then
+        drawRow(rowSlots)
+      end
     end
   end)
 end
