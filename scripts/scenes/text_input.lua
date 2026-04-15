@@ -961,7 +961,6 @@ local KEY_PRESS_OUT_FRAMES = 7
 local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
 local KEY_PRESS_MAX_DARKEN = 0.24
 local KEY_LABEL_SCALE = 0.7
-local KEY_LABEL_FT_FONT_SCALE = 1.0
 local KEY_LABEL_PRESS_SHRINK_PX = 2.0
 local KEY_LABEL_Y_BIAS = -1.0
 
@@ -1349,8 +1348,7 @@ local function run(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = KEY_LABEL_SCALE
-  local keyFontBase = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
-    { lockSceneScale = true })) or _.font
+  local keyFontBase = _.font
   local maxLabelShrinkPx = math.max(0, math.floor((tonumber(KEY_LABEL_PRESS_SHRINK_PX) or 0) + 0.5))
   local keyLabelBasePx = math.max(8, math.floor(((tonumber(_.common and _.common.FT_PIXEL_H) or 18) *
       math.max(0.1, tonumber(runtime and runtime.currentUiScale) or tonumber(ctx.uiScale) or 1)) + 0.5))
@@ -1359,12 +1357,9 @@ local function run(ctx)
   local keyFontsByShrinkPx = ctx.textInputKeyLabelFontByShrinkPx
   if type(keyFontsByShrinkPx) ~= "table" or ctx.textInputKeyLabelFontByShrinkPxSig ~= keyFontScaleSig then
     keyFontsByShrinkPx = { [0] = keyFontBase }
-    if _.drawMode == "ftPrint" and _.common and _.common.getHintFont and keyLabelBasePx > 0 then
+    if _.drawMode == "ftPrint" then
       for shrinkPx = 1, maxLabelShrinkPx do
-        local drawPx = math.max(8, keyLabelBasePx - shrinkPx)
-        local drawScale = drawPx / keyLabelBasePx
-        keyFontsByShrinkPx[shrinkPx] = _.common.getHintFont(_.font, _.drawMode, drawScale, { lockSceneScale = true }) or
-            keyFontBase
+        keyFontsByShrinkPx[shrinkPx] = keyFontBase
       end
     end
     ctx.textInputKeyLabelFontByShrinkPx = keyFontsByShrinkPx

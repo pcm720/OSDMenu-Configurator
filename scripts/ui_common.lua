@@ -957,6 +957,7 @@ local function getHintFtFont(scaleFactor, opts)
     local prevPx = tonumber(hintFtFontLastPxByHandle[handleKey]) or -1
     if prevPx ~= px then
       pcall(Font.ftSetPixelSize, f, 0, px)
+      flushTextWidthCache()
       hintFtFontLastPxByHandle[handleKey] = px
     end
   end
