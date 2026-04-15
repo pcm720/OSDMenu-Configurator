@@ -278,22 +278,8 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   drawHintsUntransformed(function()
     clearShoulderHintRowForCrossDissolve(topRowTop, rowH)
-    local transitionInfo = (_.common.getHintRowTransitionInfo and _.common.getHintRowTransitionInfo(runtime)) or nil
-    local transitionType = tostring((transitionInfo and transitionInfo.type) or "")
-    local useAnimatedTransition = (type(runtime) == "table") and (transitionInfo and transitionInfo.active == true) and
-        transitionType ~= "flip_horizontal" and transitionType ~= "flip_vertical"
-    if not useAnimatedTransition then
-      -- Flip transitions already animate the scene; avoid a second shoulder-hint
-      -- fade so top and bottom keyboard helper rows stay visually in sync.
-      if type(runtime) == "table" then
-        if type(runtime.keyboardShoulderStableSlots) ~= "table" then
-          runtime.keyboardShoulderStableSlots = {}
-        end
-        runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(rowSlots)
-        if type(runtime.keyboardShoulderFadeStates) == "table" then
-          runtime.keyboardShoulderFadeStates[hintKey] = nil
-        end
-      end
+    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
+    if not transitionActive then
       drawRow(rowSlots)
     else
       local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
@@ -1841,7 +1827,6 @@ local function run(ctx)
       (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X, {
-    disableTransitions = true,
     getIconPressAmount = function(padName)
       if suppressPressVisualsForFrame or pressAnimEntryGateActive then
         return 0
