@@ -278,8 +278,22 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   drawHintsUntransformed(function()
     clearShoulderHintRowForCrossDissolve(topRowTop, rowH)
-    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
-    if not transitionActive then
+    local transitionInfo = (_.common.getHintRowTransitionInfo and _.common.getHintRowTransitionInfo(runtime)) or nil
+    local transitionType = tostring((transitionInfo and transitionInfo.type) or "")
+    local useAnimatedTransition = (type(runtime) == "table") and (transitionInfo and transitionInfo.active == true) and
+        transitionType ~= "flip_horizontal" and transitionType ~= "flip_vertical"
+    if not useAnimatedTransition then
+      -- Flip transitions already animate the scene; avoid a second shoulder-hint
+      -- fade so top and bottom keyboard helper rows stay visually in sync.
+      if type(runtime) == "table" then
+        if type(runtime.keyboardShoulderStableSlots) ~= "table" then
+          runtime.keyboardShoulderStableSlots = {}
+        end
+        runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(rowSlots)
+        if type(runtime.keyboardShoulderFadeStates) == "table" then
+          runtime.keyboardShoulderFadeStates[hintKey] = nil
+        end
+      end
       drawRow(rowSlots)
     else
       local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
