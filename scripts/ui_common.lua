@@ -59,7 +59,8 @@ common.PAD_ICON_H                  = 26
 common.PAD_HINT_GAP                = 5
 common.PAD_HINT_ROW_H              = 28
 common.PAD_HINT_SIDE_MARGIN        = 16
-common.PAD_HINT_TEXT_SCALE         = 0.75
+common.PAD_HINT_TEXT_SCALE         = 0.675 -- 10% smaller helper/description text for better fit safety
+common.PAD_HINT_ICON_SCALE         = 0.54  -- 10% smaller helper button icons (was 0.60)
 common.PAD_HINT_BASE_SCALE         = 0.7
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
@@ -79,9 +80,10 @@ common.PAD_HINT_GRID_X_SHIFT       = -55
 common.PAD_HINT_GRID_AUTO_WIDEN    = true                 -- widen once (per language/font metrics) to fit helper labels
 common.PAD_HINT_GRID_AUTO_MAX_EXTRA_W = 220               -- hard cap so hint row never grows unbounded
 common.PAD_HINT_GRID_RIGHT_OVERSCAN = 8                   -- keep widened grid this many pixels away from right edge
+common.PAD_HINT_ALIGN_CROSS_TO_X   = true                 -- align cross-slot icon left edge to drawHintLine x (main header margin)
 common.PAD_HINT_LABEL_SAFE_GAP     = 4                    -- keep text away from next icon / next slot edge
-common.PAD_HINT_LABEL_MIN_SCALE_FACTOR = 0.82             -- shrink hint labels only as needed (relative to base)
-common.PAD_HINT_CANDIDATE_MAX_CHARS = 24                  -- ignore very long non-hint labels when scanning language strings
+common.PAD_HINT_LABEL_MIN_SCALE_FACTOR = 0.70             -- shrink hint labels only as needed (relative to base)
+common.PAD_HINT_CANDIDATE_MAX_CHARS = 40                  -- ignore implausibly long labels for width auto-sizing
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
@@ -133,14 +135,9 @@ function common.collectHintLabelCandidates(stringsTable)
       end
     end
 
-    for k, v in pairs(value) do
+    for _, v in pairs(value) do
       if type(v) == "table" then
         walk(v)
-      elseif type(v) == "string" then
-        local key = tostring(k or "")
-        if key:match("_label$") or key:match("_hint$") then
-          addHintLabelCandidate(out, seen, v)
-        end
       end
     end
   end
@@ -183,6 +180,7 @@ function common.handleVideoModeMetricsChanged(ctx, modeSig)
   if runtime then
     runtime.currentFtPixelH = nil
     runtime.hintGridAutoNeedsRecalc = true
+    runtime.hintGridMaxLabelWByPad = nil
   end
   if type(ctx) ~= "table" then
     return
@@ -206,6 +204,8 @@ function common.onLanguageChanged(ctx, stringsTable)
   local runtime = _G and _G.CONFIG_UI
   if type(runtime) ~= "table" then return end
   runtime.hintGridLabelCandidates = common.collectHintLabelCandidates(stringsTable or runtime.strings or {})
+  runtime.hintGridSeenLabels = nil
+  runtime.hintGridMaxLabelWByPad = nil
   runtime.hintGridAutoExtraW = nil
   runtime.hintGridAutoNeedsRecalc = true
 end
@@ -943,12 +943,12 @@ end
 
 function common.getHintLabelDrawScale(baseScale)
   local bs = tonumber(baseScale) or common.PAD_HINT_BASE_SCALE or 0.7
-  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
   return bs * ts
 end
 
 function common.getHintLabelTextHeight(opts)
-  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
   local basePx = getRuntimeFtPixelBase(opts)
   return math.max(10, math.floor(basePx * ts + 0.5))
 end
@@ -1141,6 +1141,14 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if rh <= 0 then return end
     Graphics.drawRect(0, ry, rw, rh, common.BACKGROUND_COLOR)
   end
+  local function clearHintRowForOverwrite(topY, height)
+    if not (Graphics and Graphics.drawRect) then return end
+    local rw = math.max(1, math.floor((type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or common.DEFAULT_W))
+    local ry = math.floor(tonumber(topY) or 0) - 1
+    local rh = math.max(0, math.floor(tonumber(height) or 0) + 2)
+    if rh <= 0 then return end
+    Graphics.drawRect(0, ry, rw, rh, common.BACKGROUND_COLOR)
+  end
   local function getPadLabelColor(padName, fallbackColor)
     local key = tostring(padName or ""):lower()
     if key == "cross" then return common.PAD_LABEL_CROSS end
@@ -1151,13 +1159,13 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     return fallbackColor
   end
   if hintItems and #hintItems > 0 then
-    local iconScale = 0.6
-    local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+    local iconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
+    local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
     local drawScale = common.getHintLabelDrawScale(scale)
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
-    local labelSafeGap = math.max(2, math.floor(tonumber(common.PAD_HINT_LABEL_SAFE_GAP) or 6))
+    local labelSafeGap = math.max(2, math.floor(tonumber(common.PAD_HINT_LABEL_SAFE_GAP) or 4))
     local textH = common.getHintLabelTextHeight({ lockSceneScale = true })
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
     local approxCharW = math.floor(8 * drawScale)
@@ -1186,8 +1194,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
     local slotCount = #rowPads
     local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
-    local minLabelScaleFactor = tonumber(common.PAD_HINT_LABEL_MIN_SCALE_FACTOR) or 0.82
-    if minLabelScaleFactor <= 0 then minLabelScaleFactor = 0.82 end
+    local minLabelScaleFactor = tonumber(common.PAD_HINT_LABEL_MIN_SCALE_FACTOR) or 0.70
+    if minLabelScaleFactor <= 0 then minLabelScaleFactor = 0.70 end
     if minLabelScaleFactor > 1 then minLabelScaleFactor = 1 end
     local minLabelScale = drawScale * minLabelScaleFactor
     if minLabelScale < 0.3 then minLabelScale = 0.3 end
@@ -1246,6 +1254,44 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return best
     end
 
+    if type(runtime) == "table" then
+      if type(runtime.hintGridLabelCandidates) ~= "table" then
+        runtime.hintGridLabelCandidates = {}
+      end
+      local seenLabels = runtime.hintGridSeenLabels
+      if type(seenLabels) ~= "table" then
+        seenLabels = {}
+        runtime.hintGridSeenLabels = seenLabels
+      end
+      local maxLabelWByPad = runtime.hintGridMaxLabelWByPad
+      if type(maxLabelWByPad) ~= "table" then
+        maxLabelWByPad = {}
+        runtime.hintGridMaxLabelWByPad = maxLabelWByPad
+      end
+      local added = false
+      for i = 1, #hintItems do
+        local item = hintItems[i]
+        if type(item) == "table" and item.pad ~= nil and item.label ~= nil then
+          local before = #runtime.hintGridLabelCandidates
+          addHintLabelCandidate(runtime.hintGridLabelCandidates, seenLabels, item.label)
+          if #runtime.hintGridLabelCandidates > before then
+            added = true
+          end
+          local padKey = common.remapCrossCirclePadName(tostring(item.pad or ""):lower())
+          if padKey ~= "" then
+            local labelW = getTextWidth(trimHintLabel(item.label))
+            if labelW > (tonumber(maxLabelWByPad[padKey]) or 0) then
+              maxLabelWByPad[padKey] = labelW
+              added = true
+            end
+          end
+        end
+      end
+      if added then
+        runtime.hintGridAutoNeedsRecalc = true
+      end
+    end
+
     if type(runtime) == "table" and common.PAD_HINT_GRID_AUTO_WIDEN ~= false and runtime.hintGridAutoNeedsRecalc == true then
       local labels = runtime.hintGridLabelCandidates
       local maxLabelW = 0
@@ -1255,7 +1301,23 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
           maxLabelW = lw
         end
       end
-      local minSlotWNeeded = math.max(0, maxLabelW) + iconW + gap + labelSafeGap
+      local maxLabelWByPad = (type(runtime.hintGridMaxLabelWByPad) == "table") and runtime.hintGridMaxLabelWByPad or {}
+      local fallbackLabelW = math.max(0, maxLabelW)
+      local minSlotWNeeded = 0
+      for i = 1, slotCount do
+        local pad = rowPads[i]
+        local labelW = tonumber(maxLabelWByPad[pad]) or fallbackLabelW
+        local slotNeed
+        if i < slotCount then
+          slotNeed = labelW + iconW + gap + labelSafeGap
+        else
+          -- Last slot (circle/cross) has only half-slot text room to the right edge.
+          slotNeed = (2 * labelW) + iconW + (2 * gap) + (2 * labelSafeGap)
+        end
+        if slotNeed > minSlotWNeeded then
+          minSlotWNeeded = slotNeed
+        end
+      end
       local neededWidthEff = math.max(baseWidthEff, minSlotWNeeded * slotCount)
       local neededTotalW = neededWidthEff + (2 * sideMargin)
       local neededExtra = math.max(0, math.floor((neededTotalW - baseWidth) + 0.5))
@@ -1273,6 +1335,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     local slotW = widthEff / slotCount
+    if common.PAD_HINT_ALIGN_CROSS_TO_X ~= false then
+      local desiredXEff = (tonumber(x) or 0) + (iconW * 0.5) - (slotW * 0.5)
+      local maxXEff = (sceneW - rightOverscan) - widthEff
+      if desiredXEff > maxXEff then desiredXEff = maxXEff end
+      xEff = desiredXEff
+    end
 
     local rowSlots = {}
     local rowMap = {}
@@ -1301,6 +1369,20 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
 
     local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH
+    local overwriteExistingRow = false
+    if type(runtime) == "table" then
+      local frameCounter = math.floor(tonumber(runtime.uiFrameCounter) or -1)
+      if runtime._hintRowDrawFrame ~= frameCounter then
+        runtime._hintRowDrawFrame = frameCounter
+        runtime._hintRowDrawnRows = {}
+      end
+      if type(runtime._hintRowDrawnRows) ~= "table" then
+        runtime._hintRowDrawnRows = {}
+      end
+      local rowKey = tostring(rowTop) .. ":" .. tostring(totalRowH)
+      overwriteExistingRow = runtime._hintRowDrawnRows[rowKey] == true
+      runtime._hintRowDrawnRows[rowKey] = true
+    end
 
     local function getIconVisualAlpha(slot)
       if slot and slot.used == true then return 1 end
@@ -1446,14 +1528,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             -- avoid double-draw pops/brightness pulses.
             local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
             if sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
-              -- Same active button, changed helper text: text uses sequential fade.
-              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon, 0)
-              if fromLabel ~= "" then
-                drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, outAlpha)
-              end
-              if toLabel ~= "" then
-                drawSlot(toSlot, col, rowCenter, iconY, textY, 0, inAlpha)
-              end
+              -- Never draw two different labels for one button at once:
+              -- when only label text changes, snap to the new label.
+              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon, (toLabel ~= "") and 1 or 0)
             else
               -- Active/inactive changes and non-paired text follow full-duration fade.
               drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon,
@@ -1476,8 +1553,11 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     drawHintsUntransformed(function()
+      if overwriteExistingRow then
+        clearHintRowForOverwrite(rowTop, rowH)
+      end
       clearHintRowForCrossDissolve(rowTop - 1, rowH + 2)
-      local disableTransitions = (type(opts) == "table" and opts.disableTransitions == true)
+      local disableTransitions = overwriteExistingRow or (type(opts) == "table" and opts.disableTransitions == true)
       if disableTransitions then
         drawRow(rowSlots, 0)
       else
@@ -1606,7 +1686,7 @@ function common.handleLeaveSavePrompt(ctx, opts)
     common.drawCenteredPromptModal(_, prompt)
   end
   common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM_COLOR,
-    _.w - 2 * _.MARGIN_X)
+    _.w - 2 * _.MARGIN_X, { disableTransitions = true })
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     ctx.editorLeavePrompt = nil
     if type(opts.onSave) == "function" then

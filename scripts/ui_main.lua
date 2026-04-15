@@ -844,7 +844,7 @@ local function runMain(s, pad)
     local squareSlotCenter = squareSlotLeft + (slotW / 2)
     local startSlotLeft = hintXEff + (2 * slotW)
     local startSlotCenter = startSlotLeft + (slotW / 2)
-    local hintIconScale = 0.6
+    local hintIconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
     local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
     local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
     local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
@@ -994,7 +994,7 @@ local function runMain(s, pad)
     local triangleSlotCenter = triangleSlotLeft + (slotW / 2)
     local circleSlotLeft = hintXEff + (4 * slotW)
     local circleSlotCenter = circleSlotLeft + (slotW / 2)
-    local hintIconScale = 0.6
+    local hintIconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
     local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
     local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
     local triangleButtonLeft = math.floor(triangleSlotCenter - (hintIconW / 2))

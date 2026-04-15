@@ -290,11 +290,24 @@ function actions_menu.run(ctx, opts)
   local rowStep = textH + math.max(2, math.floor((_.scaleY and _.scaleY(3) or 3) + 0.5))
 
   -- Match hint-grid geometry so this feels like a popup anchored to the active helper button.
+  local runtime = _G and _G.CONFIG_UI
   local sideMargin = (_.common and _.common.PAD_HINT_SIDE_MARGIN) or 0
   local hintGridXShift = (_.common and _.common.PAD_HINT_GRID_X_SHIFT) or 0
   local hintGridExtraW = (_.common and _.common.PAD_HINT_GRID_EXTRA_W) or 0
-  local hintTotalW = ((_.w or 640) - (2 * (_.MARGIN_X or 0))) + hintGridExtraW
+  local baseHintTotalW = ((_.w or 640) - (2 * (_.MARGIN_X or 0))) + hintGridExtraW
+  local autoHintExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
+  if autoHintExtraW < 0 then autoHintExtraW = 0 end
   local hintXEff = (_.MARGIN_X or 0) + sideMargin + hintGridXShift
+  local rightOverscan = (_.common and tonumber(_.common.PAD_HINT_GRID_RIGHT_OVERSCAN)) or 8
+  if rightOverscan < 0 then rightOverscan = 0 end
+  local sceneW = (_.w or 640)
+  local maxHintWidthEff = math.max(1, math.floor((sceneW - rightOverscan) - hintXEff))
+  local baseHintWidthEff = math.max(1, baseHintTotalW - (2 * sideMargin))
+  local maxAutoExtraByScreen = math.max(0, maxHintWidthEff - baseHintWidthEff)
+  if autoHintExtraW > maxAutoExtraByScreen then
+    autoHintExtraW = maxAutoExtraByScreen
+  end
+  local hintTotalW = baseHintTotalW + autoHintExtraW
   local hintWidthEff = hintTotalW - (2 * sideMargin)
   local slotW = hintWidthEff / 5
   local function slotIndexForPad(pad)
@@ -312,8 +325,18 @@ function actions_menu.run(ctx, opts)
   local anchorSlotCenter = anchorSlotLeft + (slotW / 2)
   local targetSlotLeft = hintXEff + ((targetSlotIndex - 1) * slotW)
   local targetSlotCenter = targetSlotLeft + (slotW / 2)
-  local hintIconScale = 0.6
+  local hintIconScale = tonumber((_.common and _.common.PAD_HINT_ICON_SCALE) or 0.54) or 0.54
   local hintIconW = math.max(10, math.floor((((_.common and _.common.PAD_ICON_W) or 26) * hintIconScale) + 0.5))
+  if _.common and _.common.PAD_HINT_ALIGN_CROSS_TO_X ~= false then
+    local desiredXEff = (_.MARGIN_X or 0) + (hintIconW * 0.5) - (slotW * 0.5)
+    local maxXEff = (sceneW - rightOverscan) - hintWidthEff
+    if desiredXEff > maxXEff then desiredXEff = maxXEff end
+    hintXEff = desiredXEff
+    anchorSlotLeft = hintXEff + ((anchorSlotIndex - 1) * slotW)
+    anchorSlotCenter = anchorSlotLeft + (slotW / 2)
+    targetSlotLeft = hintXEff + ((targetSlotIndex - 1) * slotW)
+    targetSlotCenter = targetSlotLeft + (slotW / 2)
+  end
   local anchorButtonLeft = math.floor(anchorSlotCenter - (hintIconW / 2))
   local targetButtonLeft = math.floor(targetSlotCenter - (hintIconW / 2))
   local anchorActionLabelX = anchorButtonLeft + hintIconW + hintGap
@@ -448,7 +471,7 @@ function actions_menu.run(ctx, opts)
   end
   if _.Graphics and _.Graphics.drawRect then
     local hintBg = (_.common and _.common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
-    local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * 0.75 + 0.5))
+    local hintRowH = math.max(14, math.floor(((_.common and _.common.PAD_HINT_ROW_H) or 28) * textScale + 0.5))
     local hintRowTop = math.floor(_.HINT_Y) - hintRowH
     local hintW = (_.w or 640) - (2 * (_.MARGIN_X or 0))
     _.Graphics.drawRect(_.MARGIN_X or 0, hintRowTop, hintW, hintRowH, hintBg)

@@ -93,9 +93,9 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     _.Graphics.drawRect(0, ry, rw, rh, _.common.BACKGROUND_COLOR)
   end
 
-  local drawColor = _.WHITE or color or _.DIM_COLOR
-  local iconScale = 0.6
-  local textScale = 0.75
+  local drawColor = color or _.DIM_COLOR or _.WHITE
+  local iconScale = tonumber((_.common and _.common.PAD_HINT_ICON_SCALE) or 0.54) or 0.54
+  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.675) or 0.675
   local drawScale = (scale or 0.7) * textScale
   local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale, { lockSceneScale = true })) or _.font
   local iconW = math.max(10, math.floor((_.common.PAD_ICON_W or 26) * iconScale + 0.5))
@@ -243,13 +243,8 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
       else
         local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
         if samePad and sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
-          drawSlot(toSlot, blendedIcon, 0)
-          if fromLabel ~= "" then
-            drawSlot(fromSlot, 0, outAlpha)
-          end
-          if toLabel ~= "" then
-            drawSlot(toSlot, 0, inAlpha)
-          end
+          -- Keep one label per button during transitions.
+          drawSlot(toSlot, blendedIcon, (toLabel ~= "") and 1 or 0)
         else
           drawSlot(toSlot, blendedIcon, (toSlot.used and toLabel ~= "") and fullIn or 0)
           if fromSlot.used and fromLabel ~= "" then
