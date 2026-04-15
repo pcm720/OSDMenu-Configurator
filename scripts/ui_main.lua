@@ -797,7 +797,7 @@ local function runMain(s, pad)
     drawMainBaseUi()
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
-    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
+    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.675)
     local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
     local rowScale = titleScale
     local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
@@ -957,7 +957,7 @@ local function runMain(s, pad)
 
     local lines = buildMainCreditsLines(main_str)
     local total = #lines
-    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
+    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.675)
     local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
     local rowScale = titleScale
     local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font

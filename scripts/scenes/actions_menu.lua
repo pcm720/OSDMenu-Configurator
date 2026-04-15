@@ -205,7 +205,7 @@ function actions_menu.run(ctx, opts)
     title = tostring(opts.titleOverride)
   end
   local hasTitle = (title ~= "")
-  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.75)
+  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.675)
   local titleScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
   local rowScale = titleScale
   local rowStateKeyPrefix = opts.rowStateKeyPrefix or "actions_menu_row_"

@@ -61,6 +61,7 @@ common.PAD_HINT_ROW_H              = 28
 common.PAD_HINT_SIDE_MARGIN        = 16
 common.PAD_HINT_TEXT_SCALE         = 0.675 -- 10% smaller helper/description text for better fit safety
 common.PAD_HINT_ICON_SCALE         = 0.54  -- 10% smaller helper button icons (was 0.60)
+common.PAD_HINT_TEXT_Y_OFFSET      = -5    -- move helper labels up by 1px (was effectively -4)
 common.PAD_HINT_BASE_SCALE         = 0.7
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
@@ -83,6 +84,7 @@ common.PAD_HINT_GRID_RIGHT_OVERSCAN = 8                   -- keep widened grid t
 common.PAD_HINT_ALIGN_CROSS_TO_X   = true                 -- align cross-slot icon left edge to drawHintLine x (main header margin)
 common.PAD_HINT_LABEL_SAFE_GAP     = 4                    -- keep text away from next icon / next slot edge
 common.PAD_HINT_LABEL_MIN_SCALE_FACTOR = 0.70             -- shrink hint labels only as needed (relative to base)
+common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE = true             -- keep one helper-label scale globally consistent across scenes
 common.PAD_HINT_CANDIDATE_MAX_CHARS = 40                  -- ignore implausibly long labels for width auto-sizing
 
 -- Unused placeholder behavior (code-only).
@@ -181,6 +183,7 @@ function common.handleVideoModeMetricsChanged(ctx, modeSig)
     runtime.currentFtPixelH = nil
     runtime.hintGridAutoNeedsRecalc = true
     runtime.hintGridMaxLabelWByPad = nil
+    runtime.hintGridGlobalLabelScale = nil
   end
   if type(ctx) ~= "table" then
     return
@@ -208,6 +211,7 @@ function common.onLanguageChanged(ctx, stringsTable)
   runtime.hintGridMaxLabelWByPad = nil
   runtime.hintGridAutoExtraW = nil
   runtime.hintGridAutoNeedsRecalc = true
+  runtime.hintGridGlobalLabelScale = nil
 end
 
 local function normalize3(xv, yv, zv)
@@ -1227,19 +1231,22 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return getTextWidthAtScale(label, drawScale)
     end
 
-    local function getBestLabelScaleToFit(label, maxWidth)
-      if not label or label == "" then return drawScale end
+    local function getBestLabelScaleToFit(label, maxWidth, maxScale)
+      local topScale = tonumber(maxScale) or drawScale
+      if topScale > drawScale then topScale = drawScale end
+      if topScale < minLabelScale then topScale = minLabelScale end
+      if not label or label == "" then return topScale end
       if not maxWidth or maxWidth <= 0 then return minLabelScale end
-      local baseW = getTextWidthAtScale(label, drawScale)
+      local baseW = getTextWidthAtScale(label, topScale)
       if baseW <= maxWidth then
-        return drawScale
+        return topScale
       end
       local minW = getTextWidthAtScale(label, minLabelScale)
       if minW > maxWidth then
         return minLabelScale
       end
       -- Binary-search the largest readable scale that still fits.
-      local lo, hi = minLabelScale, drawScale
+      local lo, hi = minLabelScale, topScale
       local best = minLabelScale
       for _ = 1, 8 do
         local mid = (lo + hi) * 0.5
@@ -1332,6 +1339,43 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
       width = baseWidth + autoExtraW
       widthEff = width - 2 * sideMargin
+      if common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
+        local globalScale = drawScale
+        local preSlotW = widthEff / slotCount
+        for i = 1, slotCount do
+          local pad = rowPads[i]
+          local labelW = tonumber(maxLabelWByPad[pad]) or fallbackLabelW
+          if labelW > 0 then
+            local slotLeft = xEff + (i - 1) * preSlotW
+            local slotCenter = slotLeft + preSlotW / 2
+            local basePx = math.floor(slotCenter - iconW / 2)
+            local textX = basePx + iconW + gap
+            local maxLabelWAvail
+            if i < slotCount then
+              local nextSlotLeft = xEff + i * preSlotW
+              local nextIconLeft = math.floor((nextSlotLeft + (preSlotW / 2)) - (iconW / 2))
+              maxLabelWAvail = nextIconLeft - labelSafeGap - textX
+            else
+              local rightEdge = xEff + widthEff - labelSafeGap
+              maxLabelWAvail = rightEdge - textX
+            end
+            if not maxLabelWAvail or maxLabelWAvail <= 0 then
+              globalScale = minLabelScale
+            elseif labelW > maxLabelWAvail then
+              local fitScale = drawScale * (maxLabelWAvail / labelW)
+              if fitScale < globalScale then
+                globalScale = fitScale
+              end
+            end
+          end
+        end
+        globalScale = math.max(minLabelScale, math.min(drawScale, globalScale))
+        local prevGlobal = tonumber(runtime.hintGridGlobalLabelScale)
+        if prevGlobal and prevGlobal > 0 and prevGlobal < globalScale then
+          globalScale = prevGlobal
+        end
+        runtime.hintGridGlobalLabelScale = globalScale
+      end
     end
 
     local slotW = widthEff / slotCount
@@ -1365,6 +1409,63 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local key = rowPads[i]
       local active = activeByPad[key]
       rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
+    end
+
+    local function clampLabelScale(scaleValue)
+      local s = tonumber(scaleValue) or drawScale
+      if s > drawScale then s = drawScale end
+      if s < minLabelScale then s = minLabelScale end
+      return s
+    end
+
+    local function getSlotMaxLabelW(col)
+      local slotLeft = xEff + (col - 1) * slotW
+      local slotCenter = slotLeft + slotW / 2
+      local basePx = math.floor(slotCenter - iconW / 2)
+      local textX = basePx + iconW + gap
+      if col < slotCount then
+        local nextSlotLeft = xEff + col * slotW
+        local nextIconLeft = math.floor((nextSlotLeft + (slotW / 2)) - (iconW / 2))
+        return nextIconLeft - labelSafeGap - textX
+      end
+      local rightEdge = xEff + widthEff - labelSafeGap
+      return rightEdge - textX
+    end
+
+    local function getRowRequiredLabelScale(slots, startScale)
+      local required = clampLabelScale(startScale)
+      for col = 1, slotCount do
+        local slot = slots and slots[col]
+        local label = tostring(slot and slot.label or "")
+        if slot and slot.used and label ~= "" then
+          local maxLabelW = getSlotMaxLabelW(col)
+          if maxLabelW and maxLabelW > 0 then
+            local fitScale = getBestLabelScaleToFit(label, maxLabelW, required)
+            if fitScale < required then
+              required = fitScale
+            end
+          else
+            required = minLabelScale
+          end
+        end
+      end
+      return clampLabelScale(required)
+    end
+
+    local resolvedLabelScale = drawScale
+    if common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
+      local seedScale = drawScale
+      if type(runtime) == "table" then
+        seedScale = clampLabelScale(runtime.hintGridGlobalLabelScale or drawScale)
+      end
+      local fitScale = getRowRequiredLabelScale(rowSlots, seedScale)
+      if fitScale < seedScale then
+        seedScale = fitScale
+      end
+      resolvedLabelScale = seedScale
+      if type(runtime) == "table" then
+        runtime.hintGridGlobalLabelScale = resolvedLabelScale
+      end
     end
 
     local totalRowH = rowH
@@ -1438,7 +1539,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         end
       end
       if drawLabelAlpha > 0.001 and label ~= "" then
-        local labelDrawScale = drawScale
+        local labelDrawScale = resolvedLabelScale
         local textW = getTextWidthAtScale(label, labelDrawScale)
         local textX
         local maxLabelW
@@ -1458,7 +1559,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
           maxLabelW = rightEdge - textX
         end
         if maxLabelW and maxLabelW > 0 then
-          labelDrawScale = getBestLabelScaleToFit(label, maxLabelW)
           textW = getTextWidthAtScale(label, labelDrawScale)
           if common.truncateTextToWidth then
             label = common.truncateTextToWidth(hintFont, label, maxLabelW, labelDrawScale)
@@ -1482,7 +1582,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rTop = rowTop + idx * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
-      local textY = math.floor(rowCenter - textH / 2) - 4
+      local textYOffset = math.floor(tonumber(common.PAD_HINT_TEXT_Y_OFFSET) or -5)
+      local textY = math.floor(rowCenter - textH / 2) + textYOffset
       for col = 1, slotCount do
         local slot = slots[col]
         drawSlot(slot, col, rowCenter, iconY, textY, getIconVisualAlpha(slot),
@@ -1506,7 +1607,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
-      local textY = math.floor(rowCenter - textH / 2) - 4
+      local textYOffset = math.floor(tonumber(common.PAD_HINT_TEXT_Y_OFFSET) or -5)
+      local textY = math.floor(rowCenter - textH / 2) + textYOffset
       for col = 1, slotCount do
         local fromSlot = (fromSlots and fromSlots[col]) or { pad = rowPads[col], label = "", used = false }
         local toSlot = (toSlots and toSlots[col]) or { pad = rowPads[col], label = "", used = false }

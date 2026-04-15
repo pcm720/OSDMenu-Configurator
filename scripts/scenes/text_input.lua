@@ -96,7 +96,15 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   local drawColor = color or _.DIM_COLOR or _.WHITE
   local iconScale = tonumber((_.common and _.common.PAD_HINT_ICON_SCALE) or 0.54) or 0.54
   local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.675) or 0.675
-  local drawScale = (scale or 0.7) * textScale
+  local baseScale = (scale or (_.common and _.common.PAD_HINT_BASE_SCALE) or 0.7)
+  local drawScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(baseScale)) or
+      (baseScale * textScale)
+  if type(runtime) == "table" then
+    local globalScale = tonumber(runtime.hintGridGlobalLabelScale)
+    if globalScale and globalScale > 0 and globalScale < drawScale then
+      drawScale = globalScale
+    end
+  end
   local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale, { lockSceneScale = true })) or _.font
   local iconW = math.max(10, math.floor((_.common.PAD_ICON_W or 26) * iconScale + 0.5))
   local iconH = math.max(10, math.floor((_.common.PAD_ICON_H or 26) * iconScale + 0.5))
@@ -104,12 +112,29 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   local rowH = math.max(14, math.floor((_.common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
   local textH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight({ lockSceneScale = true })) or
       math.max(10, math.floor((_.common.FT_PIXEL_H or 18) * textScale + 0.5))
-  local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
-  width = width + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
+  local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
+  baseWidth = baseWidth + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
+  local autoExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
+  if autoExtraW < 0 then autoExtraW = 0 end
   local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
   local xEff = (_.MARGIN_X or 0) + sideMargin + (tonumber(_.common.PAD_HINT_GRID_X_SHIFT) or 0)
-  local widthEff = width - 2 * sideMargin
+  local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or (_.w or _.common.DEFAULT_W)
+  local rightOverscan = math.max(0, math.floor(tonumber(_.common.PAD_HINT_GRID_RIGHT_OVERSCAN) or 8))
+  local maxWidthEffByScreen = math.max(1, math.floor((sceneW - rightOverscan) - xEff))
+  local baseWidthEff = math.max(1, baseWidth - (2 * sideMargin))
+  local maxAutoExtraByScreen = math.max(0, maxWidthEffByScreen - baseWidthEff)
+  if autoExtraW > maxAutoExtraByScreen then
+    autoExtraW = maxAutoExtraByScreen
+  end
+  local width = baseWidth + autoExtraW
+  local widthEff = width - (2 * sideMargin)
   local slotW = widthEff / 5
+  if _.common.PAD_HINT_ALIGN_CROSS_TO_X ~= false then
+    local desiredXEff = (_.MARGIN_X or 0) + (iconW * 0.5) - (slotW * 0.5)
+    local maxXEff = (sceneW - rightOverscan) - widthEff
+    if desiredXEff > maxXEff then desiredXEff = maxXEff end
+    xEff = desiredXEff
+  end
   local bottomRowTop = math.floor(_.HINT_Y) - rowH
   local topRowTop = bottomRowTop - rowH
   local hintKey = "__keyboard_shoulder_hint_row__"
@@ -166,7 +191,8 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local slotCol = tonumber(slot.col) or columnByPad[tostring(slot.pad or "")] or 1
     local slotCenter = xEff + (slotCol - 1) * slotW + (slotW / 2)
     local rowCenter = topRowTop + (rowH / 2)
-    local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
+    local textYOffset = math.floor(tonumber(_.common and _.common.PAD_HINT_TEXT_Y_OFFSET) or -5)
+    local textY = math.floor(topRowTop + (rowH - textH) / 2) + textYOffset
     local basePx = math.floor(slotCenter - iconW / 2)
     local baseIconY = math.floor(rowCenter - iconH / 2)
     local pressAmount = 0
@@ -526,7 +552,7 @@ local function ensureBelRowsByPage(ctx, profile, textInputStrings)
 end
 
 local function buildBelMenuLayoutMetrics(_, rowsByPage)
-  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.75)
+  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.675)
   local rowScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
   local hintFont = (_.common and _.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
   local function textWidth(text)
