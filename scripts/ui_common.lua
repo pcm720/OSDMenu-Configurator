@@ -96,6 +96,7 @@ common.PAD_HINT_ICON_PRESS_LERP_IN = 0.55
 common.PAD_HINT_ICON_PRESS_LERP_OUT = 0.35
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+local hintTypographyCache          = {}
 
 local function flushTextWidthCache()
   common._textWidthCache = {}
@@ -168,10 +169,18 @@ function common.flushHintFtFontCache(unloadFonts)
       end
       hintFtFontCache[key] = nil
     end
+    common.flushHintTypographyCache()
     return
   end
   for key in pairs(hintFtFontCache) do
     hintFtFontCache[key] = nil
+  end
+  common.flushHintTypographyCache()
+end
+
+function common.flushHintTypographyCache()
+  for key in pairs(hintTypographyCache) do
+    hintTypographyCache[key] = nil
   end
 end
 
@@ -201,6 +210,7 @@ end
 
 function common.onLanguageChanged(ctx, stringsTable)
   flushTextWidthCache()
+  common.flushHintTypographyCache()
   if type(ctx) == "table" then
     ctx._rowMarqueeStates = nil
   end
@@ -956,9 +966,9 @@ function common.getHintFont(fallbackFont, drawMode, textScale, opts)
   return hintFont
 end
 
-function common.getHintLabelDrawScale(baseScale)
+function common.getHintLabelDrawScale(baseScale, textScaleOverride)
   local bs = tonumber(baseScale) or common.PAD_HINT_BASE_SCALE or 0.7
-  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
+  local ts = tonumber(textScaleOverride) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
   return bs * ts
 end
 
@@ -974,9 +984,75 @@ function common.getHintLabelTextHeight(opts)
       metricOpts[k] = v
     end
   end
-  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
+  local ts = tonumber(metricOpts and metricOpts.textScale) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
   local basePx = getRuntimeFtPixelBase(metricOpts)
   return math.max(10, math.floor(basePx * ts + 0.5))
+end
+
+-- Shared helper/description typography resolver.
+-- Returns table: { font, textScale, baseScale, drawScale, textHeight }.
+function common.getHintTypography(fallbackFont, drawMode, opts)
+  local o = (type(opts) == "table") and opts or {}
+  local textScale = tonumber(o.textScale) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
+  local baseScale = tonumber(o.baseScale) or tonumber(common.PAD_HINT_BASE_SCALE) or 0.7
+  local lockSceneScale = (o.lockSceneScale ~= false)
+  local applyGlobalScale = (o.applyGlobalScale ~= false)
+  local runtime = _G and _G.CONFIG_UI
+  local globalScale = nil
+  if applyGlobalScale and type(runtime) == "table" then
+    local gs = tonumber(runtime.hintGridGlobalLabelScale)
+    if gs and gs > 0 then
+      globalScale = gs
+    end
+  end
+
+  local uiScaleKey = tonumber(runtime and runtime.currentUiScale) or 1
+  local ftPxKey = 0
+  if not lockSceneScale then
+    ftPxKey = math.floor((tonumber(runtime and runtime.currentFtPixelH) or 0) + 0.5)
+  end
+  local key = table.concat({
+    tostring(fallbackFont or ""),
+    tostring(drawMode or ""),
+    string.format("%.4f", textScale),
+    string.format("%.4f", baseScale),
+    lockSceneScale and "1" or "0",
+    applyGlobalScale and "1" or "0",
+    globalScale and string.format("%.4f", globalScale) or "0",
+    string.format("%.4f", uiScaleKey),
+    tostring(ftPxKey),
+  }, "@")
+
+  local cached = hintTypographyCache[key]
+  if cached then
+    return cached
+  end
+
+  local drawScale = common.getHintLabelDrawScale(baseScale, textScale)
+  if globalScale and globalScale < drawScale then
+    drawScale = globalScale
+  end
+
+  local fontOpts = {
+    lockSceneScale = lockSceneScale
+  }
+  local hintFont = common.getHintFont(fallbackFont, drawMode, textScale, fontOpts)
+  local textHeight = common.getHintLabelTextHeight({
+    lockSceneScale = lockSceneScale,
+    textScale = textScale
+  })
+
+  local out = {
+    font = hintFont,
+    textScale = textScale,
+    baseScale = baseScale,
+    drawScale = drawScale,
+    textHeight = textHeight,
+    lockSceneScale = lockSceneScale,
+    applyGlobalScale = applyGlobalScale,
+  }
+  hintTypographyCache[key] = out
+  return out
 end
 
 function common.getHintRowTransitionInfo(runtime)
@@ -1186,13 +1262,18 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
   end
   if hintItems and #hintItems > 0 then
     local iconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
-    local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
-    local drawScale = common.getHintLabelDrawScale(scale)
+    local hintTypography = common.getHintTypography(font, drawMode, {
+      baseScale = tonumber(scale) or tonumber(common.PAD_HINT_BASE_SCALE) or 0.7,
+      lockSceneScale = true,
+      applyGlobalScale = false,
+    })
+    local textScale = hintTypography.textScale
+    local drawScale = hintTypography.drawScale
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
     local labelSafeGap = math.max(2, math.floor(tonumber(common.PAD_HINT_LABEL_SAFE_GAP) or 4))
-    local textH = common.getHintLabelTextHeight({ lockSceneScale = true })
+    local textH = hintTypography.textHeight
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
     local approxCharW = math.floor(8 * drawScale)
     local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
@@ -1219,7 +1300,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       rowPads = { "cross", "square", "start", "triangle", "circle" }
     end
     local slotCount = #rowPads
-    local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
+    local hintFont = hintTypography.font
     local minLabelScaleFactor = tonumber(common.PAD_HINT_LABEL_MIN_SCALE_FACTOR) or 0.70
     if minLabelScaleFactor <= 0 then minLabelScaleFactor = 0.70 end
     if minLabelScaleFactor > 1 then minLabelScaleFactor = 1 end

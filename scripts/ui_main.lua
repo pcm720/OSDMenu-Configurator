@@ -797,14 +797,11 @@ local function runMain(s, pad)
     drawMainBaseUi()
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
-    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.675)
-    local baseScale = tonumber((common and common.PAD_HINT_BASE_SCALE) or 0.7)
-    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(baseScale)) or (baseScale * textScale)
-    local rowScale = titleScale
-    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale, { lockSceneScale = true })) or
-        s.font
-    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight({ lockSceneScale = true })) or
-        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local hintTypography = common.getHintTypography(s.font, s.drawMode)
+    local textScale = hintTypography.textScale
+    local rowScale = hintTypography.drawScale
+    local hintFont = hintTypography.font
+    local textH = hintTypography.textHeight
     local function textWidth(text, scale)
       local useScale = scale or rowScale
       if common.calcTextWidth then
@@ -959,14 +956,11 @@ local function runMain(s, pad)
 
     local lines = buildMainCreditsLines(main_str)
     local total = #lines
-    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.675)
-    local baseScale = tonumber((common and common.PAD_HINT_BASE_SCALE) or 0.7)
-    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(baseScale)) or (baseScale * textScale)
-    local rowScale = titleScale
-    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale, { lockSceneScale = true })) or
-        s.font
-    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight({ lockSceneScale = true })) or
-        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local hintTypography = common.getHintTypography(s.font, s.drawMode)
+    local textScale = hintTypography.textScale
+    local rowScale = hintTypography.drawScale
+    local hintFont = hintTypography.font
+    local textH = hintTypography.textHeight
     local function textWidth(text, scale)
       local useScale = scale or rowScale
       if common.calcTextWidth then

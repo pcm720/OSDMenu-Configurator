@@ -205,18 +205,14 @@ function actions_menu.run(ctx, opts)
     title = tostring(opts.titleOverride)
   end
   local hasTitle = (title ~= "")
-  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.675)
-  local baseScale = tonumber((_.common and _.common.PAD_HINT_BASE_SCALE) or 0.7)
-  local titleScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(baseScale)) or
-      (baseScale * textScale)
-  local rowScale = titleScale
+  local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
+  local textScale = hintTypography.textScale
+  local rowScale = hintTypography.drawScale
+  local titleScale = rowScale
   local rowStateKeyPrefix = opts.rowStateKeyPrefix or "actions_menu_row_"
 
-  local hintFont = (_.common and _.common.getHintFont and
-      _.common.getHintFont(_.font, _.drawMode, textScale, { lockSceneScale = true })) or _.font
-  local textH = (_.common and _.common.getHintLabelTextHeight and
-      _.common.getHintLabelTextHeight({ lockSceneScale = true })) or
-      math.max(10, math.floor(((_.common and _.common.FT_PIXEL_H or 18) * textScale) + 0.5))
+  local hintFont = hintTypography.font
+  local textH = hintTypography.textHeight
 
   local function textWidth(text)
     if _.common and _.common.calcTextWidth then
