@@ -1709,7 +1709,23 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
       clearHintRowForCrossDissolve(rowTop - 1, rowH + 2)
       local disableTransitions = overwriteExistingRow or (type(opts) == "table" and opts.disableTransitions == true)
-      if disableTransitions then
+      local transitionInfo = (not disableTransitions) and common.getHintRowTransitionInfo and
+          common.getHintRowTransitionInfo(runtime) or nil
+      local useAnimatedTransition = (not disableTransitions) and type(runtime) == "table" and transitionInfo and
+          transitionInfo.active == true and transitionInfo.instant ~= true
+      if not useAnimatedTransition then
+        if type(runtime) == "table" then
+          if type(runtime.hintRowStableSlots) ~= "table" then
+            runtime.hintRowStableSlots = {}
+          end
+          local stableSlots = runtime.hintRowStableSlots[hintKey]
+          if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
+            runtime.hintRowStableSlots[hintKey] = cloneSlots(rowSlots)
+          end
+          if type(runtime.hintRowFadeStates) == "table" then
+            runtime.hintRowFadeStates[hintKey] = nil
+          end
+        end
         drawRow(rowSlots, 0)
       else
         local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
@@ -2421,23 +2437,28 @@ end
 
 function common.runLayout(ctx)
   local vmode = Screen.getMode()
-  local modeSig = "nil\31\31\31"
+  local modeSig = nil
+  local prevModeSig = (type(ctx) == "table") and ctx._layoutVideoModeSig or nil
   if type(vmode) == "table" then
-    -- Do not include vmode.field in the layout signature.
-    -- On interlaced outputs this can toggle per frame (odd/even field), which
-    -- would incorrectly trigger per-frame "video mode changed" cache flushes.
+    -- Keep layout signature tied to stable geometry-affecting fields only.
+    -- Some runtimes expose transient output metadata that can vary frame-to-frame
+    -- on interlaced outputs; including those would incorrectly trigger frequent
+    -- "video mode changed" cache flushes.
     modeSig = table.concat({
       tostring(vmode.mode or ""),
       tostring(vmode.width or ""),
       tostring(vmode.height or ""),
-      tostring(vmode.interlace or ""),
     }, "\31")
+  else
+    -- Guard against transient mode-query failures: keep prior signature/layout
+    -- instead of forcing a per-frame reset to defaults.
+    modeSig = prevModeSig or "nil\31\31"
   end
   if ctx and ctx._layoutVideoModeSig ~= modeSig then
     common.handleVideoModeMetricsChanged(ctx, modeSig)
   end
-  local w = (vmode and vmode.width) or common.DEFAULT_W
-  local h = (vmode and vmode.height) or common.DEFAULT_H
+  local w = (type(vmode) == "table" and vmode.width) or (ctx and ctx.w) or common.DEFAULT_W
+  local h = (type(vmode) == "table" and vmode.height) or (ctx and ctx.h) or common.DEFAULT_H
   local sx = w / common.DEFAULT_W
   local sy = h / common.DEFAULT_H
   local uiScale = math.min(sx, sy)
