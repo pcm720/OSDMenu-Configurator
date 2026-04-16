@@ -78,14 +78,9 @@ common.SCENE_TRANSITION_MAX_FRAMES = 60
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_GRID_EXTRA_W       = 60
 common.PAD_HINT_GRID_X_SHIFT       = -55
-common.PAD_HINT_GRID_AUTO_WIDEN    = true                 -- widen once (per language/font metrics) to fit helper labels
-common.PAD_HINT_GRID_AUTO_MAX_EXTRA_W = 220               -- hard cap so hint row never grows unbounded
 common.PAD_HINT_GRID_RIGHT_OVERSCAN = 8                   -- keep widened grid this many pixels away from right edge
 common.PAD_HINT_ALIGN_CROSS_TO_X   = true                 -- align cross-slot icon left edge to drawHintLine x (main header margin)
 common.PAD_HINT_LABEL_SAFE_GAP     = 4                    -- keep text away from next icon / next slot edge
-common.PAD_HINT_LABEL_MIN_SCALE_FACTOR = 0.70             -- shrink hint labels only as needed (relative to base)
-common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE = true             -- keep one helper-label scale globally consistent across scenes
-common.PAD_HINT_CANDIDATE_MAX_CHARS = 40                  -- ignore implausibly long labels for width auto-sizing
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
@@ -102,60 +97,6 @@ local hintTypographyCache          = {}
 local function flushTextWidthCache()
   common._textWidthCache = {}
   common._textWidthCacheSize = 0
-end
-
-local function trimHintLabel(text)
-  local s = tostring(text or "")
-  s = s:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-  return s
-end
-
-local function addHintLabelCandidate(out, seen, label)
-  local cleaned = trimHintLabel(label)
-  if cleaned == "" then return end
-  local maxChars = math.max(4, math.floor(tonumber(common.PAD_HINT_CANDIDATE_MAX_CHARS) or 24))
-  if #cleaned > maxChars then return end
-  if seen[cleaned] then return end
-  seen[cleaned] = true
-  out[#out + 1] = cleaned
-end
-
-function common.collectHintLabelCandidates(stringsTable)
-  local out = {}
-  local seen = {}
-  local visited = {}
-
-  local function walk(value)
-    if type(value) ~= "table" or visited[value] then return end
-    visited[value] = true
-
-    for i = 1, #value do
-      local item = value[i]
-      if type(item) == "table" then
-        if item.pad ~= nil and item.label ~= nil then
-          addHintLabelCandidate(out, seen, item.label)
-        end
-        walk(item)
-      end
-    end
-
-    for _, v in pairs(value) do
-      if type(v) == "table" then
-        walk(v)
-      end
-    end
-  end
-
-  walk(stringsTable)
-
-  local baseline = {
-    "Enter", "Select", "Back", "Cancel", "Actions", "Save",
-    "Move", "Insert", "Remove", "Language", "Settings", "Credits",
-  }
-  for i = 1, #baseline do
-    addHintLabelCandidate(out, seen, baseline[i])
-  end
-  return out
 end
 
 function common.flushTextWidthCache()
@@ -197,9 +138,6 @@ function common.handleVideoModeMetricsChanged(ctx, modeSig)
   local runtime = _G and _G.CONFIG_UI
   if runtime then
     runtime.currentFtPixelH = nil
-    runtime.hintGridAutoNeedsRecalc = true
-    runtime.hintGridMaxLabelWByPad = nil
-    runtime.hintGridGlobalLabelScale = nil
   end
   if type(ctx) ~= "table" then
     return
@@ -221,14 +159,6 @@ function common.onLanguageChanged(ctx, stringsTable)
   if type(ctx) == "table" then
     ctx._rowMarqueeStates = nil
   end
-  local runtime = _G and _G.CONFIG_UI
-  if type(runtime) ~= "table" then return end
-  runtime.hintGridLabelCandidates = common.collectHintLabelCandidates(stringsTable or runtime.strings or {})
-  runtime.hintGridSeenLabels = nil
-  runtime.hintGridMaxLabelWByPad = nil
-  runtime.hintGridAutoExtraW = nil
-  runtime.hintGridAutoNeedsRecalc = true
-  runtime.hintGridGlobalLabelScale = nil
 end
 
 local function normalize3(xv, yv, zv)
@@ -1014,15 +944,7 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
   local textScale = tonumber(o.textScale) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
   local baseScale = tonumber(o.baseScale) or tonumber(common.PAD_HINT_BASE_SCALE) or 0.7
   local lockSceneScale = (o.lockSceneScale ~= false)
-  local applyGlobalScale = (o.applyGlobalScale ~= false)
   local runtime = _G and _G.CONFIG_UI
-  local globalScale = nil
-  if applyGlobalScale and type(runtime) == "table" then
-    local gs = tonumber(runtime.hintGridGlobalLabelScale)
-    if gs and gs > 0 then
-      globalScale = gs
-    end
-  end
 
   local uiScaleKey = tonumber(runtime and runtime.currentUiScale) or 1
   local ftPxKey = 0
@@ -1035,8 +957,6 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
     string.format("%.4f", textScale),
     string.format("%.4f", baseScale),
     lockSceneScale and "1" or "0",
-    applyGlobalScale and "1" or "0",
-    globalScale and string.format("%.4f", globalScale) or "0",
     string.format("%.4f", uiScaleKey),
     tostring(ftPxKey),
   }, "@")
@@ -1054,9 +974,6 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
   end
 
   local drawScale = common.getHintLabelDrawScale(baseScale, textScale)
-  if globalScale and globalScale < drawScale then
-    drawScale = globalScale
-  end
 
   local hintFont = common.getHintFont(fallbackFont, drawMode, textScale, fontOpts)
   local textHeight = common.getHintLabelTextHeight({
@@ -1071,7 +988,6 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
     drawScale = drawScale,
     textHeight = textHeight,
     lockSceneScale = lockSceneScale,
-    applyGlobalScale = applyGlobalScale,
   }
   hintTypographyCache[key] = out
   return out
@@ -1200,7 +1116,6 @@ end
 -- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth, opts)
   if not color then color = common.DIM_COLOR end
-  local fastStaticLayout = (type(opts) == "table" and opts.fastStaticLayout == true)
   local runtime = _G and _G.CONFIG_UI
   local function clamp01(v)
     local n = tonumber(v) or 0
@@ -1288,7 +1203,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local hintTypography = common.getHintTypography(font, drawMode, {
       baseScale = tonumber(scale) or tonumber(common.PAD_HINT_BASE_SCALE) or 0.7,
       lockSceneScale = true,
-      applyGlobalScale = false,
     })
     local textScale = hintTypography.textScale
     local drawScale = hintTypography.drawScale
@@ -1298,15 +1212,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local labelSafeGap = math.max(2, math.floor(tonumber(common.PAD_HINT_LABEL_SAFE_GAP) or 4))
     local textH = hintTypography.textHeight
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
-    local approxCharW = math.floor(8 * drawScale)
     local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
     local gridBaseExtraW = tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0
     baseWidth = baseWidth + gridBaseExtraW
-    local autoExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
-    if fastStaticLayout then
-      autoExtraW = 0
-    end
-    if autoExtraW < 0 then autoExtraW = 0 end
+    local autoExtraW = 0
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
     local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or common.DEFAULT_W
@@ -1327,11 +1236,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
     local slotCount = #rowPads
     local hintFont = hintTypography.font
-    local minLabelScaleFactor = tonumber(common.PAD_HINT_LABEL_MIN_SCALE_FACTOR) or 0.70
-    if minLabelScaleFactor <= 0 then minLabelScaleFactor = 0.70 end
-    if minLabelScaleFactor > 1 then minLabelScaleFactor = 1 end
-    local minLabelScale = drawScale * minLabelScaleFactor
-    if minLabelScale < 0.3 then minLabelScale = 0.3 end
     -- Keep one shared hint-row transition state across scenes so back/forward
     -- navigation always fades between previous/next rows, even if layout width
     -- differs between scenes.
@@ -1354,142 +1258,6 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
       local approx = math.max(1, math.floor(8 * s))
       return math.floor(approx * #label)
-    end
-
-    local function getTextWidth(label)
-      return getTextWidthAtScale(label, drawScale)
-    end
-
-    local dynamicHintGrid = (not fastStaticLayout) and ((common.PAD_HINT_GRID_AUTO_WIDEN ~= false) or
-        (common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false)
-    )
-    if dynamicHintGrid and type(runtime) == "table" then
-      if type(runtime.hintGridLabelCandidates) ~= "table" then
-        runtime.hintGridLabelCandidates = {}
-      end
-      local seenLabels = runtime.hintGridSeenLabels
-      if type(seenLabels) ~= "table" then
-        seenLabels = {}
-        for i = 1, #(runtime.hintGridLabelCandidates or {}) do
-          local existing = trimHintLabel(runtime.hintGridLabelCandidates[i])
-          if existing ~= "" then
-            seenLabels[existing] = true
-          end
-        end
-        runtime.hintGridSeenLabels = seenLabels
-      end
-      local maxLabelWByPad = runtime.hintGridMaxLabelWByPad
-      if type(maxLabelWByPad) ~= "table" then
-        maxLabelWByPad = {}
-        runtime.hintGridMaxLabelWByPad = maxLabelWByPad
-      end
-      local added = false
-      for i = 1, #hintItems do
-        local item = hintItems[i]
-        if type(item) == "table" and item.pad ~= nil and item.label ~= nil then
-          local before = #runtime.hintGridLabelCandidates
-          addHintLabelCandidate(runtime.hintGridLabelCandidates, seenLabels, item.label)
-          local addedLabel = (#runtime.hintGridLabelCandidates > before)
-          if addedLabel then
-            added = true
-          end
-          local padKey = common.remapCrossCirclePadName(tostring(item.pad or ""):lower())
-          if padKey ~= "" then
-            local prevPadW = tonumber(maxLabelWByPad[padKey]) or 0
-            -- Measure only on first-seen labels (or when this pad has no width yet)
-            -- to avoid repeated per-frame ftCalcDimensions work.
-            if addedLabel or prevPadW <= 0 then
-              local labelW = getTextWidth(trimHintLabel(item.label))
-              if labelW > prevPadW then
-                maxLabelWByPad[padKey] = labelW
-                added = true
-              end
-            end
-          end
-        end
-      end
-      if added then
-        runtime.hintGridAutoNeedsRecalc = true
-      end
-    end
-
-    if (not fastStaticLayout) and type(runtime) == "table" and common.PAD_HINT_GRID_AUTO_WIDEN ~= false and
-        runtime.hintGridAutoNeedsRecalc == true then
-      local labels = runtime.hintGridLabelCandidates
-      local maxLabelW = 0
-      for i = 1, #(labels or {}) do
-        local lw = getTextWidth(labels[i])
-        if lw > maxLabelW then
-          maxLabelW = lw
-        end
-      end
-      local maxLabelWByPad = (type(runtime.hintGridMaxLabelWByPad) == "table") and runtime.hintGridMaxLabelWByPad or {}
-      local fallbackLabelW = math.max(0, maxLabelW)
-      local minSlotWNeeded = 0
-      for i = 1, slotCount do
-        local pad = rowPads[i]
-        local labelW = tonumber(maxLabelWByPad[pad]) or fallbackLabelW
-        local slotNeed
-        if i < slotCount then
-          slotNeed = labelW + iconW + gap + labelSafeGap
-        else
-          -- Last slot (circle/cross) has only half-slot text room to the right edge.
-          slotNeed = (2 * labelW) + iconW + (2 * gap) + (2 * labelSafeGap)
-        end
-        if slotNeed > minSlotWNeeded then
-          minSlotWNeeded = slotNeed
-        end
-      end
-      local neededWidthEff = math.max(baseWidthEff, minSlotWNeeded * slotCount)
-      local neededTotalW = neededWidthEff + (2 * sideMargin)
-      local neededExtra = math.max(0, math.floor((neededTotalW - baseWidth) + 0.5))
-      local maxExtra = math.max(0, math.floor(tonumber(common.PAD_HINT_GRID_AUTO_MAX_EXTRA_W) or 220))
-      local maxAllowedExtra = math.min(maxExtra, maxAutoExtraByScreen)
-      runtime.hintGridAutoExtraW = math.min(maxAllowedExtra, neededExtra)
-      runtime.hintGridAutoNeedsRecalc = nil
-      autoExtraW = tonumber(runtime.hintGridAutoExtraW) or 0
-      if autoExtraW < 0 then autoExtraW = 0 end
-      if autoExtraW > maxAutoExtraByScreen then
-        autoExtraW = maxAutoExtraByScreen
-      end
-      width = baseWidth + autoExtraW
-      widthEff = width - 2 * sideMargin
-      if common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
-        local currentGlobal = tonumber(runtime.hintGridGlobalLabelScale)
-        if not currentGlobal or currentGlobal <= 0 then
-          local globalScale = drawScale
-          local preSlotW = widthEff / slotCount
-          for i = 1, slotCount do
-            local pad = rowPads[i]
-            local labelW = tonumber(maxLabelWByPad[pad]) or fallbackLabelW
-            if labelW > 0 then
-              local slotLeft = xEff + (i - 1) * preSlotW
-              local slotCenter = slotLeft + preSlotW / 2
-              local basePx = math.floor(slotCenter - iconW / 2)
-              local textX = basePx + iconW + gap
-              local maxLabelWAvail
-              if i < slotCount then
-                local nextSlotLeft = xEff + i * preSlotW
-                local nextIconLeft = math.floor((nextSlotLeft + (preSlotW / 2)) - (iconW / 2))
-                maxLabelWAvail = nextIconLeft - labelSafeGap - textX
-              else
-                local rightEdge = xEff + widthEff - labelSafeGap
-                maxLabelWAvail = rightEdge - textX
-              end
-              if not maxLabelWAvail or maxLabelWAvail <= 0 then
-                globalScale = minLabelScale
-              elseif labelW > maxLabelWAvail then
-                local fitScale = drawScale * (maxLabelWAvail / labelW)
-                if fitScale < globalScale then
-                  globalScale = fitScale
-                end
-              end
-            end
-          end
-          globalScale = math.max(minLabelScale, math.min(drawScale, globalScale))
-          runtime.hintGridGlobalLabelScale = globalScale
-        end
-      end
     end
 
     local slotW = widthEff / slotCount
@@ -1525,17 +1293,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
     end
 
-    local function clampLabelScale(scaleValue)
-      local s = tonumber(scaleValue) or drawScale
-      if s > drawScale then s = drawScale end
-      if s < minLabelScale then s = minLabelScale end
-      return s
-    end
-
     local resolvedLabelScale = drawScale
-    if (not fastStaticLayout) and common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
-      resolvedLabelScale = clampLabelScale(type(runtime) == "table" and runtime.hintGridGlobalLabelScale or drawScale)
-    end
 
     local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH

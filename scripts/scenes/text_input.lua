@@ -110,7 +110,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
   baseWidth = baseWidth + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
   -- Keep keyboard shoulder-row slot centers locked to the same static grid
-  -- used by the bottom helper row (fastStaticLayout=true) so:
+  -- used by the bottom helper row so:
   -- L1/Select/R1 align with Square/Start/Triangle.
   local autoExtraW = 0
   local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
@@ -1255,8 +1255,6 @@ local function run(ctx)
   local belMenuOpenKey = TEXT_INPUT_BEL_MENU_OPEN_KEY
   local belMenuAnimKey = TEXT_INPUT_BEL_MENU_ANIM_KEY
   local belMenuClosingKey = TEXT_INPUT_BEL_MENU_CLOSING_KEY
-  local belMenuRowsCacheKey = TEXT_INPUT_BEL_MENU_ROWS_CACHE_KEY
-  local belMenuHintsCacheKey = TEXT_INPUT_BEL_MENU_HINTS_CACHE_KEY
   local belOverlayOpen = (ctx[belMenuOpenKey] == true)
   local transitionRenderPass = (_.common and _.common.isSceneTransitionInActive and _.common.isSceneTransitionInActive(ctx)) or
       false
@@ -1845,7 +1843,6 @@ local function run(ctx)
       (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X, {
-    fastStaticLayout = true,
     getIconPressAmount = function(padName)
       if suppressPressVisualsForFrame or pressAnimEntryGateActive then
         return 0

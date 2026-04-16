@@ -295,8 +295,8 @@ function actions_menu.run(ctx, opts)
   local hintGridXShift = (_.common and _.common.PAD_HINT_GRID_X_SHIFT) or 0
   local hintGridExtraW = (_.common and _.common.PAD_HINT_GRID_EXTRA_W) or 0
   local baseHintTotalW = ((_.w or 640) - (2 * (_.MARGIN_X or 0))) + hintGridExtraW
-  -- Keep overlay anchoring math in lock-step with overlay hint drawing
-  -- (`drawHintLine(..., { fastStaticLayout = true })`), which uses static grid width.
+  -- Keep overlay anchoring math in lock-step with overlay hint drawing,
+  -- which now always uses static grid width.
   local autoHintExtraW = 0
   local hintXEff = (_.MARGIN_X or 0) + sideMargin + hintGridXShift
   local rightOverscan = (_.common and tonumber(_.common.PAD_HINT_GRID_RIGHT_OVERSCAN)) or 8
@@ -476,8 +476,7 @@ function actions_menu.run(ctx, opts)
     local hintW = (_.w or 640) - (2 * (_.MARGIN_X or 0))
     _.Graphics.drawRect(_.MARGIN_X or 0, hintRowTop, hintW, hintRowH, hintBg)
   end
-  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X,
-    { fastStaticLayout = true })
+  _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hintItems, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X)
 
   if not closing then
     if (_.padEffective & _.PAD_UP) ~= 0 then
