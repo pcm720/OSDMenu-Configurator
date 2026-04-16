@@ -295,12 +295,13 @@ function actions_menu.run(ctx, opts)
   local hintGridXShift = (_.common and _.common.PAD_HINT_GRID_X_SHIFT) or 0
   local hintGridExtraW = (_.common and _.common.PAD_HINT_GRID_EXTRA_W) or 0
   local baseHintTotalW = ((_.w or 640) - (2 * (_.MARGIN_X or 0))) + hintGridExtraW
-  local autoHintExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
-  if autoHintExtraW < 0 then autoHintExtraW = 0 end
+  -- Keep overlay anchoring math in lock-step with overlay hint drawing
+  -- (`drawHintLine(..., { fastStaticLayout = true })`), which uses static grid width.
+  local autoHintExtraW = 0
   local hintXEff = (_.MARGIN_X or 0) + sideMargin + hintGridXShift
   local rightOverscan = (_.common and tonumber(_.common.PAD_HINT_GRID_RIGHT_OVERSCAN)) or 8
   if rightOverscan < 0 then rightOverscan = 0 end
-  local sceneW = (_.w or 640)
+  local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or (_.w or 640)
   local maxHintWidthEff = math.max(1, math.floor((sceneW - rightOverscan) - hintXEff))
   local baseHintWidthEff = math.max(1, baseHintTotalW - (2 * sideMargin))
   local maxAutoExtraByScreen = math.max(0, maxHintWidthEff - baseHintWidthEff)
@@ -341,10 +342,9 @@ function actions_menu.run(ctx, opts)
   local targetButtonLeft = math.floor(targetSlotCenter - (hintIconW / 2))
   local anchorActionLabelX = anchorButtonLeft + hintIconW + hintGap
 
-  -- Keep the overlay right edge near the configured target button, with a small visual gap.
-  local rightGap = math.max(3, math.floor((_.scaleY and _.scaleY(4) or 4) + 0.5))
+  -- Right edge snaps to the target button left edge (e.g. square->start span).
   local boxX = anchorButtonLeft
-  local targetRightX = targetButtonLeft - rightGap
+  local targetRightX = targetButtonLeft
   local desiredToStartW = math.floor(targetRightX - boxX + 0.5)
   if desiredToStartW < 90 then desiredToStartW = 90 end
   local contentW = math.max(90, math.floor(((anchorActionLabelX - boxX) + maxLabelWIntrinsic + padX) + 0.5))
