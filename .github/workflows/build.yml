@@ -20,7 +20,7 @@ jobs:
       run: |
         apk add cmake
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -53,7 +53,7 @@ jobs:
         rm -rf build
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       if: steps.make.outcome == 'success'
       with:
         name: artifacts

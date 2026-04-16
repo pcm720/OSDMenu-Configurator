@@ -634,12 +634,13 @@ local function getRawPadNow(ctx)
   return 0
 end
 
-local function getNominalFps()
-  if Screen and Screen.getMode then
-    local mode = Screen.getMode()
-    if mode and tonumber(mode.height) == 512 then
-      return 50
-    end
+local function getNominalFps(ctx, _)
+  -- Use already-computed layout height instead of polling Screen.getMode()
+  -- in the keyboard hot path every frame.
+  local runtime = _G and _G.CONFIG_UI
+  local sceneH = tonumber((ctx and ctx.h) or (_ and _.h) or (runtime and runtime.currentSceneHeight) or 0)
+  if sceneH >= 500 then
+    return 50
   end
   return 60
 end
@@ -668,7 +669,7 @@ local function getTextInputCursorHoldRepeatMask(ctx, _, nominalFpsOverride)
   ctx.textInputCursorHoldCountdown = tonumber(ctx.textInputCursorHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps()
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps(ctx, _)
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
@@ -711,7 +712,7 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _, nominalFpsOverride)
   ctx.textInputBackspaceHoldCountdown = tonumber(ctx.textInputBackspaceHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps()
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps(ctx, _)
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial delete already comes from padJust in _.padEffective.
@@ -754,7 +755,7 @@ local function getTextInputGridHorizontalHoldRepeatMask(ctx, _, nominalFpsOverri
   ctx.textInputGridHorizontalHoldCountdown = tonumber(ctx.textInputGridHorizontalHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps()
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps(ctx, _)
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
@@ -1321,7 +1322,7 @@ local function run(ctx)
   local keyboardLayout = ensureKeyboardLayoutCache(ctx, _)
   local rows = keyboardLayout.rows or {}
   local runtime = _G and _G.CONFIG_UI
-  local nominalFps = getNominalFps()
+  local nominalFps = getNominalFps(ctx, _)
   local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
   local transitionPhase = transitionActive and tostring(runtime.sceneTransitionAnimPhase or "") or ""
   local belEnabledRaw = (ctx.textInputEnableBelKey == true) and (not ctx.textInputTitleIdMode)

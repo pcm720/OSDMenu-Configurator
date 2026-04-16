@@ -2352,7 +2352,9 @@ function common.consumeHeldRepeat(ctx, repeatKey, isHeld, opts)
     return false
   end
 
-  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local runtime = _G and _G.CONFIG_UI
+  local sceneH = tonumber((type(ctx) == "table" and ctx.h) or (runtime and runtime.currentSceneHeight) or 0)
+  local nominalFps = (sceneH >= 500) and 50 or 60
   local fps = common.getRepeatFps(ctx, nominalFps)
   local speed = tonumber(opts and opts.speed) or 1
   if speed <= 0 then speed = 1 end
@@ -2548,7 +2550,9 @@ function common.getPadEffective(ctx)
   end
   local prevPad = ctx.prevPad or 0
   local padJust = pad & ~prevPad
-  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local runtime = _G and _G.CONFIG_UI
+  local sceneH = tonumber((type(ctx) == "table" and ctx.h) or (runtime and runtime.currentSceneHeight) or 0)
+  local nominalFps = (sceneH >= 500) and 50 or 60
   ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
   ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
