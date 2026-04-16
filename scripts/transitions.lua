@@ -560,6 +560,15 @@ function transitions.install(common)
     if type(runtime) ~= "table" then
       return drawFn()
     end
+    local hasTransform = (tonumber(runtime.sceneDrawOffsetX) or 0) ~= 0 or
+        math.abs((tonumber(runtime.sceneDrawAlpha) or 1) - 1) > 0.0001 or
+        math.abs((tonumber(runtime.sceneDrawScale) or 1) - 1) > 0.0001 or
+        math.abs((tonumber(runtime.sceneDrawScaleX) or 1) - 1) > 0.0001 or
+        math.abs((tonumber(runtime.sceneDrawScaleY) or 1) - 1) > 0.0001 or
+        runtime.sceneDrawProjective == true
+    if not hasTransform then
+      return drawFn()
+    end
     local prevOffsetX = runtime.sceneDrawOffsetX
     local prevAlpha = runtime.sceneDrawAlpha
     local prevScale = runtime.sceneDrawScale

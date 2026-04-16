@@ -634,6 +634,16 @@ local function getRawPadNow(ctx)
   return 0
 end
 
+local function getNominalFps()
+  if Screen and Screen.getMode then
+    local mode = Screen.getMode()
+    if mode and tonumber(mode.height) == 512 then
+      return 50
+    end
+  end
+  return 60
+end
+
 local function isLogicalCrossHeldNow(ctx, _)
   local crossMask = _.PAD_CROSS or 0
   if crossMask == 0 then return false end
@@ -644,7 +654,7 @@ local function isLogicalCrossHeldNow(ctx, _)
   return (rawPad & crossMask) ~= 0
 end
 
-local function getTextInputCursorHoldRepeatMask(ctx, _)
+local function getTextInputCursorHoldRepeatMask(ctx, _, nominalFpsOverride)
   local l1r1Mask = (_.PAD_L1 or 0) | (_.PAD_R1 or 0)
   if l1r1Mask == 0 then
     return 0
@@ -658,13 +668,7 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
   ctx.textInputCursorHoldCountdown = tonumber(ctx.textInputCursorHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = 60
-    if Screen and Screen.getMode then
-      local mode = Screen.getMode()
-      if mode and tonumber(mode.height) == 512 then
-        nominalFps = 50
-      end
-    end
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps()
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
@@ -693,7 +697,7 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
-local function getTextInputBackspaceHoldRepeatMask(ctx, _)
+local function getTextInputBackspaceHoldRepeatMask(ctx, _, nominalFpsOverride)
   local backspaceMask = (_.PAD_SQUARE or 0)
   if backspaceMask == 0 then
     return 0
@@ -707,13 +711,7 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
   ctx.textInputBackspaceHoldCountdown = tonumber(ctx.textInputBackspaceHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = 60
-    if Screen and Screen.getMode then
-      local mode = Screen.getMode()
-      if mode and tonumber(mode.height) == 512 then
-        nominalFps = 50
-      end
-    end
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps()
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial delete already comes from padJust in _.padEffective.
@@ -742,7 +740,7 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
-local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+local function getTextInputGridHorizontalHoldRepeatMask(ctx, _, nominalFpsOverride)
   local lrMask = (_.PAD_LEFT or 0) | (_.PAD_RIGHT or 0)
   if lrMask == 0 then
     return 0
@@ -756,13 +754,7 @@ local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
   ctx.textInputGridHorizontalHoldCountdown = tonumber(ctx.textInputGridHorizontalHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = 60
-    if Screen and Screen.getMode then
-      local mode = Screen.getMode()
-      if mode and tonumber(mode.height) == 512 then
-        nominalFps = 50
-      end
-    end
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps()
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
@@ -1329,6 +1321,7 @@ local function run(ctx)
   local keyboardLayout = ensureKeyboardLayoutCache(ctx, _)
   local rows = keyboardLayout.rows or {}
   local runtime = _G and _G.CONFIG_UI
+  local nominalFps = getNominalFps()
   local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
   local transitionPhase = transitionActive and tostring(runtime.sceneTransitionAnimPhase or "") or ""
   local belEnabledRaw = (ctx.textInputEnableBelKey == true) and (not ctx.textInputTitleIdMode)
@@ -1518,7 +1511,8 @@ local function run(ctx)
       textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
     end
     local textY = math.floor(keyCenterY - (textH * 0.5) + KEY_LABEL_Y_BIAS + 0.5)
-    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.KEYBOARD_SELECTED_COLOR or _.WHITE)
+    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.KEYBOARD_SELECTED_COLOR or _.WHITE,
+      textH)
   end
   local drawCache = ensureKeyboardDrawCache(ctx, _, keyboardLayout, keyboardLeft, keyY, kw, kh, rowOffsets) or {}
   local keysToDraw = drawCache.keys or {}
@@ -1559,7 +1553,7 @@ local function run(ctx)
         end
       end
     end
-    local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
+    local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _, nominalFps)
     if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
     if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
     local belProfile = belProfileFromContext(ctx)
@@ -1690,7 +1684,7 @@ local function run(ctx)
   local blockDpadWhileCrossHeld = isLogicalCrossHeldNow(ctx, _)
   local gridHorizontalMask = 0
   if not blockDpadWhileCrossHeld then
-    gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+    gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _, nominalFps)
   else
     -- Avoid stale repeat carry-over the frame Cross is released.
     ctx.textInputGridHorizontalPrevHeldMask = 0
@@ -1779,7 +1773,7 @@ local function run(ctx)
       ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
   end
-  local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
+  local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _, nominalFps)
   if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
   if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
   local suppressCrossEnter = suppressPressVisualsForFrame or pressAnimEntryGateActive or
@@ -1828,7 +1822,7 @@ local function run(ctx)
     ctx.textInputShift = not ctx
         .textInputShift
   end
-  local backspaceMask = _.padEffective | getTextInputBackspaceHoldRepeatMask(ctx, _)
+  local backspaceMask = _.padEffective | getTextInputBackspaceHoldRepeatMask(ctx, _, nominalFps)
   if (backspaceMask & _.PAD_SQUARE) ~= 0 then
     if ctx.textInputCursor > 1 then
       ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 2) ..
