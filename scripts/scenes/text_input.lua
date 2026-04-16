@@ -109,8 +109,10 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
   local textH = hintTypography.textHeight
   local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
   baseWidth = baseWidth + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
-  local autoExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
-  if autoExtraW < 0 then autoExtraW = 0 end
+  -- Keep keyboard shoulder-row slot centers locked to the same static grid
+  -- used by the bottom helper row (fastStaticLayout=true) so:
+  -- L1/Select/R1 align with Square/Start/Triangle.
+  local autoExtraW = 0
   local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
   local xEff = (_.MARGIN_X or 0) + sideMargin + (tonumber(_.common.PAD_HINT_GRID_X_SHIFT) or 0)
   local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or (_.w or _.common.DEFAULT_W)
