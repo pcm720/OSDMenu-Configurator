@@ -2419,14 +2419,16 @@ end
 
 function common.runLayout(ctx)
   local vmode = Screen.getMode()
-  local modeSig = "nil\31\31\31\31"
+  local modeSig = "nil\31\31\31"
   if type(vmode) == "table" then
+    -- Do not include vmode.field in the layout signature.
+    -- On interlaced outputs this can toggle per frame (odd/even field), which
+    -- would incorrectly trigger per-frame "video mode changed" cache flushes.
     modeSig = table.concat({
       tostring(vmode.mode or ""),
       tostring(vmode.width or ""),
       tostring(vmode.height or ""),
       tostring(vmode.interlace or ""),
-      tostring(vmode.field or ""),
     }, "\31")
   end
   if ctx and ctx._layoutVideoModeSig ~= modeSig then
