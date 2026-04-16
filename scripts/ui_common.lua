@@ -1200,6 +1200,7 @@ end
 -- totalWidth: optional. y = bottom of hint area.
 function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallback, color, totalWidth, opts)
   if not color then color = common.DIM_COLOR end
+  local fastStaticLayout = (type(opts) == "table" and opts.fastStaticLayout == true)
   local runtime = _G and _G.CONFIG_UI
   local function clamp01(v)
     local n = tonumber(v) or 0
@@ -1302,6 +1303,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     local gridBaseExtraW = tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0
     baseWidth = baseWidth + gridBaseExtraW
     local autoExtraW = (type(runtime) == "table" and tonumber(runtime.hintGridAutoExtraW)) or 0
+    if fastStaticLayout then
+      autoExtraW = 0
+    end
     if autoExtraW < 0 then autoExtraW = 0 end
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
@@ -1356,13 +1360,22 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       return getTextWidthAtScale(label, drawScale)
     end
 
-    if type(runtime) == "table" then
+    local dynamicHintGrid = (not fastStaticLayout) and ((common.PAD_HINT_GRID_AUTO_WIDEN ~= false) or
+        (common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false)
+    )
+    if dynamicHintGrid and type(runtime) == "table" then
       if type(runtime.hintGridLabelCandidates) ~= "table" then
         runtime.hintGridLabelCandidates = {}
       end
       local seenLabels = runtime.hintGridSeenLabels
       if type(seenLabels) ~= "table" then
         seenLabels = {}
+        for i = 1, #(runtime.hintGridLabelCandidates or {}) do
+          local existing = trimHintLabel(runtime.hintGridLabelCandidates[i])
+          if existing ~= "" then
+            seenLabels[existing] = true
+          end
+        end
         runtime.hintGridSeenLabels = seenLabels
       end
       local maxLabelWByPad = runtime.hintGridMaxLabelWByPad
@@ -1376,15 +1389,21 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         if type(item) == "table" and item.pad ~= nil and item.label ~= nil then
           local before = #runtime.hintGridLabelCandidates
           addHintLabelCandidate(runtime.hintGridLabelCandidates, seenLabels, item.label)
-          if #runtime.hintGridLabelCandidates > before then
+          local addedLabel = (#runtime.hintGridLabelCandidates > before)
+          if addedLabel then
             added = true
           end
           local padKey = common.remapCrossCirclePadName(tostring(item.pad or ""):lower())
           if padKey ~= "" then
-            local labelW = getTextWidth(trimHintLabel(item.label))
-            if labelW > (tonumber(maxLabelWByPad[padKey]) or 0) then
-              maxLabelWByPad[padKey] = labelW
-              added = true
+            local prevPadW = tonumber(maxLabelWByPad[padKey]) or 0
+            -- Measure only on first-seen labels (or when this pad has no width yet)
+            -- to avoid repeated per-frame ftCalcDimensions work.
+            if addedLabel or prevPadW <= 0 then
+              local labelW = getTextWidth(trimHintLabel(item.label))
+              if labelW > prevPadW then
+                maxLabelWByPad[padKey] = labelW
+                added = true
+              end
             end
           end
         end
@@ -1394,7 +1413,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       end
     end
 
-    if type(runtime) == "table" and common.PAD_HINT_GRID_AUTO_WIDEN ~= false and runtime.hintGridAutoNeedsRecalc == true then
+    if (not fastStaticLayout) and type(runtime) == "table" and common.PAD_HINT_GRID_AUTO_WIDEN ~= false and
+        runtime.hintGridAutoNeedsRecalc == true then
       local labels = runtime.hintGridLabelCandidates
       local maxLabelW = 0
       for i = 1, #(labels or {}) do
@@ -1513,7 +1533,7 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     local resolvedLabelScale = drawScale
-    if common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
+    if (not fastStaticLayout) and common.PAD_HINT_LABEL_GLOBAL_AUTOSCALE ~= false then
       resolvedLabelScale = clampLabelScale(type(runtime) == "table" and runtime.hintGridGlobalLabelScale or drawScale)
     end
 
@@ -2440,12 +2460,9 @@ function common.runLayout(ctx)
   local modeSig = nil
   local prevModeSig = (type(ctx) == "table") and ctx._layoutVideoModeSig or nil
   if type(vmode) == "table" then
-    -- Keep layout signature tied to stable geometry-affecting fields only.
-    -- Some runtimes expose transient output metadata that can vary frame-to-frame
-    -- on interlaced outputs; including those would incorrectly trigger frequent
-    -- "video mode changed" cache flushes.
+    -- Keep layout signature tied to strictly stable geometry fields only.
+    -- width/height is sufficient for all layout/font metrics we derive.
     modeSig = table.concat({
-      tostring(vmode.mode or ""),
       tostring(vmode.width or ""),
       tostring(vmode.height or ""),
     }, "\31")

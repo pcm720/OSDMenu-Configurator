@@ -1836,6 +1836,7 @@ local function run(ctx)
       (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X, {
+    fastStaticLayout = true,
     getIconPressAmount = function(padName)
       if suppressPressVisualsForFrame or pressAnimEntryGateActive then
         return 0
