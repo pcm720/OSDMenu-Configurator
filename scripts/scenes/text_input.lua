@@ -1257,6 +1257,7 @@ local function run(ctx)
   local belMenuClosingKey = TEXT_INPUT_BEL_MENU_CLOSING_KEY
   local belMenuRowsCacheKey = TEXT_INPUT_BEL_MENU_ROWS_CACHE_KEY
   local belMenuHintsCacheKey = TEXT_INPUT_BEL_MENU_HINTS_CACHE_KEY
+  local belOverlayOpen = (ctx[belMenuOpenKey] == true)
   local transitionRenderPass = (_.common and _.common.isSceneTransitionInActive and _.common.isSceneTransitionInActive(ctx)) or
       false
   if not ctx.textInputCallback then
@@ -1347,8 +1348,10 @@ local function run(ctx)
   if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = #keyList end
   local suppressPressVisualFrames = math.max(0, math.floor(tonumber(ctx.textInputSuppressPressVisualFrames) or 0))
   local suppressPressVisualsForFrame = suppressPressVisualFrames > 0
-  updateHeldKeyPressState(ctx, _, ctx.textInputGridSel, suppressPressVisualsForFrame)
-  advanceKeyPressAnims(ctx)
+  if not belOverlayOpen then
+    updateHeldKeyPressState(ctx, _, ctx.textInputGridSel, suppressPressVisualsForFrame)
+    advanceKeyPressAnims(ctx)
+  end
   local pressAnimEntryGateActive = (math.max(0, math.floor(tonumber(ctx.textInputPressAnimEntryGate) or 0)) == 2)
   if suppressPressVisualFrames > 0 then
     ctx.textInputSuppressPressVisualFrames = suppressPressVisualFrames - 1
@@ -1358,6 +1361,7 @@ local function run(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = KEY_LABEL_SCALE
+  local drawKeyboardKeyLabels = not belOverlayOpen
   local keyFontBase = _.font
   local maxLabelShrinkPx = math.max(0, math.floor((tonumber(KEY_LABEL_PRESS_SHRINK_PX) or 0) + 0.5))
   local keyLabelBasePx = math.max(8, math.floor(((tonumber(_.common and _.common.FT_PIXEL_H) or 18) *
@@ -1406,7 +1410,7 @@ local function run(ctx)
         (((_.KEY_CHAR_W or 10) * #label) * drawLabelScale)
   end
 
-  if _.drawMode == "ftPrint" then
+  if _.drawMode == "ftPrint" and drawKeyboardKeyLabels then
     local warmSig = tostring(keyboardLayout.key or "") .. "|" .. keyFontCacheSig
     if ctx.textInputKeyLabelWidthWarmSig ~= warmSig then
       local fontsToWarm = {}
@@ -1469,7 +1473,7 @@ local function run(ctx)
 
   local function drawKey(kx, ky, w, h, label, sel, labelScale, keyIdx)
     local drawLabelScale = tonumber(labelScale) or keyScale
-    local pressAmount = getKeyPressAnimAmount(ctx, keyIdx)
+    local pressAmount = drawKeyboardKeyLabels and getKeyPressAnimAmount(ctx, keyIdx) or 0
     local labelShrinkPx = getPressShrinkPx(pressAmount)
     local inset = KEY_PRESS_MAX_INSET * pressAmount
     local darken = KEY_PRESS_MAX_DARKEN * pressAmount
@@ -1499,6 +1503,9 @@ local function run(ctx)
     _.Graphics.drawRect(ix, iy, iw, ih, border)
     if iw > 2 and ih > 2 then
       _.Graphics.drawRect(ix + 1, iy + 1, iw - 2, ih - 2, bg)
+    end
+    if not drawKeyboardKeyLabels or label == "" then
+      return
     end
     local textW = getCachedKeyLabelWidth(labelFont, label, drawLabelScale)
     -- Anchor label positioning to the original key center so tiny inset-rounding
