@@ -81,7 +81,7 @@ local R3_BUTTON_COLOR_PRESET = {
   circle = "933624",
   selected = "365172",
   selected_dim = "003250",
-  unselected = "A0A0A0",
+  unselected = "C8C8C8",
   dim = "606060",
   background = "141414",
 }
@@ -93,7 +93,7 @@ local R3_DEFAULT_COLOR_PRESET = {
   circle = "606060",
   selected = "0072A0",
   selected_dim = "003250",
-  unselected = "A0A0A0",
+  unselected = "C8C8C8",
   dim = "606060",
   background = "141414",
 }
@@ -1492,22 +1492,35 @@ local function run(ctx)
         local hintDrawScale = hintTypography.drawScale
         local hintFont = hintTypography.font
         local hintTextH = hintTypography.textHeight
-        local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
+        local hintColor = (_.UNSELECTED_COLOR or _.DIM_COLOR or _.WHITE)
         local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
-        if _.common.fitListRowText then
-          descStr = _.common.fitListRowText(ctx,
-            "editor_desc_" .. tostring(selOpt.key or ""),
-            hintFont,
-            descStr,
-            descMaxW,
-            hintDrawScale,
-            true,
-            { holdStart = 55, stepFrames = 16, holdEnd = 85 })
-        elseif _.common.truncateTextToWidth then
-          descStr = _.common.truncateTextToWidth(hintFont, descStr, descMaxW, hintDrawScale)
+        local descRaw = descStr
+        local descRawW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, descRaw, hintDrawScale)) or
+            (#tostring(descRaw or "") * 8)
+        local useTicker = descRawW > descMaxW
+        if useTicker then
+          if _.common.fitListRowText then
+            descStr = _.common.fitListRowText(ctx,
+              "editor_desc_" .. tostring(selOpt.key or ""),
+              hintFont,
+              descStr,
+              descMaxW,
+              hintDrawScale,
+              true,
+              { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+          elseif _.common.truncateTextToWidth then
+            descStr = _.common.truncateTextToWidth(hintFont, descStr, descMaxW, hintDrawScale)
+          end
         end
-        local tw = _.common.calcTextWidth(hintFont, descStr, hintDrawScale)
-        local x = _.common.centerX(_, tw)
+        local tw = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, descStr, hintDrawScale)) or
+            (#tostring(descStr or "") * 8)
+        local x
+        if useTicker then
+          x = _.MARGIN_X
+        else
+          local startCenterX = _.common.getHintStartCenterX and _.common.getHintStartCenterX(_, (_.w or 640) - (2 * _.MARGIN_X))
+          x = startCenterX and math.floor(startCenterX - (tw / 2) + 0.5) or _.common.centerX(_, tw)
+        end
         _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, descStr, hintColor, hintTextH)
       end
     end

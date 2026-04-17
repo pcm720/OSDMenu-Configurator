@@ -93,7 +93,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     _.Graphics.drawRect(0, ry, rw, rh, _.common.BACKGROUND_COLOR)
   end
 
-  local drawColor = color or _.DIM_COLOR or _.WHITE
+  local drawColor = color or _.UNSELECTED_COLOR or _.DIM_COLOR or _.WHITE
   local iconScale = tonumber((_.common and _.common.PAD_HINT_ICON_SCALE) or 0.54) or 0.54
   local baseScale = tonumber(scale) or tonumber((_.common and _.common.PAD_HINT_BASE_SCALE) or 0.7)
   local hintTypography = _.common.getHintTypography(_.font, _.drawMode, {
@@ -1476,11 +1476,16 @@ local function run(ctx)
     local labelShrinkPx = getPressShrinkPx(pressAmount)
     local inset = KEY_PRESS_MAX_INSET * pressAmount
     local darken = KEY_PRESS_MAX_DARKEN * pressAmount
+    local selectedAccent = _.SELECTED_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE
     local bg = sel and _.KEY_BG_SEL or _.KEY_BG
-    local border = sel and _.KEY_BORDER_SEL or _.KEY_BORDER
+    local border = sel and selectedAccent or _.KEY_BORDER
+    local labelColor = sel and selectedAccent or _.WHITE
     if darken > 0.0001 then
       bg = darkenColor(bg, darken)
       border = darkenColor(border, darken * 0.85)
+      if sel then
+        labelColor = darkenColor(labelColor, darken * 0.85)
+      end
     end
     local ix = math.floor((kx + inset) + 0.5)
     local iy = math.floor((ky + inset) + 0.5)
@@ -1520,7 +1525,7 @@ local function run(ctx)
       textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
     end
     local textY = math.floor(keyCenterY - (textH * 0.5) + KEY_LABEL_Y_BIAS + 0.5)
-    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.KEYBOARD_SELECTED_COLOR or _.WHITE,
+    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, labelColor,
       textH)
   end
   local drawCache = ensureKeyboardDrawCache(ctx, _, keyboardLayout, keyboardLeft, keyY, kw, kh, rowOffsets) or {}
@@ -1866,7 +1871,7 @@ local function run(ctx)
     end
     shoulderHints[#shoulderHints + 1] = { pad = "select", label = glyphKeyLabel, row = 2 }
   end
-  drawKeyboardShoulderHints(ctx, _, shoulderHints, 0.7, _.w - 2 * _.MARGIN_X, _.DIM_COLOR)
+  drawKeyboardShoulderHints(ctx, _, shoulderHints, 0.7, _.w - 2 * _.MARGIN_X, _.UNSELECTED_COLOR)
 end
 
 local function drawShoulderHints(ctx, _, hintItems, scale, totalWidth, color)

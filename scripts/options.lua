@@ -600,7 +600,7 @@ config_options.r3configurator_cnf = {
   { key = "circle", optType = "color", default = "606060", label = "Circle color" },
   { key = "selected", optType = "color", default = "0072A0", label = "Selected color" },
   { key = "selected_dim", optType = "color", default = "003250", label = "Selected dim color" },
-  { key = "unselected", optType = "color", default = "A0A0A0", label = "Unselected color" },
+  { key = "unselected", optType = "color", default = "C8C8C8", label = "Unselected color" },
   { key = "dim", optType = "color", default = "606060", label = "Dim color" },
   { key = "background", optType = "color", default = "141414", label = "Background color" },
 }

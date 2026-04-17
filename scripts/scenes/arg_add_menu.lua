@@ -115,16 +115,26 @@ function arg_add_menu.run(ctx, opts)
     local hintDrawScale = hintTypography.drawScale
     local hintFont = hintTypography.font
     local hintTextH = hintTypography.textHeight
-    local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
+    local hintColor = (_.UNSELECTED_COLOR or _.DIM_COLOR or _.WHITE)
     local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
-    if _.common.fitListRowText then
-      desc = _.common.fitListRowText(ctx, (rowStateKeyPrefix or "arg_add_row_") .. "desc", hintFont, desc, descMaxW,
-        hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
-    elseif _.common.truncateTextToWidth then
-      desc = _.common.truncateTextToWidth(hintFont, desc, descMaxW, hintDrawScale)
+    local descRawW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, desc, hintDrawScale)) or (#desc * 8)
+    local useTicker = descRawW > descMaxW
+    if useTicker then
+      if _.common.fitListRowText then
+        desc = _.common.fitListRowText(ctx, (rowStateKeyPrefix or "arg_add_row_") .. "desc", hintFont, desc, descMaxW,
+          hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+      elseif _.common.truncateTextToWidth then
+        desc = _.common.truncateTextToWidth(hintFont, desc, descMaxW, hintDrawScale)
+      end
     end
     local tw = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, desc, hintDrawScale)) or (#desc * 8)
-    local x = (_.common.centerX and _.common.centerX(_, tw)) or _.MARGIN_X
+    local x
+    if useTicker then
+      x = _.MARGIN_X
+    else
+      local startCenterX = _.common.getHintStartCenterX and _.common.getHintStartCenterX(_, (_.w or 640) - (2 * _.MARGIN_X))
+      x = startCenterX and math.floor(startCenterX - (tw / 2) + 0.5) or ((_.common.centerX and _.common.centerX(_, tw)) or _.MARGIN_X)
+    end
     _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, desc, hintColor, hintTextH)
   end
 
