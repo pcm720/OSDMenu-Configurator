@@ -2042,7 +2042,7 @@ local function mainLoop()
         scene_text_input and type(scene_text_input.drawShoulderHints) == "function" then
       local shoulderTotalWidth = (c.w or common.DEFAULT_W) - (2 * (c.MARGIN_X or common.MARGIN_X))
       local ok, err = pcall(scene_text_input.drawShoulderHints, c, c._, {}, 0.7, shoulderTotalWidth,
-        c.UNSELECTED_COLOR or UNSELECTED_COLOR or c.DIM_COLOR or DIM_COLOR)
+        c.DIM_COLOR or DIM_COLOR or c.UNSELECTED_COLOR or UNSELECTED_COLOR)
       if not ok and c then
         if c._keyboardShoulderHintDrawErrorReported ~= true then
           c._keyboardShoulderHintDrawErrorReported = true
