@@ -1226,7 +1226,10 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if key == "square" then return common.PAD_LABEL_SQUARE end
     if key == "triangle" then return common.PAD_LABEL_TRIANGLE end
     if key == "circle" then return common.PAD_LABEL_CIRCLE end
-    if key == "start" or key == "l1" or key == "r1" or key == "select" then
+    if key == "start" then
+      return common.UNSELECTED_COLOR
+    end
+    if key == "l1" or key == "r1" or key == "select" then
       return common.DIM_COLOR
     end
     return fallbackColor
