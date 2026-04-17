@@ -1447,7 +1447,9 @@ local function run(ctx)
           elseif o.optType == "bool" and valDisplay == _.common_str.on then
             valCol = _.UNSELECTED_COLOR
           else
-            valCol = ((i == ctx.optSel) and _.WHITE or _.UNSELECTED_COLOR)
+            -- Keep value-column text tied to configured unselected/dim palette,
+            -- even when the row itself is selected.
+            valCol = _.UNSELECTED_COLOR
           end
           local valDisplayDraw = formatBelForDisplay(valDisplay)
           local valueAreaWidth = (_.w or 640) - 72 - _.VALUE_X
