@@ -102,11 +102,10 @@ local function run(ctx)
   local selOpt = opts[ctx.cdromOptSel]
   local selCoSt = selOpt and cdromStrings[cdromStringKey(selOpt.key)]
   if selCoSt and selCoSt.desc then
-    local hintTextScale = tonumber(_.common.PAD_HINT_TEXT_SCALE) or 0.75
-    local hintDrawScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * hintTextScale)
-    local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
-    local hintTextH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight()) or
-        math.max(10, math.floor(((_.common.FT_PIXEL_H or 18) * hintTextScale) + 0.5))
+    local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
+    local hintDrawScale = hintTypography.drawScale
+    local hintFont = hintTypography.font
+    local hintTextH = hintTypography.textHeight
     local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
     local tw = _.common.calcTextWidth(hintFont, selCoSt.desc, hintDrawScale)
     local x = _.common.centerX(_, tw)

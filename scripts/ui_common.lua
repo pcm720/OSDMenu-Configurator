@@ -59,7 +59,9 @@ common.PAD_ICON_H                  = 26
 common.PAD_HINT_GAP                = 5
 common.PAD_HINT_ROW_H              = 28
 common.PAD_HINT_SIDE_MARGIN        = 16
-common.PAD_HINT_TEXT_SCALE         = 0.75
+common.PAD_HINT_TEXT_SCALE         = 0.675 -- 10% smaller helper/description text for better fit safety
+common.PAD_HINT_ICON_SCALE         = 0.54  -- 10% smaller helper button icons (was 0.60)
+common.PAD_HINT_TEXT_Y_OFFSET      = -5    -- move helper labels up by 1px (was effectively -4)
 common.PAD_HINT_BASE_SCALE         = 0.7
 common.PAD_HINT_TOTAL_H            = common.PAD_HINT_ROW_H -- single-row hint bar
 common.DESC_TO_HINT_MARGIN         = 20
@@ -76,6 +78,9 @@ common.SCENE_TRANSITION_MAX_FRAMES = 60
 common.PAD_HINT_DEFAULT_WIDTH      = 560
 common.PAD_HINT_GRID_EXTRA_W       = 60
 common.PAD_HINT_GRID_X_SHIFT       = -55
+common.PAD_HINT_GRID_RIGHT_OVERSCAN = 8                   -- keep widened grid this many pixels away from right edge
+common.PAD_HINT_ALIGN_CROSS_TO_X   = true                 -- align cross-slot icon left edge to drawHintLine x (main header margin)
+common.PAD_HINT_LABEL_SAFE_GAP     = 4                    -- keep text away from next icon / next slot edge
 
 -- Unused placeholder behavior (code-only).
 common.PAD_HINT_DRAW_UNUSED_BUTTONS = true
@@ -86,6 +91,76 @@ common.PAD_HINT_ICON_PRESS_LERP_IN = 0.55
 common.PAD_HINT_ICON_PRESS_LERP_OUT = 0.35
 local padIconCache                 = {}
 local hintFtFontCache              = {}
+local hintFtFontLastPxByHandle     = {}
+local hintTypographyCache          = {}
+
+local function flushTextWidthCache()
+  common._textWidthCache = {}
+  common._textWidthCacheSize = 0
+end
+
+function common.flushTextWidthCache()
+  flushTextWidthCache()
+end
+
+function common.flushHintFtFontCache(unloadFonts)
+  if unloadFonts and Font and Font.ftUnload then
+    for key, fontHandle in pairs(hintFtFontCache) do
+      if type(fontHandle) == "number" and fontHandle >= 0 then
+        pcall(Font.ftUnload, fontHandle)
+      end
+      hintFtFontCache[key] = nil
+    end
+    for handleKey in pairs(hintFtFontLastPxByHandle) do
+      hintFtFontLastPxByHandle[handleKey] = nil
+    end
+    common.flushHintTypographyCache()
+    return
+  end
+  for key in pairs(hintFtFontCache) do
+    hintFtFontCache[key] = nil
+  end
+  for handleKey in pairs(hintFtFontLastPxByHandle) do
+    hintFtFontLastPxByHandle[handleKey] = nil
+  end
+  common.flushHintTypographyCache()
+end
+
+function common.flushHintTypographyCache()
+  for key in pairs(hintTypographyCache) do
+    hintTypographyCache[key] = nil
+  end
+end
+
+function common.handleVideoModeMetricsChanged(ctx, modeSig)
+  flushTextWidthCache()
+  common.flushHintFtFontCache(true)
+  local runtime = _G and _G.CONFIG_UI
+  if runtime then
+    runtime.currentFtPixelH = nil
+  end
+  if type(ctx) ~= "table" then
+    return
+  end
+  ctx._ftPixelSizeApplied = nil
+  ctx._rowMarqueeStates = nil
+  ctx.textInputKeyboardDrawCache = nil
+  ctx.textInputKeyLabelFontByShrinkPx = nil
+  ctx.textInputKeyLabelFontByShrinkPxSig = nil
+  ctx.textInputKeyLabelWidthCache = nil
+  ctx.textInputKeyLabelWidthCacheSig = nil
+  ctx.textInputKeyLabelWidthWarmSig = nil
+  ctx._layoutVideoModeSig = modeSig
+end
+
+function common.onLanguageChanged(ctx, stringsTable)
+  flushTextWidthCache()
+  common.flushHintTypographyCache()
+  if type(ctx) == "table" then
+    ctx._rowMarqueeStates = nil
+  end
+end
+
 local function normalize3(xv, yv, zv)
   local l = math.sqrt((xv * xv) + (yv * yv) + (zv * zv))
   if l <= 0.000001 then return 0, 0, 1 end
@@ -192,18 +267,6 @@ function common.projectScenePoint(px, py)
   local outX = st.cx + (xCam * st.halfW * p)
   local outY = st.cy + (yCam * st.halfH * p)
   return outX, outY
-end
-
-local function canOpenPath(path)
-  if not (System and System.openFile and System.closeFile) then
-    return true
-  end
-  local h = System.openFile(path, 0)
-  if h and h >= 0 then
-    System.closeFile(h)
-    return true
-  end
-  return false
 end
 
 local function clampHintUnit(v)
@@ -759,6 +822,7 @@ function common.applyFtPixelSize(ctx, font, drawMode, optsOrUiScale, usePcall)
     else
       Font.ftSetPixelSize(font, 0, wantPx)
     end
+    flushTextWidthCache()
     ctx._ftPixelSizeApplied = wantPx
   end
   if runtime then
@@ -772,12 +836,23 @@ local function loadFtFontWithFallback()
   local cwdCandidates = { "font.ttf" }
   for i = 1, #cwdCandidates do
     local path = cwdCandidates[i]
-    if canOpenPath(path) then
-      local f = Font.ftLoad(path)
-      if f and f >= 0 then
-        return f
-      end
+    -- Try direct first (VFS / already-accessible path).
+    local f = Font.ftLoad(path)
+    if f and f >= 0 then
+      return f
     end
+    -- Then try through startup/device-aware path access (USB/HDD/APA mount/module paths).
+    local mounted, accessPath = common.beginPathAccess(path, {
+      loadModule = true,
+      mountPartition = true,
+    })
+    local probePath = accessPath or path
+    f = Font.ftLoad(probePath)
+    if f and f >= 0 then
+      common.endPathAccess(mounted)
+      return f
+    end
+    common.endPathAccess(mounted)
   end
   -- Always try bundled font directly; VFS paths may resolve even when System.openFile probe does not.
   local bundled = Font.ftLoad("scripts/font/font.ttf")
@@ -792,40 +867,129 @@ local function getHintFtFont(scaleFactor, opts)
   if sf <= 0 then sf = 1 end
   opts = opts or {}
   local basePx = getRuntimeFtPixelBase(opts)
+  local px = math.max(8, math.floor((basePx * sf) + 0.5))
   local lockSceneScale = opts.lockSceneScale == true
   local key = string.format("%d@%.3f@%d", math.floor(basePx + 0.5), sf, lockSceneScale and 1 or 0)
-  if hintFtFontCache[key] then return hintFtFontCache[key] end
-  local f = loadFtFontWithFallback()
-  if f and f >= 0 then
-    if Font.ftSetPixelSize then
-      local px = math.max(8, math.floor((basePx * sf) + 0.5))
-      pcall(Font.ftSetPixelSize, f, 0, px)
+  local f = hintFtFontCache[key]
+  if not (f and f >= 0) then
+    f = loadFtFontWithFallback()
+    if f and f >= 0 then
+      hintFtFontCache[key] = f
     end
-    hintFtFontCache[key] = f
-    return hintFtFontCache[key]
   end
-  return nil
+  if not (f and f >= 0) then
+    return nil
+  end
+
+  if Font.ftSetPixelSize then
+    local handleKey = tostring(f)
+    local prevPx = tonumber(hintFtFontLastPxByHandle[handleKey]) or -1
+    if prevPx ~= px then
+      pcall(Font.ftSetPixelSize, f, 0, px)
+      flushTextWidthCache()
+      hintFtFontLastPxByHandle[handleKey] = px
+    end
+  end
+  return f
 end
 
 function common.getHintFont(fallbackFont, drawMode, textScale, opts)
   local hintFont = fallbackFont
   if drawMode == "ftPrint" then
-    local f = getHintFtFont(textScale or 1, opts)
+    local hintOpts = opts
+    if type(hintOpts) ~= "table" then
+      hintOpts = { lockSceneScale = true }
+    elseif hintOpts.lockSceneScale == nil then
+      hintOpts = {
+        lockSceneScale = true
+      }
+      for k, v in pairs(opts) do
+        hintOpts[k] = v
+      end
+    end
+    local f = getHintFtFont(textScale or 1, hintOpts)
     if f then hintFont = f end
   end
   return hintFont
 end
 
-function common.getHintLabelDrawScale(baseScale)
+function common.getHintLabelDrawScale(baseScale, textScaleOverride)
   local bs = tonumber(baseScale) or common.PAD_HINT_BASE_SCALE or 0.7
-  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
+  local ts = tonumber(textScaleOverride) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
   return bs * ts
 end
 
 function common.getHintLabelTextHeight(opts)
-  local ts = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
-  local basePx = getRuntimeFtPixelBase(opts)
+  local metricOpts = opts
+  if type(metricOpts) ~= "table" then
+    metricOpts = { lockSceneScale = true }
+  elseif metricOpts.lockSceneScale == nil then
+    metricOpts = {
+      lockSceneScale = true
+    }
+    for k, v in pairs(opts) do
+      metricOpts[k] = v
+    end
+  end
+  local ts = tonumber(metricOpts and metricOpts.textScale) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
+  local basePx = getRuntimeFtPixelBase(metricOpts)
   return math.max(10, math.floor(basePx * ts + 0.5))
+end
+
+-- Shared helper/description typography resolver.
+-- Returns table: { font, textScale, baseScale, drawScale, textHeight }.
+function common.getHintTypography(fallbackFont, drawMode, opts)
+  local o = (type(opts) == "table") and opts or {}
+  local textScale = tonumber(o.textScale) or tonumber(common.PAD_HINT_TEXT_SCALE) or 0.675
+  local baseScale = tonumber(o.baseScale) or tonumber(common.PAD_HINT_BASE_SCALE) or 0.7
+  local lockSceneScale = (o.lockSceneScale ~= false)
+  local runtime = _G and _G.CONFIG_UI
+
+  local uiScaleKey = tonumber(runtime and runtime.currentUiScale) or 1
+  local ftPxKey = 0
+  if not lockSceneScale then
+    ftPxKey = math.floor((tonumber(runtime and runtime.currentFtPixelH) or 0) + 0.5)
+  end
+  local key = table.concat({
+    tostring(fallbackFont or ""),
+    tostring(drawMode or ""),
+    string.format("%.4f", textScale),
+    string.format("%.4f", baseScale),
+    lockSceneScale and "1" or "0",
+    string.format("%.4f", uiScaleKey),
+    tostring(ftPxKey),
+  }, "@")
+
+  local fontOpts = {
+    lockSceneScale = lockSceneScale
+  }
+
+  local cached = hintTypographyCache[key]
+  if cached then
+    -- Re-resolve hint font on each request so pixel size is corrected even when
+    -- underlying FT handles are shared/mutated by other text draws (e.g. keyboard labels).
+    cached.font = common.getHintFont(fallbackFont, drawMode, textScale, fontOpts)
+    return cached
+  end
+
+  local drawScale = common.getHintLabelDrawScale(baseScale, textScale)
+
+  local hintFont = common.getHintFont(fallbackFont, drawMode, textScale, fontOpts)
+  local textHeight = common.getHintLabelTextHeight({
+    lockSceneScale = lockSceneScale,
+    textScale = textScale
+  })
+
+  local out = {
+    font = hintFont,
+    textScale = textScale,
+    baseScale = baseScale,
+    drawScale = drawScale,
+    textHeight = textHeight,
+    lockSceneScale = lockSceneScale,
+  }
+  hintTypographyCache[key] = out
+  return out
 end
 
 function common.getHintRowTransitionInfo(runtime)
@@ -1016,6 +1180,14 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if rh <= 0 then return end
     Graphics.drawRect(0, ry, rw, rh, common.BACKGROUND_COLOR)
   end
+  local function clearHintRowForOverwrite(topY, height)
+    if not (Graphics and Graphics.drawRect) then return end
+    local rw = math.max(1, math.floor((type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or common.DEFAULT_W))
+    local ry = math.floor(tonumber(topY) or 0) - 1
+    local rh = math.max(0, math.floor(tonumber(height) or 0) + 2)
+    if rh <= 0 then return end
+    Graphics.drawRect(0, ry, rw, rh, common.BACKGROUND_COLOR)
+  end
   local function getPadLabelColor(padName, fallbackColor)
     local key = tostring(padName or ""):lower()
     if key == "cross" then return common.PAD_LABEL_CROSS end
@@ -1026,19 +1198,34 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     return fallbackColor
   end
   if hintItems and #hintItems > 0 then
-    local iconScale = 0.6
-    local textScale = tonumber(common.PAD_HINT_TEXT_SCALE) or 0.75
-    local drawScale = common.getHintLabelDrawScale(scale)
+    local iconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
+    local hintTypography = common.getHintTypography(font, drawMode, {
+      baseScale = tonumber(scale) or tonumber(common.PAD_HINT_BASE_SCALE) or 0.7,
+      lockSceneScale = true,
+    })
+    local textScale = hintTypography.textScale
+    local drawScale = hintTypography.drawScale
     local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
     local iconH = math.max(10, math.floor((common.PAD_ICON_H or 26) * iconScale + 0.5))
     local gap = math.max(2, math.floor((common.PAD_HINT_GAP or 5) * textScale + 0.5))
-    local textH = common.getHintLabelTextHeight({ lockSceneScale = true })
+    local labelSafeGap = math.max(2, math.floor(tonumber(common.PAD_HINT_LABEL_SAFE_GAP) or 4))
+    local textH = hintTypography.textHeight
     local rowH = math.max(14, math.floor((common.PAD_HINT_ROW_H or 28) * textScale + 0.5), textH + 4)
-    local approxCharW = math.floor(8 * drawScale)
-    local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
-    width = width + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
+    local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or common.PAD_HINT_DEFAULT_WIDTH
+    local gridBaseExtraW = tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0
+    baseWidth = baseWidth + gridBaseExtraW
+    local autoExtraW = 0
     local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
     local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
+    local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or common.DEFAULT_W
+    local rightOverscan = math.max(0, math.floor(tonumber(common.PAD_HINT_GRID_RIGHT_OVERSCAN) or 8))
+    local maxWidthEffByScreen = math.max(1, math.floor((sceneW - rightOverscan) - xEff))
+    local baseWidthEff = math.max(1, baseWidth - (2 * sideMargin))
+    local maxAutoExtraByScreen = math.max(0, maxWidthEffByScreen - baseWidthEff)
+    if autoExtraW > maxAutoExtraByScreen then
+      autoExtraW = maxAutoExtraByScreen
+    end
+    local width = baseWidth + autoExtraW
     local widthEff = width - 2 * sideMargin
     local rowPads
     if common.isSwapCrossCircle() then
@@ -1047,27 +1234,41 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       rowPads = { "cross", "square", "start", "triangle", "circle" }
     end
     local slotCount = #rowPads
-    local slotW = widthEff / slotCount
-    local hintFont = common.getHintFont(font, drawMode, textScale, { lockSceneScale = true })
+    local hintFont = hintTypography.font
     -- Keep one shared hint-row transition state across scenes so back/forward
     -- navigation always fades between previous/next rows, even if layout width
     -- differs between scenes.
     local hintKey = "__main_hint_row__"
 
-    local function getTextWidth(label)
+    local function getTextWidthAtScale(label, labelScale)
       if not label or label == "" then return 0 end
+      local s = tonumber(labelScale) or drawScale
       if common.calcTextWidth then
-        local w = common.calcTextWidth(hintFont, label, drawScale)
+        local w = common.calcTextWidth(hintFont, label, s)
         if type(w) == "number" and w > 0 then
           return w
         end
       end
       if drawMode == "ftPrint" and hintFont and Font and Font.ftCalcDimensions then
         local w = Font.ftCalcDimensions(hintFont, label)
-        return (type(w) == "number" and w > 0) and w or math.floor(approxCharW * #label)
+        if type(w) == "number" and w > 0 then
+          return w
+        end
       end
-      return math.floor(approxCharW * #label)
+      local approx = math.max(1, math.floor(8 * s))
+      return math.floor(approx * #label)
     end
+
+    local slotW = widthEff / slotCount
+    if common.PAD_HINT_ALIGN_CROSS_TO_X ~= false then
+      local desiredXEff = (tonumber(x) or 0) + (iconW * 0.5) - (slotW * 0.5)
+      local maxXEff = (sceneW - rightOverscan) - widthEff
+      if desiredXEff > maxXEff then desiredXEff = maxXEff end
+      xEff = desiredXEff
+    end
+    -- Match the rightmost helper-text budget to the list scrollbar lane edge
+    -- (used or not): default scrollbar right edge is sceneWidth - marginX.
+    local scrollbarRightEdge = sceneW - math.max(0, math.floor(tonumber(x) or 0))
 
     local rowSlots = {}
     local rowMap = {}
@@ -1094,8 +1295,24 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       rowSlots[i] = { pad = key, label = active and active.label or "", used = not not active }
     end
 
+    local resolvedLabelScale = drawScale
+
     local totalRowH = rowH
     local rowTop = math.floor(y) - totalRowH
+    local overwriteExistingRow = false
+    if type(runtime) == "table" then
+      local frameCounter = math.floor(tonumber(runtime.uiFrameCounter) or -1)
+      if runtime._hintRowDrawFrame ~= frameCounter then
+        runtime._hintRowDrawFrame = frameCounter
+        runtime._hintRowDrawnRows = {}
+      end
+      if type(runtime._hintRowDrawnRows) ~= "table" then
+        runtime._hintRowDrawnRows = {}
+      end
+      local rowKey = tostring(rowTop) .. ":" .. tostring(totalRowH)
+      overwriteExistingRow = runtime._hintRowDrawnRows[rowKey] == true
+      runtime._hintRowDrawnRows[rowKey] = true
+    end
 
     local function getIconVisualAlpha(slot)
       if slot and slot.used == true then return 1 end
@@ -1151,15 +1368,42 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
         end
       end
       if drawLabelAlpha > 0.001 and label ~= "" then
-        local textW = getTextWidth(label)
+        local labelDrawScale = resolvedLabelScale
+        local textW = getTextWidthAtScale(label, labelDrawScale)
         local textX
+        local maxLabelW
         if icon then
           textX = basePx + iconW + gap
+          if col < slotCount then
+            local nextSlotLeft = xEff + col * slotW
+            local nextIconLeft = math.floor((nextSlotLeft + (slotW / 2)) - (iconW / 2))
+            maxLabelW = nextIconLeft - labelSafeGap - textX
+          else
+            local gridRightEdge = xEff + widthEff
+            local rightEdge = math.max(gridRightEdge, scrollbarRightEdge) - labelSafeGap
+            maxLabelW = rightEdge - textX
+          end
         else
           textX = math.floor(slotCenter - textW / 2)
+          local rightEdge = xEff + widthEff - labelSafeGap
+          maxLabelW = rightEdge - textX
         end
-        local labelColor = applyAlpha(getPadLabelColor(padName, color), drawLabelAlpha)
-        common.drawText(hintFont, drawMode, textX, textY, drawScale, label, labelColor, textH)
+        if maxLabelW and maxLabelW > 0 then
+          textW = getTextWidthAtScale(label, labelDrawScale)
+          if common.truncateTextToWidth then
+            label = common.truncateTextToWidth(hintFont, label, maxLabelW, labelDrawScale)
+            textW = getTextWidthAtScale(label, labelDrawScale)
+            if not icon then
+              textX = math.floor(slotCenter - textW / 2)
+            end
+          end
+        else
+          label = ""
+        end
+        if label ~= "" then
+          local labelColor = applyAlpha(getPadLabelColor(padName, color), drawLabelAlpha)
+          common.drawText(hintFont, drawMode, textX, textY, labelDrawScale, label, labelColor, textH)
+        end
       end
     end
 
@@ -1168,7 +1412,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rTop = rowTop + idx * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
-      local textY = math.floor(rowCenter - textH / 2) - 4
+      local textYOffset = math.floor(tonumber(common.PAD_HINT_TEXT_Y_OFFSET) or -5)
+      local textY = math.floor(rowCenter - textH / 2) + textYOffset
       for col = 1, slotCount do
         local slot = slots[col]
         drawSlot(slot, col, rowCenter, iconY, textY, getIconVisualAlpha(slot),
@@ -1192,7 +1437,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       local rTop = rowTop + rowIndex * rowH
       local rowCenter = rTop + rowH / 2
       local iconY = math.floor(rowCenter - iconH / 2)
-      local textY = math.floor(rowCenter - textH / 2) - 4
+      local textYOffset = math.floor(tonumber(common.PAD_HINT_TEXT_Y_OFFSET) or -5)
+      local textY = math.floor(rowCenter - textH / 2) + textYOffset
       for col = 1, slotCount do
         local fromSlot = (fromSlots and fromSlots[col]) or { pad = rowPads[col], label = "", used = false }
         local toSlot = (toSlots and toSlots[col]) or { pad = rowPads[col], label = "", used = false }
@@ -1214,14 +1460,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             -- avoid double-draw pops/brightness pulses.
             local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
             if sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
-              -- Same active button, changed helper text: text uses sequential fade.
-              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon, 0)
-              if fromLabel ~= "" then
-                drawSlot(fromSlot, col, rowCenter, iconY, textY, 0, outAlpha)
-              end
-              if toLabel ~= "" then
-                drawSlot(toSlot, col, rowCenter, iconY, textY, 0, inAlpha)
-              end
+              -- Never draw two different labels for one button at once:
+              -- when only label text changes, snap to the new label.
+              drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon, (toLabel ~= "") and 1 or 0)
             else
               -- Active/inactive changes and non-paired text follow full-duration fade.
               drawSlot(toSlot, col, rowCenter, iconY, textY, blendedIcon,
@@ -1244,9 +1485,28 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     end
 
     drawHintsUntransformed(function()
+      if overwriteExistingRow then
+        clearHintRowForOverwrite(rowTop, rowH)
+      end
       clearHintRowForCrossDissolve(rowTop - 1, rowH + 2)
-      local disableTransitions = (type(opts) == "table" and opts.disableTransitions == true)
-      if disableTransitions then
+      local disableTransitions = overwriteExistingRow or (type(opts) == "table" and opts.disableTransitions == true)
+      local transitionInfo = (not disableTransitions) and common.getHintRowTransitionInfo and
+          common.getHintRowTransitionInfo(runtime) or nil
+      local useAnimatedTransition = (not disableTransitions) and type(runtime) == "table" and transitionInfo and
+          transitionInfo.active == true and transitionInfo.instant ~= true
+      if not useAnimatedTransition then
+        if type(runtime) == "table" then
+          if type(runtime.hintRowStableSlots) ~= "table" then
+            runtime.hintRowStableSlots = {}
+          end
+          local stableSlots = runtime.hintRowStableSlots[hintKey]
+          if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
+            runtime.hintRowStableSlots[hintKey] = cloneSlots(rowSlots)
+          end
+          if type(runtime.hintRowFadeStates) == "table" then
+            runtime.hintRowFadeStates[hintKey] = nil
+          end
+        end
         drawRow(rowSlots, 0)
       else
         local handled = common.drawHintSlotsWithTransition and common.drawHintSlotsWithTransition(runtime, {
@@ -1278,11 +1538,12 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
   end
 end
 
--- Build editor hint items: show ±1/±10/±50 only for string; enum/bool use left/right with enumHintLabels.
+-- Build editor hint items: show left/right deltas for numeric edit rows.
+-- enum/bool use left/right with enumHintLabels.
 -- Show Reset only when option has default.
 function common.buildEditorHintItems(selOpt, hintEditItems, getDefaultFn, enumHintLabels)
   if not hintEditItems or #hintEditItems == 0 then return hintEditItems end
-  local numericPads = { left = true, right = true, L1 = true, R1 = true, L2 = true, R2 = true }
+  local numericPads = { left = true, right = true }
   local showNumeric = selOpt and
       (selOpt.optType == "string" or selOpt.optType == "enum" or selOpt.optType == "bool")
   local showReset = selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" and getDefaultFn and
@@ -1374,7 +1635,7 @@ function common.handleLeaveSavePrompt(ctx, opts)
     common.drawCenteredPromptModal(_, prompt)
   end
   common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, _.editor_str.leave_save_hint_items, nil, _.DIM_COLOR,
-    _.w - 2 * _.MARGIN_X)
+    _.w - 2 * _.MARGIN_X, { disableTransitions = true })
   if (_.padEffective & _.PAD_CROSS) ~= 0 then
     ctx.editorLeavePrompt = nil
     if type(opts.onSave) == "function" then
@@ -1888,7 +2149,9 @@ function common.consumeHeldRepeat(ctx, repeatKey, isHeld, opts)
     return false
   end
 
-  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local runtime = _G and _G.CONFIG_UI
+  local sceneH = tonumber((type(ctx) == "table" and ctx.h) or (runtime and runtime.currentSceneHeight) or 0)
+  local nominalFps = (sceneH >= 500) and 50 or 60
   local fps = common.getRepeatFps(ctx, nominalFps)
   local speed = tonumber(opts and opts.speed) or 1
   if speed <= 0 then speed = 1 end
@@ -1955,8 +2218,25 @@ end
 
 function common.runLayout(ctx)
   local vmode = Screen.getMode()
-  local w = (vmode and vmode.width) or common.DEFAULT_W
-  local h = (vmode and vmode.height) or common.DEFAULT_H
+  local modeSig = nil
+  local prevModeSig = (type(ctx) == "table") and ctx._layoutVideoModeSig or nil
+  if type(vmode) == "table" then
+    -- Keep layout signature tied to strictly stable geometry fields only.
+    -- width/height is sufficient for all layout/font metrics we derive.
+    modeSig = table.concat({
+      tostring(vmode.width or ""),
+      tostring(vmode.height or ""),
+    }, "\31")
+  else
+    -- Guard against transient mode-query failures: keep prior signature/layout
+    -- instead of forcing a per-frame reset to defaults.
+    modeSig = prevModeSig or "nil\31\31"
+  end
+  if ctx and ctx._layoutVideoModeSig ~= modeSig then
+    common.handleVideoModeMetricsChanged(ctx, modeSig)
+  end
+  local w = (type(vmode) == "table" and vmode.width) or (ctx and ctx.w) or common.DEFAULT_W
+  local h = (type(vmode) == "table" and vmode.height) or (ctx and ctx.h) or common.DEFAULT_H
   local sx = w / common.DEFAULT_W
   local sy = h / common.DEFAULT_H
   local uiScale = math.min(sx, sy)
@@ -2069,7 +2349,9 @@ function common.getPadEffective(ctx)
   end
   local prevPad = ctx.prevPad or 0
   local padJust = pad & ~prevPad
-  local nominalFps = (Screen.getMode() and Screen.getMode().height == 512) and 50 or 60
+  local runtime = _G and _G.CONFIG_UI
+  local sceneH = tonumber((type(ctx) == "table" and ctx.h) or (runtime and runtime.currentSceneHeight) or 0)
+  local nominalFps = (sceneH >= 500) and 50 or 60
   ctx.holdFrameCount = tonumber(ctx.holdFrameCount) or 0
   ctx.holdRepeatCountdown = tonumber(ctx.holdRepeatCountdown) or 0
   local padRepeat = 0
@@ -2198,9 +2480,8 @@ function common.calcTextWidth(font, text, scale)
   local approxCharW = math.floor(8 * s)
   local cache = common._textWidthCache
   if not cache then
-    cache = {}
-    common._textWidthCache = cache
-    common._textWidthCacheSize = 0
+    flushTextWidthCache()
+    cache = common._textWidthCache
   end
   local cacheKey = tostring(font) .. "\31" .. tostring(s) .. "\31" .. tostring(text)
   local cachedWidth = cache[cacheKey]
@@ -2217,8 +2498,7 @@ function common.calcTextWidth(font, text, scale)
   cache[cacheKey] = measured
   common._textWidthCacheSize = (common._textWidthCacheSize or 0) + 1
   if (common._textWidthCacheSize or 0) > 8192 then
-    common._textWidthCache = {}
-    common._textWidthCacheSize = 0
+    flushTextWidthCache()
   end
   return measured
 end

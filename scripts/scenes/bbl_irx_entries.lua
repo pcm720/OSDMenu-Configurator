@@ -125,10 +125,9 @@ local function run(ctx)
 
   _.drawText(_.font, _.drawMode, _.MARGIN_X, _.MARGIN_Y, 1, _.menu_str.edit_irx_entries or "Edit IRX entries", _.WHITE)
   local irxOrderHint = (_.menu_str.irx_order_hint or "IRX entry order matters!")
-  local hintTextScale = (_.common.PAD_HINT_TEXT_SCALE or 0.75)
-  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, hintTextScale)) or _.font
-  local hintScale = (_.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(_.common.PAD_HINT_BASE_SCALE or 0.7)) or
-      0.525
+  local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
+  local hintScale = hintTypography.drawScale
+  local hintFont = hintTypography.font
   local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
   local hintW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, irxOrderHint, hintScale)) or (#irxOrderHint * 8)
   local hintX = (_.common.centerX and _.common.centerX(_, hintW)) or _.MARGIN_X

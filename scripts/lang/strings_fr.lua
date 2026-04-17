@@ -61,7 +61,7 @@ strings.editor = {
   saved = "Enregistre",
   cross_open_circle_back_items = { { pad = "cross", label = "Entrer" }, { pad = "start", label = "Sauver" }, { pad = "circle", label = "Retour" } },
   start_save_circle_back_items = { { pad = "start", label = "Sauver" }, { pad = "circle", label = "Retour" } },
-  hint_edit_items = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Reinit.", row = 1 }, { pad = "start", label = "Sauver", row = 1 }, { pad = "circle", label = "Retour", row = 1 }, { pad = "left", label = "-1", row = 2 }, { pad = "L1", label = "-10", row = 2 }, { pad = "L2", label = "-50", row = 2 }, { pad = "R2", label = "+50", row = 2 }, { pad = "R1", label = "+10", row = 2 }, { pad = "right", label = "+1", row = 2 } },
+  hint_edit_items = { { pad = "cross", label = "Modifier", row = 1 }, { pad = "triangle", label = "Reinit.", row = 1 }, { pad = "start", label = "Sauver", row = 1 }, { pad = "circle", label = "Retour", row = 1 } },
   test_label = "Test",
   no_option_list = "Aucune liste d'options pour ce type de fichier",
   save_config_to = "Enregistrer la config dans",

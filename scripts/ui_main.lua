@@ -5,8 +5,21 @@
   (Use loadfile for the optional CWD file: with VFS, pcall(dofile, path) can fail for paths not in VFS; loadfile returns nil if missing.)
 ]]
 
+local startupPathCommon = (_G.CONFIG_UI and _G.CONFIG_UI.common) or nil
+
 local function tryLoadStrings(path)
   local chunk = loadfile(path)
+  if not chunk and startupPathCommon and startupPathCommon.beginPathAccess then
+    local mounted, accessPath = startupPathCommon.beginPathAccess(path, {
+      loadModule = true,
+      mountPartition = true,
+    })
+    local probePath = accessPath or path
+    chunk = loadfile(probePath)
+    if startupPathCommon.endPathAccess then
+      startupPathCommon.endPathAccess(mounted)
+    end
+  end
   if not chunk then return nil end
   local ok, t = pcall(chunk)
   return (ok and type(t) == "table") and t or nil
@@ -154,6 +167,9 @@ end
 local C = _G.CONFIG_UI
 local common = C.common
 local config_parse = C.config_parse
+if common and common.onLanguageChanged then
+  pcall(common.onLanguageChanged, nil, strings)
+end
 
 local PAD_UP, PAD_DOWN, PAD_CROSS, PAD_CIRCLE, PAD_SQUARE, PAD_TRIANGLE = common.PAD_UP, common.PAD_DOWN,
     common.PAD_CROSS, common.PAD_CIRCLE, common.PAD_SQUARE, common.PAD_TRIANGLE
@@ -481,6 +497,9 @@ local function applyLanguageFileIndex(s, idx)
       s.mainEntries = entries
       s.mainBuildKey = nil
     end
+    if common and common.onLanguageChanged then
+      pcall(common.onLanguageChanged, s, newStrings)
+    end
     return true
   end
   return false
@@ -791,12 +810,11 @@ local function runMain(s, pad)
     drawMainBaseUi()
     local maxVis = math.max(1, math.min(8, total))
     local scroll = common.centeredListScroll(s.mainLangSel, total, maxVis)
-    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
-    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
-    local rowScale = titleScale
-    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
-    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
-        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local hintTypography = common.getHintTypography(s.font, s.drawMode)
+    local textScale = hintTypography.textScale
+    local rowScale = hintTypography.drawScale
+    local hintFont = hintTypography.font
+    local textH = hintTypography.textHeight
     local function textWidth(text, scale)
       local useScale = scale or rowScale
       if common.calcTextWidth then
@@ -838,7 +856,7 @@ local function runMain(s, pad)
     local squareSlotCenter = squareSlotLeft + (slotW / 2)
     local startSlotLeft = hintXEff + (2 * slotW)
     local startSlotCenter = startSlotLeft + (slotW / 2)
-    local hintIconScale = 0.6
+    local hintIconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
     local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
     local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
     local squareButtonLeft = math.floor(squareSlotCenter - (hintIconW / 2))
@@ -901,7 +919,7 @@ local function runMain(s, pad)
     local hintItems = buildMainLanguageOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
       local hintBg = (common and common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
-      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
       Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)
@@ -951,12 +969,11 @@ local function runMain(s, pad)
 
     local lines = buildMainCreditsLines(main_str)
     local total = #lines
-    local textScale = tonumber((common and common.PAD_HINT_TEXT_SCALE) or 0.75)
-    local titleScale = (common.getHintLabelDrawScale and common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
-    local rowScale = titleScale
-    local hintFont = (common.getHintFont and common.getHintFont(s.font, s.drawMode, textScale)) or s.font
-    local textH = (common.getHintLabelTextHeight and common.getHintLabelTextHeight()) or
-        math.max(10, math.floor(((common.FT_PIXEL_H or 18) * textScale) + 0.5))
+    local hintTypography = common.getHintTypography(s.font, s.drawMode)
+    local textScale = hintTypography.textScale
+    local rowScale = hintTypography.drawScale
+    local hintFont = hintTypography.font
+    local textH = hintTypography.textHeight
     local function textWidth(text, scale)
       local useScale = scale or rowScale
       if common.calcTextWidth then
@@ -988,7 +1005,7 @@ local function runMain(s, pad)
     local triangleSlotCenter = triangleSlotLeft + (slotW / 2)
     local circleSlotLeft = hintXEff + (4 * slotW)
     local circleSlotCenter = circleSlotLeft + (slotW / 2)
-    local hintIconScale = 0.6
+    local hintIconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
     local hintIconW = math.max(10, math.floor(((common.PAD_ICON_W or 26) * hintIconScale) + 0.5))
     local hintGap = math.max(2, math.floor(((common.PAD_HINT_GAP or 5) * textScale) + 0.5))
     local triangleButtonLeft = math.floor(triangleSlotCenter - (hintIconW / 2))
@@ -1046,7 +1063,7 @@ local function runMain(s, pad)
     local hintItems = buildMainCreditsOverlayHintItems(main_str)
     if Graphics and Graphics.drawRect then
       local hintBg = (common and common.BACKGROUND_COLOR) or Color.new(20, 20, 20, 0x80)
-      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * 0.75) + 0.5))
+      local hintRowH = math.max(14, math.floor(((common.PAD_HINT_ROW_H or 28) * textScale) + 0.5))
       local hintRowTop = math.floor(H) - hintRowH
       local hintW = (s.w or 640) - (2 * M)
       Graphics.drawRect(M, hintRowTop, hintW, hintRowH, hintBg)

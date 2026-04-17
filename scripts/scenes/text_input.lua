@@ -93,23 +93,45 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     _.Graphics.drawRect(0, ry, rw, rh, _.common.BACKGROUND_COLOR)
   end
 
-  local drawColor = _.WHITE or color or _.DIM_COLOR
-  local iconScale = 0.6
-  local textScale = 0.75
-  local drawScale = (scale or 0.7) * textScale
-  local hintFont = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale, { lockSceneScale = true })) or _.font
+  local drawColor = color or _.DIM_COLOR or _.WHITE
+  local iconScale = tonumber((_.common and _.common.PAD_HINT_ICON_SCALE) or 0.54) or 0.54
+  local baseScale = tonumber(scale) or tonumber((_.common and _.common.PAD_HINT_BASE_SCALE) or 0.7)
+  local hintTypography = _.common.getHintTypography(_.font, _.drawMode, {
+    baseScale = baseScale,
+  })
+  local textScale = hintTypography.textScale
+  local drawScale = hintTypography.drawScale
+  local hintFont = hintTypography.font
   local iconW = math.max(10, math.floor((_.common.PAD_ICON_W or 26) * iconScale + 0.5))
   local iconH = math.max(10, math.floor((_.common.PAD_ICON_H or 26) * iconScale + 0.5))
   local gap = math.max(2, math.floor((_.common.PAD_HINT_GAP or 5) * textScale + 0.5))
   local rowH = math.max(14, math.floor((_.common.PAD_HINT_ROW_H or 28) * textScale + 0.5))
-  local textH = (_.common.getHintLabelTextHeight and _.common.getHintLabelTextHeight({ lockSceneScale = true })) or
-      math.max(10, math.floor((_.common.FT_PIXEL_H or 18) * textScale + 0.5))
-  local width = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
-  width = width + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
+  local textH = hintTypography.textHeight
+  local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or _.common.PAD_HINT_DEFAULT_WIDTH
+  baseWidth = baseWidth + (tonumber(_.common.PAD_HINT_GRID_EXTRA_W) or 0)
+  -- Keep keyboard shoulder-row slot centers locked to the same static grid
+  -- used by the bottom helper row so:
+  -- L1/Select/R1 align with Square/Start/Triangle.
+  local autoExtraW = 0
   local sideMargin = _.common.PAD_HINT_SIDE_MARGIN or 0
   local xEff = (_.MARGIN_X or 0) + sideMargin + (tonumber(_.common.PAD_HINT_GRID_X_SHIFT) or 0)
-  local widthEff = width - 2 * sideMargin
+  local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or (_.w or _.common.DEFAULT_W)
+  local rightOverscan = math.max(0, math.floor(tonumber(_.common.PAD_HINT_GRID_RIGHT_OVERSCAN) or 8))
+  local maxWidthEffByScreen = math.max(1, math.floor((sceneW - rightOverscan) - xEff))
+  local baseWidthEff = math.max(1, baseWidth - (2 * sideMargin))
+  local maxAutoExtraByScreen = math.max(0, maxWidthEffByScreen - baseWidthEff)
+  if autoExtraW > maxAutoExtraByScreen then
+    autoExtraW = maxAutoExtraByScreen
+  end
+  local width = baseWidth + autoExtraW
+  local widthEff = width - (2 * sideMargin)
   local slotW = widthEff / 5
+  if _.common.PAD_HINT_ALIGN_CROSS_TO_X ~= false then
+    local desiredXEff = (_.MARGIN_X or 0) + (iconW * 0.5) - (slotW * 0.5)
+    local maxXEff = (sceneW - rightOverscan) - widthEff
+    if desiredXEff > maxXEff then desiredXEff = maxXEff end
+    xEff = desiredXEff
+  end
   local bottomRowTop = math.floor(_.HINT_Y) - rowH
   local topRowTop = bottomRowTop - rowH
   local hintKey = "__keyboard_shoulder_hint_row__"
@@ -166,7 +188,8 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     local slotCol = tonumber(slot.col) or columnByPad[tostring(slot.pad or "")] or 1
     local slotCenter = xEff + (slotCol - 1) * slotW + (slotW / 2)
     local rowCenter = topRowTop + (rowH / 2)
-    local textY = math.floor(topRowTop + (rowH - textH) / 2) - 4
+    local textYOffset = math.floor(tonumber(_.common and _.common.PAD_HINT_TEXT_Y_OFFSET) or -5)
+    local textY = math.floor(topRowTop + (rowH - textH) / 2) + textYOffset
     local basePx = math.floor(slotCenter - iconW / 2)
     local baseIconY = math.floor(rowCenter - iconH / 2)
     local pressAmount = 0
@@ -243,13 +266,8 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
       else
         local blendedIcon = (fromIcon * fullOut) + (toIcon * fullIn)
         if samePad and sameUsed and fromSlot.used == true and toSlot.used == true and not sameLabel then
-          drawSlot(toSlot, blendedIcon, 0)
-          if fromLabel ~= "" then
-            drawSlot(fromSlot, 0, outAlpha)
-          end
-          if toLabel ~= "" then
-            drawSlot(toSlot, 0, inAlpha)
-          end
+          -- Keep one label per button during transitions.
+          drawSlot(toSlot, blendedIcon, (toLabel ~= "") and 1 or 0)
         else
           drawSlot(toSlot, blendedIcon, (toSlot.used and toLabel ~= "") and fullIn or 0)
           if fromSlot.used and fromLabel ~= "" then
@@ -262,8 +280,22 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
 
   drawHintsUntransformed(function()
     clearShoulderHintRowForCrossDissolve(topRowTop, rowH)
-    local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
-    if not transitionActive then
+    local transitionInfo = (_.common.getHintRowTransitionInfo and _.common.getHintRowTransitionInfo(runtime)) or nil
+    local useAnimatedTransition = (type(runtime) == "table") and transitionInfo and transitionInfo.active == true and
+        transitionInfo.instant ~= true
+    if not useAnimatedTransition then
+      if type(runtime) == "table" then
+        if type(runtime.keyboardShoulderStableSlots) ~= "table" then
+          runtime.keyboardShoulderStableSlots = {}
+        end
+        local stableSlots = runtime.keyboardShoulderStableSlots[hintKey]
+        if type(stableSlots) ~= "table" or not slotsEqual(stableSlots, rowSlots) then
+          runtime.keyboardShoulderStableSlots[hintKey] = cloneSlots(rowSlots)
+        end
+        if type(runtime.keyboardShoulderFadeStates) == "table" then
+          runtime.keyboardShoulderFadeStates[hintKey] = nil
+        end
+      end
       drawRow(rowSlots)
     else
       local handled = _.common.drawHintSlotsWithTransition and _.common.drawHintSlotsWithTransition(runtime, {
@@ -531,9 +563,9 @@ local function ensureBelRowsByPage(ctx, profile, textInputStrings)
 end
 
 local function buildBelMenuLayoutMetrics(_, rowsByPage)
-  local textScale = tonumber((_.common and _.common.PAD_HINT_TEXT_SCALE) or 0.75)
-  local rowScale = (_.common and _.common.getHintLabelDrawScale and _.common.getHintLabelDrawScale(0.7)) or (0.7 * textScale)
-  local hintFont = (_.common and _.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, textScale)) or _.font
+  local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
+  local rowScale = hintTypography.drawScale
+  local hintFont = hintTypography.font
   local function textWidth(text)
     local s = tostring(text or "")
     if _.common and _.common.calcTextWidth then
@@ -604,6 +636,17 @@ local function getRawPadNow(ctx)
   return 0
 end
 
+local function getNominalFps(ctx, _)
+  -- Use already-computed layout height instead of polling Screen.getMode()
+  -- in the keyboard hot path every frame.
+  local runtime = _G and _G.CONFIG_UI
+  local sceneH = tonumber((ctx and ctx.h) or (_ and _.h) or (runtime and runtime.currentSceneHeight) or 0)
+  if sceneH >= 500 then
+    return 50
+  end
+  return 60
+end
+
 local function isLogicalCrossHeldNow(ctx, _)
   local crossMask = _.PAD_CROSS or 0
   if crossMask == 0 then return false end
@@ -614,7 +657,7 @@ local function isLogicalCrossHeldNow(ctx, _)
   return (rawPad & crossMask) ~= 0
 end
 
-local function getTextInputCursorHoldRepeatMask(ctx, _)
+local function getTextInputCursorHoldRepeatMask(ctx, _, nominalFpsOverride)
   local l1r1Mask = (_.PAD_L1 or 0) | (_.PAD_R1 or 0)
   if l1r1Mask == 0 then
     return 0
@@ -628,13 +671,7 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
   ctx.textInputCursorHoldCountdown = tonumber(ctx.textInputCursorHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = 60
-    if Screen and Screen.getMode then
-      local mode = Screen.getMode()
-      if mode and tonumber(mode.height) == 512 then
-        nominalFps = 50
-      end
-    end
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps(ctx, _)
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
@@ -663,7 +700,7 @@ local function getTextInputCursorHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
-local function getTextInputBackspaceHoldRepeatMask(ctx, _)
+local function getTextInputBackspaceHoldRepeatMask(ctx, _, nominalFpsOverride)
   local backspaceMask = (_.PAD_SQUARE or 0)
   if backspaceMask == 0 then
     return 0
@@ -677,13 +714,7 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
   ctx.textInputBackspaceHoldCountdown = tonumber(ctx.textInputBackspaceHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = 60
-    if Screen and Screen.getMode then
-      local mode = Screen.getMode()
-      if mode and tonumber(mode.height) == 512 then
-        nominalFps = 50
-      end
-    end
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps(ctx, _)
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial delete already comes from padJust in _.padEffective.
@@ -712,7 +743,7 @@ local function getTextInputBackspaceHoldRepeatMask(ctx, _)
   return repeatMask
 end
 
-local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+local function getTextInputGridHorizontalHoldRepeatMask(ctx, _, nominalFpsOverride)
   local lrMask = (_.PAD_LEFT or 0) | (_.PAD_RIGHT or 0)
   if lrMask == 0 then
     return 0
@@ -726,13 +757,7 @@ local function getTextInputGridHorizontalHoldRepeatMask(ctx, _)
   ctx.textInputGridHorizontalHoldCountdown = tonumber(ctx.textInputGridHorizontalHoldCountdown) or 0
 
   if heldMask ~= 0 then
-    local nominalFps = 60
-    if Screen and Screen.getMode then
-      local mode = Screen.getMode()
-      if mode and tonumber(mode.height) == 512 then
-        nominalFps = 50
-      end
-    end
+    local nominalFps = tonumber(nominalFpsOverride) or getNominalFps(ctx, _)
     if prevHeldMask == 0 or prevHeldMask ~= heldMask then
       local fps = (_.common.getRepeatFps and _.common.getRepeatFps(ctx, nominalFps)) or nominalFps
       -- Initial move already comes from padJust in _.padEffective.
@@ -945,7 +970,6 @@ local KEY_PRESS_OUT_FRAMES = 7
 local KEY_PRESS_MAX_INSET = 1.0 -- px per side (2px total shrink)
 local KEY_PRESS_MAX_DARKEN = 0.24
 local KEY_LABEL_SCALE = 0.7
-local KEY_LABEL_FT_FONT_SCALE = 1.0
 local KEY_LABEL_PRESS_SHRINK_PX = 2.0
 local KEY_LABEL_Y_BIAS = -1.0
 
@@ -1231,8 +1255,7 @@ local function run(ctx)
   local belMenuOpenKey = TEXT_INPUT_BEL_MENU_OPEN_KEY
   local belMenuAnimKey = TEXT_INPUT_BEL_MENU_ANIM_KEY
   local belMenuClosingKey = TEXT_INPUT_BEL_MENU_CLOSING_KEY
-  local belMenuRowsCacheKey = TEXT_INPUT_BEL_MENU_ROWS_CACHE_KEY
-  local belMenuHintsCacheKey = TEXT_INPUT_BEL_MENU_HINTS_CACHE_KEY
+  local belOverlayOpen = (ctx[belMenuOpenKey] == true)
   local transitionRenderPass = (_.common and _.common.isSceneTransitionInActive and _.common.isSceneTransitionInActive(ctx)) or
       false
   if not ctx.textInputCallback then
@@ -1300,6 +1323,7 @@ local function run(ctx)
   local keyboardLayout = ensureKeyboardLayoutCache(ctx, _)
   local rows = keyboardLayout.rows or {}
   local runtime = _G and _G.CONFIG_UI
+  local nominalFps = getNominalFps(ctx, _)
   local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
   local transitionPhase = transitionActive and tostring(runtime.sceneTransitionAnimPhase or "") or ""
   local belEnabledRaw = (ctx.textInputEnableBelKey == true) and (not ctx.textInputTitleIdMode)
@@ -1322,8 +1346,10 @@ local function run(ctx)
   if ctx.textInputGridSel > #keyList then ctx.textInputGridSel = #keyList end
   local suppressPressVisualFrames = math.max(0, math.floor(tonumber(ctx.textInputSuppressPressVisualFrames) or 0))
   local suppressPressVisualsForFrame = suppressPressVisualFrames > 0
-  updateHeldKeyPressState(ctx, _, ctx.textInputGridSel, suppressPressVisualsForFrame)
-  advanceKeyPressAnims(ctx)
+  if not belOverlayOpen then
+    updateHeldKeyPressState(ctx, _, ctx.textInputGridSel, suppressPressVisualsForFrame)
+    advanceKeyPressAnims(ctx)
+  end
   local pressAnimEntryGateActive = (math.max(0, math.floor(tonumber(ctx.textInputPressAnimEntryGate) or 0)) == 2)
   if suppressPressVisualFrames > 0 then
     ctx.textInputSuppressPressVisualFrames = suppressPressVisualFrames - 1
@@ -1333,8 +1359,9 @@ local function run(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = KEY_LABEL_SCALE
-  local keyFontBase = (_.common.getHintFont and _.common.getHintFont(_.font, _.drawMode, KEY_LABEL_FT_FONT_SCALE,
-    { lockSceneScale = true })) or _.font
+  -- Keep keycap characters visible even while the glyph/BEL overlay is open.
+  local drawKeyboardKeyLabels = true
+  local keyFontBase = _.font
   local maxLabelShrinkPx = math.max(0, math.floor((tonumber(KEY_LABEL_PRESS_SHRINK_PX) or 0) + 0.5))
   local keyLabelBasePx = math.max(8, math.floor(((tonumber(_.common and _.common.FT_PIXEL_H) or 18) *
       math.max(0.1, tonumber(runtime and runtime.currentUiScale) or tonumber(ctx.uiScale) or 1)) + 0.5))
@@ -1343,12 +1370,9 @@ local function run(ctx)
   local keyFontsByShrinkPx = ctx.textInputKeyLabelFontByShrinkPx
   if type(keyFontsByShrinkPx) ~= "table" or ctx.textInputKeyLabelFontByShrinkPxSig ~= keyFontScaleSig then
     keyFontsByShrinkPx = { [0] = keyFontBase }
-    if _.drawMode == "ftPrint" and _.common and _.common.getHintFont and keyLabelBasePx > 0 then
+    if _.drawMode == "ftPrint" then
       for shrinkPx = 1, maxLabelShrinkPx do
-        local drawPx = math.max(8, keyLabelBasePx - shrinkPx)
-        local drawScale = drawPx / keyLabelBasePx
-        keyFontsByShrinkPx[shrinkPx] = _.common.getHintFont(_.font, _.drawMode, drawScale, { lockSceneScale = true }) or
-            keyFontBase
+        keyFontsByShrinkPx[shrinkPx] = keyFontBase
       end
     end
     ctx.textInputKeyLabelFontByShrinkPx = keyFontsByShrinkPx
@@ -1385,7 +1409,7 @@ local function run(ctx)
         (((_.KEY_CHAR_W or 10) * #label) * drawLabelScale)
   end
 
-  if _.drawMode == "ftPrint" then
+  if _.drawMode == "ftPrint" and drawKeyboardKeyLabels then
     local warmSig = tostring(keyboardLayout.key or "") .. "|" .. keyFontCacheSig
     if ctx.textInputKeyLabelWidthWarmSig ~= warmSig then
       local fontsToWarm = {}
@@ -1448,7 +1472,7 @@ local function run(ctx)
 
   local function drawKey(kx, ky, w, h, label, sel, labelScale, keyIdx)
     local drawLabelScale = tonumber(labelScale) or keyScale
-    local pressAmount = getKeyPressAnimAmount(ctx, keyIdx)
+    local pressAmount = ((not belOverlayOpen) and drawKeyboardKeyLabels) and getKeyPressAnimAmount(ctx, keyIdx) or 0
     local labelShrinkPx = getPressShrinkPx(pressAmount)
     local inset = KEY_PRESS_MAX_INSET * pressAmount
     local darken = KEY_PRESS_MAX_DARKEN * pressAmount
@@ -1479,6 +1503,9 @@ local function run(ctx)
     if iw > 2 and ih > 2 then
       _.Graphics.drawRect(ix + 1, iy + 1, iw - 2, ih - 2, bg)
     end
+    if not drawKeyboardKeyLabels or label == "" then
+      return
+    end
     local textW = getCachedKeyLabelWidth(labelFont, label, drawLabelScale)
     -- Anchor label positioning to the original key center so tiny inset-rounding
     -- differences during press/release do not create 1px jitter.
@@ -1493,7 +1520,8 @@ local function run(ctx)
       textH = math.max(8, math.floor(((_.KEY_LH or 14) * drawLabelScale) + 0.5))
     end
     local textY = math.floor(keyCenterY - (textH * 0.5) + KEY_LABEL_Y_BIAS + 0.5)
-    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.KEYBOARD_SELECTED_COLOR or _.WHITE)
+    _.drawText(labelFont, _.drawMode, textX, textY, drawLabelScale, label, sel and _.KEYBOARD_SELECTED_COLOR or _.WHITE,
+      textH)
   end
   local drawCache = ensureKeyboardDrawCache(ctx, _, keyboardLayout, keyboardLeft, keyY, kw, kh, rowOffsets) or {}
   local keysToDraw = drawCache.keys or {}
@@ -1534,7 +1562,7 @@ local function run(ctx)
         end
       end
     end
-    local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
+    local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _, nominalFps)
     if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
     if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
     local belProfile = belProfileFromContext(ctx)
@@ -1665,7 +1693,7 @@ local function run(ctx)
   local blockDpadWhileCrossHeld = isLogicalCrossHeldNow(ctx, _)
   local gridHorizontalMask = 0
   if not blockDpadWhileCrossHeld then
-    gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _)
+    gridHorizontalMask = _.padEffective | getTextInputGridHorizontalHoldRepeatMask(ctx, _, nominalFps)
   else
     -- Avoid stale repeat carry-over the frame Cross is released.
     ctx.textInputGridHorizontalPrevHeldMask = 0
@@ -1754,7 +1782,7 @@ local function run(ctx)
       ctx.textInputGridSel = rowAt(targetRow, targetCol)
     end
   end
-  local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _)
+  local cursorMoveMask = _.padEffective | getTextInputCursorHoldRepeatMask(ctx, _, nominalFps)
   if (cursorMoveMask & _.PAD_L1) ~= 0 then moveTextCursorWrap(-1) end
   if (cursorMoveMask & _.PAD_R1) ~= 0 then moveTextCursorWrap(1) end
   local suppressCrossEnter = suppressPressVisualsForFrame or pressAnimEntryGateActive or
@@ -1803,7 +1831,7 @@ local function run(ctx)
     ctx.textInputShift = not ctx
         .textInputShift
   end
-  local backspaceMask = _.padEffective | getTextInputBackspaceHoldRepeatMask(ctx, _)
+  local backspaceMask = _.padEffective | getTextInputBackspaceHoldRepeatMask(ctx, _, nominalFps)
   if (backspaceMask & _.PAD_SQUARE) ~= 0 then
     if ctx.textInputCursor > 1 then
       ctx.textInputValue = ctx.textInputValue:sub(1, ctx.textInputCursor - 2) ..
@@ -1816,7 +1844,6 @@ local function run(ctx)
       (ctx.textInputIgnoreCrossUntilRelease == true)
   local logicalEnterPad = (_.common and _.common.remapCrossCirclePadName and _.common.remapCrossCirclePadName("cross")) or "cross"
   _.common.drawHintLine(_.font, _.drawMode, _.MARGIN_X, _.HINT_Y, 0.7, hints, nil, _.DIM_COLOR, _.w - 2 * _.MARGIN_X, {
-    disableTransitions = true,
     getIconPressAmount = function(padName)
       if suppressPressVisualsForFrame or pressAnimEntryGateActive then
         return 0
