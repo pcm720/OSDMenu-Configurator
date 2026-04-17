@@ -23,7 +23,7 @@ common.SWAP_CROSS_CIRCLE           = false
 -- Colors
 local FULL_ALPHA                   = 0x80
 common.WHITE                       = Color.new(255, 255, 255, FULL_ALPHA)
-common.UNSELECTED_COLOR                        = Color.new(160, 160, 160, FULL_ALPHA)
+common.UNSELECTED_COLOR                        = Color.new(200, 200, 200, FULL_ALPHA)
 common.DIM_COLOR                         = Color.new(96, 96, 96, FULL_ALPHA)
 common.ERROR                       = Color.new(255, 64, 64, FULL_ALPHA)
 common.BACKGROUND_COLOR                     = Color.new(20, 20, 20, FULL_ALPHA)
@@ -992,6 +992,38 @@ function common.getHintTypography(fallbackFont, drawMode, opts)
   return out
 end
 
+-- Visual X-center of the START slot in the single-row helper layout.
+-- Used by bottom description rows so they align to what players perceive as UI center.
+function common.getHintStartCenterX(ctxLike, totalWidth)
+  local runtime = _G and _G.CONFIG_UI
+  local x = tonumber(ctxLike and ctxLike.MARGIN_X) or common.MARGIN_X
+  local sceneW = (type(runtime) == "table" and tonumber(runtime.currentSceneWidth)) or tonumber(ctxLike and ctxLike.w) or
+      common.DEFAULT_W
+  local baseWidth = (type(totalWidth) == "number" and totalWidth > 0) and totalWidth or
+      ((tonumber(ctxLike and ctxLike.w) or common.DEFAULT_W) - (2 * x))
+  baseWidth = baseWidth + (tonumber(common.PAD_HINT_GRID_EXTRA_W) or 0)
+
+  local sideMargin = common.PAD_HINT_SIDE_MARGIN or 0
+  local xEff = x + sideMargin + (tonumber(common.PAD_HINT_GRID_X_SHIFT) or 0)
+  local rightOverscan = math.max(0, math.floor(tonumber(common.PAD_HINT_GRID_RIGHT_OVERSCAN) or 8))
+  local widthEff = math.max(1, baseWidth - (2 * sideMargin))
+  local maxWidthEffByScreen = math.max(1, math.floor((sceneW - rightOverscan) - xEff))
+  if widthEff > maxWidthEffByScreen then widthEff = maxWidthEffByScreen end
+
+  local slotW = widthEff / 5
+  if common.PAD_HINT_ALIGN_CROSS_TO_X ~= false then
+    local iconScale = tonumber(common.PAD_HINT_ICON_SCALE) or 0.54
+    local iconW = math.max(10, math.floor((common.PAD_ICON_W or 26) * iconScale + 0.5))
+    local desiredXEff = x + (iconW * 0.5) - (slotW * 0.5)
+    local maxXEff = (sceneW - rightOverscan) - widthEff
+    if desiredXEff > maxXEff then desiredXEff = maxXEff end
+    xEff = desiredXEff
+  end
+
+  local startSlotCenter = xEff + (2 * slotW) + (slotW / 2)
+  return math.floor(startSlotCenter + 0.5)
+end
+
 function common.getHintRowTransitionInfo(runtime)
   local transitionActive = type(runtime) == "table" and runtime.sceneTransitionAnimActive == true
   local transitionType = type(runtime) == "table" and tostring(runtime.sceneTransitionAnimType or "") or ""
@@ -1194,7 +1226,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
     if key == "square" then return common.PAD_LABEL_SQUARE end
     if key == "triangle" then return common.PAD_LABEL_TRIANGLE end
     if key == "circle" then return common.PAD_LABEL_CIRCLE end
-    if key == "start" or key == "l1" or key == "r1" then return common.WHITE end
+    if key == "start" or key == "l1" or key == "r1" or key == "select" then
+      return common.DIM_COLOR
+    end
     return fallbackColor
   end
   if hintItems and #hintItems > 0 then

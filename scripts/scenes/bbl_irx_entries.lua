@@ -128,9 +128,27 @@ local function run(ctx)
   local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
   local hintScale = hintTypography.drawScale
   local hintFont = hintTypography.font
-  local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
+  local hintColor = (_.UNSELECTED_COLOR or _.DIM_COLOR or _.WHITE)
+  local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+  local hintRawW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, irxOrderHint, hintScale)) or
+      (#irxOrderHint * 8)
+  local useTicker = hintRawW > descMaxW
+  if useTicker then
+    if _.common.fitListRowText then
+      irxOrderHint = _.common.fitListRowText(ctx, "bbl_irx_order_hint", hintFont, irxOrderHint, descMaxW, hintScale, true,
+        { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+    elseif _.common.truncateTextToWidth then
+      irxOrderHint = _.common.truncateTextToWidth(hintFont, irxOrderHint, descMaxW, hintScale)
+    end
+  end
   local hintW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, irxOrderHint, hintScale)) or (#irxOrderHint * 8)
-  local hintX = (_.common.centerX and _.common.centerX(_, hintW)) or _.MARGIN_X
+  local hintX
+  if useTicker then
+    hintX = _.MARGIN_X
+  else
+    local startCenterX = _.common.getHintStartCenterX and _.common.getHintStartCenterX(_, (_.w or 640) - (2 * _.MARGIN_X))
+    hintX = startCenterX and math.floor(startCenterX - (hintW / 2) + 0.5) or ((_.common.centerX and _.common.centerX(_, hintW)) or _.MARGIN_X)
+  end
   _.drawText(hintFont, _.drawMode, hintX, (_.DESC_Y_BOTTOM or (_.HINT_Y - _.scaleY(22))), hintScale, irxOrderHint, hintColor)
 
   local startY = _.MARGIN_Y + _.scaleY(50)

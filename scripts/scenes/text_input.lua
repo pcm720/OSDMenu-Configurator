@@ -93,7 +93,7 @@ local function drawKeyboardShoulderHints(ctx, _, hintItems, scale, totalWidth, c
     _.Graphics.drawRect(0, ry, rw, rh, _.common.BACKGROUND_COLOR)
   end
 
-  local drawColor = color or _.DIM_COLOR or _.WHITE
+  local drawColor = color or _.DIM_COLOR or _.UNSELECTED_COLOR or _.WHITE
   local iconScale = tonumber((_.common and _.common.PAD_HINT_ICON_SCALE) or 0.54) or 0.54
   local baseScale = tonumber(scale) or tonumber((_.common and _.common.PAD_HINT_BASE_SCALE) or 0.7)
   local hintTypography = _.common.getHintTypography(_.font, _.drawMode, {

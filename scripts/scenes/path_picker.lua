@@ -1243,15 +1243,28 @@ local function run(ctx)
             local hintFont = hintTypography.font
             local hintTextH = hintTypography.textHeight
             local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
-            if _.common.fitListRowText then
-              selectedHelper = _.common.fitListRowText(ctx, "path_picker_device_helper", hintFont, selectedHelper,
-                descMaxW, hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
-            elseif _.common.truncateTextToWidth then
-              selectedHelper = _.common.truncateTextToWidth(hintFont, selectedHelper, descMaxW, hintDrawScale)
+            local helperRawW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, selectedHelper, hintDrawScale)) or
+                (#tostring(selectedHelper or "") * 8)
+            local useTicker = helperRawW > descMaxW
+            if useTicker then
+              if _.common.fitListRowText then
+                selectedHelper = _.common.fitListRowText(ctx, "path_picker_device_helper", hintFont, selectedHelper,
+                  descMaxW, hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+              elseif _.common.truncateTextToWidth then
+                selectedHelper = _.common.truncateTextToWidth(hintFont, selectedHelper, descMaxW, hintDrawScale)
+              end
             end
-            local tw = _.common.calcTextWidth(hintFont, selectedHelper, hintDrawScale)
-            local x = _.common.centerX(_, tw)
-            local hintColor = (_.common.OPTION_HINT_COLOR or _.DIM_COLOR)
+            local tw = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, selectedHelper, hintDrawScale)) or
+                (#tostring(selectedHelper or "") * 8)
+            local x
+            if useTicker then
+              x = _.MARGIN_X
+            else
+              local startCenterX = _.common.getHintStartCenterX and
+                  _.common.getHintStartCenterX(_, (_.w or 640) - (2 * _.MARGIN_X))
+              x = startCenterX and math.floor(startCenterX - (tw / 2) + 0.5) or _.common.centerX(_, tw)
+            end
+            local hintColor = (_.UNSELECTED_COLOR or _.DIM_COLOR)
             _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selectedHelper, hintColor, hintTextH)
           end
         end

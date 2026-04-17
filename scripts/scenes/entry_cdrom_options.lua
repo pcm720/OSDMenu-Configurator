@@ -102,14 +102,32 @@ local function run(ctx)
   local selOpt = opts[ctx.cdromOptSel]
   local selCoSt = selOpt and cdromStrings[cdromStringKey(selOpt.key)]
   if selCoSt and selCoSt.desc then
+    local descText = tostring(selCoSt.desc or "")
     local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
     local hintDrawScale = hintTypography.drawScale
     local hintFont = hintTypography.font
     local hintTextH = hintTypography.textHeight
-    local hintColor = (_.common.OPTION_HINT_COLOR or _.KEYBOARD_SELECTED_COLOR or _.WHITE)
-    local tw = _.common.calcTextWidth(hintFont, selCoSt.desc, hintDrawScale)
-    local x = _.common.centerX(_, tw)
-    _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, selCoSt.desc, hintColor, hintTextH)
+    local hintColor = (_.UNSELECTED_COLOR or _.DIM_COLOR or _.WHITE)
+    local descMaxW = (_.w or 640) - (_.MARGIN_X * 2)
+    local descRawW = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, descText, hintDrawScale)) or (#descText * 8)
+    local useTicker = descRawW > descMaxW
+    if useTicker then
+      if _.common.fitListRowText then
+        descText = _.common.fitListRowText(ctx, "entry_cdrom_desc_" .. tostring(selOpt and selOpt.key or ""), hintFont,
+          descText, descMaxW, hintDrawScale, true, { holdStart = 55, stepFrames = 16, holdEnd = 85 })
+      elseif _.common.truncateTextToWidth then
+        descText = _.common.truncateTextToWidth(hintFont, descText, descMaxW, hintDrawScale)
+      end
+    end
+    local tw = (_.common.calcTextWidth and _.common.calcTextWidth(hintFont, descText, hintDrawScale)) or (#descText * 8)
+    local x
+    if useTicker then
+      x = _.MARGIN_X
+    else
+      local startCenterX = _.common.getHintStartCenterX and _.common.getHintStartCenterX(_, (_.w or 640) - (2 * _.MARGIN_X))
+      x = startCenterX and math.floor(startCenterX - (tw / 2) + 0.5) or _.common.centerX(_, tw)
+    end
+    _.drawText(hintFont, _.drawMode, x, _.DESC_Y_BOTTOM, hintDrawScale, descText, hintColor, hintTextH)
   end
   local baseHints = _.menu_str.cdrom_toggle_hint_items or {}
   local crossLabel = (baseHints[1] and baseHints[1].label) or "Toggle"
