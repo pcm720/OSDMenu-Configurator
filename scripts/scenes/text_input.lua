@@ -1359,7 +1359,8 @@ local function run(ctx)
   local keyY = _.KEYBOARD_CENTER_Y - _.scaleY(50)
   local kw, kh = _.KEY_WIDTH - _.KEY_GAP, _.KEY_H - _.KEY_GAP
   local keyScale = KEY_LABEL_SCALE
-  local drawKeyboardKeyLabels = not belOverlayOpen
+  -- Keep keycap characters visible even while the glyph/BEL overlay is open.
+  local drawKeyboardKeyLabels = true
   local keyFontBase = _.font
   local maxLabelShrinkPx = math.max(0, math.floor((tonumber(KEY_LABEL_PRESS_SHRINK_PX) or 0) + 0.5))
   local keyLabelBasePx = math.max(8, math.floor(((tonumber(_.common and _.common.FT_PIXEL_H) or 18) *
@@ -1471,7 +1472,7 @@ local function run(ctx)
 
   local function drawKey(kx, ky, w, h, label, sel, labelScale, keyIdx)
     local drawLabelScale = tonumber(labelScale) or keyScale
-    local pressAmount = drawKeyboardKeyLabels and getKeyPressAnimAmount(ctx, keyIdx) or 0
+    local pressAmount = ((not belOverlayOpen) and drawKeyboardKeyLabels) and getKeyPressAnimAmount(ctx, keyIdx) or 0
     local labelShrinkPx = getPressShrinkPx(pressAmount)
     local inset = KEY_PRESS_MAX_INSET * pressAmount
     local darken = KEY_PRESS_MAX_DARKEN * pressAmount
