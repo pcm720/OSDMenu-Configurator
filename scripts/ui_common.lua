@@ -1266,6 +1266,9 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
       if desiredXEff > maxXEff then desiredXEff = maxXEff end
       xEff = desiredXEff
     end
+    -- Match the rightmost helper-text budget to the list scrollbar lane edge
+    -- (used or not): default scrollbar right edge is sceneWidth - marginX.
+    local scrollbarRightEdge = sceneW - math.max(0, math.floor(tonumber(x) or 0))
 
     local rowSlots = {}
     local rowMap = {}
@@ -1376,7 +1379,8 @@ function common.drawHintLine(font, drawMode, x, y, scale, hintItems, textFallbac
             local nextIconLeft = math.floor((nextSlotLeft + (slotW / 2)) - (iconW / 2))
             maxLabelW = nextIconLeft - labelSafeGap - textX
           else
-            local rightEdge = xEff + widthEff - labelSafeGap
+            local gridRightEdge = xEff + widthEff
+            local rightEdge = math.max(gridRightEdge, scrollbarRightEdge) - labelSafeGap
             maxLabelW = rightEdge - textX
           end
         else
