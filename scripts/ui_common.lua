@@ -269,18 +269,6 @@ function common.projectScenePoint(px, py)
   return outX, outY
 end
 
-local function canOpenPath(path)
-  if not (System and System.openFile and System.closeFile) then
-    return true
-  end
-  local h = System.openFile(path, 0)
-  if h and h >= 0 then
-    System.closeFile(h)
-    return true
-  end
-  return false
-end
-
 local function clampHintUnit(v)
   local n = tonumber(v) or 0
   if n < 0 then return 0 end
@@ -848,12 +836,23 @@ local function loadFtFontWithFallback()
   local cwdCandidates = { "font.ttf" }
   for i = 1, #cwdCandidates do
     local path = cwdCandidates[i]
-    if canOpenPath(path) then
-      local f = Font.ftLoad(path)
-      if f and f >= 0 then
-        return f
-      end
+    -- Try direct first (VFS / already-accessible path).
+    local f = Font.ftLoad(path)
+    if f and f >= 0 then
+      return f
     end
+    -- Then try through startup/device-aware path access (USB/HDD/APA mount/module paths).
+    local mounted, accessPath = common.beginPathAccess(path, {
+      loadModule = true,
+      mountPartition = true,
+    })
+    local probePath = accessPath or path
+    f = Font.ftLoad(probePath)
+    if f and f >= 0 then
+      common.endPathAccess(mounted)
+      return f
+    end
+    common.endPathAccess(mounted)
   end
   -- Always try bundled font directly; VFS paths may resolve even when System.openFile probe does not.
   local bundled = Font.ftLoad("scripts/font/font.ttf")

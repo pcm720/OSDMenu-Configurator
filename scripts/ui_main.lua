@@ -5,8 +5,21 @@
   (Use loadfile for the optional CWD file: with VFS, pcall(dofile, path) can fail for paths not in VFS; loadfile returns nil if missing.)
 ]]
 
+local startupPathCommon = (_G.CONFIG_UI and _G.CONFIG_UI.common) or nil
+
 local function tryLoadStrings(path)
   local chunk = loadfile(path)
+  if not chunk and startupPathCommon and startupPathCommon.beginPathAccess then
+    local mounted, accessPath = startupPathCommon.beginPathAccess(path, {
+      loadModule = true,
+      mountPartition = true,
+    })
+    local probePath = accessPath or path
+    chunk = loadfile(probePath)
+    if startupPathCommon.endPathAccess then
+      startupPathCommon.endPathAccess(mounted)
+    end
+  end
   if not chunk then return nil end
   local ok, t = pcall(chunk)
   return (ok and type(t) == "table") and t or nil
