@@ -210,7 +210,8 @@ static void fntPrepareCLUT() {
   for (i = 0; i < 256; ++i) {
     uint8_t alpha = (i * 128) / 255;
 
-    *clut = GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, alpha);
+    // Neutral RGB for GS MODULATE path: keeps vertex text color linear across full 0-255 range.
+    *clut = GS_SETREG_RGBA(0x80, 0x80, 0x80, alpha);
     clut++;
   }
 }
