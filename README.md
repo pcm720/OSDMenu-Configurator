@@ -54,25 +54,17 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 
 - `pfs0:/osdmenu/OSDGSM.CNF`
 
-### PS2BBL Extended (`PS2BBL.INI` / `CONFIG.INI`)
+### PS2BBL/PSXBBL Extended (`PS2BBL.INI` / `CONFIG.INI`)
 
-1. `mmce1:/PS2BBL/CONFIG.INI`
-2. `mmce0:/PS2BBL/CONFIG.INI`
-3. `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
-4. `massX:/PS2BBL/CONFIG.INI`
-5. `mass:/PS2BBL/CONFIG.INI`
-6. `mc1:/SYS-CONF/PS2BBL.INI`
-7. `mc0:/SYS-CONF/PS2BBL.INI`
-
-### PSXBBL Extended (`PSXBBL.INI` + shared paths)
-
-1. `mc1:/SYS-CONF/PSXBBL.INI`
-2. `mc0:/SYS-CONF/PSXBBL.INI`
-3. `mmce1:/PS2BBL/CONFIG.INI`
-4. `mmce0:/PS2BBL/CONFIG>INI`
-5. `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
-6. `massX:/PS2BBL/CONFIG.INI`
-7. `mass:/PS2BBL/CONFIG.INI`
+1. `CONFIG.INI` (CWD: Current Working Directory)
+2. `mc?:/SYS-CONF/PSXBBL.INI` (PSX DESR only; skipped on PS2 hardware)
+3. __MMCE BUILDS__ `mmce?:/PS2BBL/CONFIG.INI`
+4. `xfrom:/PS2BBL/CONFIG.INI` (PSX DESR only; skipped on PS2 hardware)
+5. __MX4SIO BUILDS__ `mx4sio:/PS2BBL/CONFIG.INI` 
+6. __HDD BUILDS__ `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
+7. `usb:/PS2BBL/CONFIG.INI`
+8. `mc1:/SYS-CONF/PS2BBL.INI`
+9. `mc0:/SYS-CONF/PS2BBL.INI`
 
 
 ## Config types
