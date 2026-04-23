@@ -1568,8 +1568,12 @@ local function runSelectConfig(s, pad)
       local col = (i == sel) and SE or common.UNSELECTED_COLOR
       dlr(M + 20, y, i == sel, opt.label or "", col)
     end
-    if (pad & PAD_UP) ~= 0 and sel > 1 then sel = sel - 1 end
-    if (pad & PAD_DOWN) ~= 0 and sel < #options then sel = sel + 1 end
+    if (pad & PAD_UP) ~= 0 then
+      sel = common.wrapListSelection(sel, #options, -1)
+    end
+    if (pad & PAD_DOWN) ~= 0 then
+      sel = common.wrapListSelection(sel, #options, 1)
+    end
     setSelectConfigSel(s, sel)
 
     if (pad & PAD_CROSS) ~= 0 then
@@ -1629,8 +1633,12 @@ local function runSelectConfig(s, pad)
     local col = (i == sel) and SE or common.UNSELECTED_COLOR
     dlr(M + 20, y, i == sel, opt.label or "", col)
   end
-  if (pad & PAD_UP) ~= 0 and sel > 1 then sel = sel - 1 end
-  if (pad & PAD_DOWN) ~= 0 and sel < #options then sel = sel + 1 end
+  if (pad & PAD_UP) ~= 0 then
+    sel = common.wrapListSelection(sel, #options, -1)
+  end
+  if (pad & PAD_DOWN) ~= 0 then
+    sel = common.wrapListSelection(sel, #options, 1)
+  end
   setSelectConfigSel(s, sel)
 
   if (pad & PAD_CROSS) ~= 0 then
