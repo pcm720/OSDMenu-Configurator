@@ -4,6 +4,8 @@ set(IRX_FILES
     fileXio
     sio2man
     mcman
+    extflash
+    xfromman
     mcserv
     padman
     usbd_mini

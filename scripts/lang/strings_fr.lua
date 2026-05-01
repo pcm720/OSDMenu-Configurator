@@ -199,6 +199,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "Disque dur formate exFAT",
   hdd = "Disque dur formate APA",
+  xfrom = "XFROM",
 }
 
 -- Jetons communs

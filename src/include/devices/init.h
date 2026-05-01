@@ -8,14 +8,17 @@
 #define Device_MX4SIO (1 << 3) // MX4SIO
 #define Device_MMCE (1 << 4)   // MMCE
 #define Device_BDM (1 << 5)    // Catch-all for BDM, only used by devices_guess_device_type
+#define Device_XFROM (1 << 6)  // XFROM external flash (DESR)
 
 // Load basic IOP modules (iomanX, fileXio, sio2man, mcman, mcserv, padman) and init device services.
 // Will reboot IOP and reinitialize device services on every call.
 // Returns 0 on success.
 int device_init(void);
 
-// Load IOP modules by device type or by IRX name.
+// Load IOP modules by supported device type name.
 // Supported device types:
+// - "mc" (basic memory card stack)
+// - "xfrom" (DESR external flash: extflash + xfromman)
 // - "mmce"
 // - "hdd" (both exFAT and APA)
 // - "usb"

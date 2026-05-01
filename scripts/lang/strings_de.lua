@@ -199,6 +199,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "exFAT-formatierte HDD",
   hdd = "APA-formatierte HDD",
+  xfrom = "XFROM",
 }
 
 -- Gemeinsame Texte

@@ -1269,6 +1269,8 @@ local function getLaunchSlotInfo(s)
       info.family, info.slot = "mmce", 0
     elseif p:match("^mmce1:") then
       info.family, info.slot = "mmce", 1
+    elseif p:match("^xfrom:") then
+      info.family = "xfrom"
     elseif p:match("^mass1:") or p:match("^usb1:") then
       info.family, info.slot = "usb", 1
     elseif p:match("^mass0:") or p:match("^mass:") or p:match("^usb0:") or p:match("^usb:") then
@@ -1288,7 +1290,7 @@ local function getLaunchSlotInfo(s)
     local okFam, fam = pcall(System.getLaunchDeviceFamily)
     local f = okFam and tostring(fam or ""):lower() or ""
     if f == "mass" then f = "usb" end
-    if f == "usb" or f == "mmce" or f == "mx4sio" or f == "hdd" or f == "mc" or f == "ata" then
+    if f == "usb" or f == "mmce" or f == "mx4sio" or f == "hdd" or f == "mc" or f == "ata" or f == "xfrom" then
       info.family = f
     end
   end
@@ -1387,8 +1389,11 @@ local function buildBblSourceOptions(s, iniFileType)
     addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
   end
   addDevice("mx4sio", dev_str.mx4sio_sd or "MX4SIO", { "massX:/PS2BBL/CONFIG.INI" }, nil, "mx4sio", "mx4sio")
-  addDevice("ata", dev_str.exfat_hdd_mass0 or "exFAT-formatted HDD", { "ata:/PS2BBL/CONFIG.INI" }, nil, "ata0", "hdd")
   addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
+  addDevice("ata", dev_str.exfat_hdd_mass0 or "exFAT-formatted HDD", { "ata:/PS2BBL/CONFIG.INI" }, nil, "ata0", "hdd")
+  if iniFileType == "psxbbl_ini" then
+    addDevice("xfrom", dev_str.xfrom or "XFROM", { "xfrom:/PS2BBL/CONFIG.INI" }, "xfrom:", nil, "xfrom")
+  end
   return out
 end
 
@@ -1944,6 +1949,7 @@ local function runChooseLoad(s, pad)
       label = p
     else
       label = (p:match("^mc0:") and dev_str.memory_card_1) or (p:match("^mc1:") and dev_str.memory_card_2) or
+          (p:match("^xfrom:") and (dev_str.xfrom or "XFROM")) or
           ((p:match("^ata:") or p:match("^ata%d:")) and dev_str.exfat_hdd_mass0) or
           (p:match("^mx4sio:") and dev_str.mx4sio_sd) or
           (p:match("^usb1:") and (dev_str.usb_storage_1 or dev_str.usb_storage_0)) or

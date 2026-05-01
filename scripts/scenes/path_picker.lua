@@ -562,8 +562,33 @@ local function showExclusivePathWarning(ctx, pathVal)
   }
 end
 
+local function showPathNotSupportedWarning(ctx, detail)
+  local _ = ctx._
+  local fallback = "This path is not supported in this context."
+  ctx.saveSplash = {
+    kind = "failed",
+    title = (_.menu_str and _.menu_str.invalid_selection_title) or
+        (_.path_str and _.path_str.invalid_selection_title) or "Invalid selection",
+    detail = (type(detail) == "string" and detail ~= "") and detail or fallback,
+    framesLeft = 120
+  }
+end
+
+local function isBblPathOnlyXfromDisallowed(ctx, pathVal)
+  if not ctx or ctx.pathPickerContext ~= "path_only" then return false end
+  local ft = tostring(ctx.fileType or "")
+  if ft ~= "ps2bbl_ini" and ft ~= "psxbbl_ini" then return false end
+  local p = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+  return p:match("^xfrom:") ~= nil
+end
+
 local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
   local _ = ctx._
+  if isBblPathOnlyXfromDisallowed(ctx, pathVal) then
+    showPathNotSupportedWarning(ctx,
+      "xfrom: is supported only for PSXBBL CONFIG.INI location, not for entry paths.")
+    return false
+  end
   local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
   local pathIsExclusive = isPathExclusiveInContext(ctx, pathVal, flags)
   local stats = getOtherTargetPathStats(ctx)

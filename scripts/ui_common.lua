@@ -1894,6 +1894,7 @@ end
 function common.getPathModuleType(path)
   local p = tostring(path or ""):lower()
   if p == "" then return nil end
+  if p:match("^xfrom:") then return "xfrom" end
   if p:match("^mx4sio:") then return "mx4sio" end
   if p:match("^ata:") or p:match("^ata%d:") then return "hdd" end
   if p:match("^usb:") or p:match("^usb%d:") then return "usb" end

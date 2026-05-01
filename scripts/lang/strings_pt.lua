@@ -199,6 +199,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "HDD formatado em exFAT",
   hdd = "HDD formatado em APA",
+  xfrom = "XFROM",
 }
 
 -- Tokens comuns

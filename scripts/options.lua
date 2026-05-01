@@ -20,7 +20,7 @@ config_options.BBL_PATH_DEVICE_VISIBILITY = {
   mmce = true,
   mx4sio = true,
   ata = true,
-  xfrom = false,
+  xfrom = true,
 }
 
 function config_options.isEgsmUiEnabled()
@@ -47,7 +47,7 @@ local function buildBblDefaultMcPath(mcFile, chosenMcSlot)
 end
 
 -- Known PS2BBL/PSXBBL lookup locations, excluding CWD (CONFIG.INI) because CWD is launch-dependent.
--- Ordered to match PS2BBL source search order (first -> last), ignoring unsupported XFROM.
+-- Ordered to match PS2BBL source search order (first -> last).
 local function buildPs2BblIniLocations()
   local out = {}
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
@@ -68,6 +68,7 @@ local function buildPsxBblIniLocations()
   appendUnique(out, "mc0:/SYS-CONF/PSXBBL.INI")
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "xfrom:/PS2BBL/CONFIG.INI")
   appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
