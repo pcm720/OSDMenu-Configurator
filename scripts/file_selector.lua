@@ -209,6 +209,51 @@ end
 function file_selector.getDevices(context)
   local dev = (_G.CONFIG_UI and _G.CONFIG_UI.strings and _G.CONFIG_UI.strings.devices) or dev
   local isFmcbContext = (context == "fmcb_entry" or context == "fmcb_launch")
+  local function addStatic(out, addedStatic, s, opts)
+    if not s then return end
+    opts = opts or {}
+    if opts.isMbr and not s.mbr then return end
+    if opts.visibility and not staticPathOnlyVisible(opts.visibility, s) then return end
+    if addedStatic and addedStatic[s.name] then return end
+    local desc = (s.descKey and dev[s.descKey]) or s.name
+    table.insert(out, withFlags({ name = s.name, desc = desc, deviceType = s.deviceType }))
+    if addedStatic then addedStatic[s.name] = true end
+  end
+  local function addBdm(out, addedBdm, opt, opts)
+    if not opt then return end
+    opts = opts or {}
+    if opts.isMbr and not opt.mbr then return end
+    if opts.visibility and not bdmPathOnlyVisible(opts.visibility, opt) then return end
+    if addedBdm and addedBdm[opt.deviceId] then return end
+    local desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
+        (dev[BDM_DESC[opt.deviceId]] or opt.deviceId)
+    local deviceType = (opt.bdmType == "ata" and "hdd") or opt.bdmType
+    table.insert(out,
+      withFlags({
+        name = opt.deviceId,
+        desc = desc,
+        deviceType = deviceType,
+        deviceId = opt.deviceId,
+        bdmPathPrefix = bdmPrefixForContext(opt, context)
+      }))
+    if addedBdm then addedBdm[opt.deviceId] = true end
+  end
+  local function addStaticByName(out, addedStatic, name, opts)
+    for _, s in ipairs(STATIC) do
+      if s.name == name then
+        addStatic(out, addedStatic, s, opts)
+        return
+      end
+    end
+  end
+  local function addBdmById(out, addedBdm, deviceId, opts)
+    for _, opt in ipairs(BDM_OPTIONS) do
+      if opt.deviceId == deviceId then
+        addBdm(out, addedBdm, opt, opts)
+        return
+      end
+    end
+  end
   if context == "mc_only" then
     local out = {}
     for i = 1, 2 do
@@ -221,51 +266,55 @@ function file_selector.getDevices(context)
   if context == "path_only" or context == "config_ini" then
     local visibility = getBblPathDeviceVisibility()
     local out = {}
+    local addedStatic = {}
+    local addedBdm = {}
+    local addOpts = { visibility = visibility }
+
+    -- Preferred choose-device order:
+    -- MC1, MC2, MMCE1, MMCE2, USB1, USB2, MX4SIO, APA HDD, exFAT HDD.
+    addStaticByName(out, addedStatic, "mc0:", addOpts)
+    addStaticByName(out, addedStatic, "mc1:", addOpts)
+    addStaticByName(out, addedStatic, "mmce0:", addOpts)
+    addStaticByName(out, addedStatic, "mmce1:", addOpts)
+    addBdmById(out, addedBdm, "usb0", addOpts)
+    addBdmById(out, addedBdm, "usb1", addOpts)
+    addBdmById(out, addedBdm, "mx4sio", addOpts)
+    addStaticByName(out, addedStatic, "hdd0:", addOpts)
+    addBdmById(out, addedBdm, "ata0", addOpts)
+
+    -- Keep any other supported devices after the preferred block.
     for _, s in ipairs(STATIC) do
-      if staticPathOnlyVisible(visibility, s) then
-        local desc = (s.descKey and dev[s.descKey]) or s.name
-        table.insert(out, withFlags({ name = s.name, desc = desc, deviceType = s.deviceType }))
-      end
+      addStatic(out, addedStatic, s, addOpts)
     end
     for _, opt in ipairs(BDM_OPTIONS) do
-      if bdmPathOnlyVisible(visibility, opt) then
-        local desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
-            (dev[BDM_DESC[opt.deviceId]] or opt.deviceId)
-        local deviceType = (opt.bdmType == "ata" and "hdd") or opt.bdmType
-        table.insert(out,
-          withFlags({
-            name = opt.deviceId,
-            desc = desc,
-            deviceType = deviceType,
-            deviceId = opt.deviceId,
-            bdmPathPrefix = bdmPrefixForContext(opt, context)
-          }))
-      end
+      addBdm(out, addedBdm, opt, addOpts)
     end
     return out
   end
   local isMbr = (context == "mbr")
   local out = {}
+  local addedStatic = {}
+  local addedBdm = {}
+  local addOpts = { isMbr = isMbr }
+
+  -- Preferred choose-device order:
+  -- MC1, MC2, MMCE1, MMCE2, USB1, USB2, MX4SIO, APA HDD, exFAT HDD.
+  addStaticByName(out, addedStatic, "mc0:", addOpts)
+  addStaticByName(out, addedStatic, "mc1:", addOpts)
+  addStaticByName(out, addedStatic, "mmce0:", addOpts)
+  addStaticByName(out, addedStatic, "mmce1:", addOpts)
+  addBdmById(out, addedBdm, "usb0", addOpts)
+  addBdmById(out, addedBdm, "usb1", addOpts)
+  addBdmById(out, addedBdm, "mx4sio", addOpts)
+  addStaticByName(out, addedStatic, "hdd0:", addOpts)
+  addBdmById(out, addedBdm, "ata0", addOpts)
+
+  -- Keep any other supported devices after the preferred block.
   for _, s in ipairs(STATIC) do
-    if not isMbr or s.mbr then
-      local desc = (s.descKey and dev[s.descKey]) or s.name
-      table.insert(out, withFlags({ name = s.name, desc = desc, deviceType = s.deviceType }))
-    end
+    addStatic(out, addedStatic, s, addOpts)
   end
   for _, opt in ipairs(BDM_OPTIONS) do
-    if not isMbr or opt.mbr then
-      local desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
-          (dev[BDM_DESC[opt.deviceId]] or opt.deviceId)
-      local deviceType = (opt.bdmType == "ata" and "hdd") or opt.bdmType
-      table.insert(out,
-        withFlags({
-          name = opt.deviceId,
-          desc = desc,
-          deviceType = deviceType,
-          deviceId = opt.deviceId,
-          bdmPathPrefix = bdmPrefixForContext(opt, context)
-        }))
-    end
+    addBdm(out, addedBdm, opt, addOpts)
   end
   for _, s in ipairs(SPECIAL) do
     if inContext(s.contexts, context) then
