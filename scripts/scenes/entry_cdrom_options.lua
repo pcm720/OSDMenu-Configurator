@@ -3,12 +3,16 @@
 local function run(ctx)
   local _ = ctx._
   local isBoot = not not (ctx.bootKey and (ctx.context == "mbr" or ctx.fileType == "osdmbr_cnf"))
+  local bblKeyId = ctx.bblHotkeyKey
+  local bblSlot = tonumber(ctx.bblEntrySlot)
+  local isBblHotkey = (not isBoot) and bblKeyId and bblSlot and
+      (ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini")
   if not ctx.lines then
-    ctx.state = isBoot and "editor" or "menu_entry_edit"
+    ctx.state = isBoot and "editor" or (isBblHotkey and "bbl_hotkey_entry" or "menu_entry_edit")
     if isBoot then ctx.bootKey = nil end
     return
   end
-  if not isBoot and not ctx.entryIdx then
+  if not isBoot and not isBblHotkey and not ctx.entryIdx then
     ctx.state = "menu_entry_edit"; return
   end
   local args = isBoot and (function()
@@ -16,7 +20,9 @@ local function run(ctx)
     local t = {}
     for _, v in ipairs(a) do table.insert(t, { value = v, disabled = false }) end
     return t
-  end)() or (_.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {})
+  end)() or
+      (isBblHotkey and (_.config_parse.getBblHotkeyArgs(ctx.lines, bblKeyId, bblSlot) or {}) or
+        (_.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {}))
   local opts = _.config_options.cdrom_options or {}
   local optionOrderByKey = {}
   for i = 1, #opts do
@@ -27,7 +33,8 @@ local function run(ctx)
     end
   end
   local targetOrderKey = isBoot and ("boot:" .. tostring(ctx.bootKey or "")) or
-      ("entry:" .. tostring(ctx.entryIdx or 0))
+      (isBblHotkey and ("bbl:" .. tostring(bblKeyId or "") .. ":" .. tostring(bblSlot or 0)) or
+        ("entry:" .. tostring(ctx.entryIdx or 0)))
   -- Keep launch-disc option args in stable per-target order so off/on reverts
   -- return to the same semantic line order and don't leave a false dirty state.
   if ctx.cdromOptionOrderKey ~= targetOrderKey or type(ctx.cdromOptionOrder) ~= "table" then
@@ -159,7 +166,9 @@ local function run(ctx)
       local t = {}
       for _, v in ipairs(a) do table.insert(t, { value = v, disabled = false }) end
       return t
-    end)() or (_.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {})
+    end)() or
+        (isBblHotkey and (_.config_parse.getBblHotkeyArgs(ctx.lines, bblKeyId, bblSlot) or {}) or
+          (_.config_parse.getMenuEntryArgs(ctx.lines, ctx.entryIdx) or {}))
     if hasArg(key) then
       local newArgs = {}
       for _, a in ipairs(args) do
@@ -170,6 +179,8 @@ local function run(ctx)
         local v = {}
         for _, item in ipairs(newArgs) do table.insert(v, type(item) == "table" and item.value or item) end
         _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v, { preserveOrder = true })
+      elseif isBblHotkey then
+        _.config_parse.setBblHotkeyArgs(ctx.lines, bblKeyId, bblSlot, newArgs, { preserveOrder = true })
       else
         _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, newArgs, { preserveOrder = true })
       end
@@ -180,6 +191,8 @@ local function run(ctx)
         local v = {}
         for _, item in ipairs(args) do table.insert(v, type(item) == "table" and item.value or item) end
         _.config_parse.setBootArgs(ctx.lines, ctx.bootKey, v, { preserveOrder = true })
+      elseif isBblHotkey then
+        _.config_parse.setBblHotkeyArgs(ctx.lines, bblKeyId, bblSlot, args, { preserveOrder = true })
       else
         _.config_parse.setMenuEntryArgs(ctx.lines, ctx.entryIdx, args, { preserveOrder = true })
       end
@@ -197,6 +210,8 @@ local function run(ctx)
     ctx.cdromOptionOrderKey = nil
     if isBoot then
       ctx.state = "editor"; ctx.bootKey = nil
+    elseif isBblHotkey then
+      ctx.state = "bbl_hotkey_entry"
     else
       ctx.state = "menu_entry_edit"
     end

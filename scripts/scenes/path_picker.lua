@@ -206,7 +206,7 @@ local function isBblE1ExclusivePath(ctx, pathVal)
     return common.isBblSpecialExclusivePath(pathVal)
   end
   local up = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):upper()
-  return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
+  return up == "CDROM" or up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
 end
 
 local function isPathExclusiveInContext(ctx, pathVal, flags)
@@ -749,14 +749,10 @@ local function ensureBblCommandRows(ctx)
       },
     }
   else
+    local launchDiscLabel = (_.dev_str and _.dev_str.launch_disc) or
+        p.bbl_cmd_cdvd_label or "Launch disc with override"
     cmdRows = {
-      { name = "$CDVD", desc = p.bbl_cmd_cdvd_label or "Launch disc", special = "bbl_cmd", exclusive = true },
-      {
-        name = "$CDVD_NO_PS2LOGO",
-        desc = p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo",
-        special = "bbl_cmd",
-        exclusive = true
-      },
+      { name = "cdrom", desc = launchDiscLabel, special = "bbl_cmd", exclusive = true, noargs = true, specialargs = true },
       { name = "$OSDSYS", desc = p.bbl_cmd_osdsys_label or "OSDSYS", special = "bbl_cmd" },
       { name = "$CREDITS", desc = p.bbl_cmd_credits_label or "Credits", special = "bbl_cmd", exclusive = true },
       { name = "$HDDCHECKER", desc = p.bbl_cmd_hddchecker_label or "Check HDD", special = "bbl_cmd", exclusive = true },
@@ -827,6 +823,16 @@ local function getSelectedBblName(ctx)
   return "PS2BBL"
 end
 
+local function normalizeBdmPrefixForPathPickerContext(ctx, prefix)
+  if type(prefix) ~= "string" or prefix == "" then return prefix end
+  if not ctx or ctx.pathPickerContext ~= "path_only" then return prefix end
+  local ft = tostring(ctx.fileType or "")
+  if ft ~= "ps2bbl_ini" and ft ~= "psxbbl_ini" then return prefix end
+  if prefix == "mass" or prefix:match("^mass%d+$") then return "usb" end
+  if prefix == "massX" then return "mx4sio" end
+  return prefix
+end
+
 local function beginBrowseForDevice(ctx, e)
   if not e then return end
   local _ = ctx._
@@ -860,7 +866,8 @@ local function beginBrowseForDevice(ctx, e)
       if mp and mp ~= "" then
         local mpNorm = (mp:sub(-1) == ":") and mp or (mp .. ":")
         ctx.pathPickerBdmMountpoint = mpNorm
-        ctx.pathPickerBdmPrefix = _.file_selector.getBdmPathPrefix(e.deviceId, ctx.pathPickerContext)
+        ctx.pathPickerBdmPrefix = normalizeBdmPrefixForPathPickerContext(ctx,
+          _.file_selector.getBdmPathPrefix(e.deviceId, ctx.pathPickerContext))
         ctx.pathBrowsePath = (mp:sub(-1) == ":") and (mp .. "/") or mp
         ctx.pathList = listBrowseEntries(ctx, ctx.pathBrowsePath)
         ctx.pathPickerSub = "browse"
@@ -1025,7 +1032,8 @@ local function run(ctx)
           ctx.pathPickerLoadedDeviceTypes[load.deviceType] = true
           local mpNorm = (mp:sub(-1) == ":") and mp or (mp .. ":")
           ctx.pathPickerBdmMountpoint = mpNorm
-          ctx.pathPickerBdmPrefix = _.file_selector.getBdmPathPrefix(load.deviceId, ctx.pathPickerContext)
+          ctx.pathPickerBdmPrefix = normalizeBdmPrefixForPathPickerContext(ctx,
+            _.file_selector.getBdmPathPrefix(load.deviceId, ctx.pathPickerContext))
           ctx.pathBrowsePath = (mp:sub(-1) == ":") and (mp .. "/") or mp
           ctx.pathList = listBrowseEntries(ctx, ctx.pathBrowsePath)
           ctx.pathPickerSub = "browse"
@@ -1330,27 +1338,34 @@ local function run(ctx)
                     local bootKey = ctx.pathPickerBootKey
                     applyBootPathAndReturn(ctx, pathVal)
                     if e.noargs then _.config_parse.setBootArgs(ctx.lines, bootKey, {}) end
-                  elseif applyBblHotkeyPathAndReturn(ctx, pathVal) then
-                  elseif applyBblIrxPathAndReturn(ctx, pathVal) then
-                  elseif ctx.pathPickerForEntryIdx then
-                    local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
-                    setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, pathVal)
-                    _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
-                    if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
-                    ctx.entryIdx = ctx.pathPickerForEntryIdx
-                    ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or
-                        "menu_entry_edit"
-                    ctx.pathPickerForEntryIdx = nil
-                    ctx.pathPickerEditIdx = nil
-                    ctx.pathPickerReturnState = nil
-                  elseif ctx.isAddPath then
-                    local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
-                        ctx.addPathKey
-                    _.config_parse.append(ctx.lines, key, pathVal)
-                    ctx.state = "editor"
                   else
-                    _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
-                    ctx.state = "editor"
+                    local bblKey = ctx.pathPickerBblHotkeyKey
+                    local bblSlot = tonumber(ctx.pathPickerBblHotkeySlot)
+                    if applyBblHotkeyPathAndReturn(ctx, pathVal) then
+                      if e.noargs and _.config_parse.setBblHotkeyArgs and bblKey and bblSlot then
+                        _.config_parse.setBblHotkeyArgs(ctx.lines, bblKey, bblSlot, {})
+                      end
+                    elseif applyBblIrxPathAndReturn(ctx, pathVal) then
+                    elseif ctx.pathPickerForEntryIdx then
+                      local paths = _.config_parse.getMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx)
+                      setMenuEntryPathValue(paths, ctx.pathPickerEditIdx, pathVal)
+                      _.config_parse.setMenuEntryPaths(ctx.lines, ctx.pathPickerForEntryIdx, paths)
+                      if e.noargs then _.config_parse.setMenuEntryArgs(ctx.lines, ctx.pathPickerForEntryIdx, {}) end
+                      ctx.entryIdx = ctx.pathPickerForEntryIdx
+                      ctx.state = ctx.pathPickerReturnState or (ctx.pathPickerEditIdx and "entry_paths") or
+                          "menu_entry_edit"
+                      ctx.pathPickerForEntryIdx = nil
+                      ctx.pathPickerEditIdx = nil
+                      ctx.pathPickerReturnState = nil
+                    elseif ctx.isAddPath then
+                      local key = (ctx.addPathKey == "path1_OSDSYS_ITEM_1") and _.resolveNextOsdItemKey(ctx.lines) or
+                          ctx.addPathKey
+                      _.config_parse.append(ctx.lines, key, pathVal)
+                      ctx.state = "editor"
+                    else
+                      _.config_parse.set(ctx.lines, ctx.editKey or "", pathVal)
+                      ctx.state = "editor"
+                    end
                   end
                   ctx._configModifiedCache = nil
                   ctx.configModified = true

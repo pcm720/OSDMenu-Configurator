@@ -19,7 +19,7 @@ config_options.BBL_PATH_DEVICE_VISIBILITY = {
   hdd = true,
   mmce = true,
   mx4sio = true,
-  ata = false,
+  ata = true,
   xfrom = false,
 }
 
@@ -52,6 +52,7 @@ local function buildPs2BblIniLocations()
   local out = {}
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
@@ -67,6 +68,7 @@ local function buildPsxBblIniLocations()
   appendUnique(out, "mc0:/SYS-CONF/PSXBBL.INI")
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
@@ -251,25 +253,11 @@ local function buildBblIniGlobalOptions()
       desc = "Eject tray before launch.",
     },
     {
-      key = "PS1DRV_ENABLE_FAST",
+      key = "DISC_STOP",
       optType = "bool",
       default = "0",
-      label = "PS1DRV_ENABLE_FAST",
-      desc = "Enable PS1 fast loading.",
-    },
-    {
-      key = "PS1DRV_ENABLE_SMOOTH",
-      optType = "bool",
-      default = "0",
-      label = "PS1DRV_ENABLE_SMOOTH",
-      desc = "Enable PS1 smoothing.",
-    },
-    {
-      key = "PS1DRV_USE_PS1VN",
-      optType = "bool",
-      default = "1",
-      label = "PS1DRV_USE_PS1VN",
-      desc = "Enable PS1 video negator.",
+      label = "DISC_STOP",
+      desc = "Stop disc after config is loaded",
     },
     {
       key = "APP_GAMEID",
