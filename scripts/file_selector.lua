@@ -34,7 +34,7 @@ local BDM_OPTIONS = {
   { deviceId = "ata0",   bdmType = "ata",    bdmPathPrefix = "ata",   mbr = true },
   { deviceId = "usb0",   bdmType = "usb",    bdmPathPrefix = "mass" },
   { deviceId = "usb1",   bdmType = "usb",    bdmPathPrefix = "mass" },
-  { deviceId = "mx4sio", bdmType = "mx4sio", bdmPathPrefix = "massX" },
+  { deviceId = "mx4sio", bdmType = "mx4sio", bdmPathPrefix = "mx4sio" },
 }
 
 local function bdmPrefixForContext(opt, context)
@@ -188,6 +188,9 @@ local function staticPathOnlyVisible(visibility, s)
   if s.deviceType == "hdd" then
     return isVisible(visibility, "hdd")
   end
+  if s.deviceType == "xfrom" then
+    return isVisible(visibility, "xfrom")
+  end
   return true
 end
 
@@ -206,9 +209,33 @@ end
 --   "mc_only"  = memory cards only
 --   "path_only"= filesystem devices only (no special command entries)
 -- Every device gets withFlags(entry).
-function file_selector.getDevices(context)
+function file_selector.getDevices(context, opts)
   local dev = (_G.CONFIG_UI and _G.CONFIG_UI.strings and _G.CONFIG_UI.strings.devices) or dev
   local isFmcbContext = (context == "fmcb_entry" or context == "fmcb_launch")
+  local fileType = nil
+  if type(opts) == "table" then
+    fileType = opts.fileType
+  elseif type(opts) == "string" then
+    fileType = opts
+  end
+  if type(fileType) ~= "string" or fileType == "" then
+    local runtime = _G and _G.CONFIG_UI
+    if runtime and type(runtime.fileType) == "string" and runtime.fileType ~= "" then
+      fileType = runtime.fileType
+    end
+  end
+  local includePsxXfromPathOnly = (context == "path_only" and fileType == "psxbbl_ini")
+
+  local function addXfromPathOnly(out, addedStatic, opts)
+    opts = opts or {}
+    local marker = "xfrom:"
+    if addedStatic and addedStatic[marker] then return end
+    local entry = { name = marker, desc = dev.xfrom or "XFROM", deviceType = "xfrom" }
+    if opts.visibility and not staticPathOnlyVisible(opts.visibility, entry) then return end
+    table.insert(out, withFlags(entry))
+    if addedStatic then addedStatic[marker] = true end
+  end
+
   local function addStatic(out, addedStatic, s, opts)
     if not s then return end
     opts = opts or {}
@@ -288,6 +315,10 @@ function file_selector.getDevices(context)
     end
     for _, opt in ipairs(BDM_OPTIONS) do
       addBdm(out, addedBdm, opt, addOpts)
+    end
+    if includePsxXfromPathOnly then
+      -- PSXBBL-only: expose XFROM ELF browsing, pinned at the bottom.
+      addXfromPathOnly(out, addedStatic, addOpts)
     end
     return out
   end

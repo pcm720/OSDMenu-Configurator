@@ -1388,7 +1388,7 @@ local function buildBblSourceOptions(s, iniFileType)
   if presence.usb1 then
     addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
   end
-  addDevice("mx4sio", dev_str.mx4sio_sd or "MX4SIO", { "massX:/PS2BBL/CONFIG.INI" }, nil, "mx4sio", "mx4sio")
+  addDevice("mx4sio", dev_str.mx4sio_sd or "MX4SIO", { "mx4sio:/PS2BBL/CONFIG.INI" }, nil, "mx4sio", "mx4sio")
   addDevice("hdd", dev_str.hdd or "APA-formatted HDD", { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
   addDevice("ata", dev_str.exfat_hdd_mass0 or "exFAT-formatted HDD", { "ata:/PS2BBL/CONFIG.INI" }, nil, "ata0", "hdd")
   if iniFileType == "psxbbl_ini" then
@@ -1985,7 +1985,8 @@ local function runChooseLoad(s, pad)
     if type(chosen) == "table" and chosen.kind == "browse_ini" then
       openDbg("choose load selection", "kind=browse_ini", "deviceId=" .. tostring(chosen.browseDeviceId),
         "deviceType=" .. tostring(chosen.browseDeviceType))
-      local allDevices = (C.file_selector and C.file_selector.getDevices and C.file_selector.getDevices("config_ini")) or {}
+      local allDevices = (C.file_selector and C.file_selector.getDevices and
+          C.file_selector.getDevices("config_ini", { fileType = s.fileType })) or {}
       local targetDevice = nil
       for i = 1, #allDevices do
         local d = allDevices[i]

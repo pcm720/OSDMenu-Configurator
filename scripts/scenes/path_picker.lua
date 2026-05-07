@@ -100,6 +100,13 @@ local function isConfigOpenTarget(ctx)
   return ctx and ctx.pathPickerTarget == "config_open"
 end
 
+local function getPickerDevices(ctx, _)
+  if not (_ and _.file_selector and _.file_selector.getDevices) then return {} end
+  return _.file_selector.getDevices(ctx and ctx.pathPickerContext, {
+    fileType = ctx and ctx.fileType
+  }) or {}
+end
+
 local function hasIniFilter(ctx)
   if not ctx or type(ctx.pathPickerFileExts) ~= "table" then return false end
   for i = 1, #ctx.pathPickerFileExts do
@@ -128,14 +135,21 @@ end
 local function listBrowseEntries(ctx, path)
   local _ = ctx._
   if isConfigOpenTarget(ctx) then
+    local fileType = tostring(ctx and ctx.fileType or "")
+    local browsePathLower = tostring(path or ""):lower()
+    local allowPsxBblIni = (fileType == "psxbbl_ini") and
+        (browsePathLower:match("^mc0:/") or browsePathLower:match("^mc1:/"))
     local raw = _.file_selector.listDirectory(path) or {}
     local out = {}
     for i = 1, #raw do
       local e = raw[i]
       if e and e.directory then
         table.insert(out, e)
-      elseif e and tostring(e.name or ""):lower() == "config.ini" then
-        table.insert(out, e)
+      elseif e then
+        local nameLower = tostring(e.name or ""):lower()
+        if nameLower == "config.ini" or (allowPsxBblIni and nameLower == "psxbbl.ini") then
+          table.insert(out, e)
+        end
       end
     end
     return out
@@ -579,14 +593,29 @@ local function isBblPathOnlyXfromDisallowed(ctx, pathVal)
   local ft = tostring(ctx.fileType or "")
   if ft ~= "ps2bbl_ini" and ft ~= "psxbbl_ini" then return false end
   local p = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
-  return p:match("^xfrom:") ~= nil
+  if p:match("^xfrom:") == nil then return false end
+  -- PSXBBL allows xfrom: entry paths; PS2BBL does not.
+  return ft ~= "psxbbl_ini"
+end
+
+local function isPsxBblXfromPathWithoutElf(ctx, pathVal)
+  if not ctx or ctx.pathPickerContext ~= "path_only" then return false end
+  if tostring(ctx.fileType or "") ~= "psxbbl_ini" then return false end
+  local p = tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+  if p:match("^xfrom:") == nil then return false end
+  return p:match("%.elf$") == nil
 end
 
 local function canUsePathSelection(ctx, pathVal, singleUseTakenMap)
   local _ = ctx._
   if isBblPathOnlyXfromDisallowed(ctx, pathVal) then
     showPathNotSupportedWarning(ctx,
-      "xfrom: is supported only for PSXBBL CONFIG.INI location, not for entry paths.")
+      "xfrom: entry paths are supported only for PSXBBL.")
+    return false
+  end
+  if isPsxBblXfromPathWithoutElf(ctx, pathVal) then
+    showPathNotSupportedWarning(ctx,
+      "xfrom: paths for PSXBBL must point to an .elf file.")
     return false
   end
   local flags = getPathFlagsCaseAware(_.file_selector, pathVal)
@@ -699,7 +728,7 @@ local function applyManualPath(ctx, val)
       }
       ctx.state = "path_picker"
       ctx.pathPickerSub = "device"
-      ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+      ctx.pathList = getPickerDevices(ctx, _)
       ctx.pathPickerScroll = 0
       return
     end
@@ -708,7 +737,7 @@ local function applyManualPath(ctx, val)
   if not canUsePathSelection(ctx, val) then
     ctx.state = "path_picker"
     ctx.pathPickerSub = "device"
-    ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+    ctx.pathList = getPickerDevices(ctx, _)
     ctx.pathPickerScroll = 0
     return
   end
@@ -850,7 +879,9 @@ end
 
 local function normalizeBdmPrefixForPathPickerContext(ctx, prefix)
   if type(prefix) ~= "string" or prefix == "" then return prefix end
-  if not ctx or ctx.pathPickerContext ~= "path_only" then return prefix end
+  if not ctx then return prefix end
+  local pickerContext = ctx.pathPickerContext
+  if pickerContext ~= "path_only" and pickerContext ~= "config_ini" then return prefix end
   local ft = tostring(ctx.fileType or "")
   if ft ~= "ps2bbl_ini" and ft ~= "psxbbl_ini" then return prefix end
   if prefix == "mass" or prefix:match("^mass%d+$") then return "usb" end
@@ -1424,7 +1455,7 @@ local function run(ctx)
         ctx.pathPickerLoadingFrames = nil
         ctx.pathPickerModulesLoaded = nil
         ctx.pathPickerLoadingTimeoutMsg = nil
-        ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+        ctx.pathList = getPickerDevices(ctx, _)
       else
         if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
         if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
@@ -1579,7 +1610,7 @@ local function run(ctx)
         return
       end
       ctx.pathPickerSub = "device"
-      ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+      ctx.pathList = getPickerDevices(ctx, _)
       ctx.pathBrowsePath = nil
       local n = #(ctx.pathList or {})
       ctx.pathPickerSel = math.max(1, math.min(ctx.pathPickerDeviceSel or 1, n))
@@ -1820,7 +1851,7 @@ local function run(ctx)
             ctx.pathPickerBrowseSelStack = nil
             ctx.pathPickerBdmPrefix = nil
             ctx.pathPickerBdmMountpoint = nil
-            ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+            ctx.pathList = getPickerDevices(ctx, _)
             ctx.pathBrowsePath = nil
             local n = #(ctx.pathList or {})
             ctx.pathPickerSel = math.max(1, math.min(ctx.pathPickerDeviceSel or 1, n))
@@ -1844,7 +1875,7 @@ local function run(ctx)
         ctx.pathPickerBrowseSelStack = nil
         ctx.pathPickerBdmPrefix = nil
         ctx.pathPickerBdmMountpoint = nil
-        ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+        ctx.pathList = getPickerDevices(ctx, _)
         ctx.pathBrowsePath = nil
         local n = #(ctx.pathList or {})
         ctx.pathPickerSel = math.max(1, math.min(ctx.pathPickerDeviceSel or 1, n))

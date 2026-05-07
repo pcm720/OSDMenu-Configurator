@@ -42,7 +42,7 @@ local function beginIrxPathEdit(_, ctx, entryIdx, disabled)
   ctx.pathPickerBblIrxDisabled = disabled and true or false
   ctx.pathPickerContext = "path_only"
   ctx.pathPickerSub = "device"
-  ctx.pathList = _.file_selector.getDevices("path_only") or {}
+  ctx.pathList = _.file_selector.getDevices("path_only", { fileType = ctx.fileType }) or {}
   ctx.pathPickerSel = 1
   ctx.pathPickerScroll = 0
   ctx.pathBrowsePath = nil

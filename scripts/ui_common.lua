@@ -696,6 +696,8 @@ local function resolveLogicalBdmPath(path)
   local candidates = nil
   if lower == "mx4sio" then
     candidates = { "mx4sio" }
+  elseif lower == "massx" then
+    candidates = { "mx4sio" }
   elseif lower == "ata" then
     candidates = { "ata0", "ata1" }
   elseif lower:match("^ata%d+$") then

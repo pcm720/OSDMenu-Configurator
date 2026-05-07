@@ -2391,7 +2391,7 @@ local function run(ctx)
             ctx.pathPickerBblIrxDisabled = targetIrxDisabled and true or false
             ctx.pathPickerContext = "path_only"
             ctx.pathPickerSub = "device"
-            ctx.pathList = _.file_selector.getDevices("path_only") or {}
+            ctx.pathList = _.file_selector.getDevices("path_only", { fileType = ctx.fileType }) or {}
             ctx.pathPickerSel = 1
             ctx.pathPickerScroll = 0
             ctx.pathBrowsePath = nil
@@ -2447,7 +2447,7 @@ local function run(ctx)
             end
             ctx.pathPickerContext = "path_only"
             ctx.pathPickerSub = "device"
-            ctx.pathList = _.file_selector.getDevices("path_only") or {}
+            ctx.pathList = _.file_selector.getDevices("path_only", { fileType = ctx.fileType }) or {}
             ctx.pathPickerSel = 1
             ctx.pathPickerScroll = 0
             ctx.pathBrowsePath = nil
@@ -2539,7 +2539,7 @@ local function run(ctx)
             (isEsrPathPicker and "path_only" or
               ((o.key == "path_DKWDRV_ELF") and "mc_only" or ((ctx.context == "mbr") and "mbr" or "osdmenu")))
         ctx.pathPickerSub = "device"
-        ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+        ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext, { fileType = ctx.fileType }) or {}
         ctx.pathPickerSel = 1
         ctx.pathPickerScroll = 0
         ctx.state = "path_picker"
