@@ -300,7 +300,7 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   VIDEO_MODE = { label = "Wymuś tryb wideo", desc = "Tryb UI loadera" },
-  LOGO_DISPLAY = { label = "Wyświetlanie logo", desc = "Prędkość wyświetlania logo/tekstu informacyjnego" },
+  LOGO_DISPLAY = { label = "Wyświetlanie logo", desc = "Tryb wyświetlania logo/informacji" },
   OSDHISTORY_READ = { label = "Odczyt historii OSD", desc = "Odczytaj poprzedni stan historii OSD" },
   EJECT_TRAY = { label = "Wysuń tacę", desc = "Wysuń tackę przed uruchomieniem" },
   DISC_STOP = { label = "Disc stop", desc = "Stop disc after config is loaded" },

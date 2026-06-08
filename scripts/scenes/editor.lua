@@ -1482,11 +1482,6 @@ local function run(ctx)
       if ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
         descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit or channel, Up/Down change, Square channel")
       end
-      if selOpt.key == "LOGO_DISPLAY" then
-        local cur = cachedGet(ctx.lines, selOpt.key) or selOpt.default or ""
-        local n = tonumber(cur) or 0
-        descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
-      end
       if descStr ~= "" then
         local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
         local hintDrawScale = hintTypography.drawScale

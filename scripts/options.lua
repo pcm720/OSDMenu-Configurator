@@ -227,17 +227,15 @@ local function buildBblIniGlobalOptions()
       key = "LOGO_DISPLAY",
       optType = "enum",
       default = "3",
-      enumVals = { "0", "1", "2", "3", "4", "5" },
+      enumVals = { "0", "1", "2", "3" },
       enumDisplayMap = {
         ["0"] = "OFF",
         ["1"] = "CONSOLE INFO",
         ["2"] = "LOGO+INFO",
         ["3"] = "LAUNCH KEY NAME",
-        ["4"] = "LAUNCH KEY FOUND FILE",
-        ["5"] = "LAUNCH KEY FOUND PATH",
       },
       label = "LOGO_DISPLAY",
-      desc = "Display speed: FAST (0-3), SLOWER (4-5).",
+      desc = "Logo/info display mode.",
     },
     {
       key = "OSDHISTORY_READ",
@@ -256,7 +254,7 @@ local function buildBblIniGlobalOptions()
     {
       key = "DISC_STOP",
       optType = "bool",
-      default = "0",
+      default = "1",
       label = "DISC_STOP",
       desc = "Stop disc after config is loaded",
     },
