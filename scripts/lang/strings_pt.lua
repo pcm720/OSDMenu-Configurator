@@ -315,6 +315,7 @@ strings.options_r3configurator = {
   video_mode = { label = "Modo de vídeo", desc = "Modo de vídeo no arranque (auto mantém o modo nativo da PS2)." },
   swap_buttons = { label = "Trocar botões", desc = "Trocar confirmar/cancelar (Cruz <-> Círculo)." },
   default_language = { label = "Idioma predefinido", desc = "Idioma predefinido da interface." },
+  keyboard_layout = { label = "Layout do teclado", desc = "Layout do teclado no ecrã." },
   show_freemcboot = { label = "Mostrar FreeMCBoot", desc = "Mostrar FreeMCBoot na página principal." },
   show_freehddboot = { label = "Mostrar FreeHDBoot", desc = "Mostrar FreeHDBoot na página principal." },
   show_osdmenu = { label = "Mostrar OSDMenu", desc = "Mostrar OSDMenu na página principal." },

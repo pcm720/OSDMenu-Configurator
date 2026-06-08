@@ -315,6 +315,7 @@ strings.options_r3configurator = {
   video_mode = { label = "Video mode", desc = "Startup video mode (auto keeps native PS2 mode)." },
   swap_buttons = { label = "Swap buttons", desc = "Swap confirm/cancel (Cross <-> Circle)." },
   default_language = { label = "Default language", desc = "Default UI language." },
+  keyboard_layout = { label = "Keyboard layout", desc = "On-screen keyboard layout." },
   show_freemcboot = { label = "Show FreeMCBoot", desc = "Show FreeMCBoot on main page." },
   show_freehddboot = { label = "Show FreeHDBoot", desc = "Show FreeHDBoot on main page." },
   show_osdmenu = { label = "Show OSDMenu", desc = "Show OSDMenu on main page." },

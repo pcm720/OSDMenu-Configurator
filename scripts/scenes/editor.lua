@@ -313,6 +313,14 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
     end
     return
   end
+  if rawKey == "keyboard_layout" then
+    local runtime = _G.CONFIG_UI
+    if runtime then
+      local layout = (_.common.normalizeKeyboardLayout and _.common.normalizeKeyboardLayout(value)) or tostring(value or "")
+      runtime.keyboardLayout = layout
+    end
+    return
+  end
   if _G.CONFIG_UI and _G.CONFIG_UI.setMainFilterFromShowKey then
     if _G.CONFIG_UI.setMainFilterFromShowKey(rawKey, value) then
       return

@@ -97,6 +97,7 @@ local function loadStartupConfig()
     video_mode = nil,
     swap_buttons = nil,
     default_language = nil,
+    keyboard_layout = nil,
     scene_transition = nil,
     scene_transition_frames = nil,
     main_filter = nil,
@@ -138,6 +139,11 @@ local function loadStartupConfig()
   local lang = trimString(kv.default_language):lower()
   if lang ~= "" and lang:match("^[%a][%w_]*$") then
     cfg.default_language = lang
+  end
+
+  local keyboardLayout = trimString(kv.keyboard_layout):lower()
+  if keyboardLayout ~= "" and common.normalizeKeyboardLayout then
+    cfg.keyboard_layout = common.normalizeKeyboardLayout(keyboardLayout)
   end
 
   local transitionType = trimString(kv.scene_transition)
@@ -302,6 +308,9 @@ _G.CONFIG_UI = {
   startupCwd = STARTUP_CWD,
   startupMainFilter = STARTUP_CFG.main_filter,
   startupDefaultLanguage = STARTUP_CFG.default_language,
+  startupKeyboardLayout = STARTUP_CFG.keyboard_layout,
+  keyboardLayout = (common.normalizeKeyboardLayout and common.normalizeKeyboardLayout(STARTUP_CFG.keyboard_layout)) or
+      (STARTUP_CFG.keyboard_layout or common.KEYBOARD_LAYOUT_DEFAULT),
   startupSceneTransitionType = STARTUP_CFG.scene_transition,
   startupSceneTransitionFrames = STARTUP_CFG.scene_transition_frames,
   sceneTransitionType = (common.normalizeSceneTransitionType and common.normalizeSceneTransitionType(STARTUP_CFG.scene_transition)) or
@@ -1924,6 +1933,8 @@ local function mainLoop()
       KEYBOARD_ROWS = KEYBOARD_ROWS,
       KEYBOARD_ROWS_SHIFTED = KEYBOARD_ROWS_SHIFTED,
       KEYBOARD_ROWS_TITLE_ID = KEYBOARD_ROWS_TITLE_ID,
+      normalizeKeyboardLayout = common.normalizeKeyboardLayout,
+      getKeyboardLayoutSpec = common.getKeyboardLayoutSpec,
       KEYBOARD_ROW_OFFSETS = KEYBOARD_ROW_OFFSETS,
       KEYBOARD_ROW_OFFSETS_TITLE_ID = KEYBOARD_ROW_OFFSETS_TITLE_ID,
       PAD_UP = PAD_UP,

@@ -517,6 +517,17 @@ end
 
 local R3_DEFAULT_LANGUAGE_DEFAULT, R3_DEFAULT_LANGUAGE_ENUM_VALS, R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP = buildR3DefaultLanguageSpec()
 
+local R3_KEYBOARD_LAYOUT_ENUM_VALS = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abnt2", "abc" }
+local R3_KEYBOARD_LAYOUT_ENUM_DISPLAY_MAP = {
+  qwerty = "QWERTY",
+  dvorak = "DVORAK",
+  qwertz = "QWERTZ",
+  azerty = "AZERTY",
+  abnt = "ABNT",
+  abnt2 = "ABNT2",
+  abc = "ABC",
+}
+
 config_options.r3configurator_cnf = {
   {
     key = "video_mode",
@@ -547,6 +558,15 @@ config_options.r3configurator_cnf = {
     enumDisplayMap = R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP,
     label = "Default language",
     desc = "Default UI language.",
+  },
+  {
+    key = "keyboard_layout",
+    optType = "enum",
+    default = "qwerty",
+    enumVals = R3_KEYBOARD_LAYOUT_ENUM_VALS,
+    enumDisplayMap = R3_KEYBOARD_LAYOUT_ENUM_DISPLAY_MAP,
+    label = "Keyboard layout",
+    desc = "On-screen keyboard layout.",
   },
   { key = "show_freemcboot", optType = "bool", default = "1", label = "Show FreeMCBoot" },
   { key = "show_freehddboot", optType = "bool", default = "1", label = "Show FreeHDBoot" },
