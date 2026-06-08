@@ -227,17 +227,15 @@ local function buildBblIniGlobalOptions()
       key = "LOGO_DISPLAY",
       optType = "enum",
       default = "3",
-      enumVals = { "0", "1", "2", "3", "4", "5" },
+      enumVals = { "0", "1", "2", "3" },
       enumDisplayMap = {
         ["0"] = "OFF",
         ["1"] = "CONSOLE INFO",
         ["2"] = "LOGO+INFO",
         ["3"] = "LAUNCH KEY NAME",
-        ["4"] = "LAUNCH KEY FOUND FILE",
-        ["5"] = "LAUNCH KEY FOUND PATH",
       },
       label = "LOGO_DISPLAY",
-      desc = "Display speed: FAST (0-3), SLOWER (4-5).",
+      desc = "Logo/info display mode.",
     },
     {
       key = "OSDHISTORY_READ",
@@ -256,7 +254,7 @@ local function buildBblIniGlobalOptions()
     {
       key = "DISC_STOP",
       optType = "bool",
-      default = "0",
+      default = "1",
       label = "DISC_STOP",
       desc = "Stop disc after config is loaded",
     },
@@ -519,6 +517,17 @@ end
 
 local R3_DEFAULT_LANGUAGE_DEFAULT, R3_DEFAULT_LANGUAGE_ENUM_VALS, R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP = buildR3DefaultLanguageSpec()
 
+local R3_KEYBOARD_LAYOUT_ENUM_VALS = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abnt2", "abc" }
+local R3_KEYBOARD_LAYOUT_ENUM_DISPLAY_MAP = {
+  qwerty = "QWERTY",
+  dvorak = "DVORAK",
+  qwertz = "QWERTZ",
+  azerty = "AZERTY",
+  abnt = "ABNT",
+  abnt2 = "ABNT2",
+  abc = "ABC",
+}
+
 config_options.r3configurator_cnf = {
   {
     key = "video_mode",
@@ -549,6 +558,15 @@ config_options.r3configurator_cnf = {
     enumDisplayMap = R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP,
     label = "Default language",
     desc = "Default UI language.",
+  },
+  {
+    key = "keyboard_layout",
+    optType = "enum",
+    default = "qwerty",
+    enumVals = R3_KEYBOARD_LAYOUT_ENUM_VALS,
+    enumDisplayMap = R3_KEYBOARD_LAYOUT_ENUM_DISPLAY_MAP,
+    label = "Keyboard layout",
+    desc = "On-screen keyboard layout.",
   },
   { key = "show_freemcboot", optType = "bool", default = "1", label = "Show FreeMCBoot" },
   { key = "show_freehddboot", optType = "bool", default = "1", label = "Show FreeHDBoot" },

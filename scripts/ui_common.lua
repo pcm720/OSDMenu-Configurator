@@ -1733,11 +1733,63 @@ function common.handleLeaveSavePrompt(ctx, opts)
   return true
 end
 
--- Keyboard: full QWERTY rows 1-=, q-], a-'\, z-/
-common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvbnm,./" }
-common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"|", "ZXCVBNM<>?" }
+common.KEYBOARD_LAYOUT_DEFAULT = "qwerty"
+common.KEYBOARD_LAYOUT_ORDER = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abnt2", "abc" }
+common.KEYBOARD_LAYOUTS = {
+  qwerty = {
+    rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvbnm,./" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"|", "ZXCVBNM<>?" },
+    titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
+  },
+  dvorak = {
+    rows = { "1234567890[]", "',.pyfgcrl/=", "aoeuidhtns-\\", ";qjkxbmwvz" },
+    shiftedRows = { "!@#$%^&*(){}", "\"<>PYFGCRL?+", "AOEUIDHTNS_|", ":QJKXBMWVZ" },
+    titleRows = { "1234567890", "PYFGCRL", "AOEUIDHTNS", "QJKXBMWVZ" },
+  },
+  qwertz = {
+    rows = { "1234567890-=", "qwertzuiop[]", "asdfghjkl;'\\", "yxcvbnm,./" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTZUIOP{}", "ASDFGHJKL:\"|", "YXCVBNM<>?" },
+    titleRows = { "1234567890", "QWERTZUIOP", "ASDFGHJKL", "YXCVBNM" },
+  },
+  azerty = {
+    rows = { "1234567890-=", "azertyuiop[]", "qsdfghjklm;'", "wxcvbn\\,./" },
+    shiftedRows = { "!@#$%^&*()_+", "AZERTYUIOP{}", "QSDFGHJKLM:\"", "WXCVBN|<>?" },
+    titleRows = { "1234567890", "AZERTYUIOP", "QSDFGHJKLM", "WXCVBN" },
+  },
+  abnt = {
+    rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./\\" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "ZXCVBNM<>?|" },
+    titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
+  },
+  abnt2 = {
+    rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "\\zxcvbnm,./" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "|ZXCVBNM<>?" },
+    titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
+  },
+  abc = {
+    rows = { "1234567890-=", "abcdefghij[]", "klmnopqrs;'\\", "tuvwxyz,./" },
+    shiftedRows = { "!@#$%^&*()_+", "ABCDEFGHIJ{}", "KLMNOPQRS:\"|", "TUVWXYZ<>?" },
+    titleRows = { "1234567890", "ABCDEFGHIJ", "KLMNOPQRS", "TUVWXYZ" },
+  },
+}
+
+function common.normalizeKeyboardLayout(value)
+  local key = tostring(value or ""):lower()
+  if common.KEYBOARD_LAYOUTS[key] then
+    return key
+  end
+  return common.KEYBOARD_LAYOUT_DEFAULT
+end
+
+function common.getKeyboardLayoutSpec(value)
+  local key = common.normalizeKeyboardLayout(value)
+  return common.KEYBOARD_LAYOUTS[key] or common.KEYBOARD_LAYOUTS[common.KEYBOARD_LAYOUT_DEFAULT]
+end
+
+common.KEYBOARD_ROWS = common.KEYBOARD_LAYOUTS.qwerty.rows
+common.KEYBOARD_ROWS_SHIFTED = common.KEYBOARD_LAYOUTS.qwerty.shiftedRows
 -- Title ID only: digits + uppercase letters, no shift (e.g. eGSM AAAA_000.00). No symbols.
-common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
+common.KEYBOARD_ROWS_TITLE_ID = common.KEYBOARD_LAYOUTS.qwerty.titleRows
 -- Shift the row above spacebar right by one key for both layouts.
 common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.0, 0.0, 1.0 }
 common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.0, 0.0, 1.0 }

@@ -790,9 +790,16 @@ local function ensureKeyboardLayoutCache(ctx, _)
   local titleMode = ctx.textInputTitleIdMode == true
   local shiftMode = (not titleMode) and (ctx.textInputShift == true)
   local hidePipe = ctx.textInputHidePipeBackslash == true
-  local baseRows = titleMode and (_.KEYBOARD_ROWS_TITLE_ID or _.KEYBOARD_ROWS_SHIFTED) or
-      (shiftMode and _.KEYBOARD_ROWS_SHIFTED or _.KEYBOARD_ROWS)
-  local cacheKey = (titleMode and "1" or "0") .. "|" .. (shiftMode and "1" or "0") .. "|" .. (hidePipe and "1" or "0")
+  local runtime = _G and _G.CONFIG_UI
+  local normalizeLayout = _.normalizeKeyboardLayout or (_.common and _.common.normalizeKeyboardLayout)
+  local getLayoutSpec = _.getKeyboardLayoutSpec or (_.common and _.common.getKeyboardLayoutSpec)
+  local layoutKey = (normalizeLayout and normalizeLayout(runtime and runtime.keyboardLayout)) or "qwerty"
+  local layoutSpec = (getLayoutSpec and getLayoutSpec(layoutKey)) or nil
+  local layoutRows = (layoutSpec and layoutSpec.rows) or _.KEYBOARD_ROWS
+  local layoutShiftedRows = (layoutSpec and layoutSpec.shiftedRows) or _.KEYBOARD_ROWS_SHIFTED
+  local layoutTitleRows = (layoutSpec and layoutSpec.titleRows) or _.KEYBOARD_ROWS_TITLE_ID
+  local baseRows = titleMode and layoutTitleRows or (shiftMode and layoutShiftedRows or layoutRows)
+  local cacheKey = layoutKey .. "|" .. (titleMode and "1" or "0") .. "|" .. (shiftMode and "1" or "0") .. "|" .. (hidePipe and "1" or "0")
   local cache = ctx.textInputKeyboardLayoutCache
   if type(cache) == "table" and cache.key == cacheKey and cache.baseRowsRef == baseRows then
     return cache

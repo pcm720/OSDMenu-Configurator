@@ -313,6 +313,14 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
     end
     return
   end
+  if rawKey == "keyboard_layout" then
+    local runtime = _G.CONFIG_UI
+    if runtime then
+      local layout = (_.common.normalizeKeyboardLayout and _.common.normalizeKeyboardLayout(value)) or tostring(value or "")
+      runtime.keyboardLayout = layout
+    end
+    return
+  end
   if _G.CONFIG_UI and _G.CONFIG_UI.setMainFilterFromShowKey then
     if _G.CONFIG_UI.setMainFilterFromShowKey(rawKey, value) then
       return
@@ -1481,11 +1489,6 @@ local function run(ctx)
           selOpt.desc or ""
       if ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
         descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit or channel, Up/Down change, Square channel")
-      end
-      if selOpt.key == "LOGO_DISPLAY" then
-        local cur = cachedGet(ctx.lines, selOpt.key) or selOpt.default or ""
-        local n = tonumber(cur) or 0
-        descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
       end
       if descStr ~= "" then
         local hintTypography = _.common.getHintTypography(_.font, _.drawMode)

@@ -3,11 +3,11 @@ set(IRX_FILES
     iomanX
     fileXio
     sio2man
-    mcman
+    mcman-1400
     extflash
     xfromman
     mcserv
-    padman
+    padman-1400
     usbd_mini
     bdm
     bdmfs_fatfs

@@ -300,7 +300,7 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   VIDEO_MODE = { label = "Force video mode", desc = "Loader UI mode" },
-  LOGO_DISPLAY = { label = "Logo display", desc = "Display speed for boot logo/info text" },
+  LOGO_DISPLAY = { label = "Logo display", desc = "Modo de visualización de logo/información" },
   OSDHISTORY_READ = { label = "OSD history read", desc = "Read previous OSD history state" },
   EJECT_TRAY = { label = "Eject tray", desc = "Eject tray before launch" },
   DISC_STOP = { label = "Disc stop", desc = "Stop disc after config is loaded" },
@@ -315,6 +315,7 @@ strings.options_r3configurator = {
   video_mode = { label = "Modo de video", desc = "Modo de video de arranque (auto mantiene el modo nativo de PS2)." },
   swap_buttons = { label = "Intercambiar botones", desc = "Intercambiar confirmar/cancelar (Cruz <-> Circulo)." },
   default_language = { label = "Idioma predeterminado", desc = "Idioma predeterminado de la interfaz." },
+  keyboard_layout = { label = "Distribucion del teclado", desc = "Distribucion del teclado en pantalla." },
   show_freemcboot = { label = "Mostrar FreeMCBoot", desc = "Mostrar FreeMCBoot en la pagina principal." },
   show_freehddboot = { label = "Mostrar FreeHDBoot", desc = "Mostrar FreeHDBoot en la pagina principal." },
   show_osdmenu = { label = "Mostrar OSDMenu", desc = "Mostrar OSDMenu en la pagina principal." },

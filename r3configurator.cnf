@@ -9,6 +9,9 @@ swap_buttons = 0
 # Default UI language code (used when CWD strings.lua override is not present)
 default_language = en
 
+# On-screen keyboard layout: qwerty | dvorak | qwertz | azerty | abnt | abnt2 | abc
+keyboard_layout = qwerty
+
 # Main page visibility: set to 1 to show, 0 to hide.
 show_freemcboot = 1
 show_freehddboot = 1
