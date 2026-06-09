@@ -1734,7 +1734,7 @@ function common.handleLeaveSavePrompt(ctx, opts)
 end
 
 common.KEYBOARD_LAYOUT_DEFAULT = "qwerty"
-common.KEYBOARD_LAYOUT_ORDER = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abnt2", "abc" }
+common.KEYBOARD_LAYOUT_ORDER = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abc" }
 common.KEYBOARD_LAYOUTS = {
   qwerty = {
     rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvbnm,./" },
@@ -1759,11 +1759,6 @@ common.KEYBOARD_LAYOUTS = {
   abnt = {
     rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./\\" },
     shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "ZXCVBNM<>?|" },
-    titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
-  },
-  abnt2 = {
-    rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "\\zxcvbnm,./" },
-    shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "|ZXCVBNM<>?" },
     titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
   },
   abc = {
