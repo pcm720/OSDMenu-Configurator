@@ -313,6 +313,14 @@ local function applyR3ConfiguratorRuntimeOverride(ctx, _, key, value)
     end
     return
   end
+  if rawKey == "keyboard_layout" then
+    local runtime = _G.CONFIG_UI
+    if runtime then
+      local layout = (_.common.normalizeKeyboardLayout and _.common.normalizeKeyboardLayout(value)) or tostring(value or "")
+      runtime.keyboardLayout = layout
+    end
+    return
+  end
   if _G.CONFIG_UI and _G.CONFIG_UI.setMainFilterFromShowKey then
     if _G.CONFIG_UI.setMainFilterFromShowKey(rawKey, value) then
       return
@@ -369,16 +377,18 @@ local function markConfigMutated(ctx, recomputeDirty)
   end
 end
 
-local OSD_VISUAL_COORD_KEYS = {
+local OSD_VISUAL_PRESET_KEYS = {
   OSDSYS_menu_x = true,
   OSDSYS_menu_y = true,
   OSDSYS_enter_x = true,
   OSDSYS_enter_y = true,
   OSDSYS_version_x = true,
   OSDSYS_version_y = true,
+  OSDSYS_cursor_max_velocity = true,
+  OSDSYS_cursor_acceleration = true,
 }
 
--- OSDMenu patcher defaults from thirdparty/OSDMenu/patcher/src/settings.c (initConfig).
+-- Patched menu defaults used by this configurator.
 local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_menu_x = "320",
   OSDSYS_menu_y = "110",
@@ -386,9 +396,11 @@ local OSD_VISUAL_PATCHED_DEFAULTS = {
   OSDSYS_enter_y = "-1",
   OSDSYS_version_x = "-1",
   OSDSYS_version_y = "-1",
+  OSDSYS_cursor_max_velocity = "1500",
+  OSDSYS_cursor_acceleration = "150",
 }
 
--- Original PS2 OSDSYS look from thirdparty/OSDMenu/patcher/README.md and patches_fmcb.c comments.
+-- Original PS2 OSDSYS coordinate look with app cursor defaults.
 local OSD_VISUAL_PS2_DEFAULTS = {
   OSDSYS_menu_x = "430",
   OSDSYS_menu_y = "110",
@@ -396,11 +408,13 @@ local OSD_VISUAL_PS2_DEFAULTS = {
   OSDSYS_enter_y = "-1",
   OSDSYS_version_x = "-1",
   OSDSYS_version_y = "-1",
+  OSDSYS_cursor_max_velocity = "1500",
+  OSDSYS_cursor_acceleration = "150",
 }
 
-local function isOsdVisualCoordKey(key)
+local function isOsdVisualPresetKey(key)
   local k = tostring(key or "")
-  return OSD_VISUAL_COORD_KEYS[k] == true
+  return OSD_VISUAL_PRESET_KEYS[k] == true
 end
 
 local function applyOsdVisualPreset(ctx, _, preset)
@@ -449,20 +463,6 @@ local function optionMatchesDefault(ctx, _, key, def, getValue)
   local cur = getter(ctx.lines, key)
   local effective = (cur ~= nil) and cur or def
   return valuesEquivalent(effective, def)
-end
-
-local function osdVisualGroupMatchesPreset(ctx, _, preset, getValue)
-  if not (ctx and _ and preset) then return false end
-  local getter = getValue or _.config_parse.get
-  for key, _present in pairs(OSD_VISUAL_COORD_KEYS) do
-    local def = preset[key]
-    local cur = getter(ctx.lines, key)
-    local effective = (cur ~= nil) and cur or def
-    if not valuesEquivalent(effective, def) then
-      return false
-    end
-  end
-  return true
 end
 
 local function makeFrameParseCache(_, lines)
@@ -1482,11 +1482,6 @@ local function run(ctx)
       if ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
         descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit or channel, Up/Down change, Square channel")
       end
-      if selOpt.key == "LOGO_DISPLAY" then
-        local cur = cachedGet(ctx.lines, selOpt.key) or selOpt.default or ""
-        local n = tonumber(cur) or 0
-        descStr = (n >= 4) and "Display speed: SLOWER (4-5)" or "Display speed: FAST (0-3)"
-      end
       if descStr ~= "" then
         local hintTypography = _.common.getHintTypography(_.font, _.drawMode)
         local hintDrawScale = hintTypography.drawScale
@@ -1528,9 +1523,9 @@ local function run(ctx)
     local autoSlotNum = isAutoSlotRow and tonumber(selOpt.bblEntrySlot) or nil
     local isEsrPathRow = selOpt and ctx.fileType == "freemcboot_cnf" and selOpt.key and selOpt.key:match("^ESR_Path_E%d+$")
     local esrSlotNum = isEsrPathRow and tonumber(selOpt.key:match("^ESR_Path_E(%d+)$")) or nil
-    local isOsdVisualCoordRow = selOpt and
+    local isOsdVisualPresetRow = selOpt and
         (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf") and
-        selOpt.optType == "int" and isOsdVisualCoordKey(selOpt.key)
+        selOpt.optType == "int" and isOsdVisualPresetKey(selOpt.key)
     local function resetDefaultFn(key)
       local keyStr = tostring(key or "")
       if ctx.fileType == "freemcboot_cnf" then
@@ -1560,8 +1555,8 @@ local function run(ctx)
     local canResetFromTriangle = false
     local isR3ColorPresetRow = selOpt and selOpt.optType == "color" and isR3ConfiguratorColorKey(ctx, selOpt.key)
     if selOpt and selOpt.key and selOpt.key:sub(1, 1) ~= "_" and selOpt.optType ~= "header" then
-      if isOsdVisualCoordRow then
-        canResetFromTriangle = not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet)
+      if isOsdVisualPresetRow then
+        canResetFromTriangle = true
       else
         local def = resetDefaultFn and resetDefaultFn(selOpt.key)
         if def ~= nil then
@@ -2391,7 +2386,7 @@ local function run(ctx)
             ctx.pathPickerBblIrxDisabled = targetIrxDisabled and true or false
             ctx.pathPickerContext = "path_only"
             ctx.pathPickerSub = "device"
-            ctx.pathList = _.file_selector.getDevices("path_only") or {}
+            ctx.pathList = _.file_selector.getDevices("path_only", { fileType = ctx.fileType }) or {}
             ctx.pathPickerSel = 1
             ctx.pathPickerScroll = 0
             ctx.pathBrowsePath = nil
@@ -2447,7 +2442,7 @@ local function run(ctx)
             end
             ctx.pathPickerContext = "path_only"
             ctx.pathPickerSub = "device"
-            ctx.pathList = _.file_selector.getDevices("path_only") or {}
+            ctx.pathList = _.file_selector.getDevices("path_only", { fileType = ctx.fileType }) or {}
             ctx.pathPickerSel = 1
             ctx.pathPickerScroll = 0
             ctx.pathBrowsePath = nil
@@ -2539,7 +2534,7 @@ local function run(ctx)
             (isEsrPathPicker and "path_only" or
               ((o.key == "path_DKWDRV_ELF") and "mc_only" or ((ctx.context == "mbr") and "mbr" or "osdmenu")))
         ctx.pathPickerSub = "device"
-        ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext) or {}
+        ctx.pathList = _.file_selector.getDevices(ctx.pathPickerContext, { fileType = ctx.fileType }) or {}
         ctx.pathPickerSel = 1
         ctx.pathPickerScroll = 0
         ctx.state = "path_picker"
@@ -2570,12 +2565,10 @@ local function run(ctx)
         -- Key-level disable/enable is a common quick toggle; recompute dirty now
         -- so Start reflects true semantic state immediately on the next frame.
         markConfigMutated(ctx, true)
-      elseif isOsdVisualCoordRow then
-        if not osdVisualGroupMatchesPreset(ctx, _, OSD_VISUAL_PATCHED_DEFAULTS, cachedGet) then
-          ctx.editorOsdVisualRestoreOpen = true
-          ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
-          ctx.editorOsdVisualRestoreScroll = ctx.editorOsdVisualRestoreScroll or 0
-        end
+      elseif isOsdVisualPresetRow then
+        ctx.editorOsdVisualRestoreOpen = true
+        ctx.editorOsdVisualRestoreSel = ctx.editorOsdVisualRestoreSel or 1
+        ctx.editorOsdVisualRestoreScroll = ctx.editorOsdVisualRestoreScroll or 0
       elseif o and o.key and o.key:match("^ESR_Path_E%d+$") and ctx.fileType == "freemcboot_cnf" then
         toggleEsrSlotDisabled()
       elseif o and o.optType == "bbl_slot" and o.bblKeyId == "AUTO" and o.bblEntrySlot then

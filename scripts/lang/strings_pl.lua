@@ -199,6 +199,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "HDD sformatowany w exFAT",
   hdd = "HDD sformatowany w APA",
+  xfrom = "XFROM",
 }
 
 -- Wspólne tokeny
@@ -299,12 +300,10 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   VIDEO_MODE = { label = "Wymuś tryb wideo", desc = "Tryb UI loadera" },
-  LOGO_DISPLAY = { label = "Wyświetlanie logo", desc = "Prędkość wyświetlania logo/tekstu informacyjnego" },
+  LOGO_DISPLAY = { label = "Wyświetlanie logo", desc = "Tryb wyświetlania logo/informacji" },
   OSDHISTORY_READ = { label = "Odczyt historii OSD", desc = "Odczytaj poprzedni stan historii OSD" },
   EJECT_TRAY = { label = "Wysuń tacę", desc = "Wysuń tackę przed uruchomieniem" },
-  PS1DRV_ENABLE_FAST = { label = "Szybkie ładowanie PS1", desc = "Wymuś szybką prędkość dysku PS1" },
-  PS1DRV_ENABLE_SMOOTH = { label = "Wygładzanie tekstur PS1", desc = "Wymuś wygładzanie tekstur PS1" },
-  PS1DRV_USE_PS1VN = { label = "Użyj PS1VN", desc = "Użyj negatora trybu wideo PS1" },
+  DISC_STOP = { label = "Disc stop", desc = "Stop disc after config is loaded" },
   _bbl_irx_entries = { label = "Edytuj wpisy IRX", desc = "Edytuj ścieżki modułów LOAD_IRX_E#" },
   APP_GAMEID = { label = "Wizualne ID gry aplikacji", desc = "Game ID for RetroGem" },
   CDROM_DISABLE_GAMEID = { label = "Wyłącz wizualne ID gry dysku", desc = "Disable RetroGem Game ID for DISCS" },
@@ -316,6 +315,7 @@ strings.options_r3configurator = {
   video_mode = { label = "Tryb wideo", desc = "Tryb wideo przy starcie (auto zachowuje natywny tryb PS2)." },
   swap_buttons = { label = "Zamień przyciski", desc = "Zamień potwierdź/anuluj (Cross <-> Circle)." },
   default_language = { label = "Domyślny język", desc = "Domyślny język interfejsu." },
+  keyboard_layout = { label = "Układ klawiatury", desc = "Układ klawiatury ekranowej." },
   show_freemcboot = { label = "Pokaż FreeMCBoot", desc = "Pokaż FreeMCBoot na stronie głównej." },
   show_freehddboot = { label = "Pokaż FreeHDBoot", desc = "Pokaż FreeHDBoot na stronie głównej." },
   show_osdmenu = { label = "Pokaż OSDMenu", desc = "Pokaż OSDMenu na stronie głównej." },

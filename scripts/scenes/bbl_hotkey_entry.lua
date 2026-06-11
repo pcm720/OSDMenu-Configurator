@@ -42,7 +42,14 @@ local function run(ctx)
   local data = _.config_parse.getBblHotkeySlot(ctx.lines, keyId, slot)
   local keyDisabled = (_.config_parse.isBblHotkeyDisabled and _.config_parse.isBblHotkeyDisabled(ctx.lines, keyId)) and true or false
   local allowArgs = (ctx.fileType ~= "freemcboot_cnf") and (ctx.context ~= "freehddboot")
-  local rows = allowArgs and { "path", "args" } or { "path" }
+  local function isCdromLikePath(pathVal)
+    local trimmed = (_.common and _.common.trimPathValue and _.common.trimPathValue(pathVal)) or
+        tostring(pathVal or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local up = trimmed:upper()
+    return trimmed:lower() == "cdrom" or up == "$CDVD" or up == "$CDVD_NO_PS2LOGO"
+  end
+  local hasCdromPath = data.pathExists and isCdromLikePath(data.path)
+  local rows = allowArgs and { "path", hasCdromPath and "launch_disc_options" or "args" } or { "path" }
   ctx.bblEntryDetailSel = ctx.bblEntryDetailSel or 1
   if ctx.bblEntryDetailSel < 1 then ctx.bblEntryDetailSel = 1 end
   if ctx.bblEntryDetailSel > #rows then ctx.bblEntryDetailSel = #rows end
@@ -59,12 +66,19 @@ local function run(ctx)
   local argsLine = (type(maxArgs) == "number" and maxArgs > 0)
       and ("Arguments: " .. tostring(data.argCount) .. "/" .. tostring(maxArgs))
       or ("Arguments: " .. tostring(data.argCount))
+  local launchDiscLine = (_.menu_str.launch_disc_options or "Launch disc options") ..
+      ((tonumber(data.argCount) or 0) > 0 and (" (" .. tostring(data.argCount) .. ")") or "")
   local maxLabelW = (_.w or 640) - (_.MARGIN_X + 24) - _.MARGIN_X
 
   for i = 1, #rows do
     local y = _.MARGIN_Y + _.scaleY(50) + (i - 1) * _.LINE_H
     local col = (i == ctx.bblEntryDetailSel) and _.SELECTED_COLOR or _.UNSELECTED_COLOR
-    local line = (rows[i] == "path") and pathLine or argsLine
+    local line = pathLine
+    if rows[i] == "args" then
+      line = argsLine
+    elseif rows[i] == "launch_disc_options" then
+      line = launchDiscLine
+    end
     if _.common.fitListRowText then
       local key = (rows[i] == "path") and "bbl_hotkey_entry_path" or "bbl_hotkey_entry_args"
       line = _.common.fitListRowText(ctx, key, _.font, line, maxLabelW, _.FONT_SCALE, i == ctx.bblEntryDetailSel)
@@ -211,7 +225,7 @@ local function run(ctx)
       ctx.pathPickerFileExts = nil
       ctx.pathPickerContext = "path_only"
       ctx.pathPickerSub = "device"
-      ctx.pathList = _.file_selector.getDevices("path_only") or {}
+      ctx.pathList = _.file_selector.getDevices("path_only", { fileType = ctx.fileType }) or {}
       ctx.pathPickerSel = 1
       ctx.pathPickerScroll = 0
       ctx.pathBrowsePath = nil
@@ -229,14 +243,20 @@ local function run(ctx)
       ctx.pathPickerBblHotkeyDisabled = data.disabled and true or false
       ctx.state = "path_picker"
     elseif allowArgs then
-      if (tonumber(data.argCount) or 0) <= 0 then
-        ctx.bblArgAddMenu = true
-        ctx.bblArgAddSel = 1
-        ctx.bblArgAddScroll = 0
+      local selectedRow = rows[ctx.bblEntryDetailSel]
+      if selectedRow == "launch_disc_options" then
+        ctx.cdromOptSel = 1
+        ctx.state = "entry_cdrom_options"
+      else
+        if (tonumber(data.argCount) or 0) <= 0 then
+          ctx.bblArgAddMenu = true
+          ctx.bblArgAddSel = 1
+          ctx.bblArgAddScroll = 0
+        end
+        ctx.bblArgSel = 1
+        ctx.bblArgScroll = 0
+        ctx.state = "bbl_hotkey_args"
       end
-      ctx.bblArgSel = 1
-      ctx.bblArgScroll = 0
-      ctx.state = "bbl_hotkey_args"
     end
   end
 

@@ -39,6 +39,8 @@ const char *devices_get_bdm_driver(const char *mountpoint) {
 uint32_t devices_guess_device_type(const char *path) {
   if (!strncmp(path, "mc", 2))
     return Device_Basic;
+  else if (!strncmp(path, "xfrom", 5))
+    return Device_XFROM;
   else if (!strncmp(path, "mmce", 4))
     return Device_MMCE;
   else if (!strncmp(path, "hdd", 3))

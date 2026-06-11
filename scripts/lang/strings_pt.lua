@@ -199,6 +199,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "HDD formatado em exFAT",
   hdd = "HDD formatado em APA",
+  xfrom = "XFROM",
 }
 
 -- Tokens comuns
@@ -299,12 +300,10 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   VIDEO_MODE = { label = "Force video mode", desc = "Loader UI mode" },
-  LOGO_DISPLAY = { label = "Logo display", desc = "Display speed for boot logo/info text" },
+  LOGO_DISPLAY = { label = "Logo display", desc = "Modo de exibição do logotipo/informações" },
   OSDHISTORY_READ = { label = "OSD history read", desc = "Read previous OSD history state" },
   EJECT_TRAY = { label = "Eject tray", desc = "Eject tray before launch" },
-  PS1DRV_ENABLE_FAST = { label = "PS1 fast loading", desc = "Force PS1 fast disc speed" },
-  PS1DRV_ENABLE_SMOOTH = { label = "PS1 texture smoothing", desc = "Force PS1 texture smoothing" },
-  PS1DRV_USE_PS1VN = { label = "Use PS1VN", desc = "Use PS1 Video Mode Negator" },
+  DISC_STOP = { label = "Disc stop", desc = "Stop disc after config is loaded" },
   _bbl_irx_entries = { label = "Editar entradas IRX", desc = "Editar caminhos de módulos LOAD_IRX_E#" },
   APP_GAMEID = { label = "Application visual game ID", desc = "Game ID for RetroGem" },
   CDROM_DISABLE_GAMEID = { label = "Desabilitar disc visual game ID", desc = "Disable RetroGem Game ID for DISCS" },
@@ -316,6 +315,7 @@ strings.options_r3configurator = {
   video_mode = { label = "Modo de vídeo", desc = "Modo de vídeo no arranque (auto mantém o modo nativo da PS2)." },
   swap_buttons = { label = "Trocar botões", desc = "Trocar confirmar/cancelar (Cruz <-> Círculo)." },
   default_language = { label = "Idioma predefinido", desc = "Idioma predefinido da interface." },
+  keyboard_layout = { label = "Layout do teclado", desc = "Layout do teclado no ecrã." },
   show_freemcboot = { label = "Mostrar FreeMCBoot", desc = "Mostrar FreeMCBoot na página principal." },
   show_freehddboot = { label = "Mostrar FreeHDBoot", desc = "Mostrar FreeHDBoot na página principal." },
   show_osdmenu = { label = "Mostrar OSDMenu", desc = "Mostrar OSDMenu na página principal." },

@@ -618,6 +618,9 @@ function common.formatDisplayPathWithCommands(_, pathVal)
   local raw = tostring(pathVal or "")
   local up = raw:gsub("^%s+", ""):gsub("%s+$", ""):upper()
   local p = (_ and _.path_str) or {}
+  if up == "CDROM" then
+    return ((_ and _.dev_str and _.dev_str.launch_disc) or p.bbl_cmd_cdvd_label or "Launch disc with override")
+  end
   if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
   if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
   if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
@@ -639,7 +642,7 @@ end
 
 function common.isBblSpecialExclusivePath(pathVal)
   local up = common.pathTokenUpper(pathVal)
-  return up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
+  return up == "CDROM" or up == "$CDVD" or up == "$CDVD_NO_PS2LOGO" or up == "$CREDITS" or up == "$HDDCHECKER"
 end
 
 -- Canonicalize HDD APA/PFS display paths:
@@ -684,12 +687,50 @@ local function isDeviceAbsolutePath(path)
   return false
 end
 
+local function resolveLogicalBdmPath(path)
+  if not (System and System.getDeviceMountpoint) then return path end
+  local p = tostring(path or "")
+  local prefix, rest = p:match("^([%w_]+):(.*)$")
+  if not prefix then return p end
+  local lower = prefix:lower()
+  local candidates = nil
+  if lower == "mx4sio" then
+    candidates = { "mx4sio" }
+  elseif lower == "massx" then
+    candidates = { "mx4sio" }
+  elseif lower == "ata" then
+    candidates = { "ata0", "ata1" }
+  elseif lower:match("^ata%d+$") then
+    candidates = { lower }
+  elseif lower == "usb" then
+    candidates = { "usb0", "usb1" }
+  elseif lower:match("^usb%d+$") then
+    candidates = { lower }
+  end
+  if not candidates then return p end
+  local suffix = tostring(rest or "")
+  if suffix ~= "" and suffix:sub(1, 1) ~= "/" then
+    suffix = "/" .. suffix
+  end
+  for i = 1, #candidates do
+    local ok, mountpoint = pcall(System.getDeviceMountpoint, candidates[i])
+    if ok and type(mountpoint) == "string" and mountpoint ~= "" then
+      local mp = mountpoint:gsub("/+$", "")
+      if mp:sub(-1) ~= ":" then
+        mp = mp .. ":"
+      end
+      return mp .. suffix
+    end
+  end
+  return p
+end
+
 function common.resolvePathForAccess(path)
   local raw = tostring(path or "")
   if raw == "" then return raw end
   local p = raw:gsub("\\", "/")
   if isDeviceAbsolutePath(p) then
-    return p
+    return resolveLogicalBdmPath(p)
   end
   if p:sub(1, 2) == "./" then
     p = p:sub(3)
@@ -1692,11 +1733,58 @@ function common.handleLeaveSavePrompt(ctx, opts)
   return true
 end
 
--- Keyboard: full QWERTY rows 1-=, q-], a-'\, z-/
-common.KEYBOARD_ROWS = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvbnm,./" }
-common.KEYBOARD_ROWS_SHIFTED = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"|", "ZXCVBNM<>?" }
+common.KEYBOARD_LAYOUT_DEFAULT = "qwerty"
+common.KEYBOARD_LAYOUT_ORDER = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abc" }
+common.KEYBOARD_LAYOUTS = {
+  qwerty = {
+    rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'\\", "zxcvbnm,./" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"|", "ZXCVBNM<>?" },
+    titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
+  },
+  dvorak = {
+    rows = { "1234567890[]", "',.pyfgcrl/=", "aoeuidhtns-\\", ";qjkxbmwvz" },
+    shiftedRows = { "!@#$%^&*(){}", "\"<>PYFGCRL?+", "AOEUIDHTNS_|", ":QJKXBMWVZ" },
+    titleRows = { "1234567890", "PYFGCRL", "AOEUIDHTNS", "QJKXBMWVZ" },
+  },
+  qwertz = {
+    rows = { "1234567890-=", "qwertzuiop[]", "asdfghjkl;'\\", "yxcvbnm,./" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTZUIOP{}", "ASDFGHJKL:\"|", "YXCVBNM<>?" },
+    titleRows = { "1234567890", "QWERTZUIOP", "ASDFGHJKL", "YXCVBNM" },
+  },
+  azerty = {
+    rows = { "1234567890-=", "azertyuiop[]", "qsdfghjklm;'", "wxcvbn\\,./" },
+    shiftedRows = { "!@#$%^&*()_+", "AZERTYUIOP{}", "QSDFGHJKLM:\"", "WXCVBN|<>?" },
+    titleRows = { "1234567890", "AZERTYUIOP", "QSDFGHJKLM", "WXCVBN" },
+  },
+  abnt = {
+    rows = { "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./\\" },
+    shiftedRows = { "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "ZXCVBNM<>?|" },
+    titleRows = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" },
+  },
+  abc = {
+    rows = { "1234567890-=", "abcdefghij[]", "klmnopqrs;'\\", "tuvwxyz,./" },
+    shiftedRows = { "!@#$%^&*()_+", "ABCDEFGHIJ{}", "KLMNOPQRS:\"|", "TUVWXYZ<>?" },
+    titleRows = { "1234567890", "ABCDEFGHIJ", "KLMNOPQRS", "TUVWXYZ" },
+  },
+}
+
+function common.normalizeKeyboardLayout(value)
+  local key = tostring(value or ""):lower()
+  if common.KEYBOARD_LAYOUTS[key] then
+    return key
+  end
+  return common.KEYBOARD_LAYOUT_DEFAULT
+end
+
+function common.getKeyboardLayoutSpec(value)
+  local key = common.normalizeKeyboardLayout(value)
+  return common.KEYBOARD_LAYOUTS[key] or common.KEYBOARD_LAYOUTS[common.KEYBOARD_LAYOUT_DEFAULT]
+end
+
+common.KEYBOARD_ROWS = common.KEYBOARD_LAYOUTS.qwerty.rows
+common.KEYBOARD_ROWS_SHIFTED = common.KEYBOARD_LAYOUTS.qwerty.shiftedRows
 -- Title ID only: digits + uppercase letters, no shift (e.g. eGSM AAAA_000.00). No symbols.
-common.KEYBOARD_ROWS_TITLE_ID = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
+common.KEYBOARD_ROWS_TITLE_ID = common.KEYBOARD_LAYOUTS.qwerty.titleRows
 -- Shift the row above spacebar right by one key for both layouts.
 common.KEYBOARD_ROW_OFFSETS = { 0.0, 0.0, 0.0, 1.0 }
 common.KEYBOARD_ROW_OFFSETS_TITLE_ID = { 0.0, 0.0, 0.0, 1.0 }
@@ -1855,6 +1943,10 @@ end
 function common.getPathModuleType(path)
   local p = tostring(path or ""):lower()
   if p == "" then return nil end
+  if p:match("^xfrom:") then return "xfrom" end
+  if p:match("^mx4sio:") then return "mx4sio" end
+  if p:match("^ata:") or p:match("^ata%d:") then return "hdd" end
+  if p:match("^usb:") or p:match("^usb%d:") then return "usb" end
   if p:match("^massx:") then return "mx4sio" end
   if p:match("^mmce%d:") then return "mmce" end
   if p:match("^hdd%d:") or p:match("^pfs%d:") then return "hdd" end

@@ -19,8 +19,8 @@ config_options.BBL_PATH_DEVICE_VISIBILITY = {
   hdd = true,
   mmce = true,
   mx4sio = true,
-  ata = false,
-  xfrom = false,
+  ata = true,
+  xfrom = true,
 }
 
 function config_options.isEgsmUiEnabled()
@@ -47,13 +47,14 @@ local function buildBblDefaultMcPath(mcFile, chosenMcSlot)
 end
 
 -- Known PS2BBL/PSXBBL lookup locations, excluding CWD (CONFIG.INI) because CWD is launch-dependent.
--- Ordered to match PS2BBL source search order (first -> last), ignoring unsupported XFROM.
+-- Ordered to match PS2BBL source search order (first -> last).
 local function buildPs2BblIniLocations()
   local out = {}
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
-  appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "mx4sio:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mc1:/SYS-CONF/PS2BBL.INI")
   appendUnique(out, "mc0:/SYS-CONF/PS2BBL.INI")
@@ -67,8 +68,10 @@ local function buildPsxBblIniLocations()
   appendUnique(out, "mc0:/SYS-CONF/PSXBBL.INI")
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "xfrom:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
-  appendUnique(out, "massX:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "mx4sio:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
   return out
 end
@@ -224,17 +227,15 @@ local function buildBblIniGlobalOptions()
       key = "LOGO_DISPLAY",
       optType = "enum",
       default = "3",
-      enumVals = { "0", "1", "2", "3", "4", "5" },
+      enumVals = { "0", "1", "2", "3" },
       enumDisplayMap = {
         ["0"] = "OFF",
         ["1"] = "CONSOLE INFO",
         ["2"] = "LOGO+INFO",
         ["3"] = "LAUNCH KEY NAME",
-        ["4"] = "LAUNCH KEY FOUND FILE",
-        ["5"] = "LAUNCH KEY FOUND PATH",
       },
       label = "LOGO_DISPLAY",
-      desc = "Display speed: FAST (0-3), SLOWER (4-5).",
+      desc = "Logo/info display mode.",
     },
     {
       key = "OSDHISTORY_READ",
@@ -251,25 +252,11 @@ local function buildBblIniGlobalOptions()
       desc = "Eject tray before launch.",
     },
     {
-      key = "PS1DRV_ENABLE_FAST",
-      optType = "bool",
-      default = "0",
-      label = "PS1DRV_ENABLE_FAST",
-      desc = "Enable PS1 fast loading.",
-    },
-    {
-      key = "PS1DRV_ENABLE_SMOOTH",
-      optType = "bool",
-      default = "0",
-      label = "PS1DRV_ENABLE_SMOOTH",
-      desc = "Enable PS1 smoothing.",
-    },
-    {
-      key = "PS1DRV_USE_PS1VN",
+      key = "DISC_STOP",
       optType = "bool",
       default = "1",
-      label = "PS1DRV_USE_PS1VN",
-      desc = "Enable PS1 video negator.",
+      label = "DISC_STOP",
+      desc = "Stop disc after config is loaded",
     },
     {
       key = "APP_GAMEID",
@@ -402,7 +389,7 @@ config_options.osdmenu_cnf_categories = {
       { key = "OSDSYS_right_cursor",          optType = "text",  default = "",                   maxLen = 19 },
       { key = "OSDSYS_menu_top_delimiter",    optType = "text",  default = "",                   maxLen = 79 },
       { key = "OSDSYS_menu_bottom_delimiter", optType = "text",  default = "",                   maxLen = 79 },
-      { key = "OSDSYS_num_displayed_items",   optType = "int",   default = "5" },
+      { key = "OSDSYS_num_displayed_items",   optType = "int",   default = "7" },
       { key = "OSDSYS_selected_color",        optType = "color", default = "0x10,0x80,0xE0,0x80" },
       { key = "OSDSYS_unselected_color",      optType = "color", default = "0x33,0x33,0x33,0x80" },
     },
@@ -450,7 +437,7 @@ config_options.freemcboot_cnf_categories = {
       { key = "OSDSYS_enter_y",             optType = "int",   default = "-1",  min = -1, max = 242 },
       { key = "OSDSYS_version_x",           optType = "int",   default = "-1",  min = -1, max = 520 },
       { key = "OSDSYS_version_y",           optType = "int",   default = "-1",  min = -1, max = 242 },
-      { key = "OSDSYS_cursor_max_velocity", optType = "int",   default = "1000" },
+      { key = "OSDSYS_cursor_max_velocity", optType = "int",   default = "1500" },
       { key = "OSDSYS_cursor_acceleration", optType = "int",   default = "150" },
       { key = "OSDSYS_left_cursor",         optType = "text",  default = "",                   maxLen = 19 },
       { key = "OSDSYS_right_cursor",        optType = "text",  default = "",                   maxLen = 19 },
@@ -530,6 +517,16 @@ end
 
 local R3_DEFAULT_LANGUAGE_DEFAULT, R3_DEFAULT_LANGUAGE_ENUM_VALS, R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP = buildR3DefaultLanguageSpec()
 
+local R3_KEYBOARD_LAYOUT_ENUM_VALS = { "qwerty", "dvorak", "qwertz", "azerty", "abnt", "abc" }
+local R3_KEYBOARD_LAYOUT_ENUM_DISPLAY_MAP = {
+  qwerty = "QWERTY",
+  dvorak = "DVORAK",
+  qwertz = "QWERTZ",
+  azerty = "AZERTY",
+  abnt = "ABNT",
+  abc = "ABC",
+}
+
 config_options.r3configurator_cnf = {
   {
     key = "video_mode",
@@ -560,6 +557,15 @@ config_options.r3configurator_cnf = {
     enumDisplayMap = R3_DEFAULT_LANGUAGE_ENUM_DISPLAY_MAP,
     label = "Default language",
     desc = "Default UI language.",
+  },
+  {
+    key = "keyboard_layout",
+    optType = "enum",
+    default = "qwerty",
+    enumVals = R3_KEYBOARD_LAYOUT_ENUM_VALS,
+    enumDisplayMap = R3_KEYBOARD_LAYOUT_ENUM_DISPLAY_MAP,
+    label = "Keyboard layout",
+    desc = "On-screen keyboard layout.",
   },
   { key = "show_freemcboot", optType = "bool", default = "1", label = "Show FreeMCBoot" },
   { key = "show_freehddboot", optType = "bool", default = "1", label = "Show FreeHDBoot" },

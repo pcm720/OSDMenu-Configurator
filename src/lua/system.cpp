@@ -282,7 +282,7 @@ static int lua_getDeviceMountpoint(lua_State *L) {
 }
 
 // Returns launch device family inferred from boot_path:
-// "mc", "mmce", "hdd", "usb", "mx4sio", "ata", "bdm", or "unknown".
+// "mc", "xfrom", "mmce", "hdd", "usb", "mx4sio", "ata", "bdm", or "unknown".
 static int lua_getLaunchDeviceFamily(lua_State *L) {
   if (!boot_path || boot_path[0] == '\0') {
     lua_pushstring(L, "unknown");
@@ -296,6 +296,10 @@ static int lua_getLaunchDeviceFamily(lua_State *L) {
   }
   if (device & Device_HDD) {
     lua_pushstring(L, "hdd");
+    return 1;
+  }
+  if (device & Device_XFROM) {
+    lua_pushstring(L, "xfrom");
     return 1;
   }
   if (device & Device_Basic) {

@@ -199,6 +199,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "exFAT-formatierte HDD",
   hdd = "APA-formatierte HDD",
+  xfrom = "XFROM",
 }
 
 -- Gemeinsame Texte
@@ -299,12 +300,10 @@ strings.options_osdmbr = {
 
 strings.options_bbl = {
   VIDEO_MODE = { label = "Force video mode", desc = "Loader UI mode" },
-  LOGO_DISPLAY = { label = "Logo display", desc = "Display speed for boot logo/info text" },
+  LOGO_DISPLAY = { label = "Logo display", desc = "Anzeigemodus für Logo/Info" },
   OSDHISTORY_READ = { label = "OSD history read", desc = "Read previous OSD history state" },
   EJECT_TRAY = { label = "Eject tray", desc = "Eject tray before launch" },
-  PS1DRV_ENABLE_FAST = { label = "PS1 fast loading", desc = "Force PS1 fast disc speed" },
-  PS1DRV_ENABLE_SMOOTH = { label = "PS1 texture smoothing", desc = "Force PS1 texture smoothing" },
-  PS1DRV_USE_PS1VN = { label = "Use PS1VN", desc = "Use PS1 Video Mode Negator" },
+  DISC_STOP = { label = "Disc stop", desc = "Stop disc after config is loaded" },
   _bbl_irx_entries = { label = "IRX-Eintraege bearbeiten", desc = "LOAD_IRX_E#-Modulpfade bearbeiten" },
   APP_GAMEID = { label = "Application visual game ID", desc = "Game ID for RetroGem" },
   CDROM_DISABLE_GAMEID = { label = "Disable disc visual game ID", desc = "Disable RetroGem Game ID for DISCS" },
@@ -316,6 +315,7 @@ strings.options_r3configurator = {
   video_mode = { label = "Videomodus", desc = "Videomodus beim Start (Auto behaelt den nativen PS2-Modus)." },
   swap_buttons = { label = "Tasten tauschen", desc = "Bestaetigen/Abbrechen tauschen (Cross <-> Circle)." },
   default_language = { label = "Standardsprache", desc = "Standard-UI-Sprache." },
+  keyboard_layout = { label = "Tastaturlayout", desc = "Layout der Bildschirmtastatur." },
   show_freemcboot = { label = "Zeige FreeMCBoot", desc = "FreeMCBoot auf der Hauptseite anzeigen." },
   show_freehddboot = { label = "Zeige FreeHDBoot", desc = "FreeHDBoot auf der Hauptseite anzeigen." },
   show_osdmenu = { label = "Zeige OSDMenu", desc = "OSDMenu auf der Hauptseite anzeigen." },

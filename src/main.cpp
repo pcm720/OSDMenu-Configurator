@@ -104,6 +104,10 @@ char *resolveRootDevice(char *argv0) {
     printf("main: loading MMCE drivers\n");
     device_init_load_modules("mmce");
     return result;
+  } else if (device & Device_XFROM) {
+    printf("main: loading XFROM drivers\n");
+    device_init_load_modules("xfrom");
+    return result;
   } else if (device & Device_HDD) {
     printf("main: loading HDD drivers\n");
     device_init_load_modules("hdd");
