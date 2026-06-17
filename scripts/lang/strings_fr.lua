@@ -237,12 +237,26 @@ strings.categories_freemcboot = {
   [6] = "Modifier les entrees du menu",
 }
 
+strings.categories_osdmbr = {
+  [1] = "Modificateurs du comportement OSD",
+  [2] = "Modificateurs de lancement disque et application",
+  [3] = "Autoboot et touches de lancement",
+}
+
 -- Libelles et descriptions des options OSDMENU.CNF (par cle d'option)
 strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Forcer le mode video", desc = "Forcer le mode video OSD" },
   OSDSYS_region = { label = "Forcer la region", desc = "Forcer la region OSD" },
   OSDSYS_Skip_Disc = { label = "Ignorer le disque", desc = "Ignorer le lancement automatique du disque" },
-  OSDSYS_boot = { label = "Cible de demarrage", desc = "Demarrer directement dans l'ouverture, l'horloge ou le navigateur" },
+  OSDSYS_boot = {
+    label = "Cible de demarrage",
+    desc = "Demarrer directement vers le menu principal",
+    enumDescMap = {
+      clock = "Demarrer directement vers le menu principal",
+      opening = "Demarrer directement vers les tours d'historique des sauvegardes",
+      browser = "Demarrer vers le selecteur de carte memoire et disque",
+    },
+  },
   OSDSYS_Skip_Logo = { label = "Ignorer l'intro", desc = "Ignorer l'animation d'introduction SCE" },
   OSDSYS_Inner_Browser = { label = "Navigateur interne", desc = "Demarrer dans le navigateur de carte memoire" },
   OSDSYS_Skip_MC = { label = "Ignorer la MC", desc = "Ignorer la verification de la carte memoire dans le navigateur" },

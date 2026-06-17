@@ -237,12 +237,26 @@ strings.categories_freemcboot = {
   [6] = "Edytuj wpisy menu",
 }
 
+strings.categories_osdmbr = {
+  [1] = "Modyfikatory zachowania OSD",
+  [2] = "Modyfikatory uruchamiania dysku i aplikacji",
+  [3] = "Autoboot i klawisze uruchamiania",
+}
+
 -- Etykiety i opisy opcji OSDMENU.CNF (według klucza opcji)
 strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Wymuś tryb wideo", desc = "Wymuś tryb wideo OSD" },
   OSDSYS_region = { label = "Wymuś region", desc = "Wymuś region OSD" },
   OSDSYS_Skip_Disc = { label = "Pomiń dysk", desc = "Pomiń automatyczne uruchamianie dysku" },
-  OSDSYS_boot = { label = "Cel startu", desc = "Uruchom bezpośrednio ekran otwarcia, zegar lub przeglądarkę" },
+  OSDSYS_boot = {
+    label = "Cel startu",
+    desc = "Uruchom bezpośrednio menu główne",
+    enumDescMap = {
+      clock = "Uruchom bezpośrednio menu główne",
+      opening = "Uruchom bezpośrednio wieże historii zapisanych danych",
+      browser = "Uruchom wybór karty pamięci i dysku",
+    },
+  },
   OSDSYS_Skip_Logo = { label = "Pomiń intro", desc = "Pomiń animację intro SCE" },
   OSDSYS_Inner_Browser = { label = "Wewnętrzna przeglądarka", desc = "Uruchom w przeglądarce kart pamięci" },
   OSDSYS_Skip_MC = { label = "Pomiń MC", desc = "Pomiń sprawdzanie karty pamięci w przeglądarce" },

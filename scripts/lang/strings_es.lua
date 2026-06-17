@@ -237,12 +237,26 @@ strings.categories_freemcboot = {
   [6] = "Editar entradas del menú",
 }
 
+strings.categories_osdmbr = {
+  [1] = "Modificadores de comportamiento de OSD",
+  [2] = "Modificadores de lanzamiento de disco y aplicación",
+  [3] = "Autoboot y launch keys",
+}
+
 -- Etiquetas y descripciones de opciones de OSDMENU.CNF (por clave de opción)
 strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Forzar modo de video", desc = "Forzar modo de video de OSD" },
   OSDSYS_region = { label = "Forzar región", desc = "Forzar región de OSD" },
   OSDSYS_Skip_Disc = { label = "Saltar disco", desc = "Saltar lanzamiento automático de disco" },
-  OSDSYS_boot = { label = "Destino de arranque", desc = "Arrancar directamente en apertura, reloj o navegador" },
+  OSDSYS_boot = {
+    label = "Destino de arranque",
+    desc = "Arrancar directamente al menú principal",
+    enumDescMap = {
+      clock = "Arrancar directamente al menú principal",
+      opening = "Arrancar directamente a las torres del historial de datos guardados",
+      browser = "Arrancar al selector de tarjeta de memoria y disco",
+    },
+  },
   OSDSYS_Skip_Logo = { label = "Saltar intro", desc = "Saltar animación de introducción de SCE" },
   OSDSYS_Inner_Browser = { label = "Navegador interno", desc = "Arrancar en el navegador de la tarjeta de memoria" },
   OSDSYS_Skip_MC = { label = "Saltar MC", desc = "Saltar comprobación de tarjeta de memoria en el navegador" },

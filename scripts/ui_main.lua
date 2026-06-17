@@ -671,8 +671,8 @@ local function setStateAfterLoad(s)
     s.configModified = false
     s.configNeedsInitialSave = false
   end
-  local isCategorized = (s.fileType == "osdmenu_cnf" or s.fileType == "freemcboot_cnf" or s.fileType == "ps2bbl_ini" or
-      s.fileType == "psxbbl_ini")
+  local isCategorized = (s.fileType == "osdmenu_cnf" or s.fileType == "freemcboot_cnf" or s.fileType == "osdmbr_cnf" or
+      s.fileType == "ps2bbl_ini" or s.fileType == "psxbbl_ini")
   if s.fileType == "osdgsm_cnf" then
     s.state = "egsm_editor"
     s.egsmSel, s.egsmScroll = 1, 0

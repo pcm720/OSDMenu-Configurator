@@ -187,6 +187,22 @@ local function cycleEnumIndex(ctx, opt, currentIndex, step, allowUnset)
   return currentIndex
 end
 
+local function resolveOptionDescription(ctx, _, opt)
+  if not opt then return "" end
+  local key = opt.key
+  local textDef = (_.strings and _.strings.options and key and _.strings.options[key]) or nil
+  if opt.optType == "enum" and key then
+    local raw = (_.config_parse and _.config_parse.get and _.config_parse.get(ctx.lines, key)) or opt.default or ""
+    local enumDescMap = (textDef and textDef.enumDescMap) or opt.enumDescMap
+    if type(enumDescMap) == "table" then
+      local rawKey = tostring(raw or "")
+      local desc = enumDescMap[rawKey] or enumDescMap[rawKey:lower()] or enumDescMap[rawKey:upper()]
+      if desc ~= nil then return desc end
+    end
+  end
+  return (textDef and textDef.desc) or opt.desc or ""
+end
+
 local function isDeviceAbsolutePath(path)
   local p = tostring(path or "")
   if p == "" then return false end
@@ -1060,12 +1076,14 @@ local function run(ctx)
   end
 
   local isCategorizedFile = (ctx.fileType == "osdmenu_cnf" or ctx.fileType == "freemcboot_cnf" or
-      ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini")
+      ctx.fileType == "osdmbr_cnf" or ctx.fileType == "ps2bbl_ini" or ctx.fileType == "psxbbl_ini")
   local categories = {}
   if ctx.fileType == "osdmenu_cnf" then
     categories = _.config_options.osdmenu_cnf_categories or {}
   elseif ctx.fileType == "freemcboot_cnf" then
     categories = _.config_options.freemcboot_cnf_categories or _.config_options.osdmenu_cnf_categories or {}
+  elseif ctx.fileType == "osdmbr_cnf" then
+    categories = _.config_options.osdmbr_cnf_categories or {}
   elseif ctx.fileType == "ps2bbl_ini" then
     categories = _.config_options.ps2bbl_ini_categories or {}
   elseif ctx.fileType == "psxbbl_ini" then
@@ -1146,6 +1164,8 @@ local function run(ctx)
         catLabel = (_.strings.categories and _.strings.categories[i]) or catLabel
       elseif ctx.fileType == "freemcboot_cnf" then
         catLabel = (_.strings.categories_freemcboot and _.strings.categories_freemcboot[i]) or catLabel
+      elseif ctx.fileType == "osdmbr_cnf" then
+        catLabel = (_.strings.categories_osdmbr and _.strings.categories_osdmbr[i]) or catLabel
       end
       if _.common.fitListRowText then
         catLabel = _.common.fitListRowText(ctx, "editor_cat_row_" .. tostring(i), _.font, catLabel, maxCatLabelW,
@@ -1485,8 +1505,7 @@ local function run(ctx)
     end
     local selOpt = ctx.optList[ctx.optSel]
     if selOpt then
-      local descStr = (_.strings.options and _.strings.options[selOpt.key] and _.strings.options[selOpt.key].desc) or
-          selOpt.desc or ""
+      local descStr = resolveOptionDescription(ctx, _, selOpt)
       if ctx.colorInlineEdit and ctx.colorInlineEdit.key == selOpt.key then
         descStr = (_.editor_str.inline_color_edit_hint or "D-pad: Left/Right digit or channel, Up/Down change, Square channel")
       end

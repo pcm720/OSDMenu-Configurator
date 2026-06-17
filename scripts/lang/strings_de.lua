@@ -237,12 +237,26 @@ strings.categories_freemcboot = {
   [6] = "Menueeintraege bearbeiten",
 }
 
+strings.categories_osdmbr = {
+  [1] = "OSD-Verhaltensmodifikatoren",
+  [2] = "Disc- und Anwendungsstart-Modifikatoren",
+  [3] = "Autoboot und Start-Tasten",
+}
+
 -- OSDMENU.CNF Optionsbezeichnungen und Beschreibungen
 strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Videomodus erzwingen", desc = "OSD-Videomodus erzwingen" },
   OSDSYS_region = { label = "Region erzwingen", desc = "OSD-Region erzwingen" },
   OSDSYS_Skip_Disc = { label = "Disc ueberspringen", desc = "Automatischen Disc-Start ueberspringen" },
-  OSDSYS_boot = { label = "Startziel", desc = "Direkt in Opening, Uhr oder Browser starten" },
+  OSDSYS_boot = {
+    label = "Startziel",
+    desc = "Direkt ins Hauptmenue starten",
+    enumDescMap = {
+      clock = "Direkt ins Hauptmenue starten",
+      opening = "Direkt zu den Speicherdaten-Verlaufstuermen starten",
+      browser = "Zur Speicherkarte- und Disc-Auswahl starten",
+    },
+  },
   OSDSYS_Skip_Logo = { label = "Intro ueberspringen", desc = "SCE-Introanimation ueberspringen" },
   OSDSYS_Inner_Browser = { label = "Interner Browser", desc = "Im Speicherkarten-Browser starten" },
   OSDSYS_Skip_MC = { label = "MC ueberspringen", desc = "Speicherkartenpruefung im Browser ueberspringen" },

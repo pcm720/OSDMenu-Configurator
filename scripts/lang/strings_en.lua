@@ -237,12 +237,26 @@ strings.categories_freemcboot = {
   [6] = "Edit menu entries",
 }
 
+strings.categories_osdmbr = {
+  [1] = "OSD behavior modifiers",
+  [2] = "Disc and application launch modifiers",
+  [3] = "Autoboot and launch keys",
+}
+
 -- OSDMENU.CNF option labels and descriptions (by option key)
 strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Force video mode", desc = "Force OSD video mode" },
   OSDSYS_region = { label = "Force region", desc = "Force OSD region" },
   OSDSYS_Skip_Disc = { label = "Skip disc", desc = "Skip automatic disc launch" },
-  OSDSYS_boot = { label = "Boot target", desc = "Boot directly into opening, clock, or browser" },
+  OSDSYS_boot = {
+    label = "Boot target",
+    desc = "Boot directly to Main Menu",
+    enumDescMap = {
+      clock = "Boot directly to Main Menu",
+      opening = "Boot directly to the save data history towers",
+      browser = "Boot to the memory card and disc picker",
+    },
+  },
   OSDSYS_Skip_Logo = { label = "Skip intro", desc = "Skip SCE intro animation" },
   OSDSYS_Inner_Browser = { label = "Inner browser", desc = "Boot into memory card browser" },
   OSDSYS_Skip_MC = { label = "Skip MC", desc = "Skip memory card check in browser" },

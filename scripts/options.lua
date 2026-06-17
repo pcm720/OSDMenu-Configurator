@@ -369,7 +369,17 @@ config_options.osdmenu_cnf_categories = {
       { key = "OSDSYS_video_mode",    optType = "enum", default = "AUTO", enumVals = { "AUTO", "PAL", "NTSC", "480p", "1080i" } },
       { key = "OSDSYS_region",        optType = "enum", default = "AUTO", enumVals = { "AUTO", "jap", "usa", "eur" } },
       { key = "OSDSYS_Skip_Disc",     optType = "bool", default = "1" },
-      { key = "OSDSYS_boot",          optType = "enum", default = "clock", enumVals = { "opening", "clock", "browser" } },
+      {
+        key = "OSDSYS_boot",
+        optType = "enum",
+        default = "clock",
+        enumVals = { "clock", "browser", "opening" },
+        enumDisplayMap = {
+          clock = "CLOCK",
+          browser = "BROWSER",
+          opening = "OPENING",
+        },
+      },
     },
   },
   {
@@ -700,32 +710,8 @@ local OSD_LANGUAGE_DISPLAY = {
   sch = "Simplified Chinese (Zhongwen)",
 }
 
--- OSDMBR.CNF: boot button paths (multi) + args; then other options. Label/desc from strings.options[key].
-config_options.osdmbr_cnf = {
-  { key = "boot_auto",            optType = "boot_paths" },
-  { key = "boot_start",           optType = "boot_paths" },
-  { key = "boot_select",          optType = "boot_paths" },
-  { key = "boot_triangle",        optType = "boot_paths" },
-  { key = "boot_circle",          optType = "boot_paths" },
-  { key = "boot_cross",           optType = "boot_paths" },
-  { key = "boot_square",          optType = "boot_paths" },
-  { key = "boot_up",              optType = "boot_paths" },
-  { key = "boot_down",            optType = "boot_paths" },
-  { key = "boot_left",            optType = "boot_paths" },
-  { key = "boot_right",           optType = "boot_paths" },
-  { key = "boot_l1",              optType = "boot_paths" },
-  { key = "boot_l2",              optType = "boot_paths" },
-  { key = "boot_r1",              optType = "boot_paths" },
-  { key = "boot_r2",              optType = "boot_paths" },
-  { key = "cdrom_skip_ps2logo",   optType = "bool",      default = "1" },
-  { key = "cdrom_disable_gameid", optType = "bool",      default = "0" },
-  { key = "cdrom_use_dkwdrv",     optType = "bool",      default = "0" },
-  { key = "ps1drv_enable_fast",   optType = "bool",      default = "0" },
-  { key = "ps1drv_enable_smooth", optType = "bool",      default = "0" },
-  { key = "ps1drv_use_ps1vn",     optType = "bool",      default = "1" },
-  { key = "prefer_bbn",           optType = "bool",      default = "0" },
-  { key = "app_gameid",           optType = "bool",      default = "0" },
-  { key = "osd_screentype",       optType = "enum",      default = "", enumVals = { "4:3", "16:9", "full" } },
+local OSDMBR_BEHAVIOR_OPTIONS = {
+  { key = "osd_screentype", optType = "enum", default = "", enumVals = { "4:3", "16:9", "full" } },
   {
     key = "osd_language",
     optType = "enum",
@@ -734,6 +720,49 @@ config_options.osdmbr_cnf = {
     enumDisplayMap = OSD_LANGUAGE_DISPLAY,
   },
 }
+
+local OSDMBR_LAUNCH_OPTIONS = {
+  { key = "cdrom_skip_ps2logo",   optType = "bool", default = "1" },
+  { key = "app_gameid",           optType = "bool", default = "0" },
+  { key = "cdrom_disable_gameid", optType = "bool", default = "0" },
+  { key = "cdrom_use_dkwdrv",     optType = "bool", default = "0" },
+  { key = "ps1drv_enable_fast",   optType = "bool", default = "0" },
+  { key = "ps1drv_enable_smooth", optType = "bool", default = "0" },
+  { key = "ps1drv_use_ps1vn",     optType = "bool", default = "1" },
+  { key = "prefer_bbn",           optType = "bool", default = "0" },
+}
+
+local OSDMBR_BOOT_OPTIONS = {
+  { key = "boot_auto",     optType = "boot_paths" },
+  { key = "boot_start",    optType = "boot_paths" },
+  { key = "boot_select",   optType = "boot_paths" },
+  { key = "boot_triangle", optType = "boot_paths" },
+  { key = "boot_circle",   optType = "boot_paths" },
+  { key = "boot_cross",    optType = "boot_paths" },
+  { key = "boot_square",   optType = "boot_paths" },
+  { key = "boot_up",       optType = "boot_paths" },
+  { key = "boot_down",     optType = "boot_paths" },
+  { key = "boot_left",     optType = "boot_paths" },
+  { key = "boot_right",    optType = "boot_paths" },
+  { key = "boot_l1",       optType = "boot_paths" },
+  { key = "boot_l2",       optType = "boot_paths" },
+  { key = "boot_r1",       optType = "boot_paths" },
+  { key = "boot_r2",       optType = "boot_paths" },
+}
+
+config_options.osdmbr_cnf_categories = {
+  { name = "OSD behavior modifiers", options = OSDMBR_BEHAVIOR_OPTIONS },
+  { name = "Disc and application launch modifiers", options = OSDMBR_LAUNCH_OPTIONS },
+  { name = "Autoboot and launch keys", options = OSDMBR_BOOT_OPTIONS },
+}
+
+-- Flat OSDMBR.CNF option order used by save/regeneration helpers.
+config_options.osdmbr_cnf = {}
+for _, cat in ipairs(config_options.osdmbr_cnf_categories) do
+  for _, o in ipairs(cat.options or {}) do
+    config_options.osdmbr_cnf[#config_options.osdmbr_cnf + 1] = o
+  end
+end
 
 -- OSDGSM.CNF: edited in egsm_editor state (default + title overrides on one screen). Option list not used.
 config_options.osdgsm_cnf = {}
