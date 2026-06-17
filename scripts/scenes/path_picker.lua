@@ -1316,7 +1316,7 @@ local function run(ctx)
           local selectedRawIdx = rawIndexFromDisplay(ctx.pathPickerSel)
           if not (includeManualEntry and selectedRawIdx == 1) then
             local selectedEntry = selectedRawIdx and deviceFromRawIndex(selectedRawIdx) or nil
-            selectedHelper = getFmcbCommandHelper(selectedEntry)
+            selectedHelper = (selectedEntry and selectedEntry.helper) or getFmcbCommandHelper(selectedEntry)
           end
           if selectedHelper and selectedHelper ~= "" then
             local hintTypography = _.common.getHintTypography(_.font, _.drawMode)

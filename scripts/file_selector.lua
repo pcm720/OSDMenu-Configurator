@@ -20,6 +20,7 @@ local file_selector = {}
 local System = System
 local strings = _G.CONFIG_UI and _G.CONFIG_UI.strings or {}
 local dev = strings.devices or {}
+local pathStrings = strings.path_picker or {}
 
 -- Static devices (fixed mountpoints). descKey = key in strings.devices for label (so lang cycle works).
 local STATIC = {
@@ -59,8 +60,8 @@ end
 local SPECIAL = {
   { name = "$HOSDSYS", descKey = "hosdsys",     special = "hosdsys",  contexts = "mbr", noargs = true },
   { name = "$PSBBN",   descKey = "psbbn",       special = "psbbn",    contexts = "mbr", noargs = true },
-  { name = "$XOSD",    descKey = "xosd",        special = "xosd",     contexts = "mbr", noargs = true },
-  { name = "$OSDMENU", descKey = "osdmenu",     special = "osdmenu",  contexts = "mbr", noargs = true },
+  { name = "$XOSD",    descKey = "xosd",        helperKey = "mbr_cmd_xosd",    special = "xosd",     contexts = "mbr", noargs = true },
+  { name = "$OSDMENU", descKey = "osdmenu_psx", helperKey = "mbr_cmd_osdmenu", special = "osdmenu",  contexts = "mbr", noargs = true },
   { name = "OSDSYS",   descKey = "osd",         special = "osdsys",   contexts = { "osdmenu", "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
   { name = "OSDMENU",  descKey = "osdmenu",     special = "osdmenu",  contexts = "fmcb_launch",         noargs = true },
   { name = "FASTBOOT", descKey = "fastboot",    special = "fastboot", contexts = { "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
@@ -254,7 +255,13 @@ function file_selector.getDevices(context, opts)
     if s.mbrOnly and not opts.isMbr then return end
     if opts.visibility and not staticPathOnlyVisible(opts.visibility, s) then return end
     if addedStatic and addedStatic[s.name] then return end
-    local desc = (s.descKey and dev[s.descKey]) or s.name
+    local descKey = s.descKey
+    if opts.isMbr and s.name == "hdd0:" then
+      descKey = "hdd_mbr_0"
+    elseif opts.isMbr and s.name == "hdd1:" then
+      descKey = "hdd_mbr_1"
+    end
+    local desc = (descKey and dev[descKey]) or (s.descKey and dev[s.descKey]) or s.name
     table.insert(out, withFlags({ name = s.name, desc = desc, deviceType = s.deviceType, hddNum = s.hddNum }))
     if addedStatic then addedStatic[s.name] = true end
   end
@@ -265,8 +272,15 @@ function file_selector.getDevices(context, opts)
     if opt.mbrOnly and not opts.isMbr then return end
     if opts.visibility and not bdmPathOnlyVisible(opts.visibility, opt) then return end
     if addedBdm and addedBdm[opt.deviceId] then return end
-    local desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
-        (dev[BDM_DESC[opt.deviceId]] or opt.deviceId)
+    local desc
+    if opts.isMbr and opt.deviceId == "ata0" then
+      desc = dev.exfat_hdd_mbr_0 or "exFAT-Formatted HDD 1"
+    elseif opts.isMbr and opt.deviceId == "ata1" then
+      desc = dev.exfat_hdd_mbr_1 or "exFAT-Formatted HDD 2"
+    else
+      desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
+          (dev[BDM_DESC[opt.deviceId]] or opt.deviceId)
+    end
     local deviceType = (opt.bdmType == "ata" and "hdd") or opt.bdmType
     table.insert(out,
       withFlags({
@@ -369,14 +383,27 @@ function file_selector.getDevices(context, opts)
   for _, opt in ipairs(BDM_OPTIONS) do
     addBdm(out, addedBdm, opt, addOpts)
   end
+  local deferredMbrSpecials = {}
+  local function appendSpecial(s)
+    if not s then return end
+    local desc = (s.descKey and dev[s.descKey]) or s.name
+    local helper = (s.helperKey and pathStrings[s.helperKey]) or nil
+    if isFmcbContext and s.name == "POWEROFF" then
+      desc = "POWEROFF"
+    end
+    table.insert(out, withFlags({ name = s.name, desc = desc, helper = helper, special = s.special }))
+  end
   for _, s in ipairs(SPECIAL) do
     if inContext(s.contexts, context) then
-      local desc = (s.descKey and dev[s.descKey]) or s.name
-      if isFmcbContext and s.name == "POWEROFF" then
-        desc = "POWEROFF"
+      if isMbr and (s.name == "$XOSD" or s.name == "$OSDMENU") then
+        deferredMbrSpecials[#deferredMbrSpecials + 1] = s
+      else
+        appendSpecial(s)
       end
-      table.insert(out, withFlags({ name = s.name, desc = desc, special = s.special }))
     end
+  end
+  for _, s in ipairs(deferredMbrSpecials) do
+    appendSpecial(s)
   end
   return out
 end
