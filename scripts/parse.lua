@@ -83,12 +83,18 @@ local function trim(s)
   return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
-local function classifyTailArgValue(value)
+local function classifyTailArgValue(value, opts)
   local s = trim(tostring(value or "")) or ""
   if s == "" then return "regular" end
 
-  -- Keep GSM arguments at the absolute end because launcher global-flag parsing
-  -- consumes supported internal flags from the tail.
+  -- OSDMenu MBR consumes -noflags as the final per-path flag override.
+  if type(opts) == "table" and opts.noflagsLast == true and
+      s:match("^%-[Nn][Oo][Ff][Ll][Aa][Gg][Ss]%s*$") ~= nil then
+    return "last"
+  end
+
+  -- Keep GSM after internal loader flags; -noflags is handled separately because
+  -- OSDMenu MBR expects it as the final per-path override.
   if s:match("^%-[Gg][Ss][Mm]%s*=") ~= nil or s:match("^%-[Gg][Ss][Mm]%s*$") ~= nil then
     return "gsm"
   end
@@ -97,19 +103,22 @@ local function classifyTailArgValue(value)
   if s:match("^%-[Aa][Pp][Pp][Ii][Dd]%s*$") ~= nil then return "internal" end
   if s:match("^%-[Tt][Ii][Tt][Ll][Ee][Ii][Dd]%s*=") ~= nil then return "internal" end
   if s:match("^%-[Dd][Ee][Vv]9%s*=") ~= nil then return "internal" end
+  if s:match("^%-[Pp][Ss][Xx][Mm][Oo][Dd][Ee]%s*$") ~= nil then return "internal" end
   if s:match("^%-[Pp][Aa][Tt][Ii][Nn][Ff][Oo]%s*$") ~= nil then return "internal" end
 
   return "regular"
 end
 
-local function normalizeArgsWithGsmLast(args)
-  local regular, internal, gsm = {}, {}, {}
+local function normalizeArgsWithGsmLast(args, opts)
+  local regular, internal, gsm, last = {}, {}, {}, {}
   for i = 1, #(args or {}) do
     local item = args[i]
     local value = (type(item) == "table") and item.value or item
-    local kind = classifyTailArgValue(value)
+    local kind = classifyTailArgValue(value, opts)
     if kind == "gsm" then
       gsm[#gsm + 1] = item
+    elseif kind == "last" then
+      last[#last + 1] = item
     elseif kind == "internal" then
       internal[#internal + 1] = item
     else
@@ -121,6 +130,7 @@ local function normalizeArgsWithGsmLast(args)
   for i = 1, #regular do out[#out + 1] = regular[i] end
   for i = 1, #internal do out[#out + 1] = internal[i] end
   for i = 1, #gsm do out[#out + 1] = gsm[i] end
+  for i = 1, #last do out[#out + 1] = last[i] end
   return out
 end
 
@@ -453,6 +463,42 @@ function config_parse.set(lines, key, value)
   table.insert(lines, { key = key, value = value })
 end
 
+function config_parse.migrateOsdmenuBootOption(lines)
+  if not lines then return false end
+
+  local skipLogo = config_parse.get(lines, "OSDSYS_Skip_Logo")
+  local innerBrowser = config_parse.get(lines, "OSDSYS_Inner_Browser")
+  local hasLegacyBootKeys = skipLogo ~= nil or innerBrowser ~= nil
+  local changed = false
+
+  if hasLegacyBootKeys and config_parse.get(lines, "OSDSYS_boot") == nil then
+    local boot = "clock"
+    if tostring(innerBrowser or "") == "1" then
+      boot = "browser"
+    elseif tostring(skipLogo or "") == "0" then
+      boot = "opening"
+    end
+    config_parse.set(lines, "OSDSYS_boot", boot)
+    changed = true
+  end
+
+  local removeKeys = {
+    OSDSYS_Skip_Logo = true,
+    OSDSYS_Inner_Browser = true,
+  }
+  local i = 1
+  while i <= #lines do
+    if lines[i] and removeKeys[lines[i].key] then
+      table.remove(lines, i)
+      changed = true
+    else
+      i = i + 1
+    end
+  end
+
+  return changed
+end
+
 -- Append a new key=value line (for multi-value keys like boot_auto).
 function config_parse.append(lines, key, value)
   table.insert(lines, { key = key, value = value })
@@ -635,7 +681,7 @@ function config_parse.setBootArgEntries(lines, key, args, opts)
     preserveOrder = opts.preserveOrder == true
   end
   if not preserveOrder then
-    args = normalizeArgsWithGsmLast(args)
+    args = normalizeArgsWithGsmLast(args, { noflagsLast = true })
   end
   local prefix = bootArgPrefix(key)
   local legacy = bootLegacyArgKey(key)
@@ -2166,7 +2212,10 @@ function config_parse.regenerateForSave(lines, fileType, options)
       end
     end
     if #out == 0 then
-      out = { "boot_auto", "boot_start", "boot_triangle", "boot_circle", "boot_cross", "boot_square" }
+      out = {
+        "boot_auto", "boot_start", "boot_select", "boot_triangle", "boot_circle", "boot_cross", "boot_square",
+        "boot_up", "boot_down", "boot_left", "boot_right", "boot_l1", "boot_l2", "boot_r1", "boot_r2"
+      }
     end
     return out
   end
@@ -2194,6 +2243,7 @@ function config_parse.regenerateForSave(lines, fileType, options)
   end
 
   if fileType == "osdmenu_cnf" then
+    config_parse.migrateOsdmenuBootOption(lines)
     normalizeMenuEntryArgsInPlace()
     return config_parse.regenerateLines(lines, opt.osdmenu_cnf_categories or {}, true, nil, nil, true)
   end

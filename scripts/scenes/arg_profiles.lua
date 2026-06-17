@@ -103,6 +103,13 @@ local rowsDev9Patinfo = {
     { uniqueKey = "patinfo" }),
 }
 
+local rowsMbrLoader = {
+  makeRow("-psxmode", "-psxmode", "Do not switch PSX into PS2 mode before launching the target ELF.",
+    { uniqueKey = "psxmode" }),
+  makeRow("-dev9=NICHDD", "-dev9=NICHDD", "Keep both DEV9 and HDD powered/on.", { uniqueKey = "dev9" }),
+  makeRow("-dev9=NIC", "-dev9=NIC", "Keep DEV9/network on; put HDD into idle state.", { uniqueKey = "dev9" }),
+}
+
 local rowsMbrOnly = {
   makeRow("-noflags", "-noflags", "OSDMenu MBR: disable configured flags for this path (keep last).",
     { uniqueKey = "noflags" }),
@@ -218,6 +225,7 @@ profiles.osdmbr_global = {
   rows = {},
 }
 appendEgsmRows(profiles.osdmbr_global.rows, "osdmbr")
+appendRows(profiles.osdmbr_global.rows, rowsMbrLoader)
 appendRows(profiles.osdmbr_global.rows, rowsMbrOnly)
 appendRows(profiles.osdmbr_global.rows, rowsCdromLauncher)
 
@@ -230,6 +238,7 @@ profiles.osdmbr_nhddl = {
 }
 appendRows(profiles.osdmbr_nhddl.rows, rowsNhddl)
 appendEgsmRows(profiles.osdmbr_nhddl.rows, "osdmbr")
+appendRows(profiles.osdmbr_nhddl.rows, rowsMbrLoader)
 appendRows(profiles.osdmbr_nhddl.rows, rowsMbrOnly)
 appendRows(profiles.osdmbr_nhddl.rows, rowsCdromLauncher)
 

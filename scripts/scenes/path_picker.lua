@@ -894,22 +894,32 @@ local function beginBrowseForDevice(ctx, e)
   local _ = ctx._
   ctx.pathPickerFreeBootFilterAppliedTo = nil
   if e.deviceType == "hdd" and not e.deviceId then
+    local hddNum = tonumber(e.hddNum)
+    if hddNum == nil then
+      hddNum = tonumber(tostring(e.name or ""):match("^hdd(%d):")) or 0
+    end
+    local hddRoot = "hdd" .. tostring(hddNum) .. ":"
     ctx.pathPickerDeviceSel = ctx.pathPickerSel
     ctx.pathPickerLoadedDeviceTypes = ctx.pathPickerLoadedDeviceTypes or {}
     if ctx.pathPickerLoadedDeviceTypes["hdd"] then
       if System and System.loadModules then System.loadModules("hdd") end
-      if _.common.isHddPresent and _.common.isHddPresent() then
+      local hddOk = false
+      if System and System.listDirectory then
+        local ok, list = pcall(function() return System.listDirectory(hddRoot) end)
+        hddOk = ok and type(list) == "table"
+      end
+      if hddOk then
         ctx.pathPickerSub = "partitions"
-        ctx.pathList = _.file_selector.getHddPartitions(0) or {}
-        ctx.pathBrowsePath = "hdd0:"
+        ctx.pathList = _.file_selector.getHddPartitions(hddNum) or {}
+        ctx.pathBrowsePath = hddRoot
         ctx.pathPickerSel = 1
         ctx.pathPickerScroll = 0
       else
-        ctx.pathPickerLoading = { deviceType = "hdd", staticHdd = true }
+        ctx.pathPickerLoading = { deviceType = "hdd", staticHdd = true, hddNum = hddNum, hddRoot = hddRoot }
         ctx.pathPickerLoadingFrames = 0
       end
     else
-      ctx.pathPickerLoading = { deviceType = "hdd", staticHdd = true }
+      ctx.pathPickerLoading = { deviceType = "hdd", staticHdd = true, hddNum = hddNum, hddRoot = hddRoot }
       ctx.pathPickerLoadingFrames = 0
     end
   elseif e.deviceId and e.deviceType then
@@ -1063,15 +1073,22 @@ local function run(ctx)
       local mp = nil
       if load.staticHdd then
         if ctx.pathPickerLoadingFrames > 0 and ctx.pathPickerLoadingFrames % PROBE_INTERVAL_FRAMES == 0 then
-          if _.common.isHddPresent and _.common.isHddPresent() then
+          local hddNum = tonumber(load.hddNum) or 0
+          local hddRoot = tostring(load.hddRoot or ("hdd" .. tostring(hddNum) .. ":"))
+          local ok = false
+          if System and System.listDirectory then
+            local listed, list = pcall(function() return System.listDirectory(hddRoot) end)
+            ok = listed and type(list) == "table"
+          end
+          if ok then
             ctx.pathPickerLoading = nil
             ctx.pathPickerLoadingFrames = nil
             ctx.pathPickerModulesLoaded = nil
             ctx.pathPickerLoadedDeviceTypes = ctx.pathPickerLoadedDeviceTypes or {}
             ctx.pathPickerLoadedDeviceTypes["hdd"] = true
             ctx.pathPickerSub = "partitions"
-            ctx.pathList = _.file_selector.getHddPartitions(0) or {}
-            ctx.pathBrowsePath = "hdd0:"
+            ctx.pathList = _.file_selector.getHddPartitions(hddNum) or {}
+            ctx.pathBrowsePath = hddRoot
             ctx.pathPickerSel = 1
             ctx.pathPickerScroll = 0
           end
@@ -1098,7 +1115,7 @@ local function run(ctx)
         end
       end
       if ctx.pathPickerLoading and ctx.pathPickerLoadingFrames >= LOAD_TIMEOUT_FRAMES then
-        local timeoutDevice = load.deviceId or (load.staticHdd and "hdd0") or load.deviceType or "device"
+        local timeoutDevice = load.deviceId or (load.staticHdd and (load.hddRoot or "hdd0:")) or load.deviceType or "device"
         ctx.pathPickerLoading = nil
         ctx.pathPickerLoadingFrames = nil
         ctx.pathPickerModulesLoaded = nil
@@ -1553,7 +1570,9 @@ local function run(ctx)
     if allowPatinfo and (_.padEffective & _.PAD_SQUARE) ~= 0 and #parts > 0 then
       local p = parts[ctx.pathPickerSel]
       if not p then p = {} end
-      local partFull = p.full or ("hdd0:" .. (p.name or ""))
+      local hddRoot = tostring(ctx.pathBrowsePath or "hdd0:")
+      if not hddRoot:match("^hdd%d:") then hddRoot = "hdd0:" end
+      local partFull = p.full or (hddRoot .. (p.name or ""))
       local val = partFull .. ":PATINFO"
       if not canUsePathSelection(ctx, val) then
         return
@@ -1586,7 +1605,9 @@ local function run(ctx)
       if not p then p = {} end
       ctx.pathPickerPartitionSel = ctx.pathPickerSel
       local partName = p.name or ""
-      local partFull = p.full or ("hdd0:" .. partName)
+      local hddRoot = tostring(ctx.pathBrowsePath or "hdd0:")
+      if not hddRoot:match("^hdd%d:") then hddRoot = "hdd0:" end
+      local partFull = p.full or (hddRoot .. partName)
       if partName == "__sysconf" then
         if System.fileXioMount then System.fileXioMount("pfs0:", partFull) end
         ctx.pfs0Mounted = partFull

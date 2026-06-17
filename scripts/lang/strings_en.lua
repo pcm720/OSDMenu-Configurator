@@ -53,6 +53,7 @@ strings.main = {
   cross_load_circle_back_items = { { pad = "cross", label = "Load" }, { pad = "circle", label = "Back" } },
   select_config_browse_ini = "Browse CONFIG.INI (CWD)",
   select_config_osdmenu_cnf = "OSDMENU.CNF",
+  select_config_osdmbr_cnf = "OSDMBR.CNF",
   select_config_osdgsm_cnf = "OSDGSM.CNF",
 }
 
@@ -192,6 +193,7 @@ strings.devices = {
   shutdown = "Shutdown",
   hosdsys = "Browser 2.0 / HOSDMenu",
   psbbn = "PlayStation Broadband Navigator",
+  xosd = "PSX XOSD",
   usb_storage_0 = "USB Mass Storage 1",
   usb_storage_1 = "USB Mass Storage 2",
   mmce_0 = "MMCE in slot 1",
@@ -199,6 +201,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "exFAT-formatted HDD",
   hdd = "APA-formatted HDD",
+  hdd_1 = "APA-formatted HDD 2",
   xfrom = "XFROM",
 }
 
@@ -239,6 +242,7 @@ strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Force video mode", desc = "Force OSD video mode" },
   OSDSYS_region = { label = "Force region", desc = "Force OSD region" },
   OSDSYS_Skip_Disc = { label = "Skip disc", desc = "Skip automatic disc launch" },
+  OSDSYS_boot = { label = "Boot target", desc = "Boot directly into opening, clock, or browser" },
   OSDSYS_Skip_Logo = { label = "Skip intro", desc = "Skip SCE intro animation" },
   OSDSYS_Inner_Browser = { label = "Inner browser", desc = "Boot into memory card browser" },
   OSDSYS_Skip_MC = { label = "Skip MC", desc = "Skip memory card check in browser" },
@@ -282,10 +286,19 @@ strings.options_osdmenu = {
 strings.options_osdmbr = {
   boot_auto = { label = "Boot auto", desc = "Default paths and arguments" },
   boot_start = { label = "Boot START", desc = "Paths and arguments for start button" },
+  boot_select = { label = "Boot SELECT", desc = "Paths and arguments for select button" },
   boot_triangle = { label = "Boot TRIANGLE", desc = "Paths and arguments for triangle button" },
   boot_circle = { label = "Boot CIRCLE", desc = "Paths and arguments for circle button" },
   boot_cross = { label = "Boot CROSS", desc = "Paths and arguments for cross button" },
   boot_square = { label = "Boot SQUARE", desc = "Paths and arguments for square button" },
+  boot_up = { label = "Boot UP", desc = "Paths and arguments for up button" },
+  boot_down = { label = "Boot DOWN", desc = "Paths and arguments for down button" },
+  boot_left = { label = "Boot LEFT", desc = "Paths and arguments for left button" },
+  boot_right = { label = "Boot RIGHT", desc = "Paths and arguments for right button" },
+  boot_l1 = { label = "Boot L1", desc = "Paths and arguments for L1 button" },
+  boot_l2 = { label = "Boot L2", desc = "Paths and arguments for L2 button" },
+  boot_r1 = { label = "Boot R1", desc = "Paths and arguments for R1 button" },
+  boot_r2 = { label = "Boot R2", desc = "Paths and arguments for R2 button" },
   cdrom_skip_ps2logo = { label = "Skip PS2 Logo", desc = "Skip PlayStation 2 logo at disc boot" },
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "Use DKWDRV", desc = "Use DKWDRV for PS1 discs" },

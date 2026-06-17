@@ -427,7 +427,7 @@ local function buildMainEntries(main_str)
     logoKey = "osdmenu_mbr",
     context = "mbr",
     fileType = "osdmbr_cnf",
-    state = "open",
+    state = "select_config",
   })
   addEntry({
     id = "hosdmenu",
@@ -620,6 +620,12 @@ local function initEmptyLinesForFileType(s, reason)
   end
   openDbg("init empty lines", "fileType=" .. tostring(s.fileType), "reason=" .. tostring(reason),
     "lineCount=" .. tostring(#(s.lines or {})))
+end
+
+local function normalizeLoadedLinesForFileType(s)
+  if s and s.fileType == "osdmenu_cnf" and config_parse.migrateOsdmenuBootOption then
+    config_parse.migrateOsdmenuBootOption(s.lines)
+  end
 end
 
 local function pathExists(path)
@@ -1504,11 +1510,19 @@ local function runSelectConfig(s, pad)
   local sc = s.scaleY or function(y) return y end
   local SE = common.SELECTED_COLOR
 
-  if s.context == "osdmenu" or s.context == "hosdmenu" then
-    local options = {
-      { label = main_str.select_config_osdmenu_cnf or "OSDMENU.CNF", fileType = "osdmenu_cnf" },
-      { label = main_str.select_config_osdgsm_cnf or "OSDGSM.CNF", fileType = "osdgsm_cnf" },
-    }
+  if s.context == "osdmenu" or s.context == "hosdmenu" or s.context == "mbr" then
+    local options
+    if s.context == "mbr" then
+      options = {
+        { label = main_str.select_config_osdmbr_cnf or "OSDMBR.CNF", fileType = "osdmbr_cnf" },
+        { label = main_str.select_config_osdgsm_cnf or "OSDGSM.CNF", fileType = "osdgsm_cnf" },
+      }
+    else
+      options = {
+        { label = main_str.select_config_osdmenu_cnf or "OSDMENU.CNF", fileType = "osdmenu_cnf" },
+        { label = main_str.select_config_osdgsm_cnf or "OSDGSM.CNF", fileType = "osdgsm_cnf" },
+      }
+    end
     local sel = getSelectConfigSel(s)
     if sel < 1 then sel = 1 end
     if sel > #options then sel = #options end
@@ -1803,6 +1817,7 @@ local function runOpen(s, pad)
     local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)
     if loaded then
       s.lines = loaded
+      normalizeLoadedLinesForFileType(s)
       s.openExplicitPath = nil
       clearLoadChoiceState(s)
       setStateAfterLoad(s)
@@ -1885,6 +1900,7 @@ local function runOpen(s, pad)
       if (pad & PAD_CROSS) ~= 0 then s.state = getOpenParentState(s) end
     else
       s.lines = loaded
+      normalizeLoadedLinesForFileType(s)
       setStateAfterLoad(s)
     end
   else
@@ -2040,6 +2056,7 @@ local function runChooseLoad(s, pad)
       local loaded, loadErr = loadLinesWithDeviceAccess(s.currentPath)
       if loaded then
         s.lines = loaded
+        normalizeLoadedLinesForFileType(s)
         setStateAfterLoad(s)
         clearLoadChoiceState(s)
       else

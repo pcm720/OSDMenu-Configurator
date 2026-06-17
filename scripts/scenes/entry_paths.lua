@@ -188,6 +188,8 @@ local function run(ctx)
     if p == "dvd" then return _.dev_str.dvd_player end
     if (p or ""):upper() == "$HOSDSYS" then return _.dev_str.hosdsys end
     if (p or ""):upper() == "$PSBBN" then return _.dev_str.psbbn end
+    if (p or ""):upper() == "$XOSD" then return _.dev_str.xosd or "PSX XOSD" end
+    if (p or ""):upper() == "$OSDMENU" then return _.dev_str.osdmenu or "OSDMenu" end
     if p == "OSDSYS" or p == "osdsys" then return _.dev_str.osd end
     if p == "POWEROFF" or p == "poweroff" then return _.dev_str.shutdown end
     if _.common and _.common.normalizePathForDisplay then

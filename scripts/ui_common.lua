@@ -484,10 +484,19 @@ end
 
 function common.bootKeyToPadName(key)
   if key == "boot_start" then return "start" end
+  if key == "boot_select" then return "select" end
   if key == "boot_triangle" then return "triangle" end
   if key == "boot_circle" then return "circle" end
   if key == "boot_cross" then return "cross" end
   if key == "boot_square" then return "square" end
+  if key == "boot_up" then return "up" end
+  if key == "boot_down" then return "down" end
+  if key == "boot_left" then return "left" end
+  if key == "boot_right" then return "right" end
+  if key == "boot_l1" then return "l1" end
+  if key == "boot_l2" then return "l2" end
+  if key == "boot_r1" then return "r1" end
+  if key == "boot_r2" then return "r2" end
   return nil
 end
 
@@ -496,12 +505,12 @@ function common.isBblContext(context)
 end
 
 function common.isOsdConfigFileType(fileType)
-  return fileType == "osdmenu_cnf" or fileType == "osdgsm_cnf"
+  return fileType == "osdmenu_cnf" or fileType == "osdmbr_cnf" or fileType == "osdgsm_cnf"
 end
 
 function common.getNextStateAfterMcSelection(context)
   if common.isBblContext(context) then return "select_config" end
-  if context == "osdmenu" or context == "hosdmenu" then return "select_config" end
+  if context == "osdmenu" or context == "hosdmenu" or context == "mbr" then return "select_config" end
   return "open"
 end
 
@@ -515,6 +524,9 @@ function common.getOpenParentState(context, fileType)
   if (context == "osdmenu" or context == "hosdmenu") and common.isOsdConfigFileType(fileType) then
     return "select_config"
   end
+  if context == "mbr" and common.isOsdConfigFileType(fileType) then
+    return "select_config"
+  end
   return "main"
 end
 
@@ -526,6 +538,9 @@ function common.getEditorBackState(context, fileType, getPresentMcSlots)
     return "select_config"
   end
   if context == "hosdmenu" and common.isOsdConfigFileType(fileType) then
+    return "select_config"
+  end
+  if context == "mbr" and common.isOsdConfigFileType(fileType) then
     return "select_config"
   end
   if context == "osdmenu" and common.isOsdConfigFileType(fileType) then
@@ -624,6 +639,10 @@ function common.formatDisplayPathWithCommands(_, pathVal)
   if up == "$CDVD" then return p.bbl_cmd_cdvd_label or "Launch disc" end
   if up == "$CDVD_NO_PS2LOGO" then return p.bbl_cmd_cdvd_no_logo_label or "Launch disc skip PS2 logo" end
   if up == "$OSDSYS" then return p.bbl_cmd_osdsys_label or "OSDSYS" end
+  if up == "$HOSDSYS" then return ((_ and _.dev_str and _.dev_str.hosdsys) or "Browser 2.0 / HOSDMenu") end
+  if up == "$PSBBN" then return ((_ and _.dev_str and _.dev_str.psbbn) or "PlayStation Broadband Navigator") end
+  if up == "$XOSD" then return ((_ and _.dev_str and _.dev_str.xosd) or "PSX XOSD") end
+  if up == "$OSDMENU" then return ((_ and _.dev_str and _.dev_str.osdmenu) or "OSDMenu") end
   if up == "$CREDITS" then return p.bbl_cmd_credits_label or "Credits" end
   if up == "$HDDCHECKER" then return p.bbl_cmd_hddchecker_label or "Check HDD" end
   if common.normalizePathForDisplay then

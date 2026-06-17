@@ -158,7 +158,7 @@ function config_options.getLocations(context, fileType, chosenMcSlot)
     return {}
   end
   if fileType == "osdmbr_cnf" then
-    if context == "mbr" then return { "pfs0:/osdmenu/OSDMBR.CNF" } end
+    if context == "mbr" then return { "pfs0:/osdmenu/OSDMBR.CNF", "xfrom:/osdmenu/OSDMBR.CNF" } end
     return {}
   end
   if fileType == "osdgsm_cnf" then
@@ -172,7 +172,7 @@ function config_options.getLocations(context, fileType, chosenMcSlot)
       return buildOsdMcLocations(chosenMcSlot, "OSDGSM.CNF")
     end
     if context == "hosdmenu" or context == "mbr" then
-      return { "pfs0:/osdmenu/OSDGSM.CNF" }
+      return { "pfs0:/osdmenu/OSDGSM.CNF", "xfrom:/osdmenu/OSDGSM.CNF" }
     end
     return {}
   end
@@ -369,8 +369,7 @@ config_options.osdmenu_cnf_categories = {
       { key = "OSDSYS_video_mode",    optType = "enum", default = "AUTO", enumVals = { "AUTO", "PAL", "NTSC", "480p", "1080i" } },
       { key = "OSDSYS_region",        optType = "enum", default = "AUTO", enumVals = { "AUTO", "jap", "usa", "eur" } },
       { key = "OSDSYS_Skip_Disc",     optType = "bool", default = "1" },
-      { key = "OSDSYS_Skip_Logo",     optType = "bool", default = "1" },
-      { key = "OSDSYS_Inner_Browser", optType = "bool", default = "0" },
+      { key = "OSDSYS_boot",          optType = "enum", default = "clock", enumVals = { "opening", "clock", "browser" } },
     },
   },
   {
@@ -705,10 +704,19 @@ local OSD_LANGUAGE_DISPLAY = {
 config_options.osdmbr_cnf = {
   { key = "boot_auto",            optType = "boot_paths" },
   { key = "boot_start",           optType = "boot_paths" },
+  { key = "boot_select",          optType = "boot_paths" },
   { key = "boot_triangle",        optType = "boot_paths" },
   { key = "boot_circle",          optType = "boot_paths" },
   { key = "boot_cross",           optType = "boot_paths" },
   { key = "boot_square",          optType = "boot_paths" },
+  { key = "boot_up",              optType = "boot_paths" },
+  { key = "boot_down",            optType = "boot_paths" },
+  { key = "boot_left",            optType = "boot_paths" },
+  { key = "boot_right",           optType = "boot_paths" },
+  { key = "boot_l1",              optType = "boot_paths" },
+  { key = "boot_l2",              optType = "boot_paths" },
+  { key = "boot_r1",              optType = "boot_paths" },
+  { key = "boot_r2",              optType = "boot_paths" },
   { key = "cdrom_skip_ps2logo",   optType = "bool",      default = "1" },
   { key = "cdrom_disable_gameid", optType = "bool",      default = "0" },
   { key = "cdrom_use_dkwdrv",     optType = "bool",      default = "0" },

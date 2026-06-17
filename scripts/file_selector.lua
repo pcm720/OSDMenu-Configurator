@@ -27,11 +27,13 @@ local STATIC = {
   { name = "mc1:",   descKey = "memory_card_2", mbr = true },
   { name = "mmce0:", descKey = "mmce_0",        deviceType = "mmce" },
   { name = "mmce1:", descKey = "mmce_1",        deviceType = "mmce" },
-  { name = "hdd0:",  descKey = "hdd",           deviceType = "hdd", mbr = true },
+  { name = "hdd0:",  descKey = "hdd",           deviceType = "hdd", mbr = true, hddNum = 0 },
+  { name = "hdd1:",  descKey = "hdd_1",         deviceType = "hdd", mbr = true, mbrOnly = true, hddNum = 1 },
 }
 local BDM_DESC = { usb0 = "usb_storage_0", usb1 = "usb_storage_1", mx4sio = "mx4sio_sd" }
 local BDM_OPTIONS = {
   { deviceId = "ata0",   bdmType = "ata",    bdmPathPrefix = "ata",   mbr = true },
+  { deviceId = "ata1",   bdmType = "ata",    bdmPathPrefix = "ata1",  mbr = true, mbrOnly = true },
   { deviceId = "usb0",   bdmType = "usb",    bdmPathPrefix = "mass" },
   { deviceId = "usb1",   bdmType = "usb",    bdmPathPrefix = "mass" },
   { deviceId = "mx4sio", bdmType = "mx4sio", bdmPathPrefix = "mx4sio" },
@@ -39,6 +41,9 @@ local BDM_OPTIONS = {
 
 local function bdmPrefixForContext(opt, context)
   if not opt then return nil end
+  if context == "mbr" and opt.bdmType == "ata" and opt.deviceId then
+    return opt.deviceId
+  end
   if opt.bdmType == "usb" and (context == "osdmenu" or context == "mbr") then
     return "usb"
   end
@@ -52,8 +57,10 @@ end
 -- contexts = "osdmenu" | "mbr" | "fmcb_entry" | "fmcb_launch" | { ... }.
 -- Optional: noargs, exclusive, specialargs (specialargs is ignored unless exclusive is set).
 local SPECIAL = {
-  { name = "$HOSDSYS", descKey = "hosdsys",     special = "hosdsys",  contexts = "mbr" },
-  { name = "$PSBBN",   descKey = "psbbn",       special = "psbbn",    contexts = "mbr" },
+  { name = "$HOSDSYS", descKey = "hosdsys",     special = "hosdsys",  contexts = "mbr", noargs = true },
+  { name = "$PSBBN",   descKey = "psbbn",       special = "psbbn",    contexts = "mbr", noargs = true },
+  { name = "$XOSD",    descKey = "xosd",        special = "xosd",     contexts = "mbr", noargs = true },
+  { name = "$OSDMENU", descKey = "osdmenu",     special = "osdmenu",  contexts = "mbr", noargs = true },
   { name = "OSDSYS",   descKey = "osd",         special = "osdsys",   contexts = { "osdmenu", "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
   { name = "OSDMENU",  descKey = "osdmenu",     special = "osdmenu",  contexts = "fmcb_launch",         noargs = true },
   { name = "FASTBOOT", descKey = "fastboot",    special = "fastboot", contexts = { "fmcb_entry", "fmcb_launch" }, noargs = true, exclusive = true },
@@ -69,6 +76,10 @@ local function getFlagsByName(name)
   if p:upper() == "OSDMENU" then p = "OSDMENU" end
   if p:upper() == "FASTBOOT" then p = "FASTBOOT" end
   if p:upper() == "POWEROFF" then p = "POWEROFF" end
+  if p:upper() == "$HOSDSYS" then p = "$HOSDSYS" end
+  if p:upper() == "$PSBBN" then p = "$PSBBN" end
+  if p:upper() == "$XOSD" then p = "$XOSD" end
+  if p:upper() == "$OSDMENU" then p = "$OSDMENU" end
   for _, s in ipairs(SPECIAL) do
     if s.name == p then return s end
   end
@@ -240,16 +251,18 @@ function file_selector.getDevices(context, opts)
     if not s then return end
     opts = opts or {}
     if opts.isMbr and not s.mbr then return end
+    if s.mbrOnly and not opts.isMbr then return end
     if opts.visibility and not staticPathOnlyVisible(opts.visibility, s) then return end
     if addedStatic and addedStatic[s.name] then return end
     local desc = (s.descKey and dev[s.descKey]) or s.name
-    table.insert(out, withFlags({ name = s.name, desc = desc, deviceType = s.deviceType }))
+    table.insert(out, withFlags({ name = s.name, desc = desc, deviceType = s.deviceType, hddNum = s.hddNum }))
     if addedStatic then addedStatic[s.name] = true end
   end
   local function addBdm(out, addedBdm, opt, opts)
     if not opt then return end
     opts = opts or {}
     if opts.isMbr and not opt.mbr then return end
+    if opt.mbrOnly and not opts.isMbr then return end
     if opts.visibility and not bdmPathOnlyVisible(opts.visibility, opt) then return end
     if addedBdm and addedBdm[opt.deviceId] then return end
     local desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
@@ -272,6 +285,12 @@ function file_selector.getDevices(context, opts)
         return
       end
     end
+  end
+  local function addXfromMbr(out, addedStatic)
+    local marker = "xfrom:"
+    if addedStatic and addedStatic[marker] then return end
+    table.insert(out, withFlags({ name = marker, desc = dev.xfrom or "XFROM", deviceType = "xfrom" }))
+    if addedStatic then addedStatic[marker] = true end
   end
   local function addBdmById(out, addedBdm, deviceId, opts)
     for _, opt in ipairs(BDM_OPTIONS) do
@@ -338,7 +357,10 @@ function file_selector.getDevices(context, opts)
   addBdmById(out, addedBdm, "usb1", addOpts)
   addBdmById(out, addedBdm, "mx4sio", addOpts)
   addStaticByName(out, addedStatic, "hdd0:", addOpts)
+  if isMbr then addStaticByName(out, addedStatic, "hdd1:", addOpts) end
   addBdmById(out, addedBdm, "ata0", addOpts)
+  if isMbr then addBdmById(out, addedBdm, "ata1", addOpts) end
+  if isMbr then addXfromMbr(out, addedStatic) end
 
   -- Keep any other supported devices after the preferred block.
   for _, s in ipairs(STATIC) do

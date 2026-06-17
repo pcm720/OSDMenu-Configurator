@@ -107,6 +107,7 @@ function arg_presets.collectUsedArgs(args)
     appid = false,
     titleid = false,
     dev9 = false,
+    psxmode = false,
     patinfo = false,
     video = false,
     udpbd_ip = false,
@@ -132,6 +133,8 @@ function arg_presets.collectUsedArgs(args)
       usedKnown.titleid = true
     elseif a:match("^%-dev9%s*=") then
       usedKnown.dev9 = true
+    elseif a == "-psxmode" then
+      usedKnown.psxmode = true
     elseif a == "-patinfo" then
       usedKnown.patinfo = true
     elseif a:match("^%-video%s*=") then

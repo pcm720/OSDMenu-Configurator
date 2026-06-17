@@ -53,6 +53,7 @@ strings.main = {
   cross_load_circle_back_items = { { pad = "cross", label = "Cargar" }, { pad = "circle", label = "Atrás" } },
   select_config_browse_ini = "Buscar CONFIG.INI (CWD)",
   select_config_osdmenu_cnf = "OSDMENU.CNF",
+  select_config_osdmbr_cnf = "OSDMBR.CNF",
   select_config_osdgsm_cnf = "OSDGSM.CNF",
 }
 
@@ -192,6 +193,7 @@ strings.devices = {
   shutdown = "Apagar",
   hosdsys = "Navegador 2.0 / HOSDMenu",
   psbbn = "PlayStation Broadband Navigator",
+  xosd = "PSX XOSD",
   usb_storage_0 = "Almacenamiento Masivo USB 1",
   usb_storage_1 = "Almacenamiento Masivo USB 2",
   mmce_0 = "MMCE en ranura 1",
@@ -199,6 +201,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "HDD formateado en exFAT",
   hdd = "HDD formateado en APA",
+  hdd_1 = "HDD 2 formateado en APA",
   xfrom = "XFROM",
 }
 
@@ -239,6 +242,7 @@ strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Forzar modo de video", desc = "Forzar modo de video de OSD" },
   OSDSYS_region = { label = "Forzar región", desc = "Forzar región de OSD" },
   OSDSYS_Skip_Disc = { label = "Saltar disco", desc = "Saltar lanzamiento automático de disco" },
+  OSDSYS_boot = { label = "Destino de arranque", desc = "Arrancar directamente en apertura, reloj o navegador" },
   OSDSYS_Skip_Logo = { label = "Saltar intro", desc = "Saltar animación de introducción de SCE" },
   OSDSYS_Inner_Browser = { label = "Navegador interno", desc = "Arrancar en el navegador de la tarjeta de memoria" },
   OSDSYS_Skip_MC = { label = "Saltar MC", desc = "Saltar comprobación de tarjeta de memoria en el navegador" },
@@ -282,10 +286,19 @@ strings.options_osdmenu = {
 strings.options_osdmbr = {
   boot_auto = { label = "Inicio automático", desc = "Rutas y argumentos predeterminados" },
   boot_start = { label = "Inicio START", desc = "Rutas y argumentos para el botón START" },
+  boot_select = { label = "Inicio SELECT", desc = "Rutas y argumentos para el botón SELECT" },
   boot_triangle = { label = "Inicio TRIÁNGULO", desc = "Rutas y argumentos para el botón TRIÁNGULO" },
   boot_circle = { label = "Inicio CÍRCULO", desc = "Rutas y argumentos para el botón CÍRCULO" },
   boot_cross = { label = "Inicio CRUZ", desc = "Rutas y argumentos para el botón CRUZ" },
   boot_square = { label = "Inicio CUADRADO", desc = "Rutas y argumentos para el botón CUADRADO" },
+  boot_up = { label = "Inicio ARRIBA", desc = "Rutas y argumentos para el botón ARRIBA" },
+  boot_down = { label = "Inicio ABAJO", desc = "Rutas y argumentos para el botón ABAJO" },
+  boot_left = { label = "Inicio IZQUIERDA", desc = "Rutas y argumentos para el botón IZQUIERDA" },
+  boot_right = { label = "Inicio DERECHA", desc = "Rutas y argumentos para el botón DERECHA" },
+  boot_l1 = { label = "Inicio L1", desc = "Rutas y argumentos para el botón L1" },
+  boot_l2 = { label = "Inicio L2", desc = "Rutas y argumentos para el botón L2" },
+  boot_r1 = { label = "Inicio R1", desc = "Rutas y argumentos para el botón R1" },
+  boot_r2 = { label = "Inicio R2", desc = "Rutas y argumentos para el botón R2" },
   cdrom_skip_ps2logo = { label = "Saltar PS2LOGO", desc = "Saltar el logo de PlayStation 2 al iniciar el disco" },
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "Usar DKWDRV", desc = "Usar DKWDRV para discos de PS1" },

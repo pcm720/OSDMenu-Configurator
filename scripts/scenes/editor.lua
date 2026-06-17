@@ -25,16 +25,24 @@ local function getOsdmbrHotkeyPadName(key)
     return commonRef.bootKeyToPadName(key)
   end
   if key == "boot_start" then return "start" end
+  if key == "boot_select" then return "select" end
   if key == "boot_triangle" then return "triangle" end
   if key == "boot_circle" then return "circle" end
   if key == "boot_cross" then return "cross" end
   if key == "boot_square" then return "square" end
+  if key == "boot_up" then return "up" end
+  if key == "boot_down" then return "down" end
+  if key == "boot_left" then return "left" end
+  if key == "boot_right" then return "right" end
+  if key == "boot_l1" then return "l1" end
+  if key == "boot_l2" then return "l2" end
+  if key == "boot_r1" then return "r1" end
+  if key == "boot_r2" then return "r2" end
   return nil
 end
 
 local function isOsdmbrToggleableBootKey(key)
-  return key == "boot_start" or key == "boot_triangle" or key == "boot_circle" or key == "boot_cross" or
-      key == "boot_square"
+  return type(key) == "string" and key:match("^boot_") ~= nil and key ~= "boot_auto"
 end
 
 local function osdmbrBootKeyHasEntries(ctx, _, key)

@@ -51,8 +51,10 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 ### OSDMenu MBR (`OSDMBR.CNF`, `OSDGSM.CNF`)
 
 - `pfs0:/osdmenu/OSDMBR.CNF`
+- `xfrom:/osdmenu/OSDMBR.CNF` (PSX)
 
 - `pfs0:/osdmenu/OSDGSM.CNF`
+- `xfrom:/osdmenu/OSDGSM.CNF` (PSX)
 
 ### PS2BBL/PSXBBL Extended (`PS2BBL.INI` / `CONFIG.INI`)
 

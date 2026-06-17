@@ -53,6 +53,7 @@ strings.main = {
   cross_load_circle_back_items = { { pad = "cross", label = "Laden" }, { pad = "circle", label = "Zurueck" } },
   select_config_browse_ini = "CONFIG.INI durchsuchen (CWD)",
   select_config_osdmenu_cnf = "OSDMENU.CNF",
+  select_config_osdmbr_cnf = "OSDMBR.CNF",
   select_config_osdgsm_cnf = "OSDGSM.CNF",
 }
 
@@ -192,6 +193,7 @@ strings.devices = {
   shutdown = "Ausschalten",
   hosdsys = "Browser 2.0 / HOSDMenu",
   psbbn = "PlayStation Broadband Navigator",
+  xosd = "PSX XOSD",
   usb_storage_0 = "USB-Massenspeicher 1",
   usb_storage_1 = "USB-Massenspeicher 2",
   mmce_0 = "MMCE in Slot 1",
@@ -199,6 +201,7 @@ strings.devices = {
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "exFAT-formatierte HDD",
   hdd = "APA-formatierte HDD",
+  hdd_1 = "APA-formatierte HDD 2",
   xfrom = "XFROM",
 }
 
@@ -239,6 +242,7 @@ strings.options_osdmenu = {
   OSDSYS_video_mode = { label = "Videomodus erzwingen", desc = "OSD-Videomodus erzwingen" },
   OSDSYS_region = { label = "Region erzwingen", desc = "OSD-Region erzwingen" },
   OSDSYS_Skip_Disc = { label = "Disc ueberspringen", desc = "Automatischen Disc-Start ueberspringen" },
+  OSDSYS_boot = { label = "Startziel", desc = "Direkt in Opening, Uhr oder Browser starten" },
   OSDSYS_Skip_Logo = { label = "Intro ueberspringen", desc = "SCE-Introanimation ueberspringen" },
   OSDSYS_Inner_Browser = { label = "Interner Browser", desc = "Im Speicherkarten-Browser starten" },
   OSDSYS_Skip_MC = { label = "MC ueberspringen", desc = "Speicherkartenpruefung im Browser ueberspringen" },
@@ -282,10 +286,19 @@ strings.options_osdmenu = {
 strings.options_osdmbr = {
   boot_auto = { label = "Boot Auto", desc = "Standardpfade und -argumente" },
   boot_start = { label = "Boot START", desc = "Pfade und Argumente fuer die Start-Taste" },
+  boot_select = { label = "Boot SELECT", desc = "Pfade und Argumente fuer die Select-Taste" },
   boot_triangle = { label = "Boot TRIANGLE", desc = "Pfade und Argumente fuer die Dreieck-Taste" },
   boot_circle = { label = "Boot CIRCLE", desc = "Pfade und Argumente fuer die Kreis-Taste" },
   boot_cross = { label = "Boot CROSS", desc = "Pfade und Argumente fuer die Kreuz-Taste" },
   boot_square = { label = "Boot SQUARE", desc = "Pfade und Argumente fuer die Quadrat-Taste" },
+  boot_up = { label = "Boot OBEN", desc = "Pfade und Argumente fuer die Oben-Taste" },
+  boot_down = { label = "Boot UNTEN", desc = "Pfade und Argumente fuer die Unten-Taste" },
+  boot_left = { label = "Boot LINKS", desc = "Pfade und Argumente fuer die Links-Taste" },
+  boot_right = { label = "Boot RECHTS", desc = "Pfade und Argumente fuer die Rechts-Taste" },
+  boot_l1 = { label = "Boot L1", desc = "Pfade und Argumente fuer die L1-Taste" },
+  boot_l2 = { label = "Boot L2", desc = "Pfade und Argumente fuer die L2-Taste" },
+  boot_r1 = { label = "Boot R1", desc = "Pfade und Argumente fuer die R1-Taste" },
+  boot_r2 = { label = "Boot R2", desc = "Pfade und Argumente fuer die R2-Taste" },
   cdrom_skip_ps2logo = { label = "PS2LOGO ueberspringen", desc = "PlayStation-2-Logo beim Disc-Start ueberspringen" },
   cdrom_disable_gameid = { label = "Disable disc visual game ID", desc = "Disable disc visual game ID" },
   cdrom_use_dkwdrv = { label = "DKWDRV verwenden", desc = "DKWDRV fuer PS1-Discs verwenden" },

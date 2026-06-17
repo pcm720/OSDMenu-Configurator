@@ -36,11 +36,11 @@ IRX_DEFINE(ppctty);
 IRX_DEFINE(iomanX);
 IRX_DEFINE(fileXio);
 IRX_DEFINE(sio2man);
-IRX_DEFINE(mcman_1400);
+IRX_DEFINE(mcman);
 IRX_DEFINE(extflash);
 IRX_DEFINE(xfromman);
 IRX_DEFINE(mcserv);
-IRX_DEFINE(padman_1400);
+IRX_DEFINE(padman);
 IRX_DEFINE(usbd_mini);
 IRX_DEFINE(bdm);
 IRX_DEFINE(bdmfs_fatfs);
@@ -69,12 +69,12 @@ static ModuleListEntry moduleList[] = {
     INT_MODULE(iomanX, NULL, Device_Basic),
     INT_MODULE(fileXio, NULL, Device_Basic),
     INT_MODULE(sio2man, NULL, Device_Basic),
-    INT_MODULE(mcman_1400, NULL, Device_Basic),
+    INT_MODULE(mcman, NULL, Device_Basic),
     // XFROM (DESR external flash)
     INT_MODULE(extflash, NULL, Device_XFROM),
     INT_MODULE(xfromman, NULL, Device_XFROM),
     INT_MODULE(mcserv, NULL, Device_Basic),
-    INT_MODULE(padman_1400, NULL, Device_Basic),
+    INT_MODULE(padman, NULL, Device_Basic),
     // MMCE
     INT_MODULE(mmceman, NULL, Device_MMCE),
     // BDM
