@@ -406,12 +406,12 @@ config_options.osdmenu_cnf_categories = {
   {
     options = {
       { key = "cdrom_skip_ps2logo",   optType = "bool", default = "1" },
+      { key = "app_gameid",           optType = "bool", default = "0" },
       { key = "cdrom_disable_gameid", optType = "bool", default = "0" },
       { key = "cdrom_use_dkwdrv",     optType = "bool", default = "0" },
       { key = "ps1drv_enable_fast",   optType = "bool", default = "0" },
       { key = "ps1drv_enable_smooth", optType = "bool", default = "0" },
       { key = "ps1drv_use_ps1vn",     optType = "bool", default = "1" },
-      { key = "app_gameid",           optType = "bool", default = "0" },
       { key = "path_DKWDRV_ELF",      optType = "path", default = "" },
     },
   },
