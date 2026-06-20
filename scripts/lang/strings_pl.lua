@@ -43,6 +43,7 @@ strings.main = {
   cross_select_circle_back_items = { { pad = "cross", label = "Otwórz" }, { pad = "circle", label = "Wstecz" } },
   memory_card_1_slot = "Karta pamięci 1",
   memory_card_2_slot = "Karta pamięci 2",
+  which_device = "Które urządzenie?",
   which_file = "Który plik?",
   init_hdd_title = "Inicjowanie modułów HDD...",
   init_hdd_sub = "Ładowanie sterowników HDD i montowanie __sysconf",
@@ -203,13 +204,13 @@ strings.devices = {
   mmce_1 = "MMCE w gnieździe 2",
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "HDD sformatowany w exFAT",
-  exfat_hdd_mbr_0 = "exFAT-Formatted HDD 1",
-  exfat_hdd_mbr_1 = "exFAT-Formatted HDD 2",
+  exfat_hdd_mbr_0 = "exFAT-formatted HDD 1",
+  exfat_hdd_mbr_1 = "exFAT-formatted HDD 2",
   hdd = "HDD sformatowany w APA",
   hdd_mbr_0 = "APA-formatted HDD 1",
   hdd_mbr_1 = "APA-formatted HDD 2",
   hdd_1 = "HDD 2 sformatowany w APA",
-  xfrom = "XFROM",
+  xfrom = "XFROM (PSX ONLY!)",
 }
 
 -- Wspólne tokeny

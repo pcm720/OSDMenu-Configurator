@@ -1020,7 +1020,7 @@ local function applyStartupSceneTransitionCnf()
   end
 end
 
-local function getLocations(ctx, ft, slot) return config_options.getLocations(ctx, ft, slot) end
+local function getLocations(ctx, ft, slot, device) return config_options.getLocations(ctx, ft, slot, device) end
 local function loadCustomFont() return common.loadCustomFont() end
 local function drawText(font, mode, x, y, scale, text, color) return common.drawText(font, mode, x, y, scale, text, color) end
 local function parseColor(v) return common.parseColor(v) end

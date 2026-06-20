@@ -43,6 +43,7 @@ strings.main = {
   cross_select_circle_back_items = { { pad = "cross", label = "Entrer" }, { pad = "circle", label = "Retour" } },
   memory_card_1_slot = "Carte memoire 1",
   memory_card_2_slot = "Carte memoire 2",
+  which_device = "Quel peripherique ?",
   which_file = "Quel fichier ?",
   init_hdd_title = "Initialisation des modules HDD...",
   init_hdd_sub = "Chargement des pilotes HDD et montage de __sysconf",
@@ -203,13 +204,13 @@ strings.devices = {
   mmce_1 = "MMCE dans l'emplacement 2",
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "Disque dur formate exFAT",
-  exfat_hdd_mbr_0 = "exFAT-Formatted HDD 1",
-  exfat_hdd_mbr_1 = "exFAT-Formatted HDD 2",
+  exfat_hdd_mbr_0 = "exFAT-formatted HDD 1",
+  exfat_hdd_mbr_1 = "exFAT-formatted HDD 2",
   hdd = "Disque dur formate APA",
   hdd_mbr_0 = "APA-formatted HDD 1",
   hdd_mbr_1 = "APA-formatted HDD 2",
   hdd_1 = "Disque dur 2 formate APA",
-  xfrom = "XFROM",
+  xfrom = "XFROM (PSX ONLY!)",
 }
 
 -- Jetons communs
