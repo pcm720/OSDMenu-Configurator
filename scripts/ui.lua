@@ -315,7 +315,25 @@ local function readRom0File(path, maxLen)
   return nil
 end
 
+local function isStartupSelectHeld()
+  if not (Pads and Pads.get) then return false end
+  local selectMask = (common and common.PAD_SELECT) or 0x0001
+  for sample = 1, 6 do
+    for port = 0, 1 do
+      local okPad, rawPad = pcall(Pads.get, port)
+      if okPad and type(rawPad) == "number" and (rawPad & selectMask) ~= 0 then
+        return true
+      end
+    end
+    if sample < 6 and Screen and Screen.waitVblankStart then
+      pcall(Screen.waitVblankStart)
+    end
+  end
+  return false
+end
+
 local function probeRuntimePlatform()
+  local forceShowAll = isStartupSelectHeld()
   local psxverExists = false
   if doesFileExist then
     local okExists, exists = pcall(doesFileExist, "rom0:PSXVER")
@@ -333,11 +351,13 @@ local function probeRuntimePlatform()
 
   return {
     psxverExists = psxverExists,
-    isPsx = psxverExists,
+    probedIsPsx = psxverExists,
+    isPsx = forceShowAll or psxverExists,
     romver = romver,
     romverPrefix = romverPrefix,
     romverModel = romverModel,
-    hideHddDevices = (type(romverModel) == "number" and romverModel >= 220),
+    forceShowAll = forceShowAll,
+    hideHddDevices = (not forceShowAll) and (type(romverModel) == "number" and romverModel >= 220),
   }
 end
 
