@@ -231,6 +231,7 @@ local function buildMainCreditsLines(main_str)
     "-pcm720",
     "-R3Z3N",
     "-Berion",
+    "-GhostTownUS",
     main_str.main_credits_translators or "Translators:",
     "-ViZoR: " .. tostring(spanishLabel),
     "-nuno: " .. tostring(portugueseLabel),
