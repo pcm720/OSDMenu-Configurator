@@ -412,6 +412,7 @@ end
 C.setMainFilterFromShowKey = setMainFilterFromShowKey
 
 local function includeMainEntry(id)
+  if (id == "freehddboot" or id == "mbr" or id == "hosdmenu") and hideRuntimeHddDevices() then return false end
   if id == "psxbbl" and not isRuntimePsx() then return false end
   if MAIN_CNF_FILTER == nil then return true end
   local enabled = MAIN_CNF_FILTER[id]
