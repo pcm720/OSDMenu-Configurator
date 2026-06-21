@@ -231,6 +231,7 @@ local function buildMainCreditsLines(main_str)
     "-pcm720",
     "-R3Z3N",
     "-Berion",
+    "-GhostTownUS",
     main_str.main_credits_translators or "Translators:",
     "-ViZoR: " .. tostring(spanishLabel),
     "-nuno: " .. tostring(portugueseLabel),
@@ -365,6 +366,37 @@ local function getMainFilterBuildKey()
   return table.concat(parts, ";")
 end
 
+local function getRuntimePlatform()
+  if common and common.getRuntimePlatform then
+    return common.getRuntimePlatform()
+  end
+  local runtime = _G and _G.CONFIG_UI
+  local platform = runtime and runtime.runtimePlatform
+  if type(platform) == "table" then return platform end
+  return {}
+end
+
+local function isRuntimePsx()
+  if common and common.isRuntimePsx then
+    return common.isRuntimePsx()
+  end
+  return getRuntimePlatform().isPsx == true
+end
+
+local function hideRuntimeHddDevices()
+  if common and common.hideRuntimeHddDevices then
+    return common.hideRuntimeHddDevices()
+  end
+  return getRuntimePlatform().hideHddDevices == true
+end
+
+local function getRuntimeFilterBuildKey()
+  local platform = getRuntimePlatform()
+  return "psx=" .. tostring(platform.isPsx == true) ..
+      ";hdd=" .. tostring(platform.hideHddDevices == true) ..
+      ";rom=" .. tostring(platform.romverPrefix or "")
+end
+
 local function setMainFilterFromShowKey(rawKey, value)
   local showKey = tostring(rawKey or ""):lower()
   local id = MAIN_SHOW_KEY_TO_ID[showKey]
@@ -381,6 +413,8 @@ end
 C.setMainFilterFromShowKey = setMainFilterFromShowKey
 
 local function includeMainEntry(id)
+  if (id == "freehddboot" or id == "mbr" or id == "hosdmenu") and hideRuntimeHddDevices() then return false end
+  if id == "psxbbl" and not isRuntimePsx() then return false end
   if MAIN_CNF_FILTER == nil then return true end
   local enabled = MAIN_CNF_FILTER[id]
   if enabled == nil then
@@ -739,7 +773,7 @@ local function runMain(s, pad)
   local egsmEnabled = (C.config_options and C.config_options.isEgsmUiEnabled and C.config_options.isEgsmUiEnabled()) or
       false
   local filterKey = getMainFilterBuildKey()
-  local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey
+  local expectedBuildKey = tostring(egsmEnabled) .. "|" .. filterKey .. "|" .. getRuntimeFilterBuildKey()
   if type(s.main) ~= "table" or type(s.mainEntries) ~= "table" or s.mainBuildKey ~= expectedBuildKey then
     local labels, entries = buildMainChoices(main_str)
     s.main = labels
@@ -1079,13 +1113,14 @@ local function runMain(s, pad)
     local creditsHeadingColor = CREDITS_HEADING_BLUE
     for i = 1, total do
       local y = rowStartY + (i - 1) * rowStep
-      local label = lines[i]
+      local rawLabel = lines[i]
+      local isHeading = type(rawLabel) == "string" and rawLabel:sub(1, 1) ~= "-"
+      local label = rawLabel
       if common.fitListRowText then
         label = common.fitListRowText(s, "main_credits_row_" .. tostring(i), hintFont, label, maxLabelW, rowScale, false)
       elseif common.truncateTextToWidth then
         label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
       end
-      local isHeading = (i == 1 or i == 3 or i == 7)
       local rowColor = isHeading and creditsHeadingColor or common.WHITE
       dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, rowColor)
     end
@@ -1421,15 +1456,17 @@ local function buildBblSourceOptions(s, iniFileType)
     addDevice("usb", dev_str.usb_storage_1 or "USB Mass Storage 2", { "mass1:/PS2BBL/CONFIG.INI" }, nil, "usb1", "usb")
   end
   addDevice("mx4sio", dev_str.mx4sio_sd or "MX4SIO", { "mx4sio:/PS2BBL/CONFIG.INI" }, nil, "mx4sio", "mx4sio")
-  addDevice("hdd", dev_str.hdd_mbr_0 or "APA-formatted HDD 1",
-    { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
-  addDevice("hdd", dev_str.hdd_mbr_1 or "APA-formatted HDD 2",
-    { "hdd1:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd1:", nil, "hdd")
-  addDevice("ata", dev_str.exfat_hdd_mbr_0 or "exFAT-formatted HDD 1", { "ata0:/PS2BBL/CONFIG.INI" }, nil,
-    "ata0", "hdd")
-  addDevice("ata", dev_str.exfat_hdd_mbr_1 or "exFAT-formatted HDD 2", { "ata1:/PS2BBL/CONFIG.INI" }, nil,
-    "ata1", "hdd")
-  if iniFileType == "psxbbl_ini" then
+  if not hideRuntimeHddDevices() then
+    addDevice("hdd", dev_str.hdd_mbr_0 or "APA-formatted HDD 1",
+      { "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd0:", nil, "hdd")
+    addDevice("hdd", dev_str.hdd_mbr_1 or "APA-formatted HDD 2",
+      { "hdd1:__sysconf:pfs:/PS2BBL/CONFIG.INI" }, "hdd1:", nil, "hdd")
+    addDevice("ata", dev_str.exfat_hdd_mbr_0 or "exFAT-formatted HDD 1", { "ata0:/PS2BBL/CONFIG.INI" }, nil,
+      "ata0", "hdd")
+    addDevice("ata", dev_str.exfat_hdd_mbr_1 or "exFAT-formatted HDD 2", { "ata1:/PS2BBL/CONFIG.INI" }, nil,
+      "ata1", "hdd")
+  end
+  if iniFileType == "psxbbl_ini" and isRuntimePsx() then
     addDevice("xfrom", dev_str.xfrom or "XFROM (PSX ONLY!)", { "xfrom:/PS2BBL/CONFIG.INI" }, "xfrom:", nil, "xfrom")
   end
   return out
@@ -1543,6 +1580,16 @@ local function runSelectConfig(s, pad)
   local sc = s.scaleY or function(y) return y end
   local SE = common.SELECTED_COLOR
 
+  local function drawNoCompatibleDevices()
+    dt(s.font, s.drawMode, M, MY, 1.1, main_str.which_device or "Which device?", common.WHITE)
+    dt(s.font, s.drawMode, M + 20, MY + sc(50), common.FONT_SCALE,
+      main_str.no_compatible_devices or "No compatible devices", common.DIM_COLOR)
+    common.drawHintLine(s.font, s.drawMode, M, H, 0.7, main_str.circle_back_items, nil, common.DIM_COLOR)
+    if (pad & PAD_CIRCLE) ~= 0 then
+      s.state = "main"
+    end
+  end
+
   if s.context == "osdmenu" or s.context == "hosdmenu" or s.context == "mbr" then
     if s.context == "osdmenu" and not s.osdmenuConfigDevice then
       local options = {}
@@ -1554,7 +1601,13 @@ local function runSelectConfig(s, pad)
           options[#options + 1] = { label = main_str.memory_card_2_slot or "Memory Card 2", device = "mc", slot = 1 }
         end
       end
-      options[#options + 1] = { label = dev_str.xfrom or "XFROM (PSX ONLY!)", device = "xfrom" }
+      if isRuntimePsx() then
+        options[#options + 1] = { label = dev_str.xfrom or "XFROM (PSX ONLY!)", device = "xfrom" }
+      end
+      if #options == 0 then
+        drawNoCompatibleDevices()
+        return
+      end
 
       local sel = getOsdmenuConfigDeviceSel(s)
       if sel < 1 then sel = 1 end
@@ -1597,10 +1650,17 @@ local function runSelectConfig(s, pad)
     end
 
     if s.context == "mbr" and not s.mbrConfigDevice then
-      local options = {
-        { label = dev_str.hdd or "APA-formatted HDD", device = "hdd" },
-        { label = dev_str.xfrom or "XFROM (PSX ONLY!)", device = "xfrom" },
-      }
+      local options = {}
+      if not hideRuntimeHddDevices() then
+        options[#options + 1] = { label = dev_str.hdd or "APA-formatted HDD", device = "hdd" }
+      end
+      if isRuntimePsx() then
+        options[#options + 1] = { label = dev_str.xfrom or "XFROM (PSX ONLY!)", device = "xfrom" }
+      end
+      if #options == 0 then
+        drawNoCompatibleDevices()
+        return
+      end
       local sel = getMbrConfigDeviceSel(s)
       if sel < 1 then sel = 1 end
       if sel > #options then sel = #options end
