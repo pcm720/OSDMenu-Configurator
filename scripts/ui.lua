@@ -301,11 +301,54 @@ local STARTUP_CFG = loadStartupConfig()
 local NATIVE_VIDEO_MODE_SPEC = captureCurrentVideoModeSpec()
 local STARTUP_CWD = getStartupCwd()
 
+local function readRom0File(path, maxLen)
+  if not (System and System.openFile and System.readFile and System.closeFile) then return nil end
+  local okOpen, h = pcall(System.openFile, path, 0)
+  if not okOpen or type(h) ~= "number" or h < 0 then
+    return nil
+  end
+  local okRead, data = pcall(System.readFile, h, maxLen or 64)
+  pcall(System.closeFile, h)
+  if okRead and type(data) == "string" then
+    return data
+  end
+  return nil
+end
+
+local function probeRuntimePlatform()
+  local psxverExists = false
+  if doesFileExist then
+    local okExists, exists = pcall(doesFileExist, "rom0:PSXVER")
+    psxverExists = okExists and exists == true
+  else
+    psxverExists = readRom0File("rom0:PSXVER", 1) ~= nil
+  end
+
+  local romver = readRom0File("rom0:ROMVER", 14)
+  if type(romver) == "string" then
+    romver = romver:gsub("%z", ""):gsub("[\r\n]+$", ""):gsub("%s+$", "")
+  end
+  local romverPrefix = (type(romver) == "string") and romver:sub(1, 4) or ""
+  local romverModel = tonumber(romverPrefix)
+
+  return {
+    psxverExists = psxverExists,
+    isPsx = psxverExists,
+    romver = romver,
+    romverPrefix = romverPrefix,
+    romverModel = romverModel,
+    hideHddDevices = (type(romverModel) == "number" and romverModel >= 220),
+  }
+end
+
+local STARTUP_PLATFORM = probeRuntimePlatform()
+
 _G.CONFIG_UI = {
   common = common,
   config_parse = config_parse,
   startupConfig = STARTUP_CFG,
   startupCwd = STARTUP_CWD,
+  runtimePlatform = STARTUP_PLATFORM,
   startupMainFilter = STARTUP_CFG.main_filter,
   startupDefaultLanguage = STARTUP_CFG.default_language,
   startupKeyboardLayout = STARTUP_CFG.keyboard_layout,

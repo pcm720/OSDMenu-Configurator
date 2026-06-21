@@ -22,6 +22,21 @@ local strings = _G.CONFIG_UI and _G.CONFIG_UI.strings or {}
 local dev = strings.devices or {}
 local pathStrings = strings.path_picker or {}
 
+local function runtimePlatform()
+  local runtime = _G and _G.CONFIG_UI
+  local platform = runtime and runtime.runtimePlatform
+  if type(platform) == "table" then return platform end
+  return {}
+end
+
+local function isRuntimePsx()
+  return runtimePlatform().isPsx == true
+end
+
+local function hideRuntimeHddDevices()
+  return runtimePlatform().hideHddDevices == true
+end
+
 -- Static devices (fixed mountpoints). descKey = key in strings.devices for label (so lang cycle works).
 local STATIC = {
   { name = "mc0:",   descKey = "memory_card_1", mbr = true },
@@ -199,9 +214,11 @@ local function staticPathOnlyVisible(visibility, s)
     return isVisible(visibility, "mmce")
   end
   if s.deviceType == "hdd" then
+    if hideRuntimeHddDevices() then return false end
     return isVisible(visibility, "hdd")
   end
   if s.deviceType == "xfrom" then
+    if not isRuntimePsx() then return false end
     return isVisible(visibility, "xfrom")
   end
   return true
@@ -210,6 +227,7 @@ end
 local function bdmPathOnlyVisible(visibility, opt)
   if not opt or not opt.bdmType then return false end
   if opt.bdmType == "ata" then
+    if hideRuntimeHddDevices() then return false end
     return isVisible(visibility, "ata")
   end
   return isVisible(visibility, opt.bdmType)
@@ -242,6 +260,7 @@ function file_selector.getDevices(context, opts)
   local includeBblHddPairs = (context == "path_only" or context == "config_ini") and isBblFileType
 
   local function addXfromPathOnly(out, addedStatic, opts)
+    if not isRuntimePsx() then return end
     opts = opts or {}
     local marker = "xfrom:"
     if addedStatic and addedStatic[marker] then return end
@@ -254,6 +273,7 @@ function file_selector.getDevices(context, opts)
   local function addStatic(out, addedStatic, s, opts)
     if not s then return end
     opts = opts or {}
+    if s.deviceType == "hdd" and hideRuntimeHddDevices() then return end
     if opts.isMbr and not s.mbr then return end
     if s.mbrOnly and not (opts.isMbr or opts.includeMbrOnly) then return end
     if opts.visibility and not staticPathOnlyVisible(opts.visibility, s) then return end
@@ -272,6 +292,7 @@ function file_selector.getDevices(context, opts)
   local function addBdm(out, addedBdm, opt, opts)
     if not opt then return end
     opts = opts or {}
+    if opt.bdmType == "ata" and hideRuntimeHddDevices() then return end
     if opts.isMbr and not opt.mbr then return end
     if opt.mbrOnly and not (opts.isMbr or opts.includeMbrOnly) then return end
     if opts.visibility and not bdmPathOnlyVisible(opts.visibility, opt) then return end
@@ -306,6 +327,7 @@ function file_selector.getDevices(context, opts)
     end
   end
   local function addXfromMbr(out, addedStatic)
+    if not isRuntimePsx() then return end
     local marker = "xfrom:"
     if addedStatic and addedStatic[marker] then return end
     table.insert(out, withFlags({ name = marker, desc = dev.xfrom or "XFROM (PSX ONLY!)", deviceType = "xfrom" }))
@@ -402,6 +424,7 @@ function file_selector.getDevices(context, opts)
   local deferredMbrSpecials = {}
   local function appendSpecial(s)
     if not s then return end
+    if not isRuntimePsx() and (s.name == "$XOSD" or s.name == "$OSDMENU") then return end
     local desc = (s.descKey and dev[s.descKey]) or s.name
     local helper = (s.helperKey and pathStrings[s.helperKey]) or nil
     if isFmcbContext and s.name == "POWEROFF" then

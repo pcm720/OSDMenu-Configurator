@@ -1969,6 +1969,25 @@ function common.getPathModuleType(path)
   return nil
 end
 
+function common.getRuntimePlatform()
+  local runtime = _G and _G.CONFIG_UI
+  local platform = runtime and runtime.runtimePlatform
+  if type(platform) == "table" then return platform end
+  return {}
+end
+
+function common.isRuntimePsx()
+  return common.getRuntimePlatform().isPsx == true
+end
+
+function common.hideRuntimePsxOnly()
+  return not common.isRuntimePsx()
+end
+
+function common.hideRuntimeHddDevices()
+  return common.getRuntimePlatform().hideHddDevices == true
+end
+
 local function resolveSaveTargetModule(path)
   local fromPath = common.getPathModuleType(path)
   if fromPath then
