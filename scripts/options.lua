@@ -52,8 +52,10 @@ local function buildPs2BblIniLocations()
   local out = {}
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
-  appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "hdd1:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mx4sio:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mc1:/SYS-CONF/PS2BBL.INI")
@@ -69,8 +71,10 @@ local function buildPsxBblIniLocations()
   appendUnique(out, "mmce1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mmce0:/PS2BBL/CONFIG.INI")
   appendUnique(out, "xfrom:/PS2BBL/CONFIG.INI")
-  appendUnique(out, "ata:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata0:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "ata1:/PS2BBL/CONFIG.INI")
   appendUnique(out, "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI")
+  appendUnique(out, "hdd1:__sysconf:pfs:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mx4sio:/PS2BBL/CONFIG.INI")
   appendUnique(out, "mass:/PS2BBL/CONFIG.INI")
   return out
@@ -91,9 +95,34 @@ local function buildOsdMcLocations(chosenMcSlot, fileName)
   return out
 end
 
+local function buildOsdmenuLocations(fileName, chosenMcSlot, selectedDevice, includeXfrom)
+  local out = {}
+  if selectedDevice == "mc" or selectedDevice == nil or selectedDevice == "" then
+    local mc = buildOsdMcLocations(chosenMcSlot, fileName)
+    for i = 1, #mc do
+      appendUnique(out, mc[i])
+    end
+  end
+  if includeXfrom and (selectedDevice == "xfrom" or selectedDevice == nil or selectedDevice == "") then
+    appendUnique(out, "xfrom:/osdmenu/" .. fileName)
+  end
+  return out
+end
+
+local function buildMbrLocations(fileName, selectedDevice)
+  local out = {}
+  if selectedDevice == "hdd" or selectedDevice == nil or selectedDevice == "" then
+    appendUnique(out, "hdd0:__sysconf:pfs:osdmenu/" .. fileName)
+  end
+  if selectedDevice == "xfrom" or selectedDevice == nil or selectedDevice == "" then
+    appendUnique(out, "xfrom:/osdmenu/" .. fileName)
+  end
+  return out
+end
+
 -- Config file locations by context and file type
 -- (ps2bbl_ini, psxbbl_ini, osdmenu_cnf, osdmbr_cnf, osdgsm_cnf, r3configurator_cnf).
-function config_options.getLocations(context, fileType, chosenMcSlot)
+function config_options.getLocations(context, fileType, chosenMcSlot, selectedDevice)
   if fileType == "r3configurator_cnf" then
     return { "r3configurator.cnf" }
   end
@@ -152,13 +181,13 @@ function config_options.getLocations(context, fileType, chosenMcSlot)
   end
   if fileType == "osdmenu_cnf" then
     if context == "osdmenu" then
-      return buildOsdMcLocations(chosenMcSlot, "OSDMENU.CNF")
+      return buildOsdmenuLocations("OSDMENU.CNF", chosenMcSlot, selectedDevice, true)
     end
     if context == "hosdmenu" then return { "pfs0:/osdmenu/OSDMENU.CNF" } end
     return {}
   end
   if fileType == "osdmbr_cnf" then
-    if context == "mbr" then return { "pfs0:/osdmenu/OSDMBR.CNF", "xfrom:/osdmenu/OSDMBR.CNF" } end
+    if context == "mbr" then return buildMbrLocations("OSDMBR.CNF", selectedDevice) end
     return {}
   end
   if fileType == "osdgsm_cnf" then
@@ -169,9 +198,12 @@ function config_options.getLocations(context, fileType, chosenMcSlot)
       return { "mc0:/SYS-CONF/OSDGSM.CNF", "mc1:/SYS-CONF/OSDGSM.CNF", "pfs0:/osdmenu/OSDGSM.CNF" }
     end
     if context == "osdmenu" then
-      return buildOsdMcLocations(chosenMcSlot, "OSDGSM.CNF")
+      return buildOsdmenuLocations("OSDGSM.CNF", chosenMcSlot, selectedDevice, false)
     end
-    if context == "hosdmenu" or context == "mbr" then
+    if context == "mbr" then
+      return buildMbrLocations("OSDGSM.CNF", selectedDevice)
+    end
+    if context == "hosdmenu" then
       return { "pfs0:/osdmenu/OSDGSM.CNF", "xfrom:/osdmenu/OSDGSM.CNF" }
     end
     return {}
@@ -180,7 +212,7 @@ function config_options.getLocations(context, fileType, chosenMcSlot)
 end
 
 -- Preferred create/save path when no existing file was found.
-function config_options.getDefaultLocation(context, fileType, chosenMcSlot)
+function config_options.getDefaultLocation(context, fileType, chosenMcSlot, selectedDevice)
   if fileType == "ps2bbl_ini" then
     return buildBblDefaultMcPath("PS2BBL.INI", chosenMcSlot)
   end
@@ -193,7 +225,7 @@ function config_options.getDefaultLocation(context, fileType, chosenMcSlot)
     end
     return buildBblDefaultMcPath("FREEMCB.CNF", chosenMcSlot)
   end
-  local loc = config_options.getLocations(context, fileType, chosenMcSlot)
+  local loc = config_options.getLocations(context, fileType, chosenMcSlot, selectedDevice)
   return (loc and loc[1]) or nil
 end
 

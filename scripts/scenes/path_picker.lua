@@ -1852,12 +1852,15 @@ local function run(ctx)
         local norm = ctx.pathBrowsePath:gsub("/$", "")
         -- At partition root (pfs0 = __sysconf, pfs1 = other HDD partition): go back to partition list, not device
         if norm == "pfs1:" or norm == "pfs1" or norm == "pfs0:" or norm == "pfs0" then
+          local mountedPart = (norm == "pfs0:" or norm == "pfs0") and ctx.pfs0Mounted or ctx.pfs1Mounted
+          local hddNum = tonumber(tostring(mountedPart or ""):match("^hdd(%d):")) or 0
+          local hddRoot = "hdd" .. tostring(hddNum) .. ":"
           if ctx.pfs0Mounted and System.fileXioUmount then System.fileXioUmount("pfs0:") end
           if ctx.pfs1Mounted and System.fileXioUmount then System.fileXioUmount("pfs1:") end
           ctx.pfs0Mounted = nil; ctx.pfs1Mounted = nil
           ctx.pathPickerSub = "partitions"
-          ctx.pathList = _.file_selector.getHddPartitions(0) or {}
-          ctx.pathBrowsePath = "hdd0:"
+          ctx.pathList = _.file_selector.getHddPartitions(hddNum) or {}
+          ctx.pathBrowsePath = hddRoot
           local n = #(ctx.pathList or {})
           ctx.pathPickerSel = math.max(1, math.min(ctx.pathPickerPartitionSel or 1, n))
           ctx.pathPickerScroll = centeredScroll(ctx.pathPickerSel, n, _.MAX_VISIBLE_LIST)

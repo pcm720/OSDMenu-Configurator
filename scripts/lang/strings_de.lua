@@ -43,6 +43,7 @@ strings.main = {
   cross_select_circle_back_items = { { pad = "cross", label = "Oeffnen" }, { pad = "circle", label = "Zurueck" } },
   memory_card_1_slot = "Speicherkarte 1",
   memory_card_2_slot = "Speicherkarte 2",
+  which_device = "Welches Geraet?",
   which_file = "Welche Datei?",
   init_hdd_title = "HDD-Module werden initialisiert...",
   init_hdd_sub = "HDD-Treiber werden geladen und __sysconf wird eingehaengt",
@@ -203,13 +204,13 @@ strings.devices = {
   mmce_1 = "MMCE in Slot 2",
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "exFAT-formatierte HDD",
-  exfat_hdd_mbr_0 = "exFAT-Formatted HDD 1",
-  exfat_hdd_mbr_1 = "exFAT-Formatted HDD 2",
+  exfat_hdd_mbr_0 = "exFAT-formatted HDD 1",
+  exfat_hdd_mbr_1 = "exFAT-formatted HDD 2",
   hdd = "APA-formatierte HDD",
   hdd_mbr_0 = "APA-formatted HDD 1",
   hdd_mbr_1 = "APA-formatted HDD 2",
   hdd_1 = "APA-formatierte HDD 2",
-  xfrom = "XFROM",
+  xfrom = "XFROM (PSX ONLY!)",
 }
 
 -- Gemeinsame Texte

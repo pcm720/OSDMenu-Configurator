@@ -43,6 +43,7 @@ strings.main = {
   cross_select_circle_back_items = { { pad = "cross", label = "Enter" }, { pad = "circle", label = "Back" } },
   memory_card_1_slot = "Memory Card 1",
   memory_card_2_slot = "Memory Card 2",
+  which_device = "Which device?",
   which_file = "Which file?",
   init_hdd_title = "Initializing HDD modules...",
   init_hdd_sub = "Loading HDD drivers and mounting __sysconf",
@@ -203,13 +204,13 @@ strings.devices = {
   mmce_1 = "MMCE in slot 2",
   mx4sio_sd = "MX4SIO",
   exfat_hdd_mass0 = "exFAT-formatted HDD",
-  exfat_hdd_mbr_0 = "exFAT-Formatted HDD 1",
-  exfat_hdd_mbr_1 = "exFAT-Formatted HDD 2",
+  exfat_hdd_mbr_0 = "exFAT-formatted HDD 1",
+  exfat_hdd_mbr_1 = "exFAT-formatted HDD 2",
   hdd = "APA-formatted HDD",
   hdd_mbr_0 = "APA-formatted HDD 1",
   hdd_mbr_1 = "APA-formatted HDD 2",
   hdd_1 = "APA-formatted HDD 2",
-  xfrom = "XFROM",
+  xfrom = "XFROM (PSX ONLY!)",
 }
 
 -- Common tokens

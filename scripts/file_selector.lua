@@ -22,6 +22,21 @@ local strings = _G.CONFIG_UI and _G.CONFIG_UI.strings or {}
 local dev = strings.devices or {}
 local pathStrings = strings.path_picker or {}
 
+local function runtimePlatform()
+  local runtime = _G and _G.CONFIG_UI
+  local platform = runtime and runtime.runtimePlatform
+  if type(platform) == "table" then return platform end
+  return {}
+end
+
+local function isRuntimePsx()
+  return runtimePlatform().isPsx == true
+end
+
+local function hideRuntimeHddDevices()
+  return runtimePlatform().hideHddDevices == true
+end
+
 -- Static devices (fixed mountpoints). descKey = key in strings.devices for label (so lang cycle works).
 local STATIC = {
   { name = "mc0:",   descKey = "memory_card_1", mbr = true },
@@ -42,7 +57,8 @@ local BDM_OPTIONS = {
 
 local function bdmPrefixForContext(opt, context)
   if not opt then return nil end
-  if context == "mbr" and opt.bdmType == "ata" and opt.deviceId then
+  if (context == "mbr" or context == "osdmenu" or context == "path_only" or context == "config_ini") and
+      opt.bdmType == "ata" and opt.deviceId then
     return opt.deviceId
   end
   if opt.bdmType == "usb" and (context == "osdmenu" or context == "mbr") then
@@ -198,9 +214,11 @@ local function staticPathOnlyVisible(visibility, s)
     return isVisible(visibility, "mmce")
   end
   if s.deviceType == "hdd" then
+    if hideRuntimeHddDevices() then return false end
     return isVisible(visibility, "hdd")
   end
   if s.deviceType == "xfrom" then
+    if not isRuntimePsx() then return false end
     return isVisible(visibility, "xfrom")
   end
   return true
@@ -209,6 +227,7 @@ end
 local function bdmPathOnlyVisible(visibility, opt)
   if not opt or not opt.bdmType then return false end
   if opt.bdmType == "ata" then
+    if hideRuntimeHddDevices() then return false end
     return isVisible(visibility, "ata")
   end
   return isVisible(visibility, opt.bdmType)
@@ -237,12 +256,15 @@ function file_selector.getDevices(context, opts)
     end
   end
   local includePsxXfromPathOnly = (context == "path_only" and fileType == "psxbbl_ini")
+  local isBblFileType = (fileType == "ps2bbl_ini" or fileType == "psxbbl_ini")
+  local includeBblHddPairs = (context == "path_only" or context == "config_ini") and isBblFileType
 
   local function addXfromPathOnly(out, addedStatic, opts)
+    if not isRuntimePsx() then return end
     opts = opts or {}
     local marker = "xfrom:"
     if addedStatic and addedStatic[marker] then return end
-    local entry = { name = marker, desc = dev.xfrom or "XFROM", deviceType = "xfrom" }
+    local entry = { name = marker, desc = dev.xfrom or "XFROM (PSX ONLY!)", deviceType = "xfrom" }
     if opts.visibility and not staticPathOnlyVisible(opts.visibility, entry) then return end
     table.insert(out, withFlags(entry))
     if addedStatic then addedStatic[marker] = true end
@@ -251,14 +273,16 @@ function file_selector.getDevices(context, opts)
   local function addStatic(out, addedStatic, s, opts)
     if not s then return end
     opts = opts or {}
+    if s.deviceType == "hdd" and hideRuntimeHddDevices() then return end
     if opts.isMbr and not s.mbr then return end
-    if s.mbrOnly and not opts.isMbr then return end
+    if s.mbrOnly and not (opts.isMbr or opts.includeMbrOnly) then return end
     if opts.visibility and not staticPathOnlyVisible(opts.visibility, s) then return end
     if addedStatic and addedStatic[s.name] then return end
     local descKey = s.descKey
-    if opts.isMbr and s.name == "hdd0:" then
+    local useNumberedHddLabels = opts.isMbr or opts.useMbrHddLabels
+    if useNumberedHddLabels and s.name == "hdd0:" then
       descKey = "hdd_mbr_0"
-    elseif opts.isMbr and s.name == "hdd1:" then
+    elseif useNumberedHddLabels and s.name == "hdd1:" then
       descKey = "hdd_mbr_1"
     end
     local desc = (descKey and dev[descKey]) or (s.descKey and dev[s.descKey]) or s.name
@@ -268,15 +292,17 @@ function file_selector.getDevices(context, opts)
   local function addBdm(out, addedBdm, opt, opts)
     if not opt then return end
     opts = opts or {}
+    if opt.bdmType == "ata" and hideRuntimeHddDevices() then return end
     if opts.isMbr and not opt.mbr then return end
-    if opt.mbrOnly and not opts.isMbr then return end
+    if opt.mbrOnly and not (opts.isMbr or opts.includeMbrOnly) then return end
     if opts.visibility and not bdmPathOnlyVisible(opts.visibility, opt) then return end
     if addedBdm and addedBdm[opt.deviceId] then return end
     local desc
-    if opts.isMbr and opt.deviceId == "ata0" then
-      desc = dev.exfat_hdd_mbr_0 or "exFAT-Formatted HDD 1"
-    elseif opts.isMbr and opt.deviceId == "ata1" then
-      desc = dev.exfat_hdd_mbr_1 or "exFAT-Formatted HDD 2"
+    local useNumberedHddLabels = opts.isMbr or opts.useMbrHddLabels
+    if useNumberedHddLabels and opt.deviceId == "ata0" then
+      desc = dev.exfat_hdd_mbr_0 or "exFAT-formatted HDD 1"
+    elseif useNumberedHddLabels and opt.deviceId == "ata1" then
+      desc = dev.exfat_hdd_mbr_1 or "exFAT-formatted HDD 2"
     else
       desc = (opt.deviceId and opt.deviceId:sub(1, 3) == "ata") and dev.exfat_hdd_mass0 or
           (dev[BDM_DESC[opt.deviceId]] or opt.deviceId)
@@ -301,9 +327,10 @@ function file_selector.getDevices(context, opts)
     end
   end
   local function addXfromMbr(out, addedStatic)
+    if not isRuntimePsx() then return end
     local marker = "xfrom:"
     if addedStatic and addedStatic[marker] then return end
-    table.insert(out, withFlags({ name = marker, desc = dev.xfrom or "XFROM", deviceType = "xfrom" }))
+    table.insert(out, withFlags({ name = marker, desc = dev.xfrom or "XFROM (PSX ONLY!)", deviceType = "xfrom" }))
     if addedStatic then addedStatic[marker] = true end
   end
   local function addBdmById(out, addedBdm, deviceId, opts)
@@ -328,10 +355,14 @@ function file_selector.getDevices(context, opts)
     local out = {}
     local addedStatic = {}
     local addedBdm = {}
-    local addOpts = { visibility = visibility }
+    local addOpts = {
+      visibility = visibility,
+      includeMbrOnly = includeBblHddPairs,
+      useMbrHddLabels = includeBblHddPairs,
+    }
 
     -- Preferred choose-device order:
-    -- MC1, MC2, MMCE1, MMCE2, USB1, USB2, MX4SIO, APA HDD, exFAT HDD.
+    -- MC1, MC2, MMCE1, MMCE2, USB1, USB2, MX4SIO, APA HDD(s), exFAT HDD(s).
     addStaticByName(out, addedStatic, "mc0:", addOpts)
     addStaticByName(out, addedStatic, "mc1:", addOpts)
     addStaticByName(out, addedStatic, "mmce0:", addOpts)
@@ -340,7 +371,9 @@ function file_selector.getDevices(context, opts)
     addBdmById(out, addedBdm, "usb1", addOpts)
     addBdmById(out, addedBdm, "mx4sio", addOpts)
     addStaticByName(out, addedStatic, "hdd0:", addOpts)
+    if includeBblHddPairs then addStaticByName(out, addedStatic, "hdd1:", addOpts) end
     addBdmById(out, addedBdm, "ata0", addOpts)
+    if includeBblHddPairs then addBdmById(out, addedBdm, "ata1", addOpts) end
 
     -- Keep any other supported devices after the preferred block.
     for _, s in ipairs(STATIC) do
@@ -356,10 +389,15 @@ function file_selector.getDevices(context, opts)
     return out
   end
   local isMbr = (context == "mbr")
+  local isOsdPathPicker = (context == "osdmenu")
   local out = {}
   local addedStatic = {}
   local addedBdm = {}
-  local addOpts = { isMbr = isMbr }
+  local addOpts = {
+    isMbr = isMbr,
+    includeMbrOnly = isOsdPathPicker,
+    useMbrHddLabels = isOsdPathPicker,
+  }
 
   -- Preferred choose-device order:
   -- MC1, MC2, MMCE1, MMCE2, USB1, USB2, MX4SIO, APA HDD, exFAT HDD.
@@ -371,9 +409,9 @@ function file_selector.getDevices(context, opts)
   addBdmById(out, addedBdm, "usb1", addOpts)
   addBdmById(out, addedBdm, "mx4sio", addOpts)
   addStaticByName(out, addedStatic, "hdd0:", addOpts)
-  if isMbr then addStaticByName(out, addedStatic, "hdd1:", addOpts) end
+  if isMbr or isOsdPathPicker then addStaticByName(out, addedStatic, "hdd1:", addOpts) end
   addBdmById(out, addedBdm, "ata0", addOpts)
-  if isMbr then addBdmById(out, addedBdm, "ata1", addOpts) end
+  if isMbr or isOsdPathPicker then addBdmById(out, addedBdm, "ata1", addOpts) end
   if isMbr then addXfromMbr(out, addedStatic) end
 
   -- Keep any other supported devices after the preferred block.
@@ -386,6 +424,7 @@ function file_selector.getDevices(context, opts)
   local deferredMbrSpecials = {}
   local function appendSpecial(s)
     if not s then return end
+    if not isRuntimePsx() and (s.name == "$XOSD" or s.name == "$OSDMENU") then return end
     local desc = (s.descKey and dev[s.descKey]) or s.name
     local helper = (s.helperKey and pathStrings[s.helperKey]) or nil
     if isFmcbContext and s.name == "POWEROFF" then

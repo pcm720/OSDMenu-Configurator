@@ -39,6 +39,7 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 ### OSDMenu (`OSDMENU.CNF`, `OSDGSM.CSM`)
 
 - `mc0:/SYS-CONF/OSDMENU.CNF` -> `mc1:/SYS-CONF/OSDMENU.CNF`
+- `xfrom:/osdmenu/OSDMENU.CNF`
 
 - `mc0:/SYS-CONF/OSDGSM.CNF` -> `mc1:/SYS-CONF/OSDGSM.CNF`
 
@@ -50,10 +51,10 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 
 ### OSDMenu MBR (`OSDMBR.CNF`, `OSDGSM.CNF`)
 
-- `pfs0:/osdmenu/OSDMBR.CNF`
+- `hdd0:__sysconf:pfs:osdmenu/OSDMBR.CNF`
 - `xfrom:/osdmenu/OSDMBR.CNF` (PSX)
 
-- `pfs0:/osdmenu/OSDGSM.CNF`
+- `hdd0:__sysconf:pfs:osdmenu/OSDGSM.CNF`
 - `xfrom:/osdmenu/OSDGSM.CNF` (PSX)
 
 ### PS2BBL/PSXBBL Extended (`PS2BBL.INI` / `CONFIG.INI`)
@@ -63,10 +64,11 @@ R3CONFIGURATOR will let you search for and edit any of these config file paths.
 3. __MMCE BUILDS__ `mmce?:/PS2BBL/CONFIG.INI`
 4. `xfrom:/PS2BBL/CONFIG.INI` (PSX DESR only; skipped on PS2 hardware)
 5. __MX4SIO BUILDS__ `mx4sio:/PS2BBL/CONFIG.INI` 
-6. __HDD BUILDS__ `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
-7. `usb:/PS2BBL/CONFIG.INI`
-8. `mc1:/SYS-CONF/PS2BBL.INI`
-9. `mc0:/SYS-CONF/PS2BBL.INI`
+6. __HDD BUILDS__ `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`, `hdd1:__sysconf:pfs:/PS2BBL/CONFIG.INI`
+7. __exFAT HDD BUILDS__ `ata0:/PS2BBL/CONFIG.INI`, `ata1:/PS2BBL/CONFIG.INI`
+8. `usb:/PS2BBL/CONFIG.INI`
+9. `mc1:/SYS-CONF/PS2BBL.INI`
+10. `mc0:/SYS-CONF/PS2BBL.INI`
 
 
 ## Config types

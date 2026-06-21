@@ -544,11 +544,7 @@ function common.getEditorBackState(context, fileType, getPresentMcSlots)
     return "select_config"
   end
   if context == "osdmenu" and common.isOsdConfigFileType(fileType) then
-    local slots = (type(getPresentMcSlots) == "function" and getPresentMcSlots()) or {}
-    if type(slots) == "table" and #slots > 1 then
-      return "choose_mc"
-    end
-    return "main"
+    return "select_config"
   end
   return "main"
 end
@@ -1973,6 +1969,25 @@ function common.getPathModuleType(path)
   return nil
 end
 
+function common.getRuntimePlatform()
+  local runtime = _G and _G.CONFIG_UI
+  local platform = runtime and runtime.runtimePlatform
+  if type(platform) == "table" then return platform end
+  return {}
+end
+
+function common.isRuntimePsx()
+  return common.getRuntimePlatform().isPsx == true
+end
+
+function common.hideRuntimePsxOnly()
+  return not common.isRuntimePsx()
+end
+
+function common.hideRuntimeHddDevices()
+  return common.getRuntimePlatform().hideHddDevices == true
+end
+
 local function resolveSaveTargetModule(path)
   local fromPath = common.getPathModuleType(path)
   if fromPath then
@@ -2105,7 +2120,7 @@ end
 -- opts:
 --  allowChoose: boolean (default false)
 --  chooseSaveState: default "choose_save"
---  locationFileType/locationContext/chosenMcSlot/locations/getLocations
+--  locationFileType/locationContext/chosenMcSlot/locationDevice/locations/getLocations
 --  regenerateBeforeSave: default true
 --  beforeChooseSave(locations), beforeSave(path), afterSave(path)
 --  noSaveLocationMessage, errorDetail(err), savedFrames, failedFrames
@@ -2124,7 +2139,9 @@ function common.saveCurrentConfig(ctx, opts)
       local locContext = opts.locationContext or ctx.context
       local locFileType = opts.locationFileType or ctx.fileType
       local locSlot = (opts.chosenMcSlot ~= nil) and opts.chosenMcSlot or ctx.chosenMcSlot
-      locations = resolver(locContext, locFileType, locSlot) or {}
+      local locDevice = (opts.locationDevice ~= nil) and opts.locationDevice or ctx.mbrConfigDevice or
+          ctx.osdmenuConfigDevice
+      locations = resolver(locContext, locFileType, locSlot, locDevice) or {}
     else
       locations = {}
     end
