@@ -1113,13 +1113,14 @@ local function runMain(s, pad)
     local creditsHeadingColor = CREDITS_HEADING_BLUE
     for i = 1, total do
       local y = rowStartY + (i - 1) * rowStep
-      local label = lines[i]
+      local rawLabel = lines[i]
+      local isHeading = type(rawLabel) == "string" and rawLabel:sub(1, 1) ~= "-"
+      local label = rawLabel
       if common.fitListRowText then
         label = common.fitListRowText(s, "main_credits_row_" .. tostring(i), hintFont, label, maxLabelW, rowScale, false)
       elseif common.truncateTextToWidth then
         label = common.truncateTextToWidth(hintFont, label, maxLabelW, rowScale)
       end
-      local isHeading = (i == 1 or i == 3 or i == 7)
       local rowColor = isHeading and creditsHeadingColor or common.WHITE
       dt(hintFont, s.drawMode, rowLabelX, y, rowScale, label, rowColor)
     end
