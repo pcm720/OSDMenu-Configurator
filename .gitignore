@@ -2,8 +2,10 @@
 build*/
 release*/
 .vscode/settings.json
+/.codex
 *.elf
 build/
+thirdparty/
 TODO.md
 # Created by https://www.toptal.com/developers/gitignore/api/macos,windows,linux
 

@@ -20,7 +20,7 @@ jobs:
       run: |
         apk add cmake
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -29,21 +29,31 @@ jobs:
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
         git fetch --prune --unshallow
 
+    - name: Resolve build version
+      run: |
+        if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          VERSION="${GITHUB_REF_NAME#v}"
+        else
+          VERSION="$(git describe --always --dirty --tags --exclude nightly)"
+          VERSION="${VERSION#v}"
+        fi
+        echo "CI_VERSION=${VERSION}" >> $GITHUB_ENV
+
     - name: Compile non-VFS version
       id: make
       run: |
-        cmake -B build
+        cmake -B build -DAPP_VERSION_OVERRIDE=${{ env.CI_VERSION }} -DSAS_TITLE_VERSION=${{ env.CI_VERSION }}
         cmake --build build
 
     - name: Compile VFS version
       id: make-vfs
       run: |
-        cmake -B build -DEMBED_VFS=ON -DOUTDIR=release_vfs
+        cmake -B build -DEMBED_VFS=ON -DOUTDIR=release_vfs -DAPP_VERSION_OVERRIDE=${{ env.CI_VERSION }} -DSAS_TITLE_VERSION=${{ env.CI_VERSION }}
         cmake --build build
         rm -rf build
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       if: steps.make.outcome == 'success'
       with:
         name: artifacts
@@ -51,14 +61,19 @@ jobs:
           release/**
           release_vfs/**
 
-    - name: Get git describe
-      run: |
-        echo "GIT_VERSION=$(git describe --always --dirty --tags --exclude nightly)" >> $GITHUB_ENV
-
     - name: Build release archive
       run: |
-        cd release_vfs
-        zip -r ../osdmenu-configurator-${{ env.GIT_VERSION }}.zip ./*
+        rm -rf package
+        mkdir -p package
+        cp release_vfs/README.md package/README.MD
+        cp release_vfs/r3configurator.elf package/r3configurator.elf
+        cp release_vfs/title.cfg package/title.cfg
+        cp release_vfs/icon.sys package/icon.sys
+        cp release_vfs/copy.icn package/copy.icn
+        cp release_vfs/del.icn package/del.icn
+        cp release_vfs/list.icn package/list.icn
+        cd package
+        zip -r ../SYS_R3CONFIGURATOR.zip README.MD r3configurator.elf title.cfg icon.sys copy.icn del.icn list.icn
 
     - name: Create nightly release
       uses: "marvinpinto/action-automatic-releases@latest"
@@ -69,7 +84,7 @@ jobs:
         prerelease: true
         title: "Nightly build"
         files: |
-          osdmenu-configurator-${{ env.GIT_VERSION }}.zip
+          SYS_R3CONFIGURATOR.zip
 
     - name: Create stable release
       uses: "marvinpinto/action-automatic-releases@latest"
@@ -78,5 +93,5 @@ jobs:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         draft: true
         files: |
-          osdmenu-configurator-${{ env.GIT_VERSION }}.zip
+          SYS_R3CONFIGURATOR.zip
 

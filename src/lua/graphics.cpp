@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -20,21 +21,42 @@ static uint8_t imgThreadStack[4096] __attribute__((aligned(16)));
 // Extern symbol
 extern void *_gp;
 
+static char *dup_cstr(const char *src) {
+  size_t len;
+  char *dst;
+  if (!src)
+    return NULL;
+  len = strlen(src) + 1;
+  dst = (char *)malloc(len);
+  if (!dst)
+    return NULL;
+  memcpy(dst, src, len);
+  return dst;
+}
+
 static int imgThread(void *data) {
   char *text = (char *)data;
   bool delayed = asyncDelayed;
   GSTEXTURE *image = load_image(text, delayed);
   if (image == NULL) {
     imgThreadResult = 2;
+    free(text);
     ExitDeleteThread();
     return 0;
   }
   char *buffer = (char *)malloc(16);
+  if (!buffer) {
+    imgThreadResult = 2;
+    free(text);
+    ExitDeleteThread();
+    return 0;
+  }
   memset(buffer, 0, 16);
-  sprintf(buffer, "%i", (int)image);
+  snprintf(buffer, 16, "%i", (int)image);
   imgThreadData = (unsigned char *)buffer;
   imgThreadSize = strlen(buffer);
   imgThreadResult = 1;
+  free(text);
   ExitDeleteThread();
   return 0;
 }
@@ -194,9 +216,14 @@ static const luaL_Reg Font_functions[] = {
 
 static int lua_loadimgasync(lua_State *L) {
   int argc = lua_gettop(L);
-  if (argc != 1)
+  if (argc != 1 && argc != 2)
     return luaL_error(L, "wrong number of arguments");
-  char *text = (char *)(luaL_checkstring(L, 1));
+  const char *text = luaL_checkstring(L, 1);
+  char *textCopy = dup_cstr(text);
+  if (!textCopy) {
+    imgThreadResult = -1;
+    return luaL_error(L, "Graphics.threadLoadImage: out of memory");
+  }
   if (argc == 2)
     asyncDelayed = lua_toboolean(L, 2);
 
@@ -210,11 +237,12 @@ static int lua_loadimgasync(lua_State *L) {
   int thread = CreateThread(&thread_param);
   if (thread < 0) {
     imgThreadResult = -1;
+    free(textCopy);
     return 0;
   }
 
   imgThreadResult = 0;
-  StartThread(thread, (void *)text);
+  StartThread(thread, (void *)textCopy);
   return 0;
 }
 
@@ -237,6 +265,8 @@ static int lua_drawimg(lua_State *L) {
   if (argc != 3 && argc != 4)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
   float x = luaL_checknumber(L, 2);
   float y = luaL_checknumber(L, 3);
   Color color = 0x80808080;
@@ -259,6 +289,8 @@ static int lua_drawimg_rotate(lua_State *L) {
   if (argc != 4 && argc != 5)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
   float x = luaL_checknumber(L, 2);
   float y = luaL_checknumber(L, 3);
   float radius = luaL_checknumber(L, 4);
@@ -282,6 +314,8 @@ static int lua_drawimg_scale(lua_State *L) {
   if (argc != 5 && argc != 6)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
   float x = luaL_checknumber(L, 2);
   float y = luaL_checknumber(L, 3);
   float width = luaL_checknumber(L, 4);
@@ -304,6 +338,8 @@ static int lua_drawimg_part(lua_State *L) {
   if (argc != 7 && argc != 8)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
   float x = luaL_checknumber(L, 2);
   float y = luaL_checknumber(L, 3);
   float startx = (float)luaL_checknumber(L, 4);
@@ -321,11 +357,63 @@ static int lua_drawimg_part(lua_State *L) {
   return 0;
 }
 
+static int lua_drawimg_quad(lua_State *L) {
+  int argc = lua_gettop(L);
+  if (argc != 9 && argc != 10)
+    return luaL_error(L, "wrong number of arguments");
+  GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
+  float x1 = (float)luaL_checknumber(L, 2);
+  float y1 = (float)luaL_checknumber(L, 3);
+  float x2 = (float)luaL_checknumber(L, 4);
+  float y2 = (float)luaL_checknumber(L, 5);
+  float x3 = (float)luaL_checknumber(L, 6);
+  float y3 = (float)luaL_checknumber(L, 7);
+  float x4 = (float)luaL_checknumber(L, 8);
+  float y4 = (float)luaL_checknumber(L, 9);
+  Color color = 0x80808080;
+  if (argc == 10)
+    color = (Color)luaL_checknumber(L, 10);
+
+  drawImageQuad(source, x1, y1, x2, y2, x3, y3, x4, y4, color);
+  return 0;
+}
+
+static int lua_drawimg_quad_part(lua_State *L) {
+  int argc = lua_gettop(L);
+  if (argc != 13 && argc != 14)
+    return luaL_error(L, "wrong number of arguments");
+  GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
+  float x1 = (float)luaL_checknumber(L, 2);
+  float y1 = (float)luaL_checknumber(L, 3);
+  float x2 = (float)luaL_checknumber(L, 4);
+  float y2 = (float)luaL_checknumber(L, 5);
+  float x3 = (float)luaL_checknumber(L, 6);
+  float y3 = (float)luaL_checknumber(L, 7);
+  float x4 = (float)luaL_checknumber(L, 8);
+  float y4 = (float)luaL_checknumber(L, 9);
+  float startx = (float)luaL_checknumber(L, 10);
+  float starty = (float)luaL_checknumber(L, 11);
+  float endx = (float)luaL_checknumber(L, 12);
+  float endy = (float)luaL_checknumber(L, 13);
+  Color color = 0x80808080;
+  if (argc == 14)
+    color = (Color)luaL_checknumber(L, 14);
+
+  drawImageQuadPartial(source, x1, y1, x2, y2, x3, y3, x4, y4, startx, starty, endx, endy, color);
+  return 0;
+}
+
 static int lua_drawimg_full(lua_State *L) {
   int argc = lua_gettop(L);
   if (argc != 10 && argc != 11)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL)
+    return 0;
   float x = luaL_checknumber(L, 2);
   float y = luaL_checknumber(L, 3);
   float startx = (float)luaL_checknumber(L, 4);
@@ -349,6 +437,10 @@ static int lua_width(lua_State *L) {
   if (argc != 1)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL) {
+    lua_pushinteger(L, 0);
+    return 1;
+  }
   lua_pushinteger(L, (uint32_t)(source->Width));
   return 1;
 }
@@ -358,6 +450,10 @@ static int lua_height(lua_State *L) {
   if (argc != 1)
     return luaL_error(L, "wrong number of arguments");
   GSTEXTURE *source = (GSTEXTURE *)(luaL_checkinteger(L, 1));
+  if (source == NULL) {
+    lua_pushinteger(L, 0);
+    return 1;
+  }
   lua_pushinteger(L, (uint32_t)(source->Height));
   return 1;
 }
@@ -552,6 +648,8 @@ static const luaL_Reg Graphics_functions[] = {{"drawPixel", lua_pixel},
                                               {"drawRotateImage", lua_drawimg_rotate},
                                               {"drawScaleImage", lua_drawimg_scale},
                                               {"drawPartialImage", lua_drawimg_part},
+                                              {"drawImageQuad", lua_drawimg_quad},
+                                              {"drawImageQuadPartial", lua_drawimg_quad_part},
                                               {"drawImageExtended", lua_drawimg_full},
                                               {"setImageFilters", lua_filters},
                                               {"getImageWidth", lua_width},

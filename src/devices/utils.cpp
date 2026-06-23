@@ -39,6 +39,8 @@ const char *devices_get_bdm_driver(const char *mountpoint) {
 uint32_t devices_guess_device_type(const char *path) {
   if (!strncmp(path, "mc", 2))
     return Device_Basic;
+  else if (!strncmp(path, "xfrom", 5))
+    return Device_XFROM;
   else if (!strncmp(path, "mmce", 4))
     return Device_MMCE;
   else if (!strncmp(path, "hdd", 3))
@@ -59,7 +61,13 @@ int devices_probe(char *path, int attempts) {
     return -ENODEV;
   m++;
 
-  strncpy(mountpoint, path, m - path);
+  {
+    size_t mountLen = (size_t)(m - path);
+    if (mountLen >= sizeof(mountpoint))
+      return -ENAMETOOLONG;
+    memcpy(mountpoint, path, mountLen);
+    mountpoint[mountLen] = '\0';
+  }
 
   // Wait for IOP to initialize device driver
   int fd = 0;

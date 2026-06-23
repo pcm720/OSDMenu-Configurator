@@ -5,8 +5,8 @@ include($ENV{PS2SDK}/ps2dev.cmake)
 project(osdmenu-configurator)
 
 # Executable names
-set(EE_BIN "osdmenu-configurator_unc.elf")
-set(EE_BIN_PKD "osdmenu-configurator.elf")
+set(EE_BIN "r3configurator_unc.elf")
+set(EE_BIN_PKD "r3configurator.elf")
 
 # Output directory
 set(OUTDIR "release" CACHE STRING "Release directory")
@@ -58,11 +58,40 @@ if(GIT_FOUND)
         ERROR_QUIET
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short=12 HEAD
+        OUTPUT_VARIABLE GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
 else()
+    set(GIT_VERSION "unknown")
+    set(GIT_COMMIT "unknown")
+endif()
+
+if(NOT GIT_VERSION)
     set(GIT_VERSION "unknown")
 endif()
 
-add_definitions(-DAPP_VERSION=\"${GIT_VERSION}\")
+if(NOT GIT_COMMIT)
+    set(GIT_COMMIT "unknown")
+endif()
+
+# App version shown in UI/splash:
+# - defaults to git describe
+# - can be overridden by CI/release jobs (e.g. 1.2.0)
+set(APP_VERSION_OVERRIDE "" CACHE STRING "Optional override for displayed app version (e.g. 1.2.0)")
+if(APP_VERSION_OVERRIDE STREQUAL "")
+    set(APP_VERSION_VALUE "${GIT_VERSION}")
+else()
+    set(APP_VERSION_VALUE "${APP_VERSION_OVERRIDE}")
+endif()
+if(APP_VERSION_VALUE STREQUAL "")
+    set(APP_VERSION_VALUE "unknown")
+endif()
+
+add_definitions(-DAPP_VERSION=\"${APP_VERSION_VALUE}\")
 add_definitions(-DLUA_USE_PS2)
 
 if(ENABLE_DEBUG)
@@ -116,6 +145,28 @@ target_link_libraries(${EE_BIN}
     mc
 )
 
+# SAS/title.cfg metadata configuration:
+# - Version defaults to the app version shown in UI
+# - Release date is generated at build time (ordinal format)
+set(SAS_TITLE_VERSION "" CACHE STRING "Optional override for SAS/title.cfg Version field; defaults to app display version")
+if(SAS_TITLE_VERSION STREQUAL "")
+    set(SAS_TITLE_VERSION_VALUE "${APP_VERSION_VALUE}")
+else()
+    set(SAS_TITLE_VERSION_VALUE "${SAS_TITLE_VERSION}")
+endif()
+
+if(SAS_TITLE_VERSION_VALUE STREQUAL "")
+    set(SAS_TITLE_VERSION_VALUE "unknown")
+endif()
+
+set(SAS_TITLE_SOURCE "${CMAKE_SOURCE_DIR}/SAS/title.cfg")
+set(SAS_TITLE_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated/SAS/title.cfg")
+set(SAS_TITLE_GEN_SCRIPT "${CMAKE_SOURCE_DIR}/cmake/generate_title_cfg.cmake")
+set(SAS_ICON_SYS_SOURCE "${CMAKE_SOURCE_DIR}/SAS/icon.sys")
+set(SAS_COPY_ICN_SOURCE "${CMAKE_SOURCE_DIR}/SAS/copy.icn")
+set(SAS_DEL_ICN_SOURCE "${CMAKE_SOURCE_DIR}/SAS/del.icn")
+set(SAS_LIST_ICN_SOURCE "${CMAKE_SOURCE_DIR}/SAS/list.icn")
+
 # Strip ELF from debug symbols
 # set_target_properties(${EE_BIN} PROPERTIES LINK_FLAGS "-s")
 
@@ -135,9 +186,19 @@ if(EMBED_VFS)
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTDIR}/
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/README.md ${OUTDIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/r3configurator.cnf ${OUTDIR}/r3configurator.cnf
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${EE_BIN_PKD} ${OUTDIR}/${EE_BIN_PKD}
+        COMMAND ${CMAKE_COMMAND} -DINPUT=${SAS_TITLE_SOURCE}
+                                 -DOUTPUT=${SAS_TITLE_GENERATED}
+                                 -DTITLE_VERSION=${SAS_TITLE_VERSION_VALUE}
+                                 -P ${SAS_TITLE_GEN_SCRIPT}
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_TITLE_GENERATED} ${OUTDIR}/title.cfg
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_ICON_SYS_SOURCE} ${OUTDIR}/icon.sys
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_COPY_ICN_SOURCE} ${OUTDIR}/copy.icn
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_DEL_ICN_SOURCE} ${OUTDIR}/del.icn
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_LIST_ICN_SOURCE} ${OUTDIR}/list.icn
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Copying ELF to release directory"
+        COMMENT "Copying ELF and SAS assets to release directory root"
     )
 else()
     add_custom_command(
@@ -145,9 +206,19 @@ else()
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTDIR}/
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/README.md ${OUTDIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/r3configurator.cnf ${OUTDIR}/r3configurator.cnf
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${EE_BIN_PKD} ${OUTDIR}/${EE_BIN_PKD}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/scripts ${OUTDIR}/scripts
+        COMMAND ${CMAKE_COMMAND} -DINPUT=${SAS_TITLE_SOURCE}
+                                 -DOUTPUT=${SAS_TITLE_GENERATED}
+                                 -DTITLE_VERSION=${SAS_TITLE_VERSION_VALUE}
+                                 -P ${SAS_TITLE_GEN_SCRIPT}
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_TITLE_GENERATED} ${OUTDIR}/title.cfg
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_ICON_SYS_SOURCE} ${OUTDIR}/icon.sys
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_COPY_ICN_SOURCE} ${OUTDIR}/copy.icn
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_DEL_ICN_SOURCE} ${OUTDIR}/del.icn
+        COMMAND ${CMAKE_COMMAND} -E copy ${SAS_LIST_ICN_SOURCE} ${OUTDIR}/list.icn
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Copying ELF and scripts to release directory"
+        COMMENT "Copying ELF, scripts, and SAS assets to release directory root"
     )
 endif()

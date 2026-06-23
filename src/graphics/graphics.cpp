@@ -13,7 +13,6 @@
 #define DEG2RAD(x) ((x) * 0.01745329251)
 
 static const uint64_t BLACK_RGBAQ = GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00);
-static const uint64_t TEXTURE_RGBAQ = GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00);
 
 GSGLOBAL *gsGlobal = NULL;
 GSFONTM *gsFontM = NULL;
@@ -375,9 +374,13 @@ float FPSCounter(int interval) {
 
 GSFONT *loadFont(const char *path) {
   int file = open(path, O_RDONLY, 0777);
-  uint16_t magic;
-  read(file, &magic, 2);
+  uint16_t magic = 0;
+  if (file < 0)
+    return NULL;
+  ssize_t readBytes = read(file, &magic, sizeof(magic));
   close(file);
+  if (readBytes != (ssize_t)sizeof(magic))
+    return NULL;
   GSFONT *font = NULL;
   if (magic == 0x4D42) {
     font = gsKit_init_font(GSKIT_FTYPE_BMP_DAT, (char *)path);
@@ -465,6 +468,25 @@ void drawImageRotate(GSTEXTURE *source, float x, float y, float width, float hei
                           (-width / 2) * c - height / 2 * s + x, height / 2 * c + (-width / 2) * s + y, startx, endy,
                           width / 2 * c - (-height / 2) * s + x, (-height / 2) * c + width / 2 * s + y, endx, starty,
                           width / 2 * c - height / 2 * s + x, height / 2 * c + width / 2 * s + y, endx, endy, 1, color);
+}
+
+void drawImageQuad(GSTEXTURE *source, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, Color color) {
+  if (source->Delayed == true) {
+    gsKit_TexManager_bind(gsGlobal, source);
+  }
+  gsKit_set_texfilter(gsGlobal, source->Filter);
+  gsKit_prim_quad_texture(gsGlobal, source, x1, y1, 0.0f, 0.0f, x2, y2, 0.0f, source->Height, x3, y3, source->Width, 0.0f, x4, y4,
+                          source->Width, source->Height, 1, color);
+}
+
+void drawImageQuadPartial(GSTEXTURE *source, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float startx,
+                          float starty, float endx, float endy, Color color) {
+  if (source->Delayed == true) {
+    gsKit_TexManager_bind(gsGlobal, source);
+  }
+  gsKit_set_texfilter(gsGlobal, source->Filter);
+  gsKit_prim_quad_texture(gsGlobal, source, x1, y1, startx, starty, x2, y2, startx, endy, x3, y3, endx, starty, x4, y4, endx, endy, 1,
+                          color);
 }
 
 void drawPixel(float x, float y, Color color) { gsKit_prim_point(gsGlobal, x, y, 1, color); }

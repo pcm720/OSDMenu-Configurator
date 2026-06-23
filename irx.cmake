@@ -3,9 +3,11 @@ set(IRX_FILES
     iomanX
     fileXio
     sio2man
-    mcman
+    mcman-1400
+    extflash
+    xfromman
     mcserv
-    padman
+    padman-1400
     usbd_mini
     bdm
     bdmfs_fatfs
@@ -17,24 +19,13 @@ set(IRX_FILES
     ps2fs
 )
 
-# Local IRX: mmceman (built from submodule)
+# Local precompiled IRX under modules/
 set(LOCAL_IRX_FILES mmceman)
 
 # Optional IRX
 if(POWERPC_UART)
     list(APPEND IRX_FILES ppctty)
 endif()
-
-# Build mmceman.irx via submodule Makefile
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/mmceman.irx
-    COMMAND ${CMAKE_MAKE_PROGRAM} -C ${CMAKE_CURRENT_SOURCE_DIR}/modules/mmceman/mmceman
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/modules/mmceman/mmceman/irx/mmceman.irx
-            ${CMAKE_CURRENT_BINARY_DIR}/mmceman.irx
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/modules/mmceman/mmceman
-    COMMENT "Building mmceman.irx"
-)
 
 # PS2SDK IRX -> bin2c -> _irx.c
 foreach(IRX_FILE ${IRX_FILES})
@@ -53,14 +44,15 @@ endforeach()
 
 # Local IRX -> bin2c -> _irx.c
 foreach(IRX_FILE ${LOCAL_IRX_FILES})
+    set(local_irx_path "${CMAKE_CURRENT_SOURCE_DIR}/modules/${IRX_FILE}.irx")
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${IRX_FILE}_irx.c"
         COMMAND $ENV{PS2SDK}/bin/bin2c
-                ${CMAKE_CURRENT_BINARY_DIR}/${IRX_FILE}.irx
+                "${local_irx_path}"
                 "${CMAKE_CURRENT_BINARY_DIR}/${IRX_FILE}_irx.c"
                 "${IRX_FILE}_irx"
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${IRX_FILE}.irx
-        COMMENT "Converting ${IRX_FILE}.irx with bin2c"
+        DEPENDS "${local_irx_path}"
+        COMMENT "Converting local ${IRX_FILE}.irx with bin2c"
     )
     list(APPEND SOURCES "${CMAKE_CURRENT_BINARY_DIR}/${IRX_FILE}_irx.c")
 endforeach()

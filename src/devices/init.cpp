@@ -36,9 +36,11 @@ IRX_DEFINE(ppctty);
 IRX_DEFINE(iomanX);
 IRX_DEFINE(fileXio);
 IRX_DEFINE(sio2man);
-IRX_DEFINE(mcman);
+IRX_DEFINE(mcman_1400);
+IRX_DEFINE(extflash);
+IRX_DEFINE(xfromman);
 IRX_DEFINE(mcserv);
-IRX_DEFINE(padman);
+IRX_DEFINE(padman_1400);
 IRX_DEFINE(usbd_mini);
 IRX_DEFINE(bdm);
 IRX_DEFINE(bdmfs_fatfs);
@@ -67,9 +69,12 @@ static ModuleListEntry moduleList[] = {
     INT_MODULE(iomanX, NULL, Device_Basic),
     INT_MODULE(fileXio, NULL, Device_Basic),
     INT_MODULE(sio2man, NULL, Device_Basic),
-    INT_MODULE(mcman, NULL, Device_Basic),
+    INT_MODULE(mcman_1400, NULL, Device_Basic),
+    // XFROM (DESR external flash)
+    INT_MODULE(extflash, NULL, Device_XFROM),
+    INT_MODULE(xfromman, NULL, Device_XFROM),
     INT_MODULE(mcserv, NULL, Device_Basic),
-    INT_MODULE(padman, NULL, Device_Basic),
+    INT_MODULE(padman_1400, NULL, Device_Basic),
     // MMCE
     INT_MODULE(mmceman, NULL, Device_MMCE),
     // BDM
@@ -137,7 +142,8 @@ static int init_modules(uint32_t device) {
     if (!(device & moduleList[i].type) || (loadedModules & (1u << i)))
       continue;
 
-    if ((res = load_module(&moduleList[i]) != 0) < 0)
+    res = load_module(&moduleList[i]);
+    if (res < 0)
       return res;
 
     // Mark module as loaded
@@ -176,8 +182,12 @@ int device_init(void) {
 }
 
 // Supported device type names for loadModules (not arbitrary IRX names).
-// "hdd" = full HDD stack (ATA + APA: ata_bd, ps2hdd, ps2fs). "usb", "mx4sio", "mmce".
+// "hdd" = full HDD stack (ATA + APA: ata_bd, ps2hdd, ps2fs). "usb", "mx4sio", "mmce", "xfrom".
 static uint32_t device_string_to_type(const char *name) {
+  if (strcmp(name, "mc") == 0)
+    return Device_Basic;
+  if (strcmp(name, "xfrom") == 0)
+    return Device_XFROM;
   if (strcmp(name, "hdd") == 0)
     return Device_HDD;
   if (strcmp(name, "usb") == 0)
@@ -189,8 +199,10 @@ static uint32_t device_string_to_type(const char *name) {
   return 0;
 }
 
-// Load IOP modules by device type or by IRX name.
+// Load IOP modules by supported device type name.
 // Supported device types:
+// - "mc" (basic memory card stack)
+// - "xfrom" (DESR external flash stack: extflash + xfromman)
 // - "mmce"
 // - "hdd" (both exFAT and APA)
 // - "usb"
@@ -202,7 +214,7 @@ int device_init_load_modules(const char *name) {
   if (type == 0)
     return -1;
 
-  if (loadedDevices & type)
+  if ((loadedDevices & type) == type)
     return 0;
 
   int res = 0;

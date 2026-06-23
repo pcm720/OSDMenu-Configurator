@@ -8,6 +8,7 @@
 #include "lua/system.h"
 #include <fcntl.h>
 #include <malloc.h>
+#include <string.h>
 #include <unistd.h>
 
 // Root Lua script
@@ -21,13 +22,27 @@ extern uint32_t size_vfs;
 
 // Attempts to detect root device and load device drivers required for accessing CWD
 char *resolveRootDevice(char *argv0);
+static char *dup_path(const char *src);
+
+static char *dup_path(const char *src) {
+  size_t len;
+  char *dst;
+  if (!src)
+    return NULL;
+  len = strlen(src) + 1;
+  dst = (char *)malloc(len);
+  if (!dst)
+    return NULL;
+  memcpy(dst, src, len);
+  return dst;
+}
 
 int main(int argc, char *argv[]) {
   // Show splash
   initGraphics();
   showSplashScreen();
 
-  printf("\n******\nOSDMenu Configurator %s by pcm720\nBased on Enceladus by DanielSant0s\nhttps://github.com/DanielSant0s/Enceladus\n******\n\n", APP_VERSION);
+  printf("\n******\nR3Configurator %s by pcm720\nBased on Enceladus by DanielSant0s\nhttps://github.com/DanielSant0s/Enceladus\n******\n\n", APP_VERSION);
 
   // Init basic device drivers
   if (device_init()) {
@@ -78,13 +93,20 @@ int main(int argc, char *argv[]) {
 // Attempts to detect root device and load device drivers required for accessing CWD
 // Returns root path to device ELF
 char *resolveRootDevice(char *argv0) {
+  if (argv0 == NULL)
+    return argv0;
   char *result = argv0;
+  int ownsResult = 0;
   // Load device drivers for boot path
   printf("argv[0] is %s, guessing device type\n", argv0);
   uint32_t device = devices_guess_device_type(argv0);
   if (device & Device_MMCE) {
     printf("main: loading MMCE drivers\n");
     device_init_load_modules("mmce");
+    return result;
+  } else if (device & Device_XFROM) {
+    printf("main: loading XFROM drivers\n");
+    device_init_load_modules("xfrom");
     return result;
   } else if (device & Device_HDD) {
     printf("main: loading HDD drivers\n");
@@ -101,22 +123,48 @@ char *resolveRootDevice(char *argv0) {
 
   // Find current working directory for BDM
   if (device & Device_BDM) {
+    size_t argvLen = strlen(argv0);
+    int hasExpectedMassPrefix = 0;
     printf("main: probing root path for BDM device\n");
-    if (argv0[4] == ':' || argv0[6] != '/') {
-      // argv[0] is "mass:" or doesn't have a trailing slash, fix it to "mass?:/"
-      int arglen = strlen(argv0) + 3;
+    if (argvLen >= 7 && argv0[4] >= '0' && argv0[4] <= '7' && argv0[5] == ':' && argv0[6] == '/')
+      hasExpectedMassPrefix = 1;
+    if (!hasExpectedMassPrefix) {
+      // argv[0] is "mass:" or doesn't have a trailing slash, fix it to "mass?:/".
+      const char *tail = strchr(argv0, ':');
+      if (tail) {
+        tail++;
+        while (*tail == '/')
+          tail++;
+      } else {
+        tail = argv0;
+      }
+      size_t arglen = strlen(tail) + 8;
       result = (char *)malloc(arglen);
-      int startPos = ((argv0[5] == '/') || (argv0[5] == ':')) ? 6 : 5;
-      snprintf(result, arglen, "mass?:/%s", &argv0[startPos]);
+      if (!result)
+        return argv0;
+      snprintf(result, arglen, "mass?:/%s", tail);
+      ownsResult = 1;
+    } else if (result == argv0) {
+      // Never mutate argv[0] directly while probing.
+      result = dup_path(argv0);
+      if (!result)
+        return argv0;
+      ownsResult = 1;
     }
 
     int fd = 0;
-    int attempts = 0;
     for (int i = 0; i < 8; i++) {
+      if (strlen(result) <= 4) {
+        if (ownsResult)
+          free(result);
+        return argv0;
+      }
       result[4] = '0' + i;
       printf("main: probing %s\n", result);
       if (devices_probe(result, 2)) {
         printf("main: failed to probe\n");
+        if (ownsResult)
+          free(result);
         return argv0; // No BDM devices were found
       }
       fd = open(result, O_RDONLY);
@@ -126,6 +174,8 @@ char *resolveRootDevice(char *argv0) {
         return result;
       }
     }
+    if (ownsResult)
+      free(result);
   }
   return argv0;
 }
